@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/scoreboard.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/scoreboard.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の実行時状態を追跡するための共有メモリ管理ライブラリです。各ワーカープロセスおよびスレッドの稼働状況、リクエスト統計、接続状態を保持し、<code>mod_status</code> 等の監視モジュールや MPM (Multi-Processing Module) がプロセス間通信（IPC）を介してサーバーの健全性を把握するために使用します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>include</code> ディレクトリに位置し、サーバーのライフサイクル全体で共有される状態管理の基盤を提供します。MPM がプロセスを生成・管理する際の「状態のレジストリ」として機能し、<code>server/scoreboard.c</code> によって実装されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**状態の集約**: 全ワーカーの稼働状態、接続数、リクエスト処理時間、統計情報を構造化して保持。</li>
+<li>**IPC 管理**: 共有メモリ（<code>apr_shm</code>）の確保、初期化、およびプロセス間での同期的なアクセス提供。</li>
+<li>**ライフサイクル管理**: サーバーの起動・再起動に伴う世代（Generation）管理と、プロセスの終了に伴う状態のクリーンアップ。</li>
+<li>**抽象化**: MPM の実装詳細を隠蔽し、共通の API を通じて状態更新を可能にする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>scoreboard</code>: 共有メモリ上の <code>global_score</code>, <code>process_score</code>, <code>worker_score</code> を指すポインタを保持するメイン構造体。</li>
+<li><code>worker_score</code>: 個別のスレッド/ワーカーの統計（アクセス数、転送量、現在のリクエスト内容、ステータス）。</li>
+<li><code>process_score</code>: プロセス単位の管理情報（PID、世代、非同期接続のカウント）。</li>
+<li><code>global_score</code>: サーバー全体の稼働統計（再起動時刻、スレッド制限など）。</li>
+</ul>
+<h3>ステータス定数</h3>
+<ul>
+<li><code>SERVER_READY</code>, <code>SERVER_BUSY_READ</code>, <code>SERVER_BUSY_WRITE</code> 等: ワーカーの現在の状態を示す列挙値。</li>
+</ul>
+<h3>API (アクセサ・ミューテータ)</h3>
+<ul>
+<li><code>ap_update_child_status_...</code>: ワーカーの状態を更新するファミリー関数群。</li>
+<li><code>ap_get_scoreboard_...</code>: 共有メモリから特定のスコアボード情報を取得する関数群。</li>
+<li><code>ap_create_sb_handle</code>: スレッド/プロセスを識別するためのハンドルを作成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: MPM が <code>ap_create_scoreboard</code> を呼び出し、共有メモリを確保。<code>ap_init_scoreboard</code> で各構造体を初期化。 2. **更新**: リクエスト処理中、MPM やプロトコルモジュールが <code>ap_sb_handle_t</code> を用いて <code>ap_update_child_status</code> を呼び出し、共有メモリ上の <code>worker_score</code> を直接更新。 3. **参照**: <code>mod_status</code> 等が <code>ap_get_scoreboard_worker</code> 等を介して共有メモリを読み取り、HTML/JSON 形式で出力。 4. **終了**: プロセス終了時に <code>ap_cleanup_scoreboard</code> が呼ばれ、共有メモリの整合性を維持。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_shm.h</code>: 共有メモリ管理。</li>
+<li><code>apr_thread_proc.h</code>: スレッド/プロセス識別。</li>
+<li><code>http_config.h</code>: 設定コマンドハンドラ用。</li>
+<li><code>ap_config.h</code>: Apache の基本設定マクロ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/scoreboard.c</code>: 本ヘッダーで宣言された関数の実装。</li>
+<li><code>modules/generators/mod_status.c</code>: スコアボードの情報を利用する代表的なモジュール。</li>
+<li><code>server/mpm/</code>: 各 MPM がスコアボードをどのように更新・参照するかの具体例。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: スコアボードは共有メモリ上に配置されるため、ポインタの扱いに注意が必要です。特に <code>worker_score</code> 構造体内の文字列フィールド（<code>client</code>, <code>request</code> 等）はサイズが固定されており、オーバーフローを防ぐための設計がなされています。</li>
+<li>**非同期 MPM**: <code>process_score</code> にある <code>connections</code> や <code>write_completion</code> 等のフィールドは、非同期 MPM（<code>event</code> など）で重要となります。</li>
+<li>**制限事項**: <code>worker_score</code> 内の <code>client</code> や <code>request</code> フィールドは現在非推奨（DEPRECATED）の扱いとなっており、将来的な変更の可能性があります。</li>
+<li>**パフォーマンス**: 頻繁な更新が発生するため、ロックの競合を最小限にする設計が求められます。本ヘッダーはインターフェース定義に徹しており、具体的な同期制御は実装側（<code>scoreboard.c</code>）に依存します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__scoreboard_h__ap_generation_t.html" target="wiki-view">`ap_generation_t`</a></li>
+<li><a href="../symbols/include__scoreboard_h__ap_scoreboard_e.html" target="wiki-view">`ap_scoreboard_e`</a></li>
+<li><a href="../symbols/include__scoreboard_h__worker_score.html" target="wiki-view">`worker_score`</a></li>
+<li><a href="../symbols/include__scoreboard_h__global_score.html" target="wiki-view">`global_score`</a></li>
+<li><a href="../symbols/include__scoreboard_h__process_score.html" target="wiki-view">`process_score`</a></li>
+<li><a href="../symbols/include__scoreboard_h__scoreboard.html" target="wiki-view">`scoreboard`</a></li>
+<li><a href="../symbols/include__scoreboard_h__ap_sb_handle_t.html" target="wiki-view">`ap_sb_handle_t`</a></li>
+</ul></body></html>

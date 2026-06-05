@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/http_core.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/http_core.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の「コア」モジュールを定義するヘッダーファイルです。HTTP デーモンの基本機能、設定構造体、およびモジュール間での設定共有のためのインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の設定システムにおいて、<code>core</code> はすべてのリクエスト処理の基盤となります。他のモジュールが利用する設定の保持、リクエストのライフサイクル管理、およびフィルタチェーンの定義を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリ単位およびサーバー単位の設定構造体（<code>core_dir_config</code>, <code>core_server_config</code>）の定義。</li>
+<li>**アクセス制御**: <code>AllowOverride</code> や <code>Options</code> などのディレクティブの解釈と状態保持。</li>
+<li>**リクエスト処理の基盤**: リクエストの再帰制限、認証状態の保持、およびカスタムレスポンスの管理。</li>
+<li>**フィルタ管理**: HTTP 入出力フィルタ、チャンクフィルタ、バイトレンジフィルタのハンドル定義。</li>
+<li>**ログと統計**: エラーログのフォーマット定義と、モジュールごとの管理統計情報のフック提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>core_dir_config</code>: ディレクトリごとの設定（Options, AllowOverride, フィルタ設定など）。</li>
+<li><code>core_server_config</code>: サーバー全体の設定（ドキュメントルート、ログフォーマット、プロトコル設定など）。</li>
+<li><code>core_request_config</code>: リクエストごとの一時的な状態（バケットブリゲード、メモ、カスタムレスポンス）。</li>
+</ul>
+<h3>アクセサとユーティリティ</h3>
+<ul>
+<li><code>ap_allow_options()</code>, <code>ap_allow_overrides()</code>: 設定値の取得。</li>
+<li><code>ap_get_core_module_config()</code>, <code>ap_set_core_module_config()</code>: <code>core_module</code> 固有の設定データへの高速アクセス。</li>
+<li><code>ap_get_remote_host()</code>: クライアントの DNS/IP 解決。</li>
+</ul>
+<h3>フィルタハンドル</h3>
+<ul>
+<li><code>ap_http_input_filter_handle</code>, <code>ap_http_header_filter_handle</code>, <code>ap_chunk_filter_handle</code> 等。</li>
+</ul>
+<h3>定数</h3>
+<ul>
+<li><code>OPT_*</code>: <code>Options</code> ディレクティブのビットマスク。</li>
+<li><code>SATISFY_*</code>: <code>Satisfy</code> ディレクティブの条件指定。</li>
+<li><code>AP_MIN_BYTES_TO_WRITE</code>: 最小書き込みバッファサイズ（8000バイト）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**設定の継承**: <code>AP_CORE_MERGE_FLAG</code> マクロ等を用いて、親ディレクトリから子ディレクトリへ設定がマージされます。</li>
+<li>**リクエスト処理**: <code>core_request_config</code> がリクエストのライフサイクルを通じて保持され、フィルタチェーン（<code>ap_core_input_filter</code> / <code>ap_core_output_filter</code>）がこの構造体を通じてデータをやり取りします。</li>
+<li>**フック**: <code>get_mgmt_items</code> や <code>error_log</code> などのフックを通じて、外部モジュールがコアの統計情報やログ処理に介入します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_hash.h</code>, <code>apr_tables.h</code>: APR 基盤データ構造。</li>
+<li><code>http_config.h</code>: モジュール設定フレームワーク。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの定義。</li>
+<li><code>ap_expr.h</code>: 式評価エンジン。</li>
+<li><code>sys/resource.h</code>: リソース制限（RLIMIT）用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/http_core.c</code>: 本ヘッダーで宣言された構造体の実装と、ディレクティブの処理ロジック。</li>
+<li><code>include/httpd.h</code>: <code>request_rec</code> や <code>conn_rec</code> などの基本構造体。</li>
+<li><code>include/http_config.h</code>: モジュール設定の登録と取得メカニズム。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 本ファイルで定義される構造体は、主にリクエストプール（<code>r-&gt;pool</code>）または設定プールから割り当てられます。エラーログハンドラなど、一部のコールバックではメモリ割り当てに制限があるため注意が必要です。</li>
+<li>**不変条件**: <code>core_dir_config</code> 内の <code>opts</code> 関連ビットマスクは、<code>opts_add</code> と <code>opts_remove</code> が排他的であることを前提としています。</li>
+<li>**省略された詳細**: MPM（Multi-Processing Module）固有の複雑な非同期処理や、特定のプラットフォーム（Windows等）固有の最適化については、実装ファイル（<code>.c</code>）側で詳細化されるため、本ヘッダーでは抽象的な定義に留まっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__http_core_h__require_line.html" target="wiki-view">`require_line`</a></li>
+<li><a href="../symbols/include__http_core_h__core_request_config.html" target="wiki-view">`core_request_config`</a></li>
+<li><a href="../symbols/include__http_core_h__allow_options_t.html" target="wiki-view">`allow_options_t`</a></li>
+<li><a href="../symbols/include__http_core_h__overrides_t.html" target="wiki-view">`overrides_t`</a></li>
+<li><a href="../symbols/include__http_core_h__etag_components_t.html" target="wiki-view">`etag_components_t`</a></li>
+<li><a href="../symbols/include__http_core_h__server_signature_e.html" target="wiki-view">`server_signature_e`</a></li>
+<li><a href="../symbols/include__http_core_h__core_dir_config.html" target="wiki-view">`core_dir_config`</a></li>
+<li><a href="../symbols/include__http_core_h__core_server_config.html" target="wiki-view">`core_server_config`</a></li>
+<li><a href="../symbols/include__http_core_h__core_output_filter_ctx_t.html" target="wiki-view">`core_output_filter_ctx_t`</a></li>
+<li><a href="../symbols/include__http_core_h__core_ctx_t.html" target="wiki-view">`core_ctx_t`</a></li>
+<li><a href="../symbols/include__http_core_h__core_filter_ctx.html" target="wiki-view">`core_filter_ctx`</a></li>
+<li><a href="../symbols/include__http_core_h__core_net_rec.html" target="wiki-view">`core_net_rec`</a></li>
+</ul></body></html>

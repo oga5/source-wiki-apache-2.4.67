@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/util_filter.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/util_filter.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のフィルタチェーン機構を定義するヘッダーファイルです。データ（バケットブリゲード）を処理するフィルタの登録、チェーンへの追加・削除、およびフィルタ間でのデータ受け渡しを行うためのインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>HTTP リクエストおよびレスポンスの処理パイプラインにおいて、コンテンツ生成からネットワーク送信までのデータ変換層を担います。<code>server/util_filter.c</code> と対になり、フィルタの実行順序制御や状態管理を抽象化します。</p>
+<h2>責務</h2>
+<ul>
+<li>**フィルタ定義と登録**: フィルタのコールバック関数、型、プロトコル制約の定義。</li>
+<li>**チェーン管理**: フィルタの動的な追加・削除および実行順序の決定。</li>
+<li>**データ受け渡し**: <code>apr_bucket_brigade</code> を用いたストリーム処理の抽象化。</li>
+<li>**ユーティリティ提供**: フィルタ内でのバッファリング、フラッシュ、フォーマット出力の簡略化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタ定義・登録</h3>
+<ul>
+<li><code>ap_filter_t</code>: インストールされたフィルタのインスタンス構造体。</li>
+<li><code>ap_filter_rec_t</code>: フィルタの定義情報（名前、関数ポインタ、型）。</li>
+<li><code>ap_register_input_filter</code> / <code>ap_register_output_filter_protocol</code>: フィルタをシステムに登録する関数。</li>
+</ul>
+<h3>フィルタ実行・制御</h3>
+<ul>
+<li><code>ap_get_brigade</code> / <code>ap_pass_brigade</code>: チェーンの次段へデータを渡すための主要インターフェース。</li>
+<li><code>ap_input_mode_t</code>: 入力フィルタの読み取りモード（<code>READBYTES</code>, <code>GETLINE</code> 等）。</li>
+<li><code>ap_filter_type</code>: フィルタの優先順位を決定する分類（<code>RESOURCE</code> から <code>NETWORK</code> まで）。</li>
+</ul>
+<h3>ユーティリティ・マクロ</h3>
+<ul>
+<li><code>ap_fwrite</code>, <code>ap_fputs</code>, <code>ap_fprintf</code>: フィルタ内でのバッファリング書き込み用ラッパー。</li>
+<li><code>AP_FILTER_PROTO_*</code>: フィルタのプロトコル制約フラグ（キャッシュ不可、バイトレンジ不可など）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **登録**: モジュール初期化時に <code>ap_register_*_filter</code> を呼び出し、フィルタ名をコールバック関数と関連付けます。 2. **接続**: リクエスト処理中に <code>ap_add_*_filter</code> が呼ばれ、フィルタチェーンにノードが挿入されます。 3. **データ処理**:</p>
+<ul>
+<li>出力の場合、<code>ap_pass_brigade</code> を通じてブリゲードがチェーンを順次通過します。</li>
+<li>各フィルタは <code>ctx</code> ポインタを使用して状態を保持し、必要に応じて <code>ap_save_brigade</code> でデータを一時保存します。</li>
+<p>4. **終了**: ストリーム終了マーカーが到達すると、各フィルタは内部状態をフラッシュし、リソースを解放します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_buckets.h</code>: Apache Portable Runtime のバケット管理機能。</li>
+<li><code>httpd.h</code>: Apache のコア構造体（<code>request_rec</code>, <code>conn_rec</code> 等）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_filter.c</code>: 本ヘッダーで宣言された関数の実装およびフィルタチェーンの内部管理ロジック。</li>
+<li><code>include/http_protocol.h</code>: フィルタチェーンを介してやり取りされる HTTP プロトコル処理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>ap_pass_brigade</code> に渡されるブリゲードの所有権は呼び出し元にあります。フィルタ内でデータを保持したい場合は <code>ap_save_brigade</code> を使用してください。</li>
+<li>**実行順序**: フィルタは <code>ap_filter_type</code> に基づいてソートされます。同じ型の場合は FIFO で実行されます。</li>
+<li>**制約**: <code>AP_FTYPE_CONNECTION</code> 以上のフィルタはサブリクエスト内では使用できません。</li>
+<li>**省略事項**: 本ファイルはインターフェース定義に特化しており、フィルタの具体的な実装（<code>mod_deflate</code> 等）や、内部的なトライ木構造によるフィルタ検索の実装詳細は <code>server/util_filter.c</code> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__util_filter_h__ap_input_mode_t.html" target="wiki-view">`ap_input_mode_t`</a></li>
+<li><a href="../symbols/include__util_filter_h__ap_filter_t.html" target="wiki-view">`ap_filter_t`</a></li>
+<li><a href="../symbols/include__util_filter_h__apr_bucket_brigade.html" target="wiki-view">`apr_bucket_brigade`</a></li>
+<li><a href="../symbols/include__util_filter_h__apr_off_t.html" target="wiki-view">`apr_off_t`</a></li>
+<li><a href="../symbols/include__util_filter_h__ap_filter_func.html" target="wiki-view">`ap_filter_func`</a></li>
+<li><a href="../symbols/include__util_filter_h__ap_filter_type.html" target="wiki-view">`ap_filter_type`</a></li>
+<li><a href="../symbols/include__util_filter_h__ap_filter_rec_t.html" target="wiki-view">`ap_filter_rec_t`</a></li>
+<li><a href="../symbols/include__util_filter_h__ap_filter_provider_t.html" target="wiki-view">`ap_filter_provider_t`</a></li>
+</ul></body></html>

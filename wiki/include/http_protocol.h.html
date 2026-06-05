@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/http_protocol.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/http_protocol.h</h1>
+<h2>概要</h2>
+<p><code>http_protocol.h</code> は、Apache HTTP Server における HTTP プロトコル処理のコアインターフェースを定義するヘッダーファイルです。クライアントとの直接的な通信、リクエストの解析、レスポンスの生成、およびプロトコルスイッチング（HTTP/1.1 からのアップグレード等）を制御する主要な関数群とデータ構造を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>APACHE_CORE_PROTO</code> グループの一部として、<code>httpd.h</code> で定義された基本構造体（<code>request_rec</code>, <code>conn_rec</code>）を操作し、HTTP プロトコル特有のセマンティクスを実装するための抽象化層を提供します。<code>modules/http/http_protocol.c</code> と対になっており、フィルタチェーンを通じたデータ送受信の制御を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト処理**: リクエスト行の解析、ヘッダーの読み込み、認証情報の抽出。</li>
+<li>**レスポンス生成**: ステータスラインの構築、ETag/Last-Modified 等のキャッシュ制御ヘッダーの管理。</li>
+<li>**データ転送**: フィルタを通じたクライアントへのデータ出力（<code>ap_rputs</code>, <code>ap_rprintf</code> 等）およびクライアントからのボディ読み込み。</li>
+<li>**プロトコル管理**: プロトコルネゴシエーション（ALPN 等）およびプロトコルスイッチングのフック提供。</li>
+<li>**エラーハンドリング**: HTTP エラーレスポンスの生成と、フィルタスタック内でのエラーバケット（<code>ap_bucket_error</code>）の管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト・レスポンス制御</h3>
+<ul>
+<li><code>ap_read_request</code>, <code>ap_parse_request_line</code>: リクエストのライフサイクル開始と解析。</li>
+<li><code>ap_send_error_response</code>: エラー発生時のレスポンス生成。</li>
+<li><code>ap_finalize_request_protocol</code>: リクエスト終了時のプロトコル処理の完了。</li>
+</ul>
+<h3>データ出力（フィルタ経由）</h3>
+<ul>
+<li><code>ap_rputs</code>, <code>ap_rprintf</code>, <code>ap_rwrite</code>: クライアントへのデータ書き込み。</li>
+<li><code>ap_rflush</code>: バッファのフラッシュ。</li>
+<li><code>ap_send_fd</code>, <code>ap_send_mmap</code>: ファイルやメモリマップの効率的な送信。</li>
+</ul>
+<h3>条件付きリクエストとキャッシュ</h3>
+<ul>
+<li><code>ap_meets_conditions</code>: If-Match 等の条件付きリクエストの評価。</li>
+<li><code>ap_make_etag</code>, <code>ap_set_etag</code>: ETag の生成と設定。</li>
+<li><code>etag_rec</code>: ETag 生成に必要なメタデータ構造体。</li>
+</ul>
+<h3>プロトコルスイッチング</h3>
+<ul>
+<li><code>ap_protocol_propose</code>, <code>ap_protocol_switch</code>: プロトコル切り替えのためのフック。</li>
+<li><code>ap_select_protocol</code>, <code>ap_switch_protocol</code>: プロトコル選択と実行の API。</li>
+</ul>
+<h3>エラーバケット</h3>
+<ul>
+<li><code>ap_bucket_error</code>: フィルタスタックでエラーを伝播させるための特殊なバケット型。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <code>ap_rgetline</code> を通じてクライアントからの生データを読み込み、<code>request_rec</code> に格納します。 2. **解析**: <code>ap_parse_request_line</code> や <code>ap_get_mime_headers</code> がリクエストを分解し、内部状態を更新します。 3. **処理**: 各種フック（<code>post_read_request</code> 等）が実行され、リクエストの妥当性が検証されます。 4. **出力**: <code>ap_r*</code> 系関数が <code>apr_bucket_brigade</code> を通じてフィルタスタックにデータを投入し、最終的にネットワークへ送信されます。 5. **エラー**: フィルタ処理中に問題が発生した場合、<code>ap_bucket_error</code> を brigade に挿入することで、後続のフィルタをスキップしエラーレスポンスを生成します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>: 基本的なリクエスト・接続構造体。</li>
+<li><code>apr_buckets.h</code>: フィルタチェーンのデータ転送単位。</li>
+<li><code>util_filter.h</code>: フィルタスタックの管理。</li>
+<li><code>apr_portable.h</code>, <code>apr_mmap.h</code>: プラットフォーム依存のファイル・メモリ操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/http_protocol.c</code>: 本ヘッダーの関数実装。</li>
+<li><code>include/httpd.h</code>: <code>request_rec</code> 等の定義。</li>
+<li><code>include/util_filter.h</code>: フィルタの仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 多くの関数は <code>request_rec</code> 内のプール（<code>r-&gt;pool</code>）を使用してメモリを割り当てます。ライフサイクルはリクエストの終了とともに破棄されるため、永続的なデータ保持には注意が必要です。</li>
+<li>**スレッド安全性**: 本 API は主にリクエスト処理コンテキストで呼び出されることを想定しており、特定の接続に対する排他制御は呼び出し側（MPM）の責任範囲です。</li>
+<li>**省略された詳細**: プロトコルスイッチングの具体的な実装や、EBCDIC 環境における文字コード変換の詳細については、実装ファイル（<code>.c</code>）を参照してください。これらはプラットフォーム固有の複雑さを隠蔽するためにマクロやラッパーでラップされています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__http_protocol_h__etag_rec.html" target="wiki-view">`etag_rec`</a></li>
+<li><a href="../symbols/include__http_protocol_h__ap_condition_e.html" target="wiki-view">`ap_condition_e`</a></li>
+<li><a href="../symbols/include__http_protocol_h__ap_rputs.html" target="wiki-view">`ap_rputs`</a></li>
+<li><a href="../symbols/include__http_protocol_h__ap_bucket_error.html" target="wiki-view">`ap_bucket_error`</a></li>
+</ul></body></html>

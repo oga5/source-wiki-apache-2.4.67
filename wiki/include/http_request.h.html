@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/http_request.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/http_request.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のリクエスト処理ライフサイクルを定義する中心的なヘッダーファイルです。クライアントからのリクエスト受信後の「ディレクトリ設定の適用」「モジュールディスパッチ」「サブリクエストの生成」「内部リダイレクト」といった、リクエスト処理のメインラインを制御するための API とフックを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http/http_request.c</code> と対をなし、Apache のリクエスト処理パイプラインのインターフェースを定義します。<code>httpd.h</code> で定義される <code>request_rec</code> 構造体を操作し、リクエストの各フェーズ（翻訳、認証、認可、修正、コンテンツ生成）をモジュールが介入できるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**サブリクエスト管理**: URI やファイルパスに基づいたサブリクエストの生成、実行、破棄。</li>
+<li>**内部リダイレクト**: リクエストの転送とハンドラの差し替え。</li>
+<li>**認証・認可フックの提供**: アクセス制御フェーズにおけるモジュール連携の定義。</li>
+<li>**リクエスト処理の制御**: メインリクエストの処理開始、終了後の後処理、および EOR (End Of Request) バケットによるリソース解放の管理。</li>
+<li>**メソッド管理**: リソースに対する許可メソッドの動的な制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>サブリクエスト・リダイレクト</h3>
+<ul>
+<li><code>ap_sub_req_lookup_uri</code>, <code>ap_sub_req_lookup_file</code>: URI/ファイルからサブリクエストを生成。</li>
+<li><code>ap_run_sub_req</code>: サブリクエストの実行。</li>
+<li><code>ap_destroy_sub_req</code>: サブリクエストのメモリ解放。</li>
+<li><code>ap_internal_redirect</code>: リクエストの内部リダイレクト。</li>
+</ul>
+<h3>認証・認可フック登録</h3>
+<ul>
+<li><code>ap_hook_check_access</code>, <code>ap_hook_check_authn</code>, <code>ap_hook_check_authz</code>: 各フェーズのフック登録用。</li>
+<li><code>AP_AUTH_INTERNAL_PER_URI</code>, <code>AP_AUTH_INTERNAL_PER_CONF</code>: 内部リクエストにおけるアクセス制御の適用範囲を指定するフラグ。</li>
+</ul>
+<h3>リクエスト処理制御</h3>
+<ul>
+<li><code>ap_process_request</code>: メインリクエストの同期処理。</li>
+<li><code>ap_process_async_request</code>: 非同期処理を許容するリクエスト処理。</li>
+<li><code>ap_die</code>: エラー発生時のリクエスト終了処理。</li>
+</ul>
+<h3>EOR (End Of Request) バケット</h3>
+<ul>
+<li><code>ap_bucket_eor_create</code>: リクエスト終了時に <code>request_rec</code> を破棄するための特殊バケット生成。</li>
+<li><code>AP_BUCKET_IS_EOR</code>: バケットが EOR かどうかの判定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト開始**: <code>ap_process_request</code> が呼び出され、リクエストの各フェーズ（<code>translate_name</code> → <code>map_to_storage</code> → <code>check_user_id</code> → <code>fixups</code> → <code>type_checker</code> → <code>access_checker</code> → <code>auth_checker</code>）が順次実行されます。 2. **サブリクエスト**: <code>ap_sub_req_lookup_*</code> で生成された <code>request_rec</code> は、メインリクエストのプールから派生したメモリ空間を持ちます。<code>ap_run_sub_req</code> により、独立したフィルタスタックを通じて処理されます。 3. **終了処理**: 応答の送信完了後、EOR バケットがフィルタチェーンを通過することで、<code>ap_destroy_sub_req</code> に相当するリソース解放が自動的に行われます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_optional.h</code>: オプション機能の動的解決。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/http_request.c</code>: 本ヘッダーで宣言された関数の実装。</li>
+<li><code>include/httpd.h</code>: <code>request_rec</code> 構造体の定義。</li>
+<li><code>include/http_config.h</code>: モジュール設定とフックの基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: サブリクエストは <code>apr_pool_t</code> を使用します。<code>ap_destroy_sub_req</code> を呼び出すと関連メモリが解放されるため、サブリクエストの生存期間中に参照を保持する場合は注意が必要です。</li>
+<li>**EOR バケット**: リクエストの生存期間を制御する重要な仕組みです。出力フィルタの最後に配置され、すべてのデータが送信された後にリクエストをクリーンアップします。</li>
+<li>**省略された詳細**: 本ファイルはインターフェース定義に特化しており、具体的なフックの実行順序や、<code>ap_directory_walk</code> などの内部的なパス走査アルゴリズムの詳細は <code>http_request.c</code> に委ねられています。</li>
+</ul></body></html>

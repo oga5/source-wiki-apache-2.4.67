@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/httpd.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/httpd.h</h1>
+<h2>概要</h2>
+<p><code>httpd.h</code> は Apache HTTP Server の中心的なヘッダーファイルです。サーバーの基本設定、HTTP プロトコル定数、リクエスト処理の主要なデータ構造（<code>request_rec</code>, <code>conn_rec</code>, <code>server_rec</code>）、およびモジュール開発者が利用する広範なユーティリティ関数を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache のコアおよび全モジュールが依存する最上位のインターフェースです。他の <code>http_*.h</code> や <code>util_*.h</code> ファイルが提供する機能の基盤となる型定義と定数を提供し、サーバーのライフサイクル全体にわたるデータ共有の規約を定めています。</p>
+<h2>責務</h2>
+<ul>
+<li>**グローバル設定定数**: サーバーのルートディレクトリ、デフォルトのタイムアウト、リクエスト制限などの定義。</li>
+<li>**HTTP プロトコル定義**: ステータスコード、メソッド、MIME タイプ、HTML Doctype の定義。</li>
+<li>**リクエスト処理のデータ構造**: プロセス、サーバー、コネクション、リクエストの各コンテキストの定義。</li>
+<li>**ユーティリティ関数**: 文字列操作、パス正規化、URL エンコード/デコード、正規表現、メモリ管理ラッパーの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>request_rec</code>: リクエストごとの状態（ヘッダー、URI、メソッド、フィルタチェーン等）を保持する中心的な構造体。</li>
+<li><code>conn_rec</code>: クライアントとの接続状態（IP、ソケット、フィルタ等）を保持。</li>
+<li><code>server_rec</code>: 仮想ホストごとの設定と状態を保持。</li>
+<li><code>process_rec</code>: サーバープロセス全体の情報を保持。</li>
+</ul>
+<h3>HTTP 定数</h3>
+<ul>
+<li><code>HTTP_*</code>: 100番台から500番台までの標準的な HTTP ステータスコード。</li>
+<li><code>M_*</code>: <code>M_GET</code>, <code>M_POST</code> 等の HTTP メソッド定数。</li>
+<li><code>APEXIT_*</code>: MPM（マルチプロセッシングモジュール）の子プロセス終了ステータス。</li>
+</ul>
+<h3>ユーティリティ関数群</h3>
+<ul>
+<li>**文字列/パス操作**: <code>ap_getword_*</code>, <code>ap_escape_*</code>, <code>ap_normalize_path</code>, <code>ap_make_full_path</code>。</li>
+<li>**メモリ管理**: <code>ap_malloc</code>, <code>ap_calloc</code>, <code>ap_realloc</code>（OOM 時に <code>ap_abort_on_oom</code> を呼び出す安全なラッパー）。</li>
+<li>**正規表現**: <code>ap_pregcomp</code>, <code>ap_pregsub</code>。</li>
+<li>**セキュリティ**: <code>ap_memeq_timingsafe</code> 等のタイミング攻撃対策関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**リクエスト処理**: <code>request_rec</code> が各フェーズ（翻訳、認証、ハンドラ実行）で受け渡され、モジュールが <code>per_dir_config</code> や <code>notes</code> を通じて情報を蓄積・共有します。</li>
+<li>**メモリ管理**: ほとんどの動的メモリは <code>apr_pool_t</code> に紐付けられ、リクエスト終了時に自動解放されます。</li>
+<li>**フィルタチェーン**: <code>input_filters</code> / <code>output_filters</code> を通じてデータがストリームとして処理されます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code> 系: APR (Apache Portable Runtime) の基本機能。</li>
+<li><code>ap_config.h</code>, <code>ap_mmn.h</code>: ビルド設定とモジュール API バージョン。</li>
+<li><code>ap_regex.h</code>: 正規表現エンジン。</li>
+<li><code>apr_uri.h</code>: URI 解析機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>http_protocol.c</code>: ステータスコードやメソッド名の実装。</li>
+<li><code>http_request.c</code>: リクエスト処理のライフサイクル。</li>
+<li><code>util_filter.c</code>: フィルタチェーンの管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>request_rec</code> 内の多くの文字列はリクエストプールに割り当てられており、手動解放は不要です。</li>
+<li>**レイアウト**: <code>request_rec</code> は非常に巨大な構造体です。プロトコル処理以外のモジュールは、必要なフィールドのみにアクセスし、不必要な変更を避けるべきです。</li>
+<li>**注意点**: <code>AP_DECLARE</code> マクロはプラットフォームごとのエクスポート属性を制御します。モジュール開発時はこのマクロを介して API を利用してください。</li>
+<li>**省略箇所**: 本ファイルは非常に広範なため、個別の MPM 特有のロジックや、特定のモジュール（mod_auth等）の詳細な内部構造については、各モジュールのヘッダーを参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__httpd_h__ap_version_t.html" target="wiki-view">`ap_version_t`</a></li>
+<li><a href="../symbols/include__httpd_h__ap_method_list_t.html" target="wiki-view">`ap_method_list_t`</a></li>
+<li><a href="../symbols/include__httpd_h__ap_request_bnotes_t.html" target="wiki-view">`ap_request_bnotes_t`</a></li>
+<li><a href="../symbols/include__httpd_h__htaccess_result.html" target="wiki-view">`htaccess_result`</a></li>
+<li><a href="../symbols/include__httpd_h__process_rec.html" target="wiki-view">`process_rec`</a></li>
+<li><a href="../symbols/include__httpd_h__server_rec.html" target="wiki-view">`server_rec`</a></li>
+<li><a href="../symbols/include__httpd_h__conn_rec.html" target="wiki-view">`conn_rec`</a></li>
+<li><a href="../symbols/include__httpd_h__request_rec.html" target="wiki-view">`request_rec`</a></li>
+<li><a href="../symbols/include__httpd_h__conn_state_t.html" target="wiki-view">`conn_state_t`</a></li>
+<li><a href="../symbols/include__httpd_h__ap_conn_keepalive_e.html" target="wiki-view">`ap_conn_keepalive_e`</a></li>
+<li><a href="../symbols/include__httpd_h__conn_state_e.html" target="wiki-view">`conn_state_e`</a></li>
+<li><a href="../symbols/include__httpd_h__conn_sense_e.html" target="wiki-view">`conn_sense_e`</a></li>
+</ul></body></html>

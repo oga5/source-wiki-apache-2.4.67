@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/http_log.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/http_log.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のコアロギングライブラリを定義するヘッダーファイルです。サーバーの起動からリクエスト処理、接続管理に至るまで、システム全体の診断メッセージやエラーログを出力するためのインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>APACHE_CORE</code> モジュールの一部として、他のすべてのモジュールが利用する標準的なログ出力手段を提供します。<code>httpd.h</code> や <code>http_config.h</code> と密接に連携し、モジュールごとのログレベル制御や、リクエスト/接続コンテキストに基づいたログのフィルタリングを実現します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ログレベルの定義**: <code>syslog</code> 互換の優先度および Apache 独自のトレースレベル（TRACE1-8）の管理。</li>
+<li>**ログ出力インターフェース**: <code>server_rec</code>, <code>conn_rec</code>, <code>request_rec</code> に紐づくログ出力関数の提供。</li>
+<li>**バイナリデータロギング**: バッファの内容を 16 進数形式で出力する機能。</li>
+<li>**パイプ付きログ管理**: 外部プロセスへログを転送するためのパイプ処理の抽象化。</li>
+<li>**プロセス管理**: PID ファイルの読み書きおよび管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ログレベルと定数</h3>
+<ul>
+<li><code>APLOG_EMERG</code> ～ <code>APLOG_TRACE8</code>: ログの重大度。<code>APLOG_LEVELMASK</code> でマスク可能。</li>
+<li><code>APLOGNO(n)</code>: ログメッセージに一意のタグ（AHxxxxx）を付与するためのマクロ。</li>
+<li><code>APLOG_MARK</code>: 呼び出し元のファイル名、行番号、モジュールインデックスを自動挿入する便利マクロ。</li>
+</ul>
+<h3>ログ出力関数（マクロ経由）</h3>
+<ul>
+<li><code>ap_log_error(...)</code>: サーバー全体（<code>server_rec</code>）に関連するログ。</li>
+<li><code>ap_log_rerror(...)</code>: 特定のリクエスト（<code>request_rec</code>）に関連するログ。</li>
+<li><code>ap_log_cerror(...)</code>: 特定の接続（<code>conn_rec</code>）に関連するログ。</li>
+<li><code>ap_log_perror(...)</code>: 特定のコンテキストを持たないログ（プールベース）。</li>
+</ul>
+<h3>ログレベル判定</h3>
+<ul>
+<li><code>APLOG_MODULE_IS_LEVEL(...)</code>: 指定されたモジュールとコンテキストでログ出力が必要か判定するマクロ。</li>
+</ul>
+<h3>パイプ付きログ</h3>
+<ul>
+<li><code>piped_log</code>: 外部プロセスへのパイプを管理する不透明構造体。</li>
+<li><code>ap_open_piped_log</code>, <code>ap_close_piped_log</code>: パイプのライフサイクル管理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **マクロ展開**: <code>ap_log_*</code> 関数はマクロとして定義されており、呼び出し時に <code>APLOG_MARK</code> を通じてコンテキスト情報が渡されます。 2. **レベル判定**: <code>APLOG_MODULE_IS_LEVEL</code> 等のマクロが、現在の設定（<code>server_rec</code> や <code>conn_rec</code> に保持されたログレベル）と出力しようとしているレベルを比較します。 3. **フィルタリング**: 判定が偽であれば、関数呼び出し自体がスキップされ、パフォーマンスへの影響を最小限に抑えます。 4. **出力**: 判定が真の場合、内部の <code>ap_log_*_</code> 関数が呼び出され、フォーマット文字列と可変長引数が処理されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_thread_proc.h</code>: プロセス管理およびパイプ処理用。</li>
+<li><code>http_config.h</code>: <code>server_rec</code> やモジュールインデックスの定義用。</li>
+<li><code>syslog.h</code>: <code>HAVE_SYSLOG</code> 定義時に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/log.c</code>: 本ヘッダーで宣言された関数の実体。</li>
+<li><code>include/httpd.h</code>: <code>server_rec</code>, <code>conn_rec</code>, <code>request_rec</code> の定義元。</li>
+<li><code>include/http_config.h</code>: モジュール設定とログレベルの関連付け。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>ap_open_piped_log</code> 等で作成される構造体は、渡された <code>apr_pool_t</code> のライフサイクルに従います。</li>
+<li>**セキュリティ警告**: <code>ap_log_*</code> 関数のフォーマット文字列に、ネットワークからの未検証データ（URI やヘッダー）を直接含めないでください。DoS 攻撃の脆弱性となります。必ず <code>&quot;%s&quot;</code> を介して出力してください。</li>
+<li>**C++ 互換性**: C++ モジュールを使用する場合、<code>APLOG_USE_MODULE</code> マクロを適切に呼び出さないと、<code>APLOG_MODULE_INDEX</code> が正しく解決されません。</li>
+<li>**省略された詳細**: ログ出力の内部的なフォーマット変換ロジックや、<code>syslog</code> への具体的な転送処理は <code>server/log.c</code> に隠蔽されており、本ヘッダーではインターフェース定義に集中しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__http_log_h__piped_log.html" target="wiki-view">`piped_log`</a></li>
+</ul></body></html>
