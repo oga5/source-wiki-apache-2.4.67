@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/arch/win32/mod_isapi.c:254</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定された ISAPI 拡張（DLL）を動的にロードし、必要なエントリポイントを解決して初期化を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t isapi_load(apr_pool_t *p, server_rec *s, isapi_loaded *isa)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: リクエストまたはモジュールスコープのメモリプール。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>isa</code>: ロード対象の DLL 情報およびエントリポイントを保持する <code>isapi_loaded</code> 構造体（<code>filename</code> が設定済みであること）。</li>
+<li>**出力**:</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>、失敗時は <code>apr_status_t</code> エラーコード。</li>
+<li><code>isa</code> 構造体: <code>handle</code>、<code>GetExtensionVersion</code>、<code>HttpExtensionProc</code>、<code>TerminateExtension</code>、<code>isapi_version</code> が更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>isa-&gt;filename</code> にロードすべき DLL のパスが格納されている必要がある。</li>
+<li><code>isa-&gt;isapi_version</code> は関数内で <code>apr_pcalloc</code> により割り当てられる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>isa-&gt;isapi_version</code> 用のメモリを確保し、バージョン情報（0x500）とタイムアウト値を設定する。 2. <code>apr_dso_load</code> を使用して DLL をロードする。 3. <code>apr_dso_sym</code> を使用して以下の関数ポインタを解決する。</p>
+<ul>
+<li><code>GetExtensionVersion</code>（必須）</li>
+<li><code>HttpExtensionProc</code>（必須）</li>
+<li><code>TerminateExtension</code>（任意）</li>
+<p>4. <code>GetExtensionVersion</code> を呼び出し、拡張の初期化を行う。失敗した場合は DLL をアンロードする。 5. <code>apr_pool_cleanup_register</code> を使用し、プール破棄時に <code>cleanup_isapi</code> が実行されるよう登録する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/arch/win32/mod_isapi.c:394</code></li>
+<li><code>modules/arch/win32/mod_isapi.c:446</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_dso_load</code>, <code>apr_dso_sym</code>, <code>apr_dso_unload</code> (APR)</li>
+<li><code>ap_log_error</code> (Apache)</li>
+<li><code>GetExtensionVersion</code> (ロードした DLL 内の関数)</li>
+<li><code>cleanup_isapi</code> (クリーンアップハンドラ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>isapi_loaded</code>: DLL のハンドル、関数ポインタ、ファイル名、バージョン情報を保持する構造体。</li>
+<li><code>HSE_VERSION_INFO</code>: ISAPI 拡張のバージョン情報を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>DLL のロード失敗 (<code>apr_dso_load</code>): エラーログを出力し、エラーコードを返す。</li>
+<li>必須シンボルの解決失敗 (<code>GetExtensionVersion</code>, <code>HttpExtensionProc</code>): エラーログを出力し、DLL をアンロードした上でエラーコードを返す。</li>
+<li><code>GetExtensionVersion</code> の実行失敗: エラーログを出力し、DLL をアンロードした上でエラーコードを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>TerminateExtension</code> はオプションとして扱われており、解決に失敗しても処理は中断されない。</li>
+<li><code>isa-&gt;timeout</code> は現在使用されていない。</li>
+<li>DLL のロードおよびシンボル解決は <code>apr_dso</code> API に依存している。</li>
 </ul></body></html>

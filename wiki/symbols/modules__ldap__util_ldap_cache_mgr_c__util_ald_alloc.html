@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/ldap/util_ldap_cache_mgr.c:98</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>LDAP キャッシュ専用のメモリ割り当てを行う。共有メモリ（SHM）が有効な場合は <code>apr_rmm</code> を介して割り当て、それ以外の場合は標準の <code>calloc</code> を使用する抽象化レイヤーである。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void *util_ald_alloc(util_ald_cache_t *cache, unsigned long size)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cache</code>: キャッシュ管理構造体へのポインタ。</li>
+<li><code>size</code>: 割り当てるメモリサイズ（バイト単位）。</li>
+<li>**出力**:</li>
+<li>割り当てられたメモリ領域へのポインタ。失敗時または <code>size</code> が 0 の場合は <code>NULL</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>size</code> が 0 の場合、常に <code>NULL</code> を返す。</li>
+<li><code>APR_HAS_SHARED_MEMORY</code> が有効かつ <code>cache-&gt;rmm_addr</code> が設定されている場合、メモリは共有メモリ領域から割り当てられる。</li>
+<li>共有メモリ使用時は、返されるポインタは <code>apr_rmm_addr_get</code> によって変換されたアドレスである。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>size</code> が 0 であれば直ちに <code>NULL</code> を返す。 2. <code>APR_HAS_SHARED_MEMORY</code> が定義されており、かつ <code>cache-&gt;rmm_addr</code> が存在する場合:</p>
+<ul>
+<li><code>apr_rmm_calloc</code> を使用して共有メモリブロックを確保する。</li>
+<li>確保成功時、<code>apr_rmm_addr_get</code> を用いてオフセットを実アドレスに変換して返す。</li>
+<p>3. 上記以外の場合:</p>
+<li>標準の <code>calloc(sizeof(char), size)</code> を呼び出し、その結果を返す。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ldap/util_ldap_cache.c</code>: 各種ノード（URL, 検索, 比較, DN比較）の生成時に利用。</li>
+<li><code>modules/ldap/util_ldap_cache_mgr.c</code>: キャッシュ構造体の初期化やサブグループDNの割り当て時に利用。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_rmm_calloc</code> / <code>apr_rmm_addr_get</code> (共有メモリ有効時)</li>
+<li><code>calloc</code> (標準ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>util_ald_cache_t</code>: キャッシュ管理構造体。<code>rmm_addr</code> を保持し、メモリ割り当てのコンテキストとして使用される。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>size</code> が 0 の場合: <code>NULL</code> を返す。</li>
+<li>メモリ不足時: <code>apr_rmm_calloc</code> または <code>calloc</code> が失敗し、<code>NULL</code> を返す。</li>
+<li>共有メモリ環境下で <code>rmm_addr</code> が初期化されていない場合: <code>calloc</code> にフォールバックする。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>共有メモリ使用時は <code>apr_rmm</code> を介したポインタ操作が必要となるため、呼び出し元は返されたポインタを直接的なメモリ操作の起点として扱うこと。</li>
+<li><code>calloc</code> を使用しているため、割り当てられたメモリはゼロクリアされていることが保証される。</li>
 </ul></body></html>

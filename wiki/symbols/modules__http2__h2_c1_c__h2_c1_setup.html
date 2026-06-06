@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/http2/h2_c1.c:92</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 接続の初期化を行い、<code>h2_session</code> オブジェクトを生成して接続コンテキストに割り当てる。また、HTTP/1.1 向けフィルタである <code>reqtimeout</code> を除去し、HTTP/2 への移行を完了させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_c1_setup(conn_rec *c, request_rec *r, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 現在の接続レコード (<code>conn_rec</code>)。</li>
+<li><code>r</code>: リクエストレコード (<code>request_rec</code>)。初期化時に利用される。</li>
+<li><code>s</code>: サーバーレコード (<code>server_rec</code>)。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、ワーカーが未初期化の場合は <code>APR_EGENERAL</code>、セッション生成失敗時はそのエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>グローバル変数 <code>workers</code> が初期化されている必要がある。</li>
+<li>接続コンテキスト (<code>h2_conn_ctx_t</code>) が <code>h2_conn_ctx_get(c)</code> により取得可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>workers</code> の存在を確認し、未初期化であればエラーを返す。 2. <code>h2_session_create</code> を呼び出し、セッションオブジェクトを生成する。 3. 接続コンテキストを取得し、生成したセッションを <code>h2_conn_ctx_assign_session</code> で割り当てる。 4. <code>ap_remove_input_filter_byhandle</code> を呼び出し、HTTP/1.x 向けに設定された <code>reqtimeout</code> フィルタを除去する。 5. 成功時に <code>APR_SUCCESS</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_c1.c:302</code></li>
+<li><code>modules/http2/h2_switch.c:200</code></li>
+<li>**呼び出し先**:</li>
+<li><code>h2_session_create</code></li>
+<li><code>h2_conn_ctx_get</code></li>
+<li><code>h2_conn_ctx_assign_session</code></li>
+<li><code>ap_remove_input_filter_byhandle</code></li>
+<li><code>ap_log_cerror</code> (エラー時)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_session</code>: HTTP/2 セッションのメイン構造体。</li>
+<li><code>h2_conn_ctx_t</code>: 接続ごとの HTTP/2 コンテキスト。</li>
+<li><code>conn_rec</code>: Apache の接続レコード。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>workers</code> が未初期化の場合: <code>APR_EGENERAL</code> を返し、ログを出力して終了する。</li>
+<li><code>h2_session_create</code> が失敗した場合: そのエラーコードを返し、処理を中断する。</li>
+<li><code>h2_conn_ctx_get</code> が NULL を返す場合: <code>ap_assert(ctx)</code> によりアボートする。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>reqtimeout</code> フィルタの除去は、HTTP/2 確立後の状態管理が HTTP/1.x と異なるために必須の処理である。</li>
+<li>本関数は <code>h2_c1.h</code> にて公開されており、プロトコル切り替えの重要な接点となっている。</li>
 </ul></body></html>

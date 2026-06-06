@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/dav/main/props.c:723</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>PROPFIND</code> リクエストに応答して、指定されたリソースのライブプロパティおよびデッドプロパティを検索・統合し、XML 形式の <code>multistatus</code> レスポンス（<code>propstat</code>）を生成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>dav_get_props_result dav_get_props(dav_propdb *propdb, apr_xml_doc *doc)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>propdb</code>: プロパティデータベースのコンテキスト。</li>
+<li><code>doc</code>: クライアントから要求されたプロパティ名を含む XML ドキュメント。</li>
+<li>**出力**:</li>
+<li><code>dav_get_props_result</code>: 生成された <code>propstat</code> リストと、使用された XML 名前空間定義（<code>xmlns</code>）を含む構造体。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>propdb</code> は有効なリソースコンテキストを保持している必要があります。</li>
+<li><code>doc-&gt;root</code> には <code>&lt;D:prop&gt;</code> 要素が含まれている必要があります。</li>
+<li>ライブプロパティの検索には <code>dav_find_liveprop</code> が使用され、結果は <code>elem-&gt;priv</code> にキャッシュされます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: ライブプロパティ要素の準備と、XML 出力用のバッファ（<code>hdr_good</code>, <code>hdr_bad</code>, <code>hdr_ns</code>）を初期化します。 2. **プロパティ走査**: 要求された各プロパティに対し、以下の順序で解決を試みます。</p>
+<ul>
+<li>**ライブプロパティ**: <code>dav_insert_liveprop</code> を呼び出し、成功すれば値を <code>hdr_good</code> に追加し、関連する名前空間を <code>hdr_ns</code> に登録します。</li>
+<li>**デッドプロパティ**: ライブプロパティとして解決できない場合、<code>propdb</code> が未オープンであれば <code>dav_really_open_db</code> で開き、<code>db_hooks-&gt;output_value</code> を介してデータベースから値を取得します。</li>
+<p>3. **エラー処理**: どちらでも見つからないプロパティは <code>hdr_bad</code> に追加され、最終的に <code>404 Not Found</code> ステータスとしてまとめられます。 4. **統合**: <code>hdr_good</code>（成功分）と <code>hdr_bad</code>（失敗分）を連結し、最終的な XML 構造を構築して返却します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/main/mod_dav.c:2122</code>（<code>PROPFIND</code> メソッド処理内）。</li>
+<li>**呼び出し先**:</li>
+<li><code>dav_get_liveprop_element</code>, <code>dav_find_liveprop</code>, <code>dav_insert_liveprop</code></li>
+<li><code>dav_xmlns_create</code>, <code>dav_insert_xmlns</code>, <code>dav_xmlns_generate</code></li>
+<li><code>dav_really_open_db</code></li>
+<li><code>db_hooks-&gt;output_value</code>, <code>db_hooks-&gt;define_namespaces</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_propdb</code>: プロパティ操作のメインコンテキスト。</li>
+<li><code>dav_get_props_result</code>: 戻り値用構造体。</li>
+<li><code>dav_liveprop_elem</code>: ライブプロパティのキャッシュ用構造体。</li>
+<li><code>apr_xml_doc</code>, <code>apr_text_header</code>: XML 生成用 APR ユーティリティ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**DB オープン失敗**: <code>propdb-&gt;deferred</code> が真の場合、DB オープン時にエラーが発生する可能性がありますが、現在の実装ではエラー伝播が不完全です。</li>
+<li>**プロパティ未定義**: ライブ・デッド双方で見つからない場合、<code>404 Not Found</code> の <code>propstat</code> が生成されます。</li>
+<li>**メモリ不足**: <code>apr_pcalloc</code> 等のメモリ割り当て失敗時は、Apache のメモリ管理ポリシーに従いプロセスが終了する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>elem-&gt;priv</code> はリクエストプール（<code>r-&gt;pool</code>）を使用しており、<code>propdb-&gt;p</code> よりも長寿命である点に注意してください。</li>
+<li><code>PROPPATCH</code> 関連の複雑なエラーハンドリングにおいて、一部エラー伝播が不完全な箇所があります。</li>
 </ul></body></html>

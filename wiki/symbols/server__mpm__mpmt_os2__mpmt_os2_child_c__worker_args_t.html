@@ -6,22 +6,42 @@
 <li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2_child.c:56</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>子プロセス内において、メインスレッドが受け入れた接続情報をワーカー（<code>worker_main</code>）へ伝達するためのデータコンテナです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    apr_pool_t *pconn;
+    apr_socket_t *conn_sd;
+} worker_args_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 接続受け入れ時に <code>apr_palloc</code> で割り当てられ、<code>pconn</code> および <code>conn_sd</code> が設定されます。</li>
+<li>**出力**: OS/2 のキュー（<code>workq</code>）を介してワーカーへ渡され、ワーカー側で接続処理に使用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pconn</code> は接続の生存期間を管理するメモリプールである必要があります。</li>
+<li><code>conn_sd</code> は有効な接続済みソケットである必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. メインスレッドが接続を受け入れると、<code>apr_palloc</code> を用いて <code>worker_args_t</code> 構造体をメモリ上に確保します。 2. 構造体に接続情報（プールとソケット）を格納します。 3. <code>DosWriteQueue</code> を呼び出し、<code>WORKTYPE_CONN</code> 型のデータとしてキューに投入します。 4. ワーカー側で <code>DosReadQueue</code> を通じて本構造体を受け取り、接続処理を開始します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/mpmt_os2/mpmt_os2_child.c</code> 内のメイン接続受け入れループ（<code>DosWriteQueue</code> の引数として使用）。</li>
+<li>**呼び出し先**: <code>worker_main</code>（キューから読み出された後、接続処理の引数として利用）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: 接続ごとのメモリ管理に使用。</li>
+<li><code>apr_socket_t</code>: 処理対象のネットワークソケット。</li>
+<li><code>workq</code>: OS/2 ネイティブの FIFO キュー。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>メモリ不足により <code>apr_palloc</code> が失敗した場合、接続処理が中断されます。</li>
+<li>キューが満杯の場合や <code>DosWriteQueue</code> が失敗した場合、接続の受け渡しが正常に行われません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は OS/2 のプロセス内通信（キュー）に依存しています。</li>
+<li>接続終了後、<code>pconn</code> プールが破棄されることで関連リソースが解放される設計です。</li>
 </ul></body></html>

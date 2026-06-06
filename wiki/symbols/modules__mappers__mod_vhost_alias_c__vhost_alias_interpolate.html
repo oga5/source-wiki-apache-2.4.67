@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/mappers/mod_vhost_alias.c:253</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ホスト名やIPアドレスをテンプレート文字列（<code>VirtualDocumentRoot</code> 等）に埋め込み、リクエストに対応する物理的なディレクトリパスを構築する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void vhost_alias_interpolate(request_rec *r, const char *name,
+                             const char *map, const char *uri)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: リクエストレコード。</li>
+<li><code>name</code>: 補間対象のホスト名またはIPアドレス。</li>
+<li><code>map</code>: テンプレート文字列（<code>%</code> 記法を含む）。</li>
+<li><code>uri</code>: リクエストされたURI。</li>
+<li>**出力**:</li>
+<li><code>r-&gt;filename</code>: 生成された物理パスが格納される。</li>
+<li><code>r</code> のコンテキスト情報およびドキュメントルートが更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>map</code> 内のテンプレート構文（<code>%</code> 記法）は、呼び出し前に <code>vhost_alias_set</code> 等で検証済みであること。</li>
+<li><code>name</code> はドットで区切られた文字列として処理される。</li>
+<li><code>HUGE_STRING_LEN</code> を超えるパス生成時の挙動は <code>vhost_alias_checkspace</code> に依存する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **解析**: <code>name</code> をドットで分割し、最大19個のパーツとして保持する。 2. **テンプレート展開**: <code>map</code> を走査し、以下の指定子を処理する。</p>
+<ul>
+<li><code>%%</code>: リテラルの <code>%</code> に置換。</li>
+<li><code>%p</code>: サーバーポート番号に置換。</li>
+<li><code>%N</code>, <code>%M</code> 等: ホスト名/IPのパーツを抽出（1ベースのインデックス指定）。</li>
+<p>3. **正規化**: 生成されたパスの末尾が <code>/</code> の場合は削除する。 4. **パス結合**: <code>r-&gt;filename</code> が既に存在する場合はその末尾に結合し、存在しない場合は新規作成する。 5. **適用**: <code>ap_set_context_info</code> および <code>ap_set_document_root</code> を呼び出し、リクエストに反映する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/mappers/mod_vhost_alias.c:428</code>（<code>mva_translate</code> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>vhost_alias_checkspace</code>: バッファ溢れ防止。</li>
+<li><code>ap_get_server_port</code>: ポート番号取得。</li>
+<li><code>apr_tolower</code>: 文字列の小文字化。</li>
+<li><code>apr_pstrcat</code>, <code>apr_pstrdup</code>: メモリ確保と文字列結合。</li>
+<li><code>ap_set_context_info</code>, <code>ap_set_document_root</code>: リクエスト設定の更新。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+<li><code>HUGE_STRING_LEN</code>: パス構築用バッファの最大長。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>N</code> や <code>M</code> がパーツ数を超える場合、<code>_</code>（アンダースコア）が代用される。</li>
+<li><code>map</code> が空の場合、空のパスが生成される。</li>
+<li><code>r-&gt;filename</code> が既に設定されている場合、その値がベースパスとして使用される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>name</code> の解析において <code>dots[ndots++] = name-1</code> というポインタ操作を行っているため、変更時は注意が必要。</li>
+<li><code>Directory</code> 単位の設定オーバーライドには対応していない。</li>
 </ul></body></html>

@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/aaa/mod_auth_digest.c:142</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP Digest 認証において、クライアントから送信された <code>Authorization</code> ヘッダーの内容をパースし、認証検証プロセス全体で利用可能な形式で保持するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct digest_header_struct {
+    const char           *scheme;
+    const char           *realm;
+    const char           *username;
+          char           *nonce;
+    const char           *uri;
+    const char           *method;
+    const char           *digest;
+    const char           *algorithm;
+    const char           *cnonce;
+    const char           *opaque;
+    unsigned long         opaque_num;
+    const char           *message_qop;
+    const char           *nonce_count;
+    const char           *raw_request_uri;
+    apr_uri_t            *psd_request_uri;
+    apr_time_t            nonce_time;
+    enum hdr_sts          auth_hdr_sts;
+    int                   needed_auth;
+    const char           *ha1;
+    client_entry         *client;
+} digest_header_rec;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>get_digest_rec()</code> 関数により、リクエスト内の <code>Authorization</code> ヘッダー文字列から各フィールドが抽出・代入されます。</li>
+<li>**出力**: 認証ロジック（<code>check_nonce</code> や <code>check_nc</code> など）において、検証対象のデータソースとして参照されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pcalloc</code> 等でメモリ確保された後に使用される必要があります。</li>
+<li>共有メモリ上の <code>client_entry</code> へのポインタ（<code>client</code>）は、共有メモリの有効期間内でのみ有効です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **パース**: <code>get_digest_rec</code> がヘッダーを解析し、構造体の各メンバを埋めます。 2. **拡張情報**: ヘッダーから直接得られない情報（<code>raw_request_uri</code>、<code>psd_request_uri</code>、<code>nonce_time</code>、<code>client</code> 等）は、認証処理の過程で計算または検索され、本構造体に格納されます。 3. **状態管理**: <code>auth_hdr_sts</code> により、ヘッダーの解析状態や認証の進捗状況を追跡します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>get_digest_rec</code>（初期化）、<code>authenticate_digest_user</code>（認証フロー）、<code>check_nc</code>（カウント検証）、<code>check_nonce</code>（ナンス検証）などで参照・更新されます。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>client_entry</code>: 共有メモリ上のクライアント状態を保持する構造体。本構造体の <code>client</code> メンバから参照されます。</li>
+<li><code>apr_uri_t</code>: URI 解析結果を保持する APR の標準構造体。</li>
+<li><code>hdr_sts</code>: ヘッダー解析の状態を示す列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ヘッダーのパースに失敗した場合、<code>auth_hdr_sts</code> にエラー状態が記録されます。</li>
+<li><code>client</code> メンバが <code>NULL</code> の場合、共有メモリ上に該当するクライアントエントリが存在しないことを示します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_auth_digest</code> の認証ライフサイクル全体を通じて受け渡されるため、メンバの追加や変更は認証ロジック全体に影響を与えます。</li>
+<li><code>ha1</code> や <code>client</code> など、ヘッダーから直接得られないフィールドは、認証の各フェーズで適切に設定されていることを確認してください。</li>
 </ul></body></html>

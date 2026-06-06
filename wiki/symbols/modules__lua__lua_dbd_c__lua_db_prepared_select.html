@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/lua/lua_dbd.c:382</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Lua スクリプトから、事前に準備された SQL ステートメント（プリペアドステートメント）を実行し、その結果セットを Lua テーブルとして取得します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<p><code>int lua_db_prepared_select(lua_State *L)</code></p>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li>スタック第1引数: プリペアドステートメントを保持する Lua テーブル。</li>
+<li>スタック第2引数以降: SQL クエリにバインドするパラメータ（可変長）。</li>
+<li>**出力**:</li>
+<li>成功時: 結果セットを保持する Lua テーブル（スタックに1つプッシュ）。</li>
+<li>失敗時: <code>nil</code> とエラーメッセージ（スタックに2つプッシュ）、または <code>false</code> とエラーメッセージ。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>データベース接続（<code>st-&gt;db</code>）が生存していること。</li>
+<li>渡されたステートメントオブジェクトが <code>lua_db_prepared_statement</code> 型のユーザーデータであること。</li>
+<li>必要なバインド変数の数が、ステートメント定義時の期待値以上であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. スタックから <code>lua_db_prepared_statement</code> を取得し、バインド変数の数を検証します。 2. 指定されたパラメータを <code>apr_pcalloc</code> で確保したメモリにコピーします。 3. <code>apr_dbd_pselect</code> を呼び出し、SQL を実行します。 4. 成功した場合、結果セットを <code>lua_db_result_set</code> 構造体としてラップし、メタテーブル <code>lua_apr.dbselect</code> を設定します。このメタテーブルには <code>__call</code> メタメソッドとして <code>lua_db_get_row</code> が割り当てられ、Lua 側で結果セットをイテレート可能にします。 5. 失敗した場合は <code>apr_dbd_error</code> を用いてエラーメッセージを生成し、Lua に返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/lua/lua_dbd.c</code> 内の初期化処理（<code>lua_pushcfunction</code> による登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_dbd_pselect</code> (APR DBD API)</li>
+<li><code>lua_db_get_row</code> (メタメソッドとして登録)</li>
+<li><code>apr_dbd_num_cols</code> / <code>apr_dbd_num_tuples</code> (APR DBD API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lua_db_prepared_statement</code>: プリペアドステートメントの定義と接続情報を保持。</li>
+<li><code>lua_db_result_set</code>: クエリ結果とドライバ情報を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**接続切断**: データベース接続が閉じている場合、<code>false</code> とエラーメッセージを返します。</li>
+<li>**引数不足**: 必要なバインド変数が不足している場合、<code>false</code> と期待値・実測値を含むエラーメッセージを返します。</li>
+<li>**実行エラー**: <code>apr_dbd_pselect</code> が失敗した場合、<code>nil</code> とエラーメッセージを返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_dbd_pselect</code> を使用しており、バインド変数は文字列として処理されます。</li>
+<li>結果セットのメモリ管理は <code>st-&gt;db-&gt;pool</code> に依存しており、接続のライフサイクルと同期しています。</li>
 </ul></body></html>

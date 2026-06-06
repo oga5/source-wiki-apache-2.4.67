@@ -6,22 +6,43 @@
 <li>定義箇所: <code>modules/generators/mod_cgid.c:282</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>CGI デーモンプロセスのライフサイクル管理（監視、再起動、終了処理）を行うコールバック関数です。APR の <code>other_child</code> メカニズムを通じて、デーモンプロセスの状態変化に応じた保守処理を実行します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void cgid_maint(int reason, void *data, apr_wait_t status)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>reason</code>: 発生したイベントの種類（<code>APR_OC_REASON_DEATH</code>, <code>APR_OC_REASON_RESTART</code>, <code>APR_OC_REASON_LOST</code>, <code>APR_OC_REASON_UNREGISTER</code>）。</li>
+<li><code>data</code>: 監視対象の <code>apr_proc_t</code> 構造体へのポインタ。</li>
+<li><code>status</code>: プロセスの終了状態またはエラーコード。</li>
+<li>出力: なし（副作用としてデーモンの再起動や終了、ログ出力を行う）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_proc_other_child_register</code> によって、<code>cgid_maint</code> が対象プロセスと関連付けられている必要があります。</li>
+<li><code>root_pool</code> および <code>root_server</code> が有効な状態で初期化されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **<code>APR_OC_REASON_DEATH</code>**: プロセスが終了した場合、サーバーが停止中でなければ <code>cgid_start</code> を呼び出してデーモンを再起動します。起動エラー時はログを出力します。 2. **<code>APR_OC_REASON_RESTART</code>**: サーバーの再起動または停止に伴い、登録を解除します。 3. **<code>APR_OC_REASON_LOST</code>**: プロセスの状態が不明になった場合、<code>cgid_start</code> を呼び出してデーモンを再起動します。 4. **<code>APR_OC_REASON_UNREGISTER</code>**: モジュールのクリーンアップ時、デーモンに <code>SIGHUP</code> を送信して終了させ、Unix ドメインソケットファイルを削除します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>apr_proc_other_child_register</code> により、APR のプロセス管理サブシステムからイベント発生時に呼び出されます。</li>
+<li>呼び出し先: <code>cgid_start</code>（再起動時）、<code>kill</code>（終了時）、<code>unlink</code>（ソケット削除時）、<code>ap_log_error</code>（ログ出力時）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_proc_t</code>: 監視対象のプロセス情報。</li>
+<li><code>root_pool</code>, <code>root_server</code>: モジュール全体で共有されるグローバルなプールおよびサーバー設定。</li>
+<li><code>sockname</code>: Unix ドメインソケットのパス名。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_mpm_query</code> が失敗した場合、安全側に倒してデーモンの再起動を行わない挙動をとります。</li>
+<li><code>unlink</code> が失敗した場合（<code>ENOENT</code> 以外）、エラーログを出力します。</li>
+<li><code>kill</code> による終了シグナル送信後、デーモンが即座に終了しない場合の待機処理は本関数内には含まれていません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_proc_other_child_register</code> のコールバックとして登録されます。</li>
+<li><code>pcgi</code> プールのクリーンアップ時に <code>APR_OC_REASON_UNREGISTER</code> がトリガーされるため、デーモンの生存期間とメモリプールのライフサイクルが密接に関連しています。</li>
+<li>ソケットファイルの削除は、作成時と同じ権限を維持するためにこのタイミングで行う必要があります。</li>
 </ul></body></html>

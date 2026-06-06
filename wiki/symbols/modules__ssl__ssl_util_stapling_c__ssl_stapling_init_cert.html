@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/ssl/ssl_util_stapling.c:131</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバー証明書に関連付けられた OCSP ステープリング情報を初期化し、キャッシュ管理用の <code>certinfo</code> 構造体を生成・登録します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_stapling_init_cert(server_rec *s, apr_pool_t *p, apr_pool_t *ptemp,
+                           modssl_ctx_t *mctx, X509 *x)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>p</code>: 長期生存するメモリプール。</li>
+<li><code>ptemp</code>: 一時的なメモリプール。</li>
+<li><code>mctx</code>: SSL コンテキスト。</li>
+<li><code>x</code>: 初期化対象の証明書（<code>X509</code>）。</li>
+<li>**出力**:</li>
+<li>成功時は <code>1</code>、失敗時は <code>0</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>x</code> が <code>NULL</code> の場合は直ちに <code>0</code> を返します。</li>
+<li>証明書の発行者（Issuer）証明書が取得可能である必要があります。</li>
+<li>OCSP URI が証明書内に存在するか、<code>SSLStaplingForceURL</code> が設定されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>stapling_get_issuer</code> を呼び出し、証明書の発行者を特定します。 2. 証明書の SHA-1 ダイジェストを計算し、一意な識別子（<code>idx</code>）を生成します。 3. <code>ap_ssl_ocsp_prime</code> または <code>ssl_run_init_stapling_status</code> フックにより、他モジュールによる処理の有無を確認します。処理された場合、必要に応じて <code>stapling_cb</code> を登録して終了します。 4. 既にキャッシュ済みの <code>certinfo</code> が存在するか確認し、存在する場合は設定の整合性を検証します。 5. <code>OCSP_cert_to_id</code> で <code>OCSP_CERTID</code> を生成し、証明書から OCSP URI を抽出します。 6. <code>certinfo</code> 構造体を割り当て、<code>stapling_certinfo</code> ハッシュテーブルに格納します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_init.c</code>（サーバー初期化フェーズ）。</li>
+<li>**呼び出し先**: </li>
+<li><code>stapling_get_issuer</code>, <code>modssl_cert_get_pem</code>, <code>ap_ssl_ocsp_prime</code>, <code>ssl_run_init_stapling_status</code>, <code>OCSP_cert_to_id</code>, <code>X509_get1_ocsp</code>, <code>ssl_stapling_certid_free</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>certinfo</code>: OCSP ステープリング情報を保持する内部構造体。</li>
+<li><code>stapling_certinfo</code>: 証明書ハッシュをキーとするグローバルなハッシュテーブル。</li>
+<li><code>modssl_ctx_t</code>: SSL 設定コンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>発行者証明書が取得できない場合、<code>stapling_enabled</code> が有効であればエラーログを出力し <code>0</code> を返します。</li>
+<li>OCSP URI が取得できず、かつ強制 URL 設定もない場合、エラーログを出力し <code>0</code> を返します。</li>
+<li><code>CertID</code> の生成に失敗した場合、エラーログを出力し <code>0</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_ssl</code> の初期化プロセスの一部です。</li>
+<li><code>certinfo</code> のメモリ管理には <code>apr_pool_t</code> を使用しており、<code>cid</code>（CertID）の解放はプールクリーンアップ時に <code>ssl_stapling_certid_free</code> が実行されるよう登録されています。</li>
+<li><code>stapling_certinfo</code> ハッシュテーブルへのアクセスは、マルチスレッド環境下での競合に注意してください。</li>
 </ul></body></html>

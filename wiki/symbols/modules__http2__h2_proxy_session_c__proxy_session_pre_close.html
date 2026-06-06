@@ -6,22 +6,41 @@
 <li>定義箇所: <code>modules/http2/h2_proxy_session.c:186</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 プロキシセッションに関連付けられたリソースを、接続のクローズ直前に安全に解放・破棄します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t proxy_session_pre_close(void *theconn)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>theconn</code> (<code>void *</code>) - <code>proxy_conn_rec</code> 構造体へのポインタ。</li>
+<li>**出力**: <code>APR_SUCCESS</code> を常に返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>theconn</code> は <code>proxy_conn_rec</code> 型としてキャスト可能である必要があります。</li>
+<li><code>p_conn-&gt;data</code> に <code>h2_proxy_session</code> 構造体が格納されていることを前提としています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>theconn</code> から <code>h2_proxy_session</code> を取得します。 2. セッションおよび <code>nghttp2</code> セッションが存在する場合にのみ処理を実行します。 3. セッションの <code>aborted</code> フラグを <code>1</code> に設定します。 4. <code>H2_PROXYS_EV_PRE_CLOSE</code> イベントをディスパッチし、状態遷移をトリガーします。 5. <code>nghttp2_session_del</code> を呼び出して <code>nghttp2</code> セッションを破棄し、ポインタを <code>NULL</code> にクリアします。 6. <code>p_conn-&gt;data</code> を <code>NULL</code> に設定し、接続構造体との関連付けを解除します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_proxy_session.c:746</code> にて、<code>apr_pool_pre_cleanup_register</code> を通じて登録されています。</li>
+<li>**呼び出し先**: </li>
+<li><code>dispatch_event</code> (イベント通知)</li>
+<li><code>nghttp2_session_del</code> (ライブラリによるメモリ解放)</li>
+<li><code>ap_log_cerror</code> (ログ出力)</li>
+<li><code>h2_proxy_ihash_count</code> (ストリーム数確認)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_conn_rec</code>: プロキシ接続の管理構造体。</li>
+<li><code>h2_proxy_session</code>: HTTP/2 プロキシセッションの内部状態を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session</code> または <code>session-&gt;ngh2</code> が <code>NULL</code> の場合、関数は何も行わず即座に <code>APR_SUCCESS</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_pool_pre_cleanup_register</code> で登録されており、接続に関連付けられたメモリプールが破棄される直前に自動的に呼び出されます。</li>
+<li><code>nghttp2</code> セッションの破棄後に <code>session</code> 構造体自体が解放されるため、本関数内での <code>session</code> へのアクセスは、<code>nghttp2</code> 関連のクリーンアップに限定してください。</li>
 </ul></body></html>

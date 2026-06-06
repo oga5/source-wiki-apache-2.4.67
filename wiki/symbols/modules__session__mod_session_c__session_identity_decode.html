@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/session/mod_session.c:391</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>URLエンコードされた文字列形式のセッションデータを解析し、<code>session_rec</code> 構造体の <code>entries</code> テーブルへ展開する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t session_identity_decode(request_rec *r, session_rec *z)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト情報。</li>
+<li><code>z</code>: デコード対象のセッション構造体。<code>z-&gt;encoded</code> にエンコード済み文字列が格納されている必要がある。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>OK</code> を返す。</li>
+<li>副作用: <code>z-&gt;entries</code> にキー・値ペアが設定され、<code>z-&gt;encoded</code> は <code>NULL</code> にリセットされる。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>z-&gt;encoded</code> が <code>NULL</code> の場合、処理は即座に終了する。</li>
+<li><code>z-&gt;entries</code> は初期化済みであること。</li>
+<li>セッションデータは <code>key=value</code> のペアが <code>&amp;</code> で連結された形式であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>z-&gt;encoded</code> が存在する場合、リクエストプールを使用して文字列を複製する。 2. <code>apr_strtok</code> を用いて <code>&amp;</code> 区切りでペアを順次抽出する。 3. 各ペアを <code>=</code> で分割し、キーと値を取得する。 4. 値が空の場合は <code>apr_table_unset</code> で該当キーを削除する。 5. 値が存在する場合、<code>ap_unescape_urlencoded</code> でデコードを行い、キーが <code>SESSION_EXPIRY</code> であれば <code>z-&gt;expiry</code> に数値を格納し、それ以外は <code>apr_table_set</code> でテーブルに保存する。 6. 処理完了後、<code>z-&gt;encoded</code> を <code>NULL</code> にクリアする。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/session/mod_session.c:480</code> (内部処理)</li>
+<li><code>modules/session/mod_session.c:694</code> (フック登録時)</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_pstrdup</code>, <code>apr_strtok</code>, <code>apr_table_unset</code>, <code>apr_table_set</code>, <code>apr_atoi64</code> (APRユーティリティ)</li>
+<li><code>ap_unescape_urlencoded</code> (Apache HTTPDコア)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_rec</code>: セッション情報を保持する構造体。</li>
+<li><code>request_rec</code>: リクエストごとのメモリプール（<code>r-&gt;pool</code>）を提供。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>z-&gt;encoded</code> が空または <code>NULL</code> の場合は <code>OK</code> を返して終了する。</li>
+<li><code>key</code> が存在しない、あるいは <code>val</code> が空の場合はテーブルから該当キーを削除する。</li>
+<li>デコード処理（<code>ap_unescape_urlencoded</code>）が失敗したペアは無視される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はデフォルトのシリアライズ形式を扱う。カスタム形式が必要な場合は、別の <code>session_decode</code> フック実装を検討すること。</li>
+<li><code>SESSION_EXPIRY</code> キーは特別扱いされ、セッションの有効期限として <code>z-&gt;expiry</code> に直接反映される。</li>
 </ul></body></html>

@@ -6,22 +6,62 @@
 <li>定義箇所: <code>modules/http2/mod_proxy_http2.c:318</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のプロキシサブシステムにおいて、<code>h2:</code> および <code>h2c:</code> スキームのリクエストを処理し、バックエンドサーバーへの HTTP/2 通信を確立・実行するメインハンドラです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_http2_handler(request_rec *r, 
+                               proxy_worker *worker,
+                               proxy_server_conf *conf,
+                               char *url, 
+                               const char *proxyname,
+                               apr_port_t proxyport)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のクライアントリクエスト情報。</li>
+<li><code>worker</code>: プロキシワーカ設定。</li>
+<li><code>url</code>: 転送先 URL。</li>
+<li>**出力**: </li>
+<li><code>int</code>: HTTP ステータスコード（成功時は <code>OK</code>、失敗時はエラーコード、対象外スキームは <code>DECLINED</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>url</code> が <code>h2</code> または <code>h2c</code> で始まる必要があります。</li>
+<li>リクエストのプール (<code>r-&gt;pool</code>) を使用して <code>h2_proxy_ctx</code> が割り当てられ、リクエスト終了時に自動的に解放されます。</li>
+<li><code>h2_proxy_ctx</code> は <code>r-&gt;connection</code> の <code>conn_config</code> に設定されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **スキーム検証**: URL が <code>h2</code> または <code>h2c</code> かを確認し、プロキシ関数名と SSL 使用有無を決定します。 2. **コンテキスト初期化**: <code>h2_proxy_ctx</code> を作成し、リクエスト情報を格納します。 3. **接続確立ループ (<code>run_connect</code>)**:</p>
+<ul>
+<li><code>ap_proxy_acquire_connection</code> でバックエンド接続を取得します。</li>
+<li><code>ap_proxy_determine_connection</code> で接続先を確定します。</li>
+<li><code>ap_proxy_connect_backend</code> でバックエンドへのソケット接続を確立します。</li>
+<li><code>ap_proxy_connection_create_ex</code> で接続用の <code>conn_rec</code> を作成します。</li>
+<p>4. **セッション実行**: <code>ctx_run(ctx)</code> を呼び出し、HTTP/2 セッションを開始してリクエストを処理します。 5. **再試行判定**: エラー発生時、<code>proxy-error-override</code> が設定されておらず、かつ再試行可能であれば、最大 1 回まで接続を破棄して再試行します。 6. **終了処理**: 接続の解放、モジュール設定のクリアを行い、最終的なステータスを返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>proxy_hook_scheme_handler</code> に登録され、プロキシフレームワークから呼び出されます。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_proxy_acquire_connection</code>, <code>ap_proxy_determine_connection</code>, <code>ap_proxy_connect_backend</code>, <code>ap_proxy_connection_create_ex</code> (プロキシフレームワーク API)</li>
+<li><code>ctx_run</code> (セッション実行)</li>
+<li><code>proxy_run_detach_backend</code> (条件付き呼び出し)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_proxy_ctx</code>: リクエスト処理中の状態を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+<li><code>proxy_worker</code>, <code>proxy_server_conf</code>: プロキシ設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**スキーム不一致**: <code>h2</code>/<code>h2c</code> 以外の場合は <code>DECLINED</code> を返します。</li>
+<li>**接続失敗**: <code>ap_proxy_acquire_connection</code> 等が失敗した場合、<code>cleanup</code> へ遷移しエラーを返します。</li>
+<li>**再試行制限**: <code>reconnects</code> が 2 回に達すると再試行を停止します。</li>
+<li>**セッション状態**: セッションが「クリーン」でない（オープンなストリームが存在する）場合、接続は再利用されずクローズされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>h2_proxy_ctx</code> の <code>r_may_retry</code> フラグが再試行の可否を制御します。</li>
+<li><code>ctx_run</code> は <code>h2_proxy_session</code> 関連のロジックへ処理を委譲しています。</li>
+<li><code>AP_MODULE_MAGIC_AT_LEAST</code> マクロにより、特定のバージョン以降で <code>proxy_run_detach_backend</code> が呼び出されます。</li>
 </ul></body></html>

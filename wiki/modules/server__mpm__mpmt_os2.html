@@ -1,46 +1,39 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/server__mpm__mpmt_os2.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/mpmt_os2</h1>
 <h2>システム内での役割</h2>
-<p><code>server/mpm/mpmt_os2</code> には 3 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p>OS/2 プラットフォーム専用のマルチプロセッシングモジュール（MPM）です。Apache HTTP Server のプロセス管理およびスレッド管理を OS/2 ネイティブ API（<code>Dos*</code> 系）を用いて実装し、マルチプロセス・マルチスレッド環境を提供します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プロセス管理**: 親プロセスによる子プロセスの生成、監視、および終了処理。</li>
+<li>**スレッド管理**: 子プロセス内でのスレッドプール生成と、アイドル状態に応じた動的なスレッド数調整。</li>
+<li>**リソース共有**: 共有メモリを用いたリスナーソケットとスコアボードのプロセス間受け渡し。</li>
+<li>**接続処理**: OS/2 ネイティブのキューを用いた接続の受け入れとワーカーへのディスパッチ。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>server/mpm/mpmt_os2/mpm_default.h</code></li>
-<li><code>server/mpm/mpmt_os2/mpmt_os2.c</code></li>
-<li><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></li>
+<li><code>mpm_default.h</code>: プロセス・スレッド管理に関するデフォルト設定値の定義。</li>
+<li><code>mpmt_os2.c</code>: 親プロセスのメインループおよびプロセス管理ロジック。</li>
+<li><code>mpmt_os2_child.c</code>: 子プロセスの実行環境、スレッドプール管理、およびリクエスト処理。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>listen_socket_t</code></li>
-<li><code>parent_info_t</code></li>
-<li><code>worker_args_t</code></li>
+<li><code>listen_socket_t</code>: 子プロセスへ引き継ぐリスナーソケット情報。</li>
+<li><code>parent_info_t</code>: 共有メモリ上に配置される、プロセス間で共有する同期用ミューテックスやソケット情報。</li>
+<li><code>worker_args_t</code>: 子プロセス内のワーカーへ接続情報を伝達するための構造体。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **起動**: <code>mpmt_os2_run</code> が呼び出され、親プロセスが共有メモリを確保してリスナーソケットを準備します。 2. **分岐**: <code>DosGetNamedSharedMem</code> の成否により、親プロセス（<code>master_main</code>）と子プロセス（<code>ap_mpm_child_main</code>）に分岐します。 3. **親プロセス**: <code>DosWaitChild</code> で子プロセスを監視し、必要に応じて <code>spawn_child</code> で補充します。 4. **子プロセス**: 共有メモリからソケットを取得し、OS/2 キューを介して接続をワーカーへ割り当てます。<code>server_maintenance</code> が定期的にスレッド数を最適化します。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>ap_config.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>mpm_default.h</code></li>
-<li><code>http_main.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_core.h</code></li>
-<li><code>http_connection.h</code></li>
-<li><code>ap_mpm.h</code></li>
-<li><code>ap_listen.h</code></li>
+<li>**OS/2 API**: <code>os2.h</code>（<code>DosAllocSharedMem</code>, <code>DosExecPgm</code>, <code>DosCreateQueue</code> 等）。</li>
+<li>**Apache/APR**: <code>httpd.h</code>, <code>ap_mpm.h</code>, <code>scoreboard.h</code>, <code>apr_portable.h</code>, <code>apr_poll.h</code> 等。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは OS/2 特有の API に強く依存しており、プラットフォーム固有のプロセスモデルを前提としています。子プロセス数は <code>HARD_SERVER_LIMIT</code>（10）、スレッド数は <code>HARD_THREAD_LIMIT</code>（256）によって制限されています。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>server/mpm/mpmt_os2/mpm_default.h</code> 2. <code>server/mpm/mpmt_os2/mpmt_os2.c</code> 3. <code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></p>
+<p>1. <code>mpm_default.h</code>（設定パラメータの把握） 2. <code>mpmt_os2.c</code>（親プロセスの制御フローとプロセス間通信の理解） 3. <code>mpmt_os2_child.c</code>（子プロセス内のスレッドプール管理とリクエスト処理の詳細）</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>OS/2 以外のプラットフォームへの移植性や、現代の OS/2 環境におけるパフォーマンス特性の検証。</li>
+<li><code>Dos*</code> API のエラーハンドリングにおける、より堅牢なリカバリ戦略の策定。</li>
 </ul></body></html>

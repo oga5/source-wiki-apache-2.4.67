@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/proxy/ajp_msg.c:331</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>AJPメッセージバッファに文字列を追加します。オプションでEBCDICからASCIIへの文字コード変換を適用します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ajp_msg_append_string_ex(ajp_msg_t *msg, const char *value, int convert)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>msg</code>: 操作対象の <code>ajp_msg_t</code> 構造体へのポインタ。</li>
+<li><code>value</code>: 追加する文字列（NULLの場合は <code>0xFFFF</code> が書き込まれる）。</li>
+<li><code>convert</code>: ゼロ以外の場合、<code>ap_xlate_proto_to_ascii</code> を用いて変換を実行。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: 成功。</li>
+<li><code>AJP_EOVERFLOW</code> (内部的に <code>ajp_log_overflow</code> が返す): バッファ容量不足。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>msg</code> は有効な <code>ajp_msg_t</code> 構造体であること。</li>
+<li>文字列の長さ（<code>len</code>）と終端文字（<code>\0</code>）を含めたサイズが、<code>msg-&gt;max_size</code> を超えないこと。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>value</code> が <code>NULL</code> の場合、<code>ajp_msg_append_uint16</code> で <code>0xFFFF</code> を書き込み終了。 2. <code>value</code> の長さを取得し、バッファの残り容量を検証。不足時は <code>ajp_log_overflow</code> を呼び出しエラーを返す。 3. 文字列の長さを <code>uint16</code> としてバッファに追加。 4. <code>memcpy</code> を使用して、文字列本体と終端文字 <code>\0</code> をバッファの現在位置（<code>msg-&gt;len</code>）にコピー。 5. <code>convert</code> が真の場合、<code>ap_xlate_proto_to_ascii</code> を呼び出し、バッファ内の文字列を変換。 6. <code>msg-&gt;len</code> を更新し、<code>APR_SUCCESS</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/proxy/ajp.h</code> にて以下のマクロ経由で利用される。</li>
+<li><code>ajp_msg_append_string(m, v)</code> (convert=1)</li>
+<li><code>ajp_msg_append_string_ascii(m, v)</code> (convert=0)</li>
+<li>**呼び出し先**:</li>
+<li><code>ajp_msg_append_uint16</code></li>
+<li><code>ajp_log_overflow</code></li>
+<li><code>ap_xlate_proto_to_ascii</code> (条件付き)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_t</code>: AJPメッセージを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バッファオーバーフロー**: <code>msg-&gt;len + len + 3</code> が <code>msg-&gt;max_size</code> を超える場合、書き込みを行わずエラーを返します。</li>
+<li>**NULLポインタ**: <code>value</code> が <code>NULL</code> の場合、文字列の代わりに <code>0xFFFF</code> を追加する仕様です。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はEBCDIC環境での移植性を考慮しています。</li>
+<li><code>memcpy</code> 後に <code>msg-&gt;len</code> を更新する際、<code>len + 1</code>（終端文字分）を加算している点に注意してください。</li>
 </ul></body></html>

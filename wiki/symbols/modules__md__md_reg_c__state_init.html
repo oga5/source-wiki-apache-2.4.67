@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/md/md_reg.c:227</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>管理対象ドメイン（<code>md_t</code>）に関連付けられた証明書の整合性を検証し、その状態（<code>md_state_t</code>）を更新する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t state_init(md_reg_t *reg, apr_pool_t *p, md_t *md)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>reg</code>: レジストリハンドル。</li>
+<li><code>p</code>: メモリプール。</li>
+<li><code>md</code>: 状態を更新する対象のドメイン構造体。</li>
+<li>**出力**:</li>
+<li>戻り値: <code>apr_status_t</code>（成功時は <code>APR_SUCCESS</code>）。</li>
+<li>副作用: <code>md-&gt;state</code> および <code>md-&gt;state_descr</code> が更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md-&gt;domains</code> が存在する場合、そのプールは引数 <code>p</code> と一致する必要がある（不一致時はエラーログが出力される）。</li>
+<li><code>md-&gt;renew_window</code> および <code>md-&gt;warn_window</code> が未設定の場合、<code>reg</code> の値で初期化される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 静的証明書ファイルが指定されている場合、更新モードを <code>MD_RENEW_MANUAL</code> に強制する。 2. ドメインに関連付けられた各秘密鍵仕様（<code>md_pkeys_spec_t</code>）に対し、<code>md_reg_get_pubcert</code> を呼び出して証明書をロードする。 3. 証明書が存在しない場合、状態を <code>MD_S_INCOMPLETE</code> に設定する。 4. 証明書が存在する場合、以下の検証を行う：</p>
+<ul>
+<li>ドメイン名が証明書の代替名（Alt Names）に含まれているか。</li>
+<li><code>must-staple</code> 属性が設定と一致しているか。</li>
+<p>5. 検証失敗時は <code>MD_S_INCOMPLETE</code> または <code>MD_S_ERROR</code> を設定し、<code>cleanup</code> へ遷移する。 6. 最終的に <code>md-&gt;state</code> と <code>md-&gt;state_descr</code> を更新して終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/md_reg.c</code> 内の複数の箇所（行 315, 346, 378, 416, 437, 548, 971）から呼び出される。</li>
+<li>**呼び出し先**: <code>md_reg_get_pubcert</code>, <code>md_cert_count</code>, <code>md_pkeys_spec_get</code>, <code>md_is_covered_by_alt_names</code>, <code>md_cert_must_staple</code>, <code>apr_psprintf</code>, <code>md_log_perror</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_reg_t</code>: レジストリ管理構造体。</li>
+<li><code>md_t</code>: 管理対象ドメインの定義。</li>
+<li><code>md_state_t</code>: ドメインの状態（<code>MD_S_COMPLETE</code>, <code>MD_S_INCOMPLETE</code>, <code>MD_S_ERROR</code>）。</li>
+<li><code>md_pubcert_t</code>: 公開証明書情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_reg_get_pubcert</code> が <code>ENOENT</code> を返した場合、証明書欠如として <code>MD_S_INCOMPLETE</code> になる。</li>
+<li>その他のエラー発生時は <code>MD_S_ERROR</code> となる。</li>
+<li>証明書がドメインをカバーしていない、または <code>must-staple</code> 設定が不一致の場合も <code>MD_S_INCOMPLETE</code> となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は、ドメイン情報のロードや検索のたびに呼び出され、常に最新の状態を反映させる役割を持つ。</li>
+<li><code>md-&gt;state_descr</code> は <code>apr_psprintf</code> を使用して動的に生成されるため、メモリ消費に注意すること。</li>
 </ul></body></html>

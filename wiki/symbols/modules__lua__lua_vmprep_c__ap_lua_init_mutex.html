@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/lua/lua_vmprep.c:43</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>マルチスレッド環境における Lua 仮想マシン（VM）の共有および排他制御のためのミューテックスを初期化します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_lua_init_mutex(apr_pool_t *pool, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pool</code>: ミューテックスのライフサイクルを管理するための Apache メモリプール。</li>
+<li><code>s</code>: エラーログ出力に使用するサーバーレコード。</li>
+<li>**出力**: なし（副作用としてグローバルおよびスレッドミューテックスを初期化）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本関数は、子プロセス初期化フェーズで呼び出されることを想定しています。</li>
+<li><code>lua_ivm_mutex</code> がグローバル変数として定義されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **グローバルミューテックスの初期化**: <code>apr_global_mutex_child_init</code> を使用して、子プロセス内での <code>lua_ivm_mutex</code> を再オープンします。 2. **スレッドミューテックスの初期化**: <code>APR_HAS_THREADS</code> が定義されている場合、<code>apr_thread_mutex_create</code> を使用して <code>ap_lua_mutex</code> を作成します。 3. **エラーハンドリング**: グローバルミューテックスの初期化に失敗した場合、エラーログを出力し <code>exit(1)</code> を実行してプロセスを終了します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/lua/mod_lua.c:2182</code>（<code>ap_hook_child_init</code> を介して登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_global_mutex_child_init</code></li>
+<li><code>apr_global_mutex_lockfile</code></li>
+<li><code>ap_log_error</code></li>
+<li><code>apr_thread_mutex_create</code>（<code>APR_HAS_THREADS</code> 定義時のみ）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: メモリ管理用。</li>
+<li><code>server_rec</code>: サーバー設定およびログ出力用。</li>
+<li><code>lua_ivm_mutex</code>: グローバルな Lua VM 用ミューテックス。</li>
+<li><code>ap_lua_mutex</code>: サーバープール用ミューテックス。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_global_mutex_child_init</code> が <code>APR_SUCCESS</code> を返さない場合、致命的エラーとしてプロセスが終了します。</li>
+<li>スレッド非対応環境（<code>APR_HAS_THREADS</code> が未定義）では、スレッドミューテックスの初期化はスキップされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_lua</code> の子プロセス初期化フックとして動作するため、マルチスレッド環境での競合を防ぐ重要な役割を担っています。</li>
+<li><code>exit(1)</code> を呼び出すため、初期化失敗時の影響範囲は当該プロセス全体に及びます。</li>
 </ul></body></html>

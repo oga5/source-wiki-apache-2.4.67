@@ -2,26 +2,61 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_request_in.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>h2_c2_filter_request_in</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>function</code></li>
-<li>定義箇所: <code>modules/http2/h2_c2_filter.c:95</code></li>
+<li>**種別**: 関数</li>
+<li>**定義箇所**: <code>modules/http2/h2_c2_filter.c:95</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 セカンダリコネクション（C2）において、ストリームから受け取ったリクエスト情報を Apache のフィルタスタックへ注入し、自身をフィルタチェーンから削除する「一度きり」の入力フィルタです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_c2_filter_request_in(ap_filter_t *f,
+                                     apr_bucket_brigade *bb,
+                                     ap_input_mode_t mode,
+                                     apr_read_type_e block,
+                                     apr_off_t readbytes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>f</code>: フィルタコンテキスト。</li>
+<li><code>bb</code>: データが挿入されるバケットブリゲード。</li>
+<li><code>mode</code>, <code>block</code>, <code>readbytes</code>: フィルタ操作のモード指定。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>）。</li>
+<li><code>bb</code>: リクエストバケット（およびエラー発生時はエラーバケット）が末尾に挿入されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mode</code> が <code>AP_MODE_READBYTES</code> または <code>AP_MODE_GETLINE</code> 以外の場合、本関数は即座に後続のフィルタへ処理を委譲します。</li>
+<li>実行後、<code>ap_remove_input_filter(f)</code> によりフィルタスタックから自身を確実に削除します。</li>
+<li><code>conn_ctx-&gt;stream_id</code> が存在する場合にのみ、リクエスト注入処理が実行されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **フィルタの削除**: 実行時に必ず自身をフィルタスタックから除去します。 2. **WebSocket の処理**: プロトコルが <code>websocket</code> の場合、<code>h2_ws_rewrite_request</code> を呼び出しリクエストを書き換えます。 3. **リクエスト注入**: <code>h2_request_create_bucket</code> を使用してリクエストバケットを作成し、ブリゲードの末尾に挿入します。 4. **エラーハンドリング**: リクエスト準備段階でエラー（<code>http_status</code> が設定済み）が発生している場合、<code>ap_bucket_error_create</code> を使用してエラーバケットを挿入し、処理を終了します。 5. **EOS 挿入**: <code>conn_ctx-&gt;beam_in</code> が存在しない場合、ストリームの終了を示す EOS バケットを挿入します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_c2.c</code> 内で <code>ap_register_input_filter</code> を介して登録され、フィルタチェーンから呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_brigade</code> (後続フィルタ)</li>
+<li><code>ap_remove_input_filter</code></li>
+<li><code>h2_ws_rewrite_request</code></li>
+<li><code>h2_request_create_bucket</code></li>
+<li><code>ap_bucket_error_create</code></li>
+<li><code>apr_bucket_eos_create</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとのコンテキスト。<code>request</code> や <code>beam_in</code> を保持。</li>
+<li><code>h2_request</code>: HTTP/2 ストリームのリクエスト情報。</li>
+<li><code>ap_filter_t</code>: Apache フィルタスタックの構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_ws_rewrite_request</code> が失敗した場合、<code>APR_EGENERAL</code> を返します。</li>
+<li><code>mode</code> が不適切な場合、後続フィルタの戻り値をそのまま返します。</li>
+<li><code>req-&gt;http_status</code> が設定されている場合、エラーバケットを挿入して <code>APR_SUCCESS</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本フィルタは「一度きり」の動作を前提としており、処理完了後に必ず自身を削除する設計になっています。</li>
+<li><code>AP_MODE_EATCRLF</code> はサポートされていません。</li>
+<li><code>conn_ctx-&gt;beam_in</code> の有無によって EOS バケットの挿入タイミングが制御されている点に注意してください。</li>
 </ul></body></html>

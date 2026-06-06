@@ -1,46 +1,37 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/os__unix.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>os/unix</h1>
 <h2>システム内での役割</h2>
-<p><code>os/unix</code> には 3 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>os/unix</code> は、Apache HTTP Server が Unix 系プラットフォーム上で動作するための基盤を提供するモジュールです。ディレクトリ境界に基づき構成されており、プラットフォーム固有の差異を吸収し、MPM（Multi-Processing Module）が共通して利用する低レイヤー機能を提供します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プラットフォーム抽象化**: Unix 特有のシステムコールや機能（<code>rlimit</code>、シグナル処理、プロセス権限管理）のラップ。</li>
+<li>**MPM 共通基盤**: MPM が再起動を跨いで状態を保持するためのデータ構造や、権限降格時のミューテックス制御の提供。</li>
+<li>**特権管理**: <code>suexec</code> を介した安全なプロセス生成および実行ユーザー/グループの識別。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>os/unix/os.h</code></li>
-<li><code>os/unix/unixd.c</code></li>
-<li><code>os/unix/unixd.h</code></li>
+<li><code>os/unix/os.h</code>: プラットフォーム識別および OS 固有インターフェースの宣言。</li>
+<li><code>os/unix/unixd.c</code>: プロセス権限管理、シグナルハンドリング、リソース制限の実装。</li>
+<li><code>os/unix/unixd.h</code>: MPM 共通のデータ構造、定数、およびユーティリティ関数の定義。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>bs2_ForkType</code></li>
-<li><code>ap_unix_identity_t</code></li>
-<li><code>unixd_config_rec</code></li>
-<li><code>ap_unixd_mpm_retained_data</code></li>
+<li><code>unixd_config_rec</code>: 実行ユーザー、グループ、<code>chroot</code> 設定など、サーバーの Unix 実行環境を保持。</li>
+<li><code>ap_unix_identity_t</code>: <code>suexec</code> 等で使用されるユーザー/グループ ID の識別子。</li>
+<li><code>ap_unixd_mpm_retained_data</code>: 再起動時にも保持すべき MPM 固有の状態（シグナルフラグ等）を格納。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **起動時権限管理**: サーバー起動時に <code>ap_unixd_set_proc_mutex_perms</code> を呼び出し、root 権限から非特権ユーザーへ移行する際のミューテックス所有権を調整。 2. **シグナル処理**: <code>ap_unixd_mpm_set_signals</code> で登録されたハンドラが <code>retained_data</code> を更新し、メインループが停止・再起動の制御フローを決定。 3. **特権プロセス生成**: <code>ap_os_create_privileged_process</code> を通じて、<code>suexec</code> バイナリを介した安全なプロセス生成を実行。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>ap_config.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>apr_thread_proc.h</code></li>
-<li><code>apr.h</code></li>
-<li><code>http_main.h</code></li>
-<li><code>http_core.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>unixd.h</code></li>
-<li><code>mpm_common.h</code></li>
+<li>**APR**: <code>apr_proc_mutex.h</code>, <code>apr_signal.h</code>, <code>apr_thread_proc.h</code> 等のプラットフォーム抽象化レイヤー。</li>
+<li>**システムヘッダー**: <code>&lt;pwd.h&gt;</code>, <code>&lt;grp.h&gt;</code>, <code>&lt;sys/resource.h&gt;</code> 等の Unix 標準 API。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>mpm_common.h</code> 等のサーバーコア定義。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールはディレクトリ境界により定義されており、直接的な子モジュールは持ちません。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>os/unix/unixd.h</code> 2. <code>os/unix/os.h</code> 3. <code>os/unix/unixd.c</code></p>
+<p>1. <code>os/unix/unixd.h</code>（提供されるインターフェースとデータ構造の理解） 2. <code>os/unix/os.h</code>（プラットフォーム固有の定義と機能フラグの確認） 3. <code>os/unix/unixd.c</code>（各機能の具体的な実装と制御フローの把握）</p>
 <h2>未解決の問い</h2>
 <ul>
 <li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>

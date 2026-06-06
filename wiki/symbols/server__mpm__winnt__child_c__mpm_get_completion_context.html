@@ -6,22 +6,42 @@
 <li>定義箇所: <code>server/mpm/winnt/child.c:162</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows 版 Apache HTTP Server において、接続処理に使用する <code>winnt_conn_ctx_t</code>（接続コンテキスト）を再利用キューから取得、または新規作成して提供します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>winnt_conn_ctx_t *mpm_get_completion_context(int *timeout)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>int *timeout</code>（タイムアウト発生時に 1 が設定されるフラグへのポインタ）</li>
+<li>**出力**: 成功時は <code>winnt_conn_ctx_t</code> 構造体へのポインタ、失敗時は <code>NULL</code> を返却。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>qlock</code> ミューテックスによる再利用キューの排他制御が行われます。</li>
+<li><code>num_completion_contexts</code> が <code>max_num_completion_contexts</code> を超えない範囲で新規割り当てが行われます。</li>
+<li>新規作成時は <code>pchild</code> プールからメモリが確保されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **キューの確認**: <code>qlock</code> を取得し、再利用キュー (<code>qhead</code>) からコンテキストの取り出しを試みます。 2. **待機処理**: キューが空で、かつ最大コンテキスト数に達している場合、<code>qwait_event</code> を用いてワーカーがコンテキストを解放するまで最大 1 秒間待機します。 3. **新規作成**: 上限に達していない場合、<code>pchild</code> プールからメモリを確保し、<code>OVERLAPPED</code> 用のイベントオブジェクト作成、トランザクション用メモリプールの生成、バケットアロケータの初期化を行います。 4. **終了**: 取得したコンテキストを呼び出し元へ返却します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/winnt/child.c:438</code> (<code>worker_main</code> 内)</li>
+<li>**呼び出し先**: <code>apr_thread_mutex_lock/unlock</code>, <code>ResetEvent</code>, <code>WaitForSingleObject</code>, <code>apr_pcalloc</code>, <code>CreateEvent</code>, <code>apr_pool_create_ex</code>, <code>apr_bucket_alloc_create</code>, <code>apr_atomic_inc32</code> 等の APR/Windows API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>winnt_conn_ctx_t</code>: 接続状態を保持する主要構造体。</li>
+<li><code>qhead</code>, <code>qtail</code>: 再利用コンテキストのキュー。</li>
+<li><code>qwait_event</code>: コンテキストの空きを待機するためのイベントハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**リソース枯渇**: <code>max_num_completion_contexts</code> に達し、かつ 1 秒以内にコンテキストが解放されない場合、<code>timeout</code> を 1 に設定して <code>NULL</code> を返します。</li>
+<li>**システムエラー**: <code>CreateEvent</code> や <code>apr_pool_create_ex</code> が失敗した場合、エラーログを出力し <code>NULL</code> を返します。</li>
+<li>**メモリリーク**: ソース内のコメントによれば、エラーパスにおいて一部のメモリが <code>pchild</code> プールからリークする可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>winnt_conn_ctx_t</code> のライフサイクル管理の起点です。</li>
+<li><code>num_completion_contexts</code> のアトミック操作によりスレッド間の整合性を保っています。</li>
+<li>エラーパスにおけるメモリリークは、現在の実装では許容されています。</li>
 </ul></body></html>

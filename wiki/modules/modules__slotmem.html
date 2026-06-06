@@ -1,39 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__slotmem.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/slotmem</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/slotmem</code> には 2 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/slotmem</code> は、Apache HTTP Server における固定長データ領域（スロット）の管理サブシステムです。メモリをスロット単位に分割し、その利用状況の追跡やデータアクセスを抽象化するプロバイダーインターフェースを提供します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**スロット管理**: 固定長メモリブロックの確保、解放、および読み書きの提供。</li>
+<li>**プロバイダーの実装**: 共有メモリ（SHM）版とプロセスローカル（Plain）版の2つの実装を提供し、透過的な利用を可能にする。</li>
+<li>**ライフサイクル管理**: インスタンスの生成、破棄、およびサーバー再起動を跨ぐための永続化処理（SHM版）。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/slotmem/mod_slotmem_plain.c</code></li>
-<li><code>modules/slotmem/mod_slotmem_shm.c</code></li>
+<li><code>modules/slotmem/mod_slotmem_plain.c</code>: プロセスローカルなメモリ管理実装。</li>
+<li><code>modules/slotmem/mod_slotmem_shm.c</code>: <code>apr_shm</code> を利用したプロセス間共有メモリ実装。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>ap_slotmem_instance_t</code></li>
-<li><code>sharedslotdesc_t</code></li>
-<li><code>ap_slotmem_instance_t</code></li>
+<li><code>ap_slotmem_instance_t</code>: スロットメモリの管理構造体。ベースアドレス、スロットサイズ、個数、利用状況フラグを保持。</li>
+<li><code>sharedslotdesc_t</code>: スロットの構成情報（サイズ、個数、型）を保持するヘッダー。</li>
+<li><code>ap_slotmem_provider_t</code>: 外部モジュールから利用される関数ポインタ群（<code>create</code>, <code>attach</code>, <code>grab</code>, <code>put</code>, <code>get</code> 等）。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **初期化**: <code>pre_config</code> でグローバルプールを初期化し、プロバイダーを登録。 2. **インスタンス生成**: <code>slotmem_create</code> によりメモリ領域を確保し、メタデータ（<code>sharedslotdesc_t</code> 等）を配置。 3. **データアクセス**: <code>slotmem_get</code> / <code>slotmem_put</code> を通じて、オフセット計算に基づき <code>memcpy</code> でデータ転送。 4. **永続化（SHMのみ）**: <code>store_slotmem</code> / <code>restore_slotmem</code> により、MD5チェックサムを用いた整合性検証付きのファイル保存・復元を実行。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>ap_slotmem.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_main.h</code></li>
-<li><code>ap_mpm.h</code></li>
+<li><code>ap_slotmem.h</code>: 共通APIおよびプロバイダー定義。</li>
+<li><code>httpd.h</code>, <code>http_main.h</code>, <code>ap_mpm.h</code>: サーバー設定、ログ出力、MPM世代管理。</li>
+<li><code>apr</code> ライブラリ: メモリ管理（<code>apr_pools</code>）および共有メモリ操作（<code>apr_shm</code>）。</li>
 </ul>
 <h2>内部構成</h2>
+<p>本モジュールはディレクトリ境界により定義されており、以下の2つの独立したプロバイダー実装で構成されます。</p>
 <ul>
-<li>子モジュール数: 0</li>
+<li>**SHMプロバイダー**: プロセス間通信が必要な用途向け。</li>
+<li>**Plainプロバイダー**: 単一プロセス内でのデータ管理向け。</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/slotmem/mod_slotmem_shm.c</code> 2. <code>modules/slotmem/mod_slotmem_plain.c</code></p>
+<p>1. <code>modules/slotmem/mod_slotmem_shm.c</code>（共有メモリの複雑なライフサイクルと永続化を理解するため） 2. <code>modules/slotmem/mod_slotmem_plain.c</code>（基本的なスロット管理の仕組みを理解するため）</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>各プロバイダー間での排他制御の粒度や、マルチスレッド環境下での安全性に関する詳細な仕様の精緻化。</li>
+<li>永続化ファイルが破損した場合のリカバリ戦略の明確化。</li>
 </ul></body></html>

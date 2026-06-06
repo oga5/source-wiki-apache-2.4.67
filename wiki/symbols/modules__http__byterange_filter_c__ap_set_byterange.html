@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/http/byterange_filter.c:80</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP <code>Range</code> ヘッダーを解析し、レスポンスボディから抽出するバイト範囲のリストを生成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_set_byterange(request_rec *r, apr_off_t clength,
+                     apr_array_header_t **indexes,
+                     int *overlaps, int *reversals);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>clength</code>: コンテンツの総バイト数。</li>
+<li>**出力**:</li>
+<li><code>indexes</code>: 抽出対象の範囲（<code>indexes_t</code>）を格納した配列へのポインタ。</li>
+<li><code>overlaps</code>: 重複した範囲の数。</li>
+<li><code>reversals</code>: 範囲の逆転が発生した回数。</li>
+<li>**戻り値**: 抽出する範囲の数。エラー時は <code>0</code> または <code>-1</code>（416 Range Not Satisfiable を示す）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;assbackwards</code> が真の場合は処理をスキップします。</li>
+<li><code>Range</code> ヘッダーが存在しない、または <code>bytes=</code> で始まらない場合は処理をスキップします。</li>
+<li>既に <code>Content-Range</code> ヘッダーが付与されている、または <code>multipart/byteranges</code> 形式である場合は処理をスキップします。</li>
+<li><code>If-Range</code> ヘッダーの条件に一致しない場合は処理をスキップします。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>Range</code> ヘッダーを解析し、カンマ区切りの各範囲を抽出します。 2. 各範囲の開始・終了位置を計算し、<code>clength</code> に基づいてバリデーションを行います。 3. 範囲の重複や包含関係を判定し、必要に応じてマージします。 4. 全ての範囲が <code>clength</code> に対して無効（unsatisfiable）な場合は <code>-1</code> を返します。 5. 範囲の合計長が <code>clength</code> を超える場合は無視します。 6. 成功時、<code>r-&gt;status</code> を <code>HTTP_PARTIAL_CONTENT</code> に設定し、<code>r-&gt;range</code> に解析結果を文字列として格納します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http/byterange_filter.c</code> 内のフィルタ処理（行454付近）。</li>
+<li>**呼び出し先**: <code>ap_getword</code>, <code>ap_parse_strict_length</code>, <code>ap_condition_if_range</code>, <code>apr_array_make</code>, <code>apr_array_push</code>, <code>apr_psprintf</code>, <code>ap_log_rerror</code> 等のユーティリティ関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>indexes_t</code>: 範囲の開始位置と終了位置を保持する構造体。</li>
+<li><code>request_rec</code>: HTTP リクエスト情報を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**416 エラー**: 全ての範囲が <code>clength</code> を超えているなど、範囲指定が不適切な場合は <code>-1</code> を返します。</li>
+<li>**解析失敗**: 構文的に無効な範囲指定が含まれる場合、ヘッダー全体を無視して <code>0</code> を返します。</li>
+<li>**制限**: <code>MAX_PREALLOC_RANGES</code> を超える範囲指定は切り詰められます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用してメモリを割り当てます。</li>
+<li><code>0-</code> のような特殊な範囲指定は、他の範囲を無視して単一の範囲として扱われます。</li>
+<li>範囲の合計がファイルサイズを超える場合は、安全のため処理を中断します。</li>
 </ul></body></html>

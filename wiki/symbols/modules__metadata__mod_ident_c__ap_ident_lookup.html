@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/metadata/mod_ident.c:303</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>RFC 1413 (IDENT プロトコル) を使用して、リモートホストの ident デーモンからユーザー名を照会し、接続情報 (<code>conn_rec</code>) に格納する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>const char *ap_ident_lookup(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: 取得したユーザー名、または取得失敗・無効時の <code>&quot;unknown&quot;</code> (定数 <code>FROM_UNKNOWN</code>) を表す文字列ポインタ。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;connection</code> が有効であること。</li>
+<li><code>ident_module</code> の設定が <code>r-&gt;per_dir_config</code> に存在すること。</li>
+<li>取得されたユーザー名は <code>conn-&gt;pool</code> に割り当てられるため、リクエスト終了まで生存する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_get_module_config</code> を使用して、現在のディレクトリに対する <code>ident_config_rec</code> を取得する。 2. 設定で IDENT 照会が無効化されている場合、即座に <code>NULL</code> を返す。 3. <code>rfc1413_connect</code> を呼び出し、リモートホストの 113 番ポートへの接続を試みる。 4. 接続成功時、<code>rfc1413_query</code> を呼び出してクエリを送信し、レスポンスを解析して <code>conn-&gt;remote_logname</code> を更新する。 5. 通信完了後、ソケットを閉じる。 6. 接続またはクエリが失敗した場合、<code>conn-&gt;remote_logname</code> に <code>FROM_UNKNOWN</code> を設定する。 7. 最終的に <code>conn-&gt;remote_logname</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/core.c</code> (オプション関数として取得・利用)</li>
+<li>**呼び出し先**:</li>
+<li><code>rfc1413_connect</code> (接続確立)</li>
+<li><code>rfc1413_query</code> (クエリ送信と解析)</li>
+<li><code>apr_socket_close</code> (ソケット解放)</li>
+<li><code>ap_get_module_config</code> (設定取得)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストのコンテキスト。</li>
+<li><code>ident_config_rec</code>: モジュール固有の設定（有効フラグ、タイムアウト値）。</li>
+<li><code>conn_rec</code>: 接続情報（<code>remote_logname</code> を保持）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**タイムアウト**: <code>rfc1413_connect</code> が指定時間内に応答を得られない場合、失敗として扱われる。</li>
+<li>**無効な設定**: <code>IdentityCheck</code> がオフの場合、処理はスキップされる。</li>
+<li>**通信エラー**: 接続拒否やプロトコル違反が発生した場合、<code>remote_logname</code> は <code>&quot;unknown&quot;</code> となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はオプション関数として公開されており、<code>APR_REGISTER_OPTIONAL_FN</code> を介して他モジュールから利用可能である。</li>
+<li>ネットワーク I/O を伴うため、高負荷環境ではパフォーマンスに悪影響を及ぼす可能性がある。</li>
+<li><code>conn-&gt;remote_logname</code> のメモリ管理は <code>conn-&gt;pool</code> に依存している。</li>
 </ul></body></html>

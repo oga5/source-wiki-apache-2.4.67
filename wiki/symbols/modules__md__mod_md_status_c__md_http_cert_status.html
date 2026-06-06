@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/md/mod_md_status.c:60</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Managed Domain (MD) の証明書ステータス情報を JSON 形式でクライアントに提供する HTTP ハンドラ。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int md_http_cert_status(request_rec *r);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (Apache HTTP リクエストコンテキスト)</li>
+<li>**出力**: </li>
+<li>成功時: <code>DONE</code> (HTTP 200 OK、Content-Type: <code>application/json</code>)</li>
+<li>失敗時: <code>DECLINED</code> (リクエストが対象外の場合)、<code>HTTP_NOT_IMPLEMENTED</code> (GET 以外)、<code>HTTP_INTERNAL_SERVER_ERROR</code> (データ取得失敗)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;parsed_uri.path</code> が <code>MD_STATUS_RESOURCE</code> と一致する必要がある。</li>
+<li>サーバー設定で <code>certificate_status_enabled</code> が有効である必要がある。</li>
+<li>リクエストされたホスト名が管理対象ドメイン (<code>md_t</code>) として登録されている必要がある。</li>
+<li>HTTP メソッドは <code>GET</code> のみに限定される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. リクエストパスと設定を確認し、対象外であれば <code>DECLINED</code> を返す。 2. <code>md_status_get_md_json</code> を呼び出し、ドメインのステータス情報を JSON オブジェクトとして取得する。 3. 取得した JSON から、証明書の有効性、シリアル番号、SHA256 フィンガープリント、および更新情報を抽出・再構築する。 4. 構築した JSON を <code>apr_bucket_brigade</code> を介してレスポンスボディとして書き出し、<code>DONE</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/mod_md.c</code> において <code>ap_hook_post_read_request</code> に登録されている。</li>
+<li>**呼び出し先**: </li>
+<li><code>md_get_by_domain</code> (ドメイン検索)</li>
+<li><code>md_status_get_md_json</code> (ステータスデータ生成)</li>
+<li><code>md_json_*</code> 系関数 (JSON 操作)</li>
+<li><code>ap_pass_brigade</code> (レスポンス出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache リクエスト情報。</li>
+<li><code>md_t</code>: 管理対象ドメイン情報。</li>
+<li><code>md_json_t</code>: ステータス情報の保持に使用される JSON コンテナ。</li>
+<li><code>md_srv_conf_t</code>: モジュールのサーバー設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>GET</code> 以外のメソッドが指定された場合、<code>HTTP_NOT_IMPLEMENTED</code> を返す。</li>
+<li>ステータス情報の取得 (<code>md_status_get_md_json</code>) が失敗した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>設定が無効な場合やドメインが見つからない場合は <code>DECLINED</code> を返し、他のハンドラに処理を委譲する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用してメモリを管理しているため、明示的な解放は不要。</li>
+<li>JSON の出力フォーマットは <code>MD_JSON_FMT_INDENT</code> を使用しており、人間が読みやすい形式で出力される。</li>
+<li>証明書の更新ロジックそのものは含まれておらず、あくまでステータスの公開に特化している。</li>
 </ul></body></html>

@@ -6,22 +6,43 @@
 <li>定義箇所: <code>modules/cluster/mod_heartmonitor.c:46</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>個々のバックエンドサーバーの稼働状態（IPアドレス、ポート番号、負荷統計、最終確認時刻）を保持し、<code>mod_heartmonitor</code> による監視・集約処理のデータ単位として機能します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct hm_server_t
+{
+    const char *ip;
+    int busy;
+    int ready;
+    unsigned int port;
+    apr_time_t seen;
+} hm_server_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体はデータ保持用であり、直接的な入出力関数ではありません。各フィールドは <code>hm_processmsg</code> 等の解析処理によって更新され、<code>hm_update_stat</code> 等の永続化処理を通じて共有メモリやファイルへ書き出されます。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ip</code> はサーバーを識別する文字列として保持されます。</li>
+<li><code>seen</code> は <code>apr_time_t</code> 型であり、最後にハートビートを受信した時刻を記録します。</li>
+<li>構造体内の各フィールドは、ハートビートメッセージの受信ごとに更新されることが想定されています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は、<code>mod_heartmonitor</code> におけるサーバー状態の管理オブジェクトとして機能します。 1. **生成**: <code>hm_get_server</code> により、特定の IP とポートに対応するインスタンスが取得または生成されます。 2. **更新**: 受信したハートビートメッセージの内容に基づき、<code>busy</code>、<code>ready</code>、<code>seen</code> フィールドが更新されます。 3. **永続化**: <code>hm_update_stat</code> 系の関数を介して、共有メモリ（<code>slotmem</code>）またはファイルシステムへ状態がフラッシュされます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_heartmonitor.c</code> 内の統計更新処理（<code>hm_slotmem_update_stat</code>, <code>hm_file_update_stat</code>, <code>hm_update_stat</code>）およびサーバー取得処理（<code>hm_get_server</code>）から参照されます。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hm_ctx_t</code>: モジュール全体の実行時状態を保持し、<code>hm_server_t</code> のリストやハッシュテーブルを管理します。</li>
+<li><code>hm_slot_server_ctx_t</code>: 共有メモリ上でサーバー状態を管理するための構造体です。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ip</code> が NULL または不正な形式である場合、<code>hm_get_server</code> によるインスタンス取得が失敗する可能性があります。</li>
+<li>共有メモリ（<code>slotmem</code>）への書き込み時にリソースが枯渇している場合、<code>hm_slotmem_update_stat</code> がエラーを返す可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_heartmonitor</code> の中核となるデータモデルです。フィールドの追加や変更を行う際は、<code>hm_update_stat</code> 系の永続化ロジックおよび <code>hm_processmsg</code> のパース処理への影響を確認してください。</li>
+<li><code>seen</code> フィールドの更新精度は、<code>mod_watchdog</code> のコールバック間隔に依存します。</li>
 </ul></body></html>

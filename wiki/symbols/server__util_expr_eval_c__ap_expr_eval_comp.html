@@ -6,22 +6,62 @@
 <li>定義箇所: <code>server/util_expr_eval.c:234</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>抽象構文木（AST）の比較演算ノードを評価し、真偽値（1 または 0）を算出します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int ap_expr_eval_comp(ap_expr_eval_ctx_t *ctx, const ap_expr_t *node)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: 評価コンテキスト（リクエスト情報、エラー格納用バッファ等）。</li>
+<li><code>node</code>: 評価対象の AST ノード。<code>node_op</code> に演算子、<code>node_arg1</code>/<code>node_arg2</code> にオペランドを保持。</li>
+<li>**出力**:</li>
+<li>成功時: 比較結果として <code>1</code>（真）または <code>0</code>（偽）を返却。</li>
+<li>失敗時: <code>-1</code> を返し、<code>ctx-&gt;err</code> にエラーメッセージを格納。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>node</code> は比較演算子（<code>op_EQ</code>, <code>op_STR_EQ</code>, <code>op_IN</code>, <code>op_REG</code> 等）を持つノードである必要があります。</li>
+<li>評価中に生成される文字列は、<code>ctx-&gt;p</code>（リクエストプール）から割り当てられます。</li>
+<li><code>op_IN</code> 評価時、<code>e2</code> が <code>op_ListFuncCall</code> の場合、<code>func</code> ポインタは非 NULL である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **オペランド取得**: <code>ap_expr_eval_word</code> を呼び出し、<code>node_arg1</code> および <code>node_arg2</code> を文字列として評価します。 2. **演算子分岐**: <code>node_op</code> に応じて以下の処理を実行します。</p>
+<ul>
+<li>**数値比較 (<code>op_EQ</code>, <code>op_LT</code> 等)**: <code>intstrcmp</code> を使用して数値を比較します。</li>
+<li>**文字列比較 (<code>op_STR_EQ</code> 等)**: <code>strcmp</code> を使用して辞書順比較を行います。</li>
+<li>**包含判定 (<code>op_IN</code>)**: </li>
+<li>リスト要素 (<code>op_ListElement</code>) の場合、順次比較します。</li>
+<li>関数呼び出し (<code>op_ListFuncCall</code>) の場合、プロバイダー関数を実行し、結果の配列内に <code>needle</code> が含まれるか確認します。</li>
+<li>**正規表現 (<code>op_REG</code>, <code>op_NRE</code>)**: </li>
+<li><code>ap_regexec</code> を実行します。</li>
+<li>キャプチャグループが存在する場合、<code>ctx-&gt;re_source</code> にマッチした文字列を格納します。</li>
+<p>3. **エラー処理**: 未定義の演算子ノードが渡された場合、エラーメッセージをセットし <code>-1</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/util_expr_eval.c:370</code></li>
+<li><code>server/util_expr_eval.c:801</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_expr_eval_word</code>: オペランドの解決に使用。</li>
+<li><code>intstrcmp</code>, <code>strcmp</code>: 比較処理に使用。</li>
+<li><code>ap_regexec</code>: 正規表現マッチングに使用。</li>
+<li><code>ap_array_str_contains</code>: リスト内の包含判定に使用。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_expr_eval_ctx_t</code>: 評価コンテキスト。</li>
+<li><code>ap_expr_t</code>: AST ノード構造体。</li>
+<li><code>ap_expr_list_func_t</code>: リスト関数プロバイダーの型定義。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**内部エラー**: 未知の演算子ノードが渡された場合、<code>-1</code> を返し評価を中断します。</li>
+<li>**正規表現**: <code>ap_regexec</code> が失敗した場合、または正規表現のコンパイル状態が不正な場合の挙動は、呼び出し元の <code>ap_regexec</code> 実装に依存します。</li>
+<li>**再帰制限**: 本関数自体は再帰しませんが、呼び出し元の <code>ap_expr_eval</code> 等で <code>AP_EXPR_MAX_RECURSION</code> による制限を受けます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>op_IN</code> の <code>op_ListFuncCall</code> 処理において、プロバイダー関数が <code>NULL</code> を返した場合、<code>0</code>（偽）として扱います。</li>
+<li>正規表現のキャプチャグループ（<code>$0</code>〜<code>$9</code>）の更新は、<code>regex-&gt;re_nsub &gt; 0</code> の場合にのみ行われる設計です。</li>
 </ul></body></html>

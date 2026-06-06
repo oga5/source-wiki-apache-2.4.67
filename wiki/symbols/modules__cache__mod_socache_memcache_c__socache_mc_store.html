@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/cache/mod_socache_memcache.c:198</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Memcached バックエンドを使用して、指定されたキャッシュキーとデータ、有効期限をキャッシュストレージに保存します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t socache_mc_store(ap_socache_instance_t *ctx, server_rec *s,
+                              const unsigned char *id, unsigned int idlen,
+                              apr_time_t expiry,
+                              unsigned char *ucaData, unsigned int nData,
+                              apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: Memcached インスタンスコンテキスト。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>id</code>, <code>idlen</code>: キャッシュキーのバイナリデータとその長さ。</li>
+<li><code>expiry</code>: キャッシュの有効期限（絶対時刻）。</li>
+<li><code>ucaData</code>, <code>nData</code>: 保存するデータ本体とそのサイズ。</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 操作の成功（<code>APR_SUCCESS</code>）または失敗を示すステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>socache_mc_id2key</code> により、<code>id</code> は <code>MC_KEY_LEN</code>（254バイト）以内の文字列キーに変換可能である必要があります。</li>
+<li><code>expiry</code> は現在時刻よりも未来である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>socache_mc_id2key</code> を呼び出し、内部IDを Memcached 用の文字列キーに変換します。変換に失敗した場合は <code>APR_EINVAL</code> を返します。 2. <code>expiry</code> から現在時刻を減算し、Memcached が要求する「有効期限までの秒数」を算出します。 3. 算出された秒数が 0 以下の場合、<code>APR_EINVAL</code> を返します。 4. <code>apr_memcache_set</code> を呼び出し、データを Memcached に送信します。 5. 保存に失敗した場合は <code>ap_log_error</code> でエラーログを出力し、エラーコードを返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_socache_memcache.c:358</code>（<code>socache_mc</code> プロバイダー構造体の一部として参照）。</li>
+<li>**呼び出し先**: </li>
+<li><code>socache_mc_id2key</code>（キー変換）</li>
+<li><code>apr_time_now</code>, <code>apr_time_sec</code>（時刻計算）</li>
+<li><code>apr_memcache_set</code>（Memcached へのデータ書き込み）</li>
+<li><code>ap_log_error</code>（エラーログ出力）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: Memcached 接続情報を含むインスタンスコンテキスト。</li>
+<li><code>server_rec</code>: Apache サーバー設定情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キー変換失敗**: <code>id</code> が長すぎる場合、<code>APR_EINVAL</code> を返します。</li>
+<li>**有効期限切れ**: <code>expiry</code> が現在時刻以前の場合、<code>APR_EINVAL</code> を返します。</li>
+<li>**通信エラー**: <code>apr_memcache_set</code> が失敗した場合、そのステータスコードを返し、エラーログを記録します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_memcache_set</code> をラップしており、Memcached の仕様に従い有効期限を秒単位で扱います。</li>
+<li><code>MC_KEY_LEN</code> を超えるキーは処理できないため、将来的にキーの仕様変更がある場合は注意が必要です。</li>
 </ul></body></html>

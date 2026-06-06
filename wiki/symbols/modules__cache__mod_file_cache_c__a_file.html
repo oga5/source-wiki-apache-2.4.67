@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/cache/mod_file_cache.c:98</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_file_cache</code> モジュールにおいて、キャッシュ対象の静的ファイルに関するリソース（ファイルハンドルまたはメモリマップ）およびメタデータを保持するための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+#if APR_HAS_SENDFILE
+    apr_file_t *file;
+#endif
+    const char *filename;
+    apr_finfo_t finfo;
+    int is_mmapped;
+#if APR_HAS_MMAP
+    apr_mmap_t *mm;
+#endif
+    char mtimestr[APR_RFC822_DATE_LEN];
+    char sizestr[21];
+} a_file;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は、設定読み込み時（<code>cachefilehandle</code> / <code>cachefilemmap</code>）に初期化され、リクエスト処理時（<code>file_cache_xlat</code>）にハッシュテーブルから取得されます。出力として、<code>mmap_handler</code> や <code>sendfile_handler</code> に渡され、レスポンス生成に使用されます。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>APR_HAS_SENDFILE</code> または <code>APR_HAS_MMAP</code> が有効な環境で動作します。</li>
+<li>サーバー起動時にファイルがオープンされ、サーバーの生存期間中保持されます。</li>
+<li><code>mtimestr</code> および <code>sizestr</code> は、リクエストごとの計算コストを削減するため、キャッシュ登録時に事前計算された値が格納されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **登録**: <code>cache_the_file</code> 関数により、指定されたファイルの <code>stat</code> 情報とハンドル/メモリマップが取得され、本構造体に格納されます。 2. **検索**: <code>file_cache_xlat</code> フックにおいて、リクエストされたパスをキーとしてハッシュテーブルから本構造体を検索します。 3. **提供**: <code>file_cache_handler</code> が本構造体を参照し、<code>is_mmapped</code> フラグに応じて <code>mmap_handler</code> または <code>sendfile_handler</code> を呼び出し、効率的なファイル転送を行います。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>cache_the_file</code>（初期化時）、<code>file_cache_xlat</code>（検索時）、<code>file_cache_handler</code>（レスポンス生成時）。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>a_server_config</code>: キャッシュされた <code>a_file</code> を格納するハッシュテーブル（<code>fileht</code>）を保持するコンテナ。</li>
+<li><code>apr_finfo_t</code>: ファイル属性情報。</li>
+<li><code>apr_mmap_t</code>: メモリマップ領域（<code>APR_HAS_MMAP</code> 有効時）。</li>
+<li><code>apr_file_t</code>: ファイルハンドル（<code>APR_HAS_SENDFILE</code> 有効時）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ディスク変更**: サーバー起動後にディスク上のファイルが変更されても、本構造体は古い情報を保持し続けます（再起動が必要）。</li>
+<li>**メモリ制限**: 大量のファイルをキャッシュする場合、メモリ消費量が増大します。</li>
+<li>**環境依存**: <code>sendfile</code> や <code>mmap</code> が利用できない環境では、本構造体の該当フィールドは無効化されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>sizestr</code> は 64bit ファイルサイズを保持するために 21 バイト確保されています。</li>
+<li><code>Alias</code> や <code>RewriteRule</code> を使用した環境では、キャッシュヒット後も <code>stat()</code> が発生する可能性があるため、パフォーマンス測定時には注意してください。</li>
 </ul></body></html>

@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/metadata/mod_expires.c:390</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストの有効期限を算出し、HTTPレスポンスヘッダー（<code>Cache-Control</code> および <code>Expires</code>）を設定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int set_expiration_fields(request_rec *r, const char *code, apr_table_t *t)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>code</code>: 有効期限の基準とオフセットを示す文字列（例: <code>A123</code>, <code>M456</code>）。</li>
+<li><code>t</code>: ヘッダーを格納する <code>apr_table_t</code>。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返す。</li>
+<li>失敗時は <code>DECLINED</code> または <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>code</code> の先頭文字は &#x27;M&#x27;（最終更新時刻基準）または &#x27;A&#x27;（アクセス時刻基準）である必要がある。</li>
+<li><code>code</code> の残りの部分は数値として解釈可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **基準時刻の決定**:</p>
+<ul>
+<li><code>code[0] == &#x27;M&#x27;</code>: <code>r-&gt;finfo.mtime</code> を基準とする。ファイルが存在しない場合は <code>DECLINED</code> を返す。</li>
+<li><code>code[0] == &#x27;A&#x27;</code>: <code>r-&gt;request_time</code> を基準とする。</li>
+<p>2. **有効期限の算出**:</p>
+<li><code>code</code> の数値部分を秒数に変換し、基準時刻に加算する。</li>
+<li>算出された <code>expires</code> が <code>r-&gt;request_time</code> より過去の場合、<code>r-&gt;request_time</code> に補正する。</li>
+<p>3. **ヘッダー設定**:</p>
+<li><code>Cache-Control: max-age=&lt;seconds&gt;</code> を <code>t</code> に追加（<code>max-age</code> は現在時刻からの差分）。</li>
+<li><code>Expires</code> ヘッダーを RFC 822 形式の文字列で <code>t</code> に設定。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/metadata/mod_expires.c:519</code>（<code>expires_filter</code> 関数内）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_time_from_sec</code>, <code>apr_time_sec</code>, <code>apr_psprintf</code>, <code>apr_palloc</code>, <code>apr_rfc822_date</code>, <code>apr_table_mergen</code>, <code>apr_table_setn</code> (APR API)</li>
+<li><code>ap_log_rerror</code> (Apache Core API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびファイル情報（<code>finfo</code>）を保持。</li>
+<li><code>apr_table_t</code>: HTTP ヘッダーの格納用テーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>code</code> が &#x27;M&#x27; でファイルが存在しない場合: <code>DECLINED</code> を返し、ヘッダー操作を行わない。</li>
+<li><code>code</code> が &#x27;M&#x27;/&#x27;A&#x27; 以外の場合: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返し、エラーログを出力する。</li>
+<li><code>expires</code> が現在時刻より過去の場合: <code>r-&gt;request_time</code> に切り上げられる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>atoi()</code> を使用しているため、非常に大きな数値や不正なフォーマットに対する堅牢性は限定的である。</li>
+<li>本関数は <code>Expires</code> ヘッダーの有無をチェックせず、呼び出し元（<code>expires_filter</code>）が既にヘッダーが存在しないことを確認している前提で動作する。</li>
 </ul></body></html>

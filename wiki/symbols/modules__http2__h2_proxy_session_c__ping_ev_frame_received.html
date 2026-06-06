@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/http2/h2_proxy_session.c:165</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バックエンドとの HTTP/2 セッションにおいて、フレーム受信時に PING 関連の状態を更新し、接続の健全性確認プロセスを管理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void ping_ev_frame_received(h2_proxy_session *session, const nghttp2_frame *frame)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>session</code>: 状態更新対象となる <code>h2_proxy_session</code> 構造体へのポインタ。</li>
+<li><code>frame</code>: 受信した <code>nghttp2_frame</code> 構造体へのポインタ。</li>
+<li>**出力**: なし（副作用として <code>session</code> の状態を更新）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session</code> は有効な <code>h2_proxy_session</code> 構造体を指している必要がある。</li>
+<li><code>frame</code> は <code>nghttp2</code> から渡された有効なフレームであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>session-&gt;last_frame_received</code> を現在の時刻（<code>apr_time_now()</code>）で更新する。 2. <code>session-&gt;ping_state</code> に基づき以下の処理を行う：</p>
+<ul>
+<li><code>H2_PING_ST_NONE</code>: 何もしない。</li>
+<li><code>H2_PING_ST_AWAIT_ANY</code>: 任意のフレームを受信したため、<code>enter_ping_state</code> を呼び出し状態を <code>H2_PING_ST_NONE</code> に遷移させる。</li>
+<li><code>H2_PING_ST_AWAIT_PING</code>: 受信したフレームが <code>NGHTTP2_PING</code> 型である場合のみ、<code>enter_ping_state</code> を呼び出し状態を <code>H2_PING_ST_NONE</code> に遷移させる。それ以外のフレームは無視する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_proxy_session.c:275</code> (直接的な呼び出しを確認)</li>
+<li>**呼び出し先**: <code>enter_ping_state</code> (状態遷移用関数)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_proxy_session</code>: セッションの状態（<code>ping_state</code>）および最終受信時刻を保持する構造体。</li>
+<li><code>nghttp2_frame</code>: 受信した HTTP/2 フレームの型情報（<code>hd.type</code>）を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>H2_PING_ST_AWAIT_PING</code> 状態において、PING 以外のフレームを受信した場合は状態遷移が発生せず、待機状態が維持される。これはバックエンドからの応答待ち中に他の通信が発生する可能性を考慮した仕様である。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>nghttp2</code> のフレーム受信イベントハンドラの一部として機能する。</li>
+<li><code>session-&gt;last_frame_received</code> の更新は、PING 状態に関わらず全てのフレーム受信時に行われる。</li>
 </ul></body></html>

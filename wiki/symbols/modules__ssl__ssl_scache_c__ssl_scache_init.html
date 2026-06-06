@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/ssl/ssl_scache.c:40</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_ssl</code> における SSL セッションキャッシュおよび OCSP ステープリングキャッシュの初期化を行います。設定された <code>socache</code> プロバイダーを起動し、キャッシュ操作が可能な状態にします。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ssl_scache_init(server_rec *s, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバー設定構造体 (<code>server_rec</code>)。</li>
+<li><code>p</code>: 初期化に使用するメモリプール (<code>apr_pool_t</code>)。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code> を返し、失敗時はエラーコードを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバー起動時の <code>post_config</code> フェーズで呼び出されます。</li>
+<li><code>AP_SQ_MS_CREATE_PRE_CONFIG</code> 状態での初回呼び出し時は、プールが即座にクリアされるため何も行わず正常終了します。</li>
+<li><code>SSLModConfigRec</code> (<code>mc</code>) が <code>myModConfig(s)</code> を通じて正しく取得できる必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化ガード**: <code>AP_SQ_MS_CREATE_PRE_CONFIG</code> 状態であれば即座に終了します。 2. **OCSP ステープリングキャッシュの初期化**: <code>HAVE_OCSP_STAPLING</code> が定義されており、<code>mc-&gt;stapling_cache</code> が設定されている場合、<code>avg_obj_size=1500</code>, <code>avg_id_len=20</code>, <code>expiry_interval=300</code> のヒントを用いてプロバイダーの <code>init</code> を呼び出します。失敗時は <code>ssl_die(s)</code> を呼び出しプロセスを終了させます。 3. **セッションキャッシュの初期化**: <code>mc-&gt;sesscache</code> が未設定の場合は警告を出力して終了します。設定されている場合は、<code>avg_obj_size=150</code>, <code>avg_id_len=30</code>, <code>expiry_interval=30</code> のヒントを用いてプロバイダーの <code>init</code> を呼び出します。失敗時は <code>ssl_die(s)</code> を呼び出しプロセスを終了させます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_init.c:488</code></li>
+<li>**呼び出し先**: </li>
+<li><code>mc-&gt;stapling_cache-&gt;init</code> (プロバイダー実装)</li>
+<li><code>mc-&gt;sesscache-&gt;init</code> (プロバイダー実装)</li>
+<li><code>ssl_die</code> (エラー発生時)</li>
+<li><code>ap_log_error</code> (ログ出力)</li>
+<li><code>ap_state_query</code> (状態確認)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLModConfigRec</code>: キャッシュプロバイダー (<code>stapling_cache</code>, <code>sesscache</code>) およびそのコンテキストを保持。</li>
+<li><code>ap_socache_hints</code>: キャッシュの特性（平均オブジェクトサイズ等）をプロバイダーに伝えるための構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キャッシュ未設定**: セッションキャッシュが設定されていない場合、警告ログを出力しますがエラーとしては扱いません。</li>
+<li>**初期化失敗**: プロバイダーの <code>init</code> がエラーを返した場合、<code>ssl_die(s)</code> を経由してサーバーの起動を停止します。</li>
+<li>**二重呼び出し**: <code>AP_SQ_MS_CREATE_PRE_CONFIG</code> チェックにより、設定読み込み時の二重実行を回避しています。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は抽象化レイヤーであり、実際の保存ロジックは <code>socache</code> プロバイダーに依存します。</li>
+<li><code>hints</code> に設定されている値（<code>avg_obj_size</code> 等）は、各プロバイダーがメモリ割り当て等の最適化に使用する目安です。</li>
 </ul></body></html>

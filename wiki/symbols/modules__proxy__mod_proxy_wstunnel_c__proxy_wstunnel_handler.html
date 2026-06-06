@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_wstunnel.c:346</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebSocket プロトコル（<code>ws:</code> / <code>wss:</code>）のアップグレードリクエストを処理し、クライアントとバックエンド間の双方向トンネリングを確立・実行するメインエントリポイントです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_wstunnel_handler(request_rec *r, proxy_worker *worker,
+                                  proxy_server_conf *conf,
+                                  char *url, const char *proxyname,
+                                  apr_port_t proxyport)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>worker</code>: ターゲットとなるプロキシワーカー。</li>
+<li><code>conf</code>: プロキシサーバー設定。</li>
+<li><code>url</code>: 接続先 URL。</li>
+<li><code>proxyname</code>, <code>proxyport</code>: プロキシ設定情報。</li>
+<li>**出力**: </li>
+<li><code>int</code>: 処理結果ステータス（<code>OK</code>, <code>DECLINED</code>, <code>HTTP_UPGRADE_REQUIRED</code>, <code>HTTP_SERVICE_UNAVAILABLE</code> 等）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;per_dir_config</code> から <code>proxyws_dir_conf</code> を取得可能であること。</li>
+<li>URL が <code>ws:</code> または <code>wss:</code> で始まること。</li>
+<li><code>Upgrade</code> ヘッダーが適切に設定されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **フォールバック判定**: 設定により <code>mod_proxy_http</code> への委譲が有効な場合は <code>DECLINED</code> を返す。 2. **スキーム検証**: URL が <code>ws</code>/<code>wss</code> かを確認し、SSL 使用フラグをセットする。 3. **アップグレード検証**: <code>Upgrade</code> ヘッダーをチェックし、不適合な場合は <code>HTTP_UPGRADE_REQUIRED</code> を返す。 4. **接続管理**:</p>
+<ul>
+<li><code>ap_proxy_acquire_connection</code> でバックエンド接続を取得。</li>
+<li><code>ap_proxy_determine_connection</code> で接続先を特定。</li>
+<li><code>ap_proxy_connect_backend</code> でバックエンドへの接続を確立。</li>
+<li><code>ap_proxy_connection_create_ex</code> で接続レコードを作成。</li>
+<p>5. **トンネリング**: <code>proxy_wstunnel_request</code> を呼び出し、双方向データ転送ループを実行。 6. **終了処理**: 接続を解放し、ステータスを返却。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_proxy</code> のフックシステム（<code>proxy_hook_scheme_handler</code> に登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_proxy_acquire_connection</code>, <code>ap_proxy_determine_connection</code>, <code>ap_proxy_connect_backend</code>, <code>ap_proxy_connection_create_ex</code>, <code>ap_proxy_release_connection</code> (プロキシ基盤 API)</li>
+<li><code>proxy_wstunnel_request</code> (トンネリング実行)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxyws_dir_conf</code>: ディレクトリ単位の設定（フォールバック制御）。</li>
+<li><code>proxy_conn_rec</code>: バックエンド接続状態。</li>
+<li><code>request_rec</code>: リクエスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**URL 不適合**: <code>ws</code>/<code>wss</code> 以外は <code>DECLINED</code>。</li>
+<li>**アップグレード失敗**: <code>Upgrade</code> ヘッダーが期待値と異なる場合、<code>HTTP_UPGRADE_REQUIRED</code> を返し、<code>Connection: Upgrade</code> ヘッダーを付与。</li>
+<li>**接続失敗**: バックエンドへの接続確立に失敗した場合、<code>HTTP_SERVICE_UNAVAILABLE</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はトンネリングが確立されると <code>proxy_wstunnel_request</code> 内でループし、リクエスト処理を占有します。</li>
+<li><code>backend-&gt;close = 1</code> を設定することで、終了時に接続が再利用されないよう制御しています。</li>
 </ul></body></html>

@@ -6,22 +6,59 @@
 <li>定義箇所: <code>server/mpm/winnt/mpm_winnt.c:349</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>親プロセスから子プロセスへ、プロセス間通信および同期に必要なハンドル（イベント、ミューテックス、共有メモリ）をパイプ経由で受け渡す。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int send_handles_to_child(apr_pool_t *p,
+                          HANDLE child_ready_event,
+                          HANDLE child_exit_event,
+                          apr_proc_mutex_t *child_start_mutex,
+                          apr_shm_t *scoreboard_shm,
+                          HANDLE hProcess,
+                          apr_file_t *child_in);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>child_ready_event</code>, <code>child_exit_event</code>: 子プロセスに渡す同期用イベントハンドル。</li>
+<li><code>child_start_mutex</code>: 子プロセス起動同期用ミューテックス。</li>
+<li><code>scoreboard_shm</code>: プロセス間で共有するスコアボード用共有メモリ。</li>
+<li><code>hProcess</code>: 子プロセスのプロセスハンドル。</li>
+<li><code>child_in</code>: 子プロセスとの通信用パイプ（書き込み用）。</li>
+<li>**出力**:</li>
+<li>成功時: <code>0</code></li>
+<li>失敗時: <code>-1</code></li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hProcess</code> は有効な子プロセスのハンドルであること。</li>
+<li><code>child_in</code> は子プロセスが読み取り可能なパイプとして開かれていること。</li>
+<li><code>my_generation</code>（グローバル変数）が現在の世代番号として保持されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 現在の世代番号 (<code>my_generation</code>) をパイプに書き込む。 2. <code>DuplicateHandle</code> を使用し、各リソース（イベント、ミューテックス、共有メモリ）を子プロセスのコンテキストで有効なハンドルに複製する。 3. 複製したハンドルを順次パイプへ書き込む。 4. 各ステップでエラーが発生した場合、<code>ap_log_error</code> でログを出力し、即座に <code>-1</code> を返して終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/winnt/mpm_winnt.c:654</code>（子プロセス生成プロセスの一部として呼び出される）。</li>
+<li>**呼び出し先**:</li>
+<li><code>DuplicateHandle</code> (Windows API)</li>
+<li><code>apr_file_write_full</code> (APR)</li>
+<li><code>apr_os_proc_mutex_get</code> (APR)</li>
+<li><code>apr_os_shm_get</code> (APR)</li>
+<li><code>ap_log_error</code> (Apache Core)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_proc_mutex_t</code>: プロセス間ミューテックス。</li>
+<li><code>apr_shm_t</code>: 共有メモリ。</li>
+<li><code>HANDLE</code>: Windows API のハンドル型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>DuplicateHandle</code> が失敗した場合、リソースの複製ができずエラーを返す。</li>
+<li>パイプへの書き込み (<code>apr_file_write_full</code>) が失敗した場合、子プロセスとの同期が確立できないためエラーを返す。</li>
+<li>各エラー発生時に <code>APLOGNO</code> を含む詳細なエラーログが記録される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はWindows特有のハンドル継承メカニズムに依存している。</li>
+<li>複製するハンドルのアクセス権限（<code>EVENT_MODIFY_STATE</code> 等）は、子プロセス側での利用目的に厳密に合わせているため、変更時は子プロセス側の <code>get_handles_from_parent</code> との整合性に注意すること。</li>
 </ul></body></html>

@@ -6,22 +6,55 @@
 <li>定義箇所: <code>include/scoreboard.h:123</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server 全体の稼働統計およびプロセス管理情報を保持する共有メモリ上の構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    int             server_limit;
+    int             thread_limit;
+    ap_generation_t running_generation;
+    apr_time_t      restart_time;
+#ifdef HAVE_TIMES
+    struct tms      times;
+#endif
+} global_score;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は共有メモリ上に配置され、<code>ap_get_scoreboard_global()</code> を通じてポインタとして取得されます。</li>
+<li>直接的な関数引数としての入出力ではなく、サーバーのライフサイクルを通じて状態が更新・参照されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリ（<code>apr_shm</code>）上に割り当てられる必要があります。</li>
+<li><code>server/scoreboard.c</code> 内の <code>SIZE_OF_global_score</code> マクロにより、アライメント調整されたサイズでメモリ確保が行われることが前提です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバーの再起動時刻、スレッド制限、および現在稼働中の世代（<code>running_generation</code>）を追跡します。</li>
+<li><code>HAVE_TIMES</code> が定義されている環境では、プロセス統計（<code>struct tms</code>）を保持します。</li>
+<li>MPM（Multi-Processing Module）がプロセスを管理する際のグローバルな状態レジストリとして機能します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元（参照・更新）**:</li>
+<li><code>server/scoreboard.c</code>: 共有メモリの初期化および <code>ap_get_scoreboard_global</code> の実装。</li>
+<li><code>modules/generators/mod_status.c</code>: サーバー統計情報の表示時に参照。</li>
+<li>**呼び出し先**:</li>
+<li>構造体自体はデータ保持用であり、関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>scoreboard</code>: 本構造体を含むメインのスコアボード管理構造体。</li>
+<li><code>ap_generation_t</code>: 世代管理に使用される型。</li>
+<li><code>struct tms</code>: プロセス時間を記録するためのシステム構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリの確保に失敗した場合、本構造体へのアクセスはヌルポインタ参照を引き起こす可能性があります。</li>
+<li><code>worker_score</code> 等の他のスコアボード構造体と異なり、サーバー全体で単一のインスタンスとして扱われるため、競合制御は <code>scoreboard.c</code> の実装に依存します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ap_mmn.h</code> の記録によると、過去に <code>sb_type</code> フィールドが削除されるなどの変更履歴があります。</li>
+<li><code>client</code> や <code>request</code> フィールドを持つ <code>worker_score</code> とは異なり、本構造体はサーバー全体のメタデータを管理します。</li>
+<li>構造体のサイズ変更は共有メモリレイアウトに影響するため、バイナリ互換性に注意してください。</li>
 </ul></body></html>

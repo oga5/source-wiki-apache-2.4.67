@@ -2,26 +2,61 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__cache__mod_cache_socache_c__cache_socache_object_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>cache_socache_object_t</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>struct</code></li>
-<li>定義箇所: <code>modules/cache/mod_cache_socache.c:75</code></li>
+<li>**種別**: <code>struct</code></li>
+<li>**定義箇所**: <code>modules/cache/mod_cache_socache.c:75</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_cache_socache</code> モジュールにおいて、キャッシュエントリのメモリ内表現を保持するためのデータ構造です。HTTP レスポンスのヘッダー、ボディ、およびメタデータを統合的に管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct cache_socache_object_t {
+    apr_pool_t *pool;
+    unsigned char *buffer;
+    apr_size_t buffer_len;
+    apr_bucket_brigade *body;
+    apr_table_t *headers_in;
+    apr_table_t *headers_out;
+    cache_socache_info_t socache_info;
+    apr_size_t body_offset;
+    apr_off_t body_length;
+    apr_time_t expire;
+    const char *name;
+    const char *key;
+    apr_off_t offset;
+    apr_time_t timeout;
+    unsigned int newbody :1;
+    unsigned int done :1;
+} cache_socache_object_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: キャッシュ生成時、<code>apr_pcalloc</code> を介してメモリが割り当てられ、リクエスト情報やヘッダー情報が格納されます。</li>
+<li>**出力**: <code>socache</code> バックエンドへの永続化、またはキャッシュヒット時のレスポンス構築に使用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pool</code> メンバは、キャッシュエントリのライフサイクルを管理します。</li>
+<li>キャッシュバッファは「フォーマットヘッダー + メタデータ + ヘッダー群 + ボディ」の順でパックされる必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>open_entity</code> 等の処理内で <code>apr_pcalloc</code> を用いてインスタンス化されます。 2. **データ構築**: <code>store_table</code> 等のユーティリティ関数により、ヘッダーテーブルがバッファへシリアライズされます。 3. **ボディ管理**: <code>body</code> ブリゲードは <code>apr_bucket_pool_create</code> を用いてバッファからマッピングされます。 4. **終了処理**: <code>commit_entity</code> 完了時やエラー発生時に <code>apr_pool_destroy</code> を呼び出し、メモリを解放します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_cache_socache.c</code> 内の <code>create_entity</code>、<code>open_entity</code>、<code>store_body</code> 等のキャッシュプロバイダー関数から参照・操作されます。</li>
+<li>**呼び出し先**: <code>apr_pool_t</code> や <code>apr_bucket_brigade</code> 等の APR API を利用します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_socache_info_t</code>: キャッシュエントリのメタデータ。</li>
+<li><code>apr_bucket_brigade</code>: HTTP レスポンスボディのストリーム表現。</li>
+<li><code>apr_table_t</code>: HTTP ヘッダーの格納用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ不足**: <code>apr_pcalloc</code> 失敗時の挙動は呼び出し元に依存します。</li>
+<li>**範囲リクエスト**: 現在、範囲リクエスト（Range Requests）のキャッシュには対応していません。</li>
+<li>**排他制御**: バックエンドがスレッドセーフでない場合、<code>socache_mutex</code> による保護が必要です。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>pool</code> の管理はメモリリーク防止の要です。<code>open_entity</code> 失敗時や <code>commit_entity</code> 完了時の解放漏れに注意してください。</li>
+<li><code>slider</code> 変数（ソースコード内のロジック）がバッファ内のオフセットを追跡しているため、構造変更時はオフセット計算の整合性を確認してください。</li>
 </ul></body></html>

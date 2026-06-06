@@ -6,22 +6,45 @@
 <li>定義箇所: <code>modules/arch/unix/mod_unixd.c:62</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server が Unix 系 OS 上で動作する際、プロセス実行に必要なユーザー権限、グループ権限、および実行環境（chroot）の設定値を保持するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+  const char *user_name;
+  uid_t user_id;
+  gid_t group_id;
+  const char *chroot_dir;
+} unixd_config_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は設定保持用であり、直接的な入力・出力関数ではありません。</p>
+<ul>
+<li>**入力**: <code>unixd_set_user</code>、<code>unixd_set_group</code>、<code>unixd_set_chroot_dir</code> 等のディレクティブハンドラを通じて各フィールドが設定されます。</li>
+<li>**出力**: <code>ap_unixd_setup_child</code> 等のプロセス管理関数が、本構造体の値を参照して <code>setuid</code> や <code>chroot</code> などのシステムコールを実行します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>user_id</code> および <code>group_id</code> は、OS 上で有効なユーザー ID およびグループ ID である必要があります。</li>
+<li><code>chroot_dir</code> が設定されている場合、そのディレクトリはプロセス実行時に <code>chroot</code> システムコールが成功するパスである必要があります。</li>
+<li>権限降格操作は、プロセスが root 権限で実行されている場合にのみ有効です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は、サーバーの起動フェーズで初期化され、設定ファイル（<code>httpd.conf</code> 等）のディレクティブに基づいて値が更新されます。子プロセスの生成時には、この構造体に格納された値を用いて、実行ユーザーの切り替えおよび環境の分離が行われます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: 設定解析フェーズにおいて <code>unixd_set_user</code> 等のハンドラが本構造体を更新します。また、子プロセス生成時に <code>ap_unixd_setup_child</code> が本構造体を参照します。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>unixd.h</code>: 本構造体の定義を共有するためのヘッダーファイル。</li>
+<li><code>ap_unixd_config</code>: 本構造体の型を持つグローバルな設定インスタンス（<code>mod_unixd.c</code> 内で管理）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>設定値が不正な場合（存在しないユーザー名やグループ名など）、サーバー起動時の検証プロセスでエラーが発生します。</li>
+<li><code>chroot</code> や <code>setuid</code> の実行時に権限不足やパスの誤りがある場合、<code>ap_unixd_setup_child</code> 内で <code>APLOG_ALERT</code> レベルのログが出力され、プロセス生成が失敗する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はモジュールのライフサイクル全体で生存するグローバルな設定領域として扱われます。</li>
+<li><code>set_group_privs</code> 関数内では、ユーザー名から ID を解決するロジックが含まれており、設定値の整合性維持に注意が必要です。</li>
 </ul></body></html>

@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/http/http_request.c:237</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP Keep-Alive 接続において、パイプライン化されたリクエストの先頭に存在する空行（CRLF または LF）を消費し、接続の継続可否を判定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_check_pipeline(conn_rec *c, apr_bucket_brigade *bb, unsigned int max_blank_lines)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 接続状態を保持する <code>conn_rec</code> 構造体。</li>
+<li><code>bb</code>: 入力データを保持する <code>apr_bucket_brigade</code>。</li>
+<li><code>max_blank_lines</code>: 許容する空行の最大数。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果。成功時は <code>APR_SUCCESS</code> または <code>APR_EAGAIN</code>、エラー時は <code>APR_EGENERAL</code> や <code>APR_NOTFOUND</code> 等を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>接続 <code>c</code> が生存しており、かつ <code>c-&gt;aborted</code> が偽である必要があります。</li>
+<li><code>max_blank_lines</code> が 0 の場合、データが存在するかどうかの確認のみを行い、空行の消費は行いません。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>AP_MODE_SPECULATIVE</code> を用いて、接続からデータを非破壊的に読み取ります。 2. 読み取ったデータが空行（<code>CRLF</code> または <code>LF</code>）であるかを確認します。 3. 空行であれば <code>num_blank_lines</code> をインクリメントし、<code>AP_MODE_READBYTES</code> を用いて実際にそのデータを消費します。 4. <code>num_blank_lines</code> が <code>max_blank_lines</code> を超えた場合、<code>c-&gt;keepalive</code> を <code>AP_CONN_CLOSE</code> に設定し、接続を終了させます。 5. 空行以外のデータが検出された場合、またはエラーが発生した場合はループを終了します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http/http_request.c</code>: <code>ap_process_request_after_handler</code> 内で呼び出されます。</li>
+<li><code>modules/proxy/proxy_util.c</code>: プロキシ接続の管理において呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_brigade</code>: 入力フィルタからデータを取得します。</li>
+<li><code>apr_brigade_cleanup</code>, <code>apr_brigade_length</code>, <code>apr_brigade_flatten</code>: バケットブリゲードの操作を行います。</li>
+<li><code>ap_log_cerror</code>: エラーログの出力を行います。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: 接続状態（Keep-Alive 状態など）を管理します。</li>
+<li><code>apr_bucket_brigade</code>: ネットワークから読み込まれたデータストリームを保持します。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**空行超過**: <code>max_blank_lines</code> を超える空行が続いた場合、<code>APR_NOTFOUND</code> を返し接続を閉じます。</li>
+<li>**読み取りエラー**: <code>ap_get_brigade</code> が失敗した場合、接続状態に応じて <code>APR_EGENERAL</code> または <code>APR_EAGAIN</code> を返します。</li>
+<li>**データ不整合**: 期待した形式のデータが読み取れなかった場合、ログを出力しエラーを返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>http_request.c</code> のリクエスト処理フローにおいて、Keep-Alive 接続の効率的な再利用を制御する重要な役割を担っています。</li>
+<li><code>max_blank_lines</code> の制限値は、DoS 攻撃対策として機能します。</li>
 </ul></body></html>

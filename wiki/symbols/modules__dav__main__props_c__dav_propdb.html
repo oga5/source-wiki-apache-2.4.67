@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/dav/main/props.c:172</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebDAV プロパティ操作におけるコンテキストを保持し、ライブプロパティおよびデッドプロパティの管理、トランザクション処理、名前空間の解決を統合的に行うための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct dav_propdb {
+    apr_pool_t *p;
+    request_rec *r;
+    const dav_resource *resource;
+    int deferred;
+    dav_db *db;
+    apr_array_header_t *ns_xlate;
+    dav_namespace_map *mapping;
+    dav_lockdb *lockdb;
+    dav_buffer wb_lock;
+    int flags;
+    request_rec *subreq;
+    const dav_hooks_db *db_hooks;
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>dav_popen_propdb</code> 等の初期化関数を通じて、リクエストレコード (<code>request_rec</code>) や対象リソース (<code>dav_resource</code>) が設定されます。</li>
+<li>**出力**: プロパティ操作の結果として、データベース (<code>dav_db</code>) へのアクセスや、XML 出力バッファへのプロパティ挿入が行われます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_propdb</code> はリクエストプール (<code>r-&gt;pool</code>) または指定されたプールを使用してメモリ管理を行います。</li>
+<li><code>deferred</code> フラグが設定されている場合、データベースのオープンは実際にプロパティ操作が必要になるまで遅延されます。</li>
+<li><code>dav_close_propdb</code> を呼び出すことで、リソースの解放および内部で生成されたサブリクエスト (<code>subreq</code>) の破棄を確実に行う必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>dav_popen_propdb</code> によりコンテキストが作成されます。 2. **解決**: <code>dav_find_liveprop</code> を通じてライブプロパティプロバイダーを特定し、見つからない場合はデッドプロパティとして処理します。 3. **トランザクション**: <code>PROPPATCH</code> 操作時、<code>validate</code> -&gt; <code>exec</code> -&gt; <code>commit/rollback</code> の順序で処理され、失敗時には <code>dav_rollback_item</code> を用いて状態を復旧します。 4. **XML 構築**: <code>dav_get_props</code> 等により、名前空間 (<code>ns_xlate</code>, <code>mapping</code>) を管理しながら XML 形式のプロパティリストを生成します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_dav.c</code> 内の各メソッドハンドラ（<code>PROPFIND</code>, <code>PROPPATCH</code> 等）から参照されます。</li>
+<li>**呼び出し先**: <code>props.c</code> 内の <code>dav_find_liveprop</code> や <code>dav_find_liveprop_provider</code> 等の関数が、この構造体を引数として受け取り操作を行います。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_resource</code>: 操作対象のリソース。</li>
+<li><code>dav_db</code>: 基盤となるプロパティデータベース。</li>
+<li><code>dav_hooks_db</code>: プロパティ操作のためのフック関数群。</li>
+<li><code>dav_lockdb</code>: ロック管理用データベース。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>DAV_DISABLE_WRITABLE_PROPS</code> が有効な場合、一部のコアプロパティへの書き込みが制限されます。</li>
+<li><code>PROPPATCH</code> のエラーハンドリングにおいて、複雑なケースではエラー伝播が不完全になる可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_dav</code> のプロパティサブシステムの中核です。</li>
+<li>サブリクエスト (<code>subreq</code>) を使用した場合は、必ず <code>dav_close_propdb</code> で適切に破棄してください。</li>
+<li>プロパティ値内の名前空間は <code>ns&lt;index&gt;</code> 形式に変換されるため、クライアント側で特定のプレフィックスに依存しないよう注意が必要です。</li>
 </ul></body></html>

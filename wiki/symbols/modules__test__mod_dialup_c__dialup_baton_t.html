@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/test/mod_dialup.c:38</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>非同期リクエスト処理におけるコンテキスト保持用構造体です。Apache HTTP Server の <code>SUSPENDED</code> 状態を利用した帯域制限付きデータ送信において、送信状態を維持するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct dialup_baton_t {
+    apr_size_t bytes_per_second;    /* 1秒あたりの送信バイト数 */
+    request_rec *r;                 /* リクエスト情報 */
+    apr_file_t *fd;                 /* 送信対象ファイル */
+    apr_bucket_brigade *bb;         /* 全データを含むバケットブリゲード */
+    apr_bucket_brigade *tmpbb;      /* 送信分を一時保持するバケットブリゲード */
+} dialup_baton_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>dialup_handler</code> にてリクエスト処理開始時に初期化され、<code>r-&gt;pool</code> からメモリが割り当てられます。</li>
+<li>**出力**: 構造体自体はリクエストプールに紐付いているため、リクエスト終了時に自動的に解放されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は <code>r-&gt;pool</code> 上に割り当てられる必要があります。</li>
+<li><code>bb</code> および <code>tmpbb</code> は、<code>dialup_send_pulse</code> によるバケット移動操作の対象となります。</li>
+<li>マルチスレッド環境下では、<code>r-&gt;invoke_mtx</code> による排他制御下で本構造体のメンバへアクセスする必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>dialup_handler</code> がリクエストを捕捉した際、本構造体を生成し、ファイル記述子とバケットブリゲードをセットアップします。 2. **データ送信**: <code>dialup_send_pulse</code> が本構造体を参照し、<code>bytes_per_second</code> に基づいて <code>bb</code> から <code>tmpbb</code> へデータを移動させ、ネットワークへ送信します。 3. **非同期ループ**: 送信すべきデータが残っている場合、<code>ap_mpm_register_timed_callback</code> を用いて次回の <code>dialup_callback</code> 実行を予約します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>dialup_handler</code> (初期化)</li>
+<li><code>dialup_send_pulse</code> (引数として参照)</li>
+<li><code>dialup_callback</code> (バトンとしてキャストして参照)</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>apr_bucket_brigade</code>: 送信データのバッファリングに使用。</li>
+<li><code>dialup_dcfg_t</code>: 帯域制限値（<code>bytes_per_second</code>）の元となる設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_pass_brigade</code> が失敗した場合の挙動は最小限の実装となっており、エラー時の詳細なログ出力は省略されています。</li>
+<li><code>SUSPENDED</code> 状態の利用は MPM の実装に依存するため、環境によっては期待通りに動作しない可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は実験的なモジュールの一部です。エラーハンドリングの強化が必要な場合は、<code>dialup_send_pulse</code> 内のコメントにある通り、ログ出力の追加を検討してください。</li>
+<li>メモリ管理はリクエストプールに依存しているため、手動での <code>free</code> は不要です。</li>
 </ul></body></html>

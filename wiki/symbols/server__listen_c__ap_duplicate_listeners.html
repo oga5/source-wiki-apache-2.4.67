@@ -6,22 +6,62 @@
 <li>定義箇所: <code>server/listen.c:797</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>マルチコア環境における負荷分散のため、既存のリスナーリストを複製し、複数のリスナーバケットを作成する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_duplicate_listeners(apr_pool_t *p, server_rec *s,
+                                    ap_listen_rec ***buckets,
+                                    int *num_buckets)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用するプール。</li>
+<li><code>s</code>: サーバー設定レコード。</li>
+<li><code>buckets</code>: 複製されたリスナーリストの配列へのポインタ。</li>
+<li><code>num_buckets</code>: 作成するバケット数（入力時に1未満の場合は自動算出を試みる）。</li>
+<li>**出力**:</li>
+<li><code>buckets</code>: 複製されたリスナーの配列が格納される。</li>
+<li><code>num_buckets</code>: 実際に作成されたバケット数。</li>
+<li>戻り値: <code>APR_SUCCESS</code> またはエラーを示す <code>apr_status_t</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listeners</code> に初期リスナーリストが構築されている必要がある。</li>
+<li><code>ap_listencbratio</code> が設定されている場合、<code>SO_REUSEPORT</code> および <code>_SC_NPROCESSORS_ONLN</code> のサポート状況に応じてバケット数が決定される。</li>
+<li>複製された各リスナーは、<code>make_sock</code> を通じてソケットの作成と設定が行われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バケット数決定**: <code>num_buckets</code> が1未満の場合、<code>ap_listencbratio</code> に基づき CPU コア数からバケット数を算出する（<code>SO_REUSEPORT</code> が利用可能な場合）。 2. **メモリ確保**: <code>buckets</code> 配列を確保し、インデックス0に既存の <code>ap_listeners</code> を割り当てる。 3. **リスナー複製**: 1から <code>num_buckets - 1</code> までループし、各リスナーを複製する。</p>
+<ul>
+<li><code>HAVE_SYSTEMD</code> が定義されている場合は <code>alloc_systemd_listener</code> を使用。</li>
+<li>それ以外の場合は <code>apr_socket_create</code> で新規ソケットを作成し、<code>make_sock</code> でオプションを設定する。</li>
+<p>4. **フィルタ適用**: <code>ap_apply_accept_filter</code> を呼び出し、OS 固有のアクセプトフィルタを適用する。 5. **状態更新**: グローバル変数 <code>ap_listen_buckets</code> および <code>ap_num_listen_buckets</code> を更新する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/prefork/prefork.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>make_sock</code></li>
+<li><code>ap_apply_accept_filter</code></li>
+<li><code>alloc_systemd_listener</code> (条件付き)</li>
+<li><code>apr_socket_create</code>, <code>apr_socket_opt_set</code>, <code>apr_sockaddr_info_get</code> 等の APR 関数</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listen_rec</code>: リスナー情報を保持する構造体。</li>
+<li><code>server_rec</code>: サーバー設定レコード。</li>
+<li><code>ap_listen_buckets</code>: 複製されたリスナーバケットを保持するグローバル配列。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_socket_create</code> が失敗した場合、エラーコードを返し処理を中断する。</li>
+<li><code>apr_socket_opt_set</code> (ノンブロッキング設定) が失敗した場合、エラーコードを返し処理を中断する。</li>
+<li><code>SO_REUSEPORT</code> がサポートされていない環境で <code>ListenCoresBucketsRatio</code> が指定された場合、警告を出力し単一バケットで動作する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ap_listeners</code> のリスト構造を維持しながら複製を行うため、リストの末尾への追加処理に注意すること。</li>
+<li><code>AP_NONBLOCK_WHEN_MULTI_LISTEN</code> が定義されている場合、マルチリスナー環境ではソケットをノンブロッキングモードに設定するロジックが含まれている。</li>
 </ul></body></html>

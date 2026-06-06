@@ -6,22 +6,64 @@
 <li>定義箇所: <code>modules/cache/cache_common.h:30</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP の <code>Cache-Control</code> および <code>Pragma</code> ヘッダーに含まれるキャッシュ制御ディレクティブを解析し、後続のキャッシュ処理（保存・提供・再検証の判断）で利用可能な形式で保持する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct cache_control {
+    unsigned int parsed:1;
+    unsigned int cache_control:1;
+    unsigned int pragma:1;
+    unsigned int no_cache:1;
+    unsigned int no_cache_header:1;
+    unsigned int no_store:1;
+    unsigned int max_age:1;
+    unsigned int max_stale:1;
+    unsigned int min_fresh:1;
+    unsigned int no_transform:1;
+    unsigned int only_if_cached:1;
+    unsigned int public:1;
+    unsigned int private:1;
+    unsigned int private_header:1;
+    unsigned int must_revalidate:1;
+    unsigned int proxy_revalidate:1;
+    unsigned int s_maxage:1;
+    unsigned int invalidated:1;
+    apr_int64_t max_age_value;
+    apr_int64_t max_stale_value;
+    apr_int64_t min_fresh_value;
+    apr_int64_t s_maxage_value;
+} cache_control_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: HTTP リクエストまたはレスポンスのヘッダー値。これらは <code>ap_cache_control()</code> 関数を通じて解析され、本構造体の各フィールドにマッピングされる。</li>
+<li>**出力**: キャッシュの可否や有効期限を示すフラグおよび数値。これらは <code>mod_cache</code> や各ストレージプロバイダー（<code>mod_cache_disk</code> 等）のロジックへ渡される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>max_age_value</code> 等の数値フィールドは、対応するフラグ（<code>max_age</code> 等）がセットされており、かつ値が正（positive）である場合に有効とみなされる。</li>
+<li><code>parsed</code> フラグは、ヘッダーの解析が完了したことを示すために使用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **解析**: <code>ap_cache_control()</code> 関数がヘッダー文字列を走査し、RFC 7234 等の仕様に基づき各ビットフィールドをセットする。 2. **保持**: 解析結果を構造体として保持し、キャッシュのライフサイクル管理（保存・提供判断）において、条件分岐の判定基準として利用される。 3. **無効化**: <code>invalidated</code> フィールドは、対象エンティティが無効化されたかどうかを追跡するために使用される。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_cache.c</code> や <code>cache_util.c</code> 等のキャッシュポリシーエンジンが、リクエスト処理中に本構造体を初期化・利用する。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、直接的な関数呼び出しは行わない。</li>
+<li>**注記**: <code>ap_cache_control()</code> 関数（<code>modules/cache/cache_util.c</code>）が本構造体を操作する主要なインターフェースである。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: HTTP リクエスト情報を保持する構造体。</li>
+<li><code>cache_handle_t</code>: キャッシュエントリへのアクセスハンドル。</li>
+<li><code>disk_cache_info_t</code> / <code>cache_socache_info_t</code>: 各ストレージ固有のメタデータ構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ヘッダーが不正な形式である場合、解析ロジックが適切にフラグをセットできない可能性がある。</li>
+<li>数値フィールド（<code>max_age_value</code> 等）が負の値である場合、その設定は無視される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>modules/cache</code> モジュール全体で共有されるため、フィールドの追加や変更は <code>mod_cache</code> および各ストレージプロバイダーの互換性に影響を与える。</li>
+<li><code>cache_util.c</code> 内の解析ロジックが、RFC 仕様の変更に追従しているかを確認すること。</li>
+<li><code>invalidated</code> フィールドは <code>2.4.5-dev</code> で追加された比較的新しい要素である。</li>
 </ul></body></html>

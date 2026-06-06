@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/mappers/mod_vhost_alias.c:237</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>動的なバーチャルホストパス生成時に、一時バッファ <code>buf</code> が <code>HUGE_STRING_LEN</code> を超過するのを防ぎ、生成されたパスを <code>r-&gt;filename</code> に安全に蓄積する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static APR_INLINE void vhost_alias_checkspace(request_rec *r, char *buf, char **pdest, int size)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r</code>: リクエストレコード。<code>r-&gt;filename</code> の更新およびメモリ割り当て（<code>r-&gt;pool</code>）に使用。</li>
+<li><code>buf</code>: パス構築用の一時バッファ。</li>
+<li><code>pdest</code>: <code>buf</code> 内の現在の書き込み位置を指すポインタへのポインタ。</li>
+<li><code>size</code>: 次に追加しようとしているデータのサイズ。</li>
+<li>出力: なし（副作用として <code>r-&gt;filename</code> を更新し、<code>pdest</code> を <code>buf</code> の先頭にリセットする）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buf</code> は <code>HUGE_STRING_LEN</code> のサイズを持つことが前提となっている。</li>
+<li><code>*pdest</code> は常に <code>buf</code> 内の有効な書き込み位置を指している必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 現在の書き込み位置 <code>*pdest</code> に <code>size</code> を加えた値が <code>buf</code> の終端（<code>HUGE_STRING_LEN</code>）を超えるか判定する。 2. 超過する場合:</p>
+<ul>
+<li>現在の <code>buf</code> の内容を終端文字 <code>\0</code> で閉じる。</li>
+<li><code>r-&gt;filename</code> が既に存在する場合は <code>apr_pstrcat</code> で連結し、存在しない場合は <code>apr_pstrdup</code> でコピーして <code>r-&gt;filename</code> を更新する。</li>
+<li><code>*pdest</code> を <code>buf</code> の先頭にリセットし、以降の書き込みをバッファの先頭から再開させる。</li>
+<p>3. 超過しない場合は何もしない。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>modules/mappers/mod_vhost_alias.c</code> 内の <code>vhost_alias_interpolate</code> 関数（285, 294, 302, 362行目）。</li>
+<li>呼び出し先: <code>apr_pstrcat</code>, <code>apr_pstrdup</code>（Apache Portable Runtime API）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>size &gt; HUGE_STRING_LEN</code>: ソースコード内のコメントにて「<code>size</code> が <code>HUGE_STRING_LEN</code> を超える場合」の挙動が未定義（XXX）として指摘されている。</li>
+<li>メモリ不足: <code>apr_pstrcat</code> や <code>apr_pstrdup</code> が失敗した場合、APR のメモリ管理ポリシーに従いプロセスが終了する可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>APR_INLINE</code> で定義されており、パフォーマンスを考慮してインライン展開される。</li>
+<li><code>r-&gt;filename</code> の更新はリクエストプール（<code>r-&gt;pool</code>）を使用しているため、リクエスト終了時に自動的に解放される。</li>
+<li><code>size</code> が <code>HUGE_STRING_LEN</code> を超えるケースについては、将来的な堅牢性向上のために検討が必要。</li>
 </ul></body></html>

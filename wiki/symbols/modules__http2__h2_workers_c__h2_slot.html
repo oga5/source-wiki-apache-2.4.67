@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/http2/h2_workers.c:60</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 サブシステムにおいて、個々のワーカースレッドの状態を保持および管理するための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct h2_slot {
+    APR_RING_ENTRY(h2_slot) link;
+    /* 内部メンバ: スレッドハンドル、条件変数、現在処理中のプロデューサーへの参照等 */
+};</code></pre>
+<p>※ソースコード上の構造体定義の詳細は、<code>h2_workers.c</code> の該当箇所を参照してください。</p>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: <code>h2_workers</code> 管理下でのスレッド生成およびタスク割り当て時に使用されます。</li>
+<li>出力: 接続処理の完了後、状態遷移（free, idle, busy, zombie）を経てリングバッファへ戻されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_workers</code> が保持する <code>workers-&gt;lock</code> によって、リングバッファ操作および状態遷移は保護されています。</li>
+<li>各スロットは <code>h2_workers</code> のサブプールによってメモリ管理されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**状態管理**: <code>APR_RING</code> を用いて、free（空き）、idle（待機中）、busy（実行中）、zombie（終了待ち）の各リスト間を移動します。</li>
+<li>**タスク実行**: <code>slot_run</code> 関数がこの構造体を介してワーカーのメインループを制御し、プロデューサーから接続を取得して処理を行います。</li>
+<li>**接続識別**: <code>slot-&gt;id</code> は、接続 ID 生成（<code>c-&gt;id = (c-&gt;master-&gt;id &lt;&lt; 8)^slot-&gt;id</code>）に使用されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>h2_workers</code> 構造体（<code>slots</code> 配列として保持）、<code>activate_slot</code>（新規生成時）、<code>wake_idle_worker</code>（タスク割り当て時）。</li>
+<li>呼び出し先: <code>slot_run</code>（ワーカーの実行ロジック）、<code>get_next</code>（タスク取得）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_workers</code>: プール全体の管理構造体。</li>
+<li><code>h2_slot_state_t</code>: スロットの状態定義。</li>
+<li><code>apr_ring</code>: スロットを管理するための双方向リスト構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ID 衝突**: <code>slot-&gt;id</code> を用いた接続 ID 生成において、極めて高い並列度では衝突の可能性があります。</li>
+<li>**シャットダウン**: <code>workers_pool_cleanup</code> 実行時に全スロットの終了待機が行われます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>h2_workers.c</code> 内で定義されており、<code>h2_workers.h</code> で公開されるインターフェースと密接に関連しています。</li>
+<li>スレッドセーフな操作が必要なため、リング操作を行う際は必ず <code>workers-&gt;lock</code> を保持していることを確認してください。</li>
 </ul></body></html>

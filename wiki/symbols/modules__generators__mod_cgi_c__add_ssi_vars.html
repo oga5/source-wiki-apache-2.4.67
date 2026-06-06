@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/generators/mod_cgi.c:292</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>SSI (Server Side Includes) 実行時に必要な環境変数を、リクエストのサブプロセス環境テーブル (<code>subprocess_env</code>) に追加・設定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void add_ssi_vars(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: なし（副作用として <code>r-&gt;subprocess_env</code> を更新）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;subprocess_env</code> が初期化されていること。</li>
+<li>メモリ割り当ては <code>r-&gt;pool</code> を使用するため、リクエスト終了時に自動的に解放される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **PATH_INFO の処理**:</p>
+<ul>
+<li><code>r-&gt;path_info</code> が存在する場合、シェルエスケープを適用して <code>PATH_INFO</code> を設定。</li>
+<li>サブリクエスト (<code>ap_sub_req_lookup_uri</code>) を発行し、物理パスを解決。</li>
+<li>解決されたファイル名とパス情報を結合し、<code>PATH_TRANSLATED</code> を設定。</li>
+<li>サブリクエストを破棄 (<code>ap_destroy_sub_req</code>)。</li>
+<p>2. **QUERY_STRING の処理**:</p>
+<li><code>r-&gt;args</code> が存在する場合、<code>QUERY_STRING</code> を設定。</li>
+<li>引数のコピーを作成し、URL デコード (<code>ap_unescape_url</code>) を実行。</li>
+<li>デコード後の文字列にシェルエスケープを適用し、<code>QUERY_STRING_UNESCAPED</code> を設定。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/generators/mod_cgi.c:708</code></li>
+<li><code>modules/generators/mod_cgid.c:1741</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_escape_shell_cmd</code></li>
+<li><code>ap_sub_req_lookup_uri</code></li>
+<li><code>ap_escape_uri</code></li>
+<li><code>ap_destroy_sub_req</code></li>
+<li><code>ap_unescape_url</code></li>
+<li><code>apr_table_setn</code></li>
+<li><code>apr_pstrcat</code></li>
+<li><code>apr_pstrdup</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト処理のコンテキストを保持。</li>
+<li><code>apr_table_t</code>: 環境変数を格納するテーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;path_info</code> や <code>r-&gt;args</code> が NULL または空文字列の場合、該当する環境変数の設定はスキップされます。</li>
+<li><code>ap_sub_req_lookup_uri</code> が失敗した場合、<code>PATH_TRANSLATED</code> は設定されません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_cgi</code> と <code>mod_cgid</code> の両方から参照されており、SSI 実行時の環境変数構築における共通ロジックとして機能しています。</li>
+<li><code>ap_escape_shell_cmd</code> を使用しているため、環境変数の値がシェルインジェクションに対して保護されます。</li>
 </ul></body></html>

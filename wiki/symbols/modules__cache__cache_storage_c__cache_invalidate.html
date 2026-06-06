@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/cache/cache_storage.c:690</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>POST、PUT、DELETE 等のメソッドに応答して、指定されたリクエスト URI および関連する <code>Location</code> / <code>Content-Location</code> ヘッダーが指すキャッシュエントリを無効化する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int cache_invalidate(cache_request_rec *cache, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cache</code>: キャッシュリクエストコンテキスト。</li>
+<li><code>r</code>: 現在のリクエスト構造体。<code>r-&gt;headers_out</code> から無効化対象の URI を特定する。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 少なくとも1つのプロバイダーで無効化処理が成功した場合。</li>
+<li><code>DECLINED</code>: キャッシュ情報が不足している場合、またはキー生成に失敗した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache</code> が NULL でないこと。</li>
+<li><code>cache-&gt;key</code> が未設定の場合、<code>cache_generate_key</code> により自動生成される。</li>
+<li><code>Location</code> および <code>Content-Location</code> ヘッダーの無効化は、ホスト名が現在のリクエストと一致する場合のみ行われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. リクエスト URI のキャッシュキーを生成（未設定時）。 2. <code>r-&gt;headers_out</code> から <code>Location</code> および <code>Content-Location</code> を取得し、それぞれ正規化されたキャッシュキーを算出。 3. <code>cache-&gt;providers</code> リストを反復処理し、各プロバイダーに対して以下の順序で無効化を試行：</p>
+<ul>
+<li>リクエスト URI に対応するエンティティを開き、無効化。</li>
+<li><code>Location</code> キーが存在する場合、対応するエンティティを開き、無効化。</li>
+<li><code>Content-Location</code> キーが存在する場合、対応するエンティティを開き、無効化。</li>
+<p>4. 処理結果を <code>status</code> に保持し、全プロバイダーの走査終了後に返却する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_cache.c:1702</code> (および同ファイル内のフィルタ処理)。</li>
+<li>**呼び出し先**:</li>
+<li><code>cache_generate_key</code> (キー生成)</li>
+<li><code>cache_canonicalise_key</code> (キー正規化)</li>
+<li><code>list-&gt;provider-&gt;open_entity</code> (エンティティの取得)</li>
+<li><code>list-&gt;provider-&gt;invalidate_entity</code> (エンティティの無効化)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_request_rec</code>: キャッシュのプロバイダーリストとキーを保持。</li>
+<li><code>cache_handle_t</code>: キャッシュエントリへのアクセスハンドル。</li>
+<li><code>apr_uri_t</code>: URI 解析結果の保持に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache</code> が NULL の場合、エラーログを出力して <code>DECLINED</code> を返す。</li>
+<li><code>cache_generate_key</code> が失敗した場合、<code>DECLINED</code> を返す。</li>
+<li>ホスト名が一致しない <code>Location</code> / <code>Content-Location</code> は無効化対象から除外される。</li>
+<li>プロバイダーが <code>open_entity</code> に失敗した場合、そのエンティティの無効化はスキップされる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用してメモリを割り当てるため、明示的な解放は不要。</li>
+<li><code>Location</code> 等のヘッダー解析において、<code>apr_uri_parse</code> および <code>cache_canonicalise_key</code> の結果が不完全な場合はキーを NULL と見なし、無効化をスキップする安全な設計となっている。</li>
 </ul></body></html>

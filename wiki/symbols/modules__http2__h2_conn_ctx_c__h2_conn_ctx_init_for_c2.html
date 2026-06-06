@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/http2/h2_conn_ctx.c:77</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ストリーム処理用接続（C2）のコンテキストを初期化し、親接続（C1）から必要な情報を継承・設定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_conn_ctx_init_for_c2(h2_conn_ctx_t **pctx, conn_rec *c2,
+                                     struct h2_mplx *mplx, struct h2_stream *stream,
+                                     struct h2_c2_transit *transit)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c2</code>: ストリーム処理用の接続レコード（<code>master</code> 接続を持つこと）。</li>
+<li><code>mplx</code>: 接続に関連付けられるマルチプレクサ。</li>
+<li><code>stream</code>: 処理対象の HTTP/2 ストリーム。</li>
+<li><code>transit</code>: C2 転送用コンテキスト。</li>
+<li>**出力**:</li>
+<li><code>pctx</code>: 初期化された <code>h2_conn_ctx_t</code> 構造体へのポインタ。</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c2-&gt;master</code> が存在すること（<code>ap_assert</code> により検証）。</li>
+<li><code>c2-&gt;master</code> に紐付く <code>c1_ctx</code> およびその <code>session</code> が存在すること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>c2</code> に既存のコンテキストがない場合、親接続（<code>c2-&gt;master</code>）から <code>c1_ctx</code> を取得し、<code>ctx_create</code> を用いて新規コンテキストを生成・設定する。 2. 取得したコンテキストに対し、以下の値を設定する：</p>
+<ul>
+<li><code>mplx</code>, <code>transit</code>, <code>stream_id</code>。</li>
+<li><code>c2-&gt;pool</code> を親として <code>req_pool</code> を作成し、タグ付けを行う。</li>
+<li><code>stream-&gt;request</code> をコンテキストに保持。</li>
+<p>3. アトミック操作により <code>started</code> を 1 に設定し、<code>started_at</code> に現在時刻を記録する。 4. <code>done</code> フラグおよび <code>done_at</code> を初期化（0）する。 5. 初期化済みコンテキストを <code>*pctx</code> に格納して返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_mplx.c:867</code></li>
+<li>**呼び出し先**: <code>h2_conn_ctx_get</code>, <code>ap_assert</code>, <code>ctx_create</code>, <code>apr_pool_create</code>, <code>apr_pool_tag</code>, <code>apr_atomic_set32</code>, <code>apr_time_now</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとの状態を保持する主要構造体。</li>
+<li><code>conn_rec</code>: Apache の接続レコード。</li>
+<li><code>h2_mplx</code>, <code>h2_stream</code>, <code>h2_c2_transit</code>: HTTP/2 処理に関連するサブシステム構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c2-&gt;master</code> が NULL の場合、<code>ap_assert</code> により異常終了する。</li>
+<li><code>c1_ctx</code> または <code>c1_ctx-&gt;session</code> が NULL の場合、<code>ap_assert</code> により異常終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は C2 接続のライフサイクル管理の一部であり、<code>req_pool</code> の作成を通じてリクエスト単位のメモリ管理を行う。</li>
+<li><code>apr_atomic_set32</code> を使用しているため、マルチスレッド環境での状態追跡を意図している。</li>
 </ul></body></html>

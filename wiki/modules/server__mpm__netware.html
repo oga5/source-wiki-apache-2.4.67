@@ -1,43 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/server__mpm__netware.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/netware</h1>
 <h2>システム内での役割</h2>
-<p><code>server/mpm/netware</code> には 2 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p>NetWare OS 上で Apache HTTP Server を動作させるためのマルチプロセッシングモジュール（MPM）です。NetWare の単一プロセス・マルチスレッドモデル（NKS: NetWare Kernel Services）を活用し、効率的なリクエスト処理を実現します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**スレッド管理**: ワーカースレッドの生成、監視、およびスレッドプールの動的調整（<code>perform_idle_server_maintenance</code>）。</li>
+<li>**コンソール統合**: NetWare コンソールコマンド（<code>RESTART</code>, <code>SHUTDOWN</code> 等）の登録と処理。</li>
+<li>**ライフサイクル管理**: サーバーの起動、リスニングソケットの監視、および正常終了/再起動の制御。</li>
+<li>**設定管理**: スレッド数やスタックサイズなどの MPM 固有ディレクティブの解析と適用。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>server/mpm/netware/mpm_default.h</code></li>
-<li><code>server/mpm/netware/mpm_netware.c</code></li>
+<li><code>server/mpm/netware/mpm_default.h</code>: スレッド数やスタックサイズ等のデフォルト値定義。</li>
+<li><code>server/mpm/netware/mpm_netware.c</code>: MPM のメインロジックおよび NetWare OS との統合実装。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li>まだ明確なデータ構造シンボルは索引化されていません。</li>
+<li><code>worker_main</code>: ワーカースレッドのメインループ関数。</li>
+<li><code>mpm_state</code>: サーバーの現在の動作状態（起動中、実行中、停止中など）。</li>
+<li><code>shutdown_pending</code> / <code>restart_pending</code>: 終了や再起動を制御する状態遷移フラグ。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **初期化**: <code>netware_mpm_hooks</code> によりフックを登録し、コンソールハンドラをインストール。 2. **起動**: <code>netware_run</code> がリスニングソケットを準備し、初期スレッド群を生成。 3. **メインループ**: <code>perform_idle_server_maintenance</code> を定期実行し、スレッドプールの過不足を調整。 4. **リクエスト処理**: 各ワーカースレッドが <code>select()</code> で接続を待機し、リクエストを処理。 5. **終了**: 終了フラグがセットされると、全スレッドの終了を待機し、リソースを解放。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>apr.h</code></li>
-<li><code>apr_portable.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>apr_thread_proc.h</code></li>
-<li><code>apr_signal.h</code></li>
-<li><code>apr_tables.h</code></li>
-<li><code>apr_getopt.h</code></li>
-<li><code>apr_thread_mutex.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>ap_config.h</code></li>
+<li>**APR**: スレッド、メモリ、同期プリミティブの抽象化。</li>
+<li>**NetWare SDK**: <code>NKS</code> を介したネイティブなスレッド制御およびコンソール操作。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>mpm_common.h</code>, <code>scoreboard.h</code> 等によるサーバー基盤との連携。</li>
 </ul>
 <h2>内部構成</h2>
 <ul>
 <li>子モジュール数: 0</li>
+<li>本モジュールは NetWare 特有の環境に最適化されており、<code>fork()</code> を使用しない単一プロセスモデルを採用しています。</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>server/mpm/netware/mpm_default.h</code> 2. <code>server/mpm/netware/mpm_netware.c</code></p>
+<p>1. <code>server/mpm/netware/mpm_default.h</code>（定数と制限値の把握） 2. <code>server/mpm/netware/mpm_netware.c</code>（スレッド管理とライフサイクル制御の理解）</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>現在のコードベースにおける一部の未実装フック（<code>netware_post_config</code> 等）の将来的な必要性。</li>
+<li>NetWare 環境特有のメモリ制約下における、スコアボードの最適化手法の精緻化。</li>
 </ul></body></html>

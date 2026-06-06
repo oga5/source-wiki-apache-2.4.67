@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/http/http_request.c:76</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト処理中に発生したエラーに対するレスポンス生成を統括する。カスタムエラードキュメントへのリダイレクトや、接続のクローズ判定、プロキシ認証の調整を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void ap_die_r(int type, request_rec *r, int recursive_error)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>type</code>: 発生した HTTP ステータスコード（または <code>OK</code>/<code>DONE</code>）。</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>recursive_error</code>: 再帰的なエラー発生時のステータス（正常時は <code>HTTP_OK</code>）。</li>
+<li>出力: なし（内部的にレスポンスを送信またはリダイレクトを実行）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>type</code> が <code>OK</code> または <code>DONE</code> の場合、<code>ap_finalize_request_protocol(r)</code> を呼び出して即座に終了する。</li>
+<li><code>type</code> が有効な HTTP レスポンスコードでない場合、<code>ap_http_header_filter</code> が適用済みであれば <code>HTTP_INTERNAL_SERVER_ERROR</code> に変換し、そうでなければ処理を中断する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **エラー検証**: <code>type</code> が有効な HTTP ステータスか確認し、無効な場合はログ出力後に <code>HTTP_INTERNAL_SERVER_ERROR</code> へ昇格させる。 2. **再帰エラー処理**: <code>recursive_error</code> が <code>HTTP_OK</code> でない場合、元のリクエストまで遡り、フィルタチェーンを復元して再帰的なリダイレクトを回避する。 3. **ステータス調整**: プロキシ認証が必要な場合、ステータスを <code>HTTP_PROXY_AUTHENTICATION_REQUIRED</code> に変更する。 4. **接続管理**: <code>ap_status_drops_connection</code> に基づき、Keep-Alive の可否を判定する。 5. **リダイレクト処理**:</p>
+<ul>
+<li>URL が指定されている場合、外部リダイレクト（<code>Location</code> ヘッダー付与）または内部リダイレクト（<code>ap_internal_redirect</code>）を実行する。</li>
+<li>内部リダイレクト時はメソッドを <code>GET</code> に強制し、<code>ERROR_NOTES</code> を設定する。</li>
+<p>6. **最終応答**: <code>ap_send_error_response</code> を呼び出し、エラーレスポンスを送信する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>modules/http/http_request.c</code> 内の複数箇所</li>
+<li><code>modules/http2/h2_c2_filter.c</code></li>
+<li>呼び出し先:</li>
+<li><code>ap_finalize_request_protocol</code>, <code>ap_filter_t</code> 関連操作</li>
+<li><code>ap_log_rerror</code>, <code>ap_index_of_response</code>, <code>ap_response_code_string</code></li>
+<li><code>update_r_in_filters</code></li>
+<li><code>ap_is_url</code>, <code>ap_internal_redirect</code>, <code>ap_send_error_response</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストのコンテキストおよび状態管理に使用。</li>
+<li><code>ap_filter_t</code>: フィルタチェーンの走査に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>custom_response</code> が不正な形式（URL でもなく <code>/</code> で始まらない）の場合、ログ出力後に <code>HTTP_INTERNAL_SERVER_ERROR</code> として再帰的に処理される。</li>
+<li>再帰エラー発生時、フィルタチェーンの復元に失敗すると予期せぬ動作を引き起こす可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ap_internal_redirect</code> を呼び出す際、メソッドを <code>GET</code> に強制変更するロジックが含まれているため、メソッドの変更が意図通りか注意が必要。</li>
+<li><code>update_r_in_filters</code> によるフィルタチェーンの書き換えは、エラー処理の整合性を保つための重要なステップである。</li>
 </ul></body></html>

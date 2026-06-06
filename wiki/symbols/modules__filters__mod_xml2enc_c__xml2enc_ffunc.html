@@ -6,22 +6,42 @@
 <li>定義箇所: <code>modules/filters/mod_xml2enc.c:318</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の出力フィルタとして、XML/HTML コンテンツの文字エンコーディングを自動検出し、UTF-8 へ変換して後続のフィルタへ渡す。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t xml2enc_ffunc(ap_filter_t* f, apr_bucket_brigade* bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ap_filter_t* f</code> (フィルタコンテキスト)、<code>apr_bucket_brigade* bb</code> (処理対象のバケットブリゲード)。</li>
+<li>**出力**: <code>apr_status_t</code> (処理結果ステータス)。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;r-&gt;content_type</code> が存在し、かつ <code>text/</code> で始まるか、<code>application/xml</code> 等の XML 関連メディアタイプである必要がある。</li>
+<li>フィルタ初期化前は、エンコーディング検出に必要なデータ量（<code>BUF_MIN</code>）が蓄積されるまでバッファリングを行う。</li>
+<li>変換器（<code>ctx-&gt;convset</code>）が設定されている場合、データは UTF-8 に変換される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **メディアタイプ検証**: 対象外のコンテンツタイプであれば、フィルタを解除してブリゲードをそのまま通過させる。 2. **バッファリングと検出**: <code>ctx-&gt;bbsave</code> にデータを蓄積し、<code>BUF_MIN</code> に達した時点で <code>sniff_encoding</code> を呼び出しエンコーディングを特定する。 3. **正規化**: <code>fix_skipto</code> により指定要素までスキップし、<code>Content-Length</code> ヘッダーを無効化する。 4. **変換処理**: <code>apr_xlate_conv_buffer</code> を使用し、バッファ内のデータを UTF-8 に変換する。 5. **ストリーム制御**: メタデータバケット（FLUSH/EOS）を適切に処理し、変換後のデータを <code>ap_fwrite</code> で後続フィルタへ渡す。 6. **エラー処理**: 不正なバイト列（<code>APR_EINVAL</code>）はスキップして処理を継続し、変換失敗時は生データのまま通過させる。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_register_output_filter_protocol</code> によりフィルタとして登録（<code>modules/filters/mod_xml2enc.c:591</code>）。</li>
+<li>**呼び出し先**: <code>sniff_encoding</code>, <code>fix_skipto</code>, <code>xml2enc_run_preprocess</code>, <code>ap_pass_brigade</code>, <code>ap_fwrite</code>, <code>apr_xlate_conv_buffer</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>xml2ctx</code>: フィルタの実行状態（バッファ、変換器、フラグ）を保持。</li>
+<li><code>apr_bucket_brigade</code>: 処理対象のデータストリーム。</li>
+<li><code>xml2enc_module</code>: モジュール設定の識別に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**データ不足**: <code>APR_EINCOMPLETE</code> が発生した場合、バッファを保持して次回の呼び出しを待機する。</li>
+<li>**変換エラー**: <code>APR_EINVAL</code> の場合は該当バイトをスキップ。その他の致命的な変換エラー時は変換器を無効化し、生データのまま通過させる。</li>
+<li>**メモリ不足**: <code>apr_palloc</code> 等のメモリ確保失敗時は <code>ap_assert</code> により停止する可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ap_assert</code> の使用箇所は、将来的に適切なエラーハンドリングへの置き換えが推奨される。</li>
+<li><code>libxml2</code> の検出ロジックに依存しており、サポート外のエンコーディングは設定されたデフォルト値へフォールバックする。</li>
+<li><code>Content-Length</code> を変更するため、本フィルタ実行後に再計算が必要となる。</li>
 </ul></body></html>

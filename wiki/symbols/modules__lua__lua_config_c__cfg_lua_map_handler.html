@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/lua/lua_config.c:82</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Lua スクリプトから提供された設定テーブルを解析し、Apache のディレクトリ設定構造体（<code>ap_lua_dir_cfg</code>）にハンドラ仕様（<code>ap_lua_mapped_handler_spec</code>）として登録する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int cfg_lua_map_handler(lua_State *L);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li>Lua スタック第1引数: <code>ap_lua_dir_cfg</code> 型のユーザーデータ。</li>
+<li>Lua スタック第2引数: 設定情報を含む Lua テーブル（<code>file</code>, <code>pattern</code>, <code>scope</code>, <code>func</code> フィールド）。</li>
+<li>**出力**: 成功時は <code>0</code> を返し、失敗時は <code>luaL_error</code> を通じて Lua 側に例外を伝播させる。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>第1引数は <code>check_dir_config</code> で検証可能な有効な <code>ap_lua_dir_cfg</code> であること。</li>
+<li>第2引数は Lua のテーブル型であること。</li>
+<li>メモリ確保はすべて <code>cfg-&gt;pool</code> を使用して行われるため、呼び出し側での明示的な解放は不要。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>check_dir_config</code> を用いて設定構造体を取得し、<code>ap_lua_mapped_handler_spec</code> をメモリ確保する。 2. Lua テーブルから以下のフィールドを抽出し、構造体に格納する。</p>
+<ul>
+<li><code>file</code>: スクリプトファイル名（必須）。</li>
+<li><code>pattern</code>: URI マッチング用の正規表現。<code>ap_regcomp</code> でコンパイルし、失敗時はエラーを投げる。</li>
+<li><code>scope</code>: <code>apl_toscope</code> を用いて変換。未指定時は <code>AP_LUA_SCOPE_ONCE</code> を適用。</li>
+<li><code>func</code>: 実行する関数名。未指定時はデフォルトの <code>&quot;handle&quot;</code> を使用。</li>
+<p>3. 構築した仕様を <code>cfg-&gt;mapped_handlers</code> 配列に追加する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/lua/lua_config.c</code> 内の <code>cfg_methods</code> テーブルを通じて、Lua スクリプトから <code>match_handler</code> として呼び出される。</li>
+<li>**呼び出し先**: </li>
+<li><code>check_dir_config</code></li>
+<li><code>apr_pcalloc</code> / <code>apr_pstrdup</code> / <code>apr_palloc</code> / <code>apr_array_push</code></li>
+<li><code>ap_regcomp</code></li>
+<li><code>luaL_checktype</code> / <code>lua_getfield</code> / <code>lua_isstring</code> / <code>lua_tostring</code> / <code>lua_pop</code> / <code>luaL_error</code></li>
+<li><code>apl_toscope</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_lua_dir_cfg</code>: ディレクトリ設定を保持する構造体。</li>
+<li><code>ap_lua_mapped_handler_spec</code>: ハンドラの定義（ファイル名、URI パターン、スコープ、関数名）を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pattern</code> に無効な正規表現が指定された場合、<code>ap_regcomp</code> が失敗し <code>luaL_error</code> が発生する。</li>
+<li>Lua スタックの型が期待と異なる場合、<code>luaL_checktype</code> 等によりエラーが発生する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は Lua からの動的な設定登録を担うため、メモリ確保はすべて Apache のプール管理下にある。</li>
+<li><code>func</code> フィールドが省略された場合のデフォルト値 <code>&quot;handle&quot;</code> は、<code>mod_lua</code> の慣習に基づいている。</li>
 </ul></body></html>

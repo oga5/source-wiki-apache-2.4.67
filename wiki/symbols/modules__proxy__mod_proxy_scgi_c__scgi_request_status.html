@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_scgi.c:474</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バックエンドからのレスポンスに基づき、内部リダイレクトまたはファイル送信（<code>X-Sendfile</code>）のサブリクエストを実行するフック関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int scgi_request_status(int *status, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>status</code>: 現在のリクエストステータスへのポインタ。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 処理が成功、またはサブリクエストが実行された場合。</li>
+<li><code>DECLINED</code>: 処理対象外（設定が存在しない、またはステータスが <code>OK</code> 以外）の場合。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: ファイルサブリクエストの生成または実行に失敗した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>*status</code> が <code>OK</code> であること。</li>
+<li><code>r-&gt;request_config</code> から <code>proxy_scgi_module</code> に関連付けられた <code>scgi_request_config</code> が取得可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **条件判定**: <code>*status</code> が <code>OK</code> かつ設定が存在する場合に処理を開始します。 2. **分岐処理**: <code>req_conf-&gt;type</code> に基づき以下のいずれかを行います。</p>
+<ul>
+<li><code>scgi_internal_redirect</code>: </li>
+<li><code>r-&gt;status_line</code> をクリアします。</li>
+<li>メソッドが <code>GET</code> 以外の場合、<code>GET</code> に強制変更します。</li>
+<li><code>Content-Length</code> ヘッダーを削除し、<code>ap_internal_redirect_handler</code> を呼び出してリダイレクトを実行します。</li>
+<li><code>scgi_sendfile</code>: </li>
+<li><code>ap_sub_req_lookup_file</code> を使用してファイルサブリクエストを生成します。</li>
+<li>ファイルが存在し、ステータスが <code>HTTP_OK</code> であれば <code>ap_run_sub_req</code> を実行します。</li>
+<li>失敗した場合は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返します。</li>
+<p>3. **終了**: いずれのケースにも該当しない、または条件を満たさない場合は <code>DECLINED</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>APR_OPTIONAL_HOOK(proxy, request_status, ...)</code> により、<code>mod_proxy</code> の <code>request_status</code> フックとして登録されています（<code>modules/proxy/mod_proxy_scgi.c:671</code>）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>apr_table_unset</code></li>
+<li><code>ap_internal_redirect_handler</code></li>
+<li><code>ap_sub_req_lookup_file</code></li>
+<li><code>ap_run_sub_req</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>scgi_request_config</code>: リクエストごとの設定（リダイレクト先やファイルパス、処理タイプを保持）。</li>
+<li><code>request_rec</code>: Apache のリクエストレコード。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>scgi_sendfile</code> 処理において、サブリクエスト対象のファイルが存在しない、またはアクセスできない場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返し処理を中断します。</li>
+<li><code>Content-Length</code> はサブリクエスト実行時に明示的に操作されず、バックエンドの挙動またはチャンク転送に依存します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_proxy</code> のフックとして動作するため、他のプロキシモジュールとの競合や実行順序に注意してください。</li>
+<li><code>scgi_sendfile</code> における <code>Content-Length</code> の扱いは、バックエンドとの整合性を保つための設計上の判断です。</li>
 </ul></body></html>

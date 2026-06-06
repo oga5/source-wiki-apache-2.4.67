@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/proxy/ajp_header.c:725</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>AJPソケットからパケットを読み込み、メッセージバッファを初期化または再利用して、受信したAJPメッセージの型を特定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ajp_read_header(apr_socket_t *sock,
+                             request_rec  *r,
+                             apr_size_t buffsize,
+                             ajp_msg_t **msg)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>sock</code>: 通信に使用するAPRソケット。</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>buffsize</code>: メッセージバッファを新規作成する場合のサイズ。</li>
+<li><code>msg</code>: AJPメッセージを格納するポインタのポインタ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+<li><code>msg</code>: 受信したパケットデータで更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>msg</code> が指すポインタが <code>NULL</code> の場合、<code>r-&gt;pool</code> を使用して新規に <code>ajp_msg_t</code> が割り当てられる。</li>
+<li><code>msg</code> が既存のメッセージを指している場合、<code>ajp_msg_reuse</code> により再利用される。</li>
+<li>処理の最後には必ず <code>ajp_msg_peek_uint8</code> によりパケットの先頭バイト（型情報）が検証される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バッファ準備**: <code>*msg</code> の有無を確認し、<code>ajp_msg_reuse</code> または <code>ajp_msg_create</code> でメモリを確保・準備する。 2. **リセット**: <code>ajp_msg_reset</code> を呼び出し、バッファを初期状態にする。 3. **受信**: <code>ajp_ilink_receive</code> を通じてソケットからバイナリパケットを読み込む。 4. **ログ出力**: 受信したパケットのダンプを記録する。 5. **型特定**: <code>ajp_msg_peek_uint8</code> でパケットの型コードを読み取り、<code>ajp_type_str</code> を用いてログに記録する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_ajp.c</code> 内の <code>proxy_ajp_handler</code> 等（リクエスト処理ループ内）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ajp_msg_reuse</code>, <code>ajp_msg_create</code>, <code>ajp_msg_reset</code></li>
+<li><code>ajp_ilink_receive</code></li>
+<li><code>ajp_msg_log</code></li>
+<li><code>ajp_msg_peek_uint8</code></li>
+<li><code>ajp_type_str</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_t</code>: AJPプロトコルのメッセージを保持する構造体。</li>
+<li><code>request_rec</code>: Apacheのリクエスト情報。</li>
+<li><code>apr_socket_t</code>: APRのソケット抽象化。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_reuse</code> または <code>ajp_msg_create</code> が失敗した場合、エラーログを出力し即時復帰する。</li>
+<li><code>ajp_ilink_receive</code> が失敗した場合（ソケット切断等）、エラーログを出力し即時復帰する。</li>
+<li><code>ajp_msg_peek_uint8</code> が失敗した場合、パケットの型情報が取得できないためエラーとして復帰する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はパケットの読み込みと型特定までを担当する。パケットの内容解析（アンマーシャリング）は、この後に呼び出される関数（<code>ajp_parse_header</code> 等）で行われる。</li>
+<li><code>buffsize</code> の指定は、バックエンドからの予期される最大パケットサイズと整合している必要がある。</li>
 </ul></body></html>

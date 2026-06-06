@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_fcgi.c:349</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストに関連付けられた環境変数を FastCGI プロトコルの <code>PARAMS</code> レコードとしてシリアライズし、バックエンドへ送信する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t send_environment(proxy_conn_rec *conn, request_rec *r,
+                              apr_pool_t *temp_pool,
+                              apr_uint16_t request_id)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>conn</code>: バックエンドへの接続情報。</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>temp_pool</code>: 一時的なメモリ割り当て用プール。</li>
+<li><code>request_id</code>: FastCGI リクエスト識別子。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;subprocess_env</code> に環境変数が格納されていること。</li>
+<li><code>temp_pool</code> は呼び出し元で管理され、本関数内で <code>apr_pool_clear</code> により適宜解放される。</li>
+<li>FastCGI の多重化はサポートしておらず、<code>request_id</code> は単一のセッションを前提とする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **環境変数の準備**: <code>ap_add_common_vars</code> および <code>ap_add_cgi_vars</code> を呼び出し、CGI 関連の環境変数を構築する。 2. **動的調整**: <code>fix_cgivars</code> を呼び出し、設定に基づいた環境変数の書き換えを行う。 3. **シリアライズ**: <code>r-&gt;subprocess_env</code> から環境変数を取得し、最大 16KB 単位の <code>PARAMS</code> レコードに分割してエンコードする。 4. **送信**: <code>send_data</code> を使用して、ヘッダとボディ（環境変数）をバックエンドへ送信する。 5. **終了通知**: 全ての環境変数の送信後、データ長 0 の <code>PARAMS</code> レコードを送信して終了を通知する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/proxy/mod_proxy_fcgi.c:1056</code></li>
+<li><code>modules/aaa/mod_authnz_fcgi.c:742</code></li>
+<li>**呼び出し先**:</li>
+<li><code>fix_cgivars</code>, <code>send_data</code>, <code>ap_fcgi_encode_env</code>, <code>ap_fcgi_fill_in_header</code> 等のユーティリティ関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_conn_rec</code>: 接続管理用。</li>
+<li><code>request_rec</code>: リクエスト情報および環境変数テーブル。</li>
+<li><code>fcgi_req_config_t</code>, <code>fcgi_dirconf_t</code>: リクエストおよびディレクトリ単位の設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>環境変数のエンコードに失敗した場合、警告ログを出力して該当変数をスキップする。</li>
+<li><code>send_data</code> がエラーを返した場合、即座にそのエラーを呼び出し元へ伝播する。</li>
+<li>環境変数が 16KB を超える場合、複数の <code>PARAMS</code> レコードに分割して送信される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>temp_pool</code> を使用してメモリ効率を最適化している。</li>
+<li><code>r-&gt;filename</code> の一時的な書き換えと復元を行っているため、修正時はパス処理の整合性に注意すること。</li>
+<li><code>XXX</code> コメントにある通り、FastCGI 特有の環境変数追加の必要性については将来的な検討課題である。</li>
 </ul></body></html>

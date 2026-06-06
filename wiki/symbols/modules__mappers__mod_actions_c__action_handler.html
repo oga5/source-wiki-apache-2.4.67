@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/mappers/mod_actions.c:149</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストされた MIME タイプまたは HTTP メソッドに基づき、設定された CGI スクリプトへリクエストを内部リダイレクトするハンドラ。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int action_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: <code>int</code> (Apache のステータスコード: <code>OK</code>, <code>DECLINED</code>, または <code>HTTP_NOT_FOUND</code>)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conf-&gt;configured</code> が真であること（設定が存在しない場合は <code>DECLINED</code> を返す）。</li>
+<li>無限リダイレクトループを防止するため、<code>r-&gt;prev</code> が二重に存在する場合は <code>DECLINED</code> を返す。</li>
+<li><code>Action</code> ディレクティブによる MIME タイプベースの処理は、<code>Script</code> ディレクティブによるメソッドベースの処理を上書きする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **メソッドベースのスクリプト確認**: <code>conf-&gt;scripted</code> 配列から現在のメソッドに対応するスクリプトを特定する。 2. **アクション（MIMEタイプ）の確認**: <code>r-&gt;handler</code> または <code>r-&gt;content_type</code> をキーとして <code>conf-&gt;action_types</code> テーブルを検索する。 3. **スクリプトの実行**:</p>
+<ul>
+<li>スクリプトが特定された場合、<code>apr_table_setn</code> で環境変数 <code>HANDLER</code> を設定する。</li>
+<li><code>virtual</code> オプションが指定されていない場合、ファイルの実在チェックを行い、存在しなければ <code>HTTP_NOT_FOUND</code> を返す。</li>
+<li><code>ap_internal_redirect_handler</code> を呼び出し、スクリプトパスに URI とクエリ文字列を付与してリクエストを転送する。</li>
+<p>4. **終了**: スクリプトが特定できない場合は <code>DECLINED</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のフック機構 (<code>ap_hook_handler</code> により <code>APR_HOOK_LAST</code> で登録)。</li>
+<li>**呼び出し先**: <code>ap_internal_redirect_handler</code> (リクエスト転送用)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>action_dir_config</code>: ディレクトリごとの設定（スクリプトパスやアクションの紐付け）を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ファイル不在**: <code>virtual</code> オプションがオフの状態で対象ファイルが存在しない場合、<code>HTTP_NOT_FOUND</code> を返す。</li>
+<li>**ループ検知**: <code>r-&gt;prev-&gt;prev</code> が存在する場合、リダイレクトループとみなして <code>DECLINED</code> を返す。</li>
+<li>**未設定**: モジュール設定が空の場合、即座に <code>DECLINED</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はすべてのリクエストに対して実行されるため、処理の優先順位（メソッド vs MIMEタイプ）が厳密に管理されています。</li>
+<li><code>virtual</code> スクリプトの判定ロジックは、テーブルから取得した文字列の先頭文字 (<code>&#x27;0&#x27;</code> または <code>&#x27;1&#x27;</code>) に依存しているため、設定構造体の構築ロジックと整合性を保つ必要があります。</li>
 </ul></body></html>

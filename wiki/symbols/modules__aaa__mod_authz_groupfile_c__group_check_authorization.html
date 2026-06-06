@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_groupfile.c:136</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>require group</code> ディレクティブに基づき、リクエストユーザーが指定されたグループのいずれかに所属しているかを検証し、認可状態（<code>AUTHZ_GRANTED</code> または <code>AUTHZ_DENIED</code>）を決定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static authz_status group_check_authorization(request_rec *r,
+                                              const char *require_args,
+                                              const void *parsed_require_args)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。<code>r-&gt;user</code> を使用してユーザー名を特定。</li>
+<li><code>parsed_require_args</code>: <code>ap_expr_info_t</code> 型の式情報。評価後にグループ名のリストとして使用。</li>
+<li>**出力**:</li>
+<li><code>authz_status</code>: 認可結果。ユーザー不在時は <code>AUTHZ_DENIED_NO_USER</code>、グループファイル未設定や検証失敗時は <code>AUTHZ_DENIED</code>、一致時は <code>AUTHZ_GRANTED</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;user</code> が設定されていること。</li>
+<li><code>conf-&gt;groupfile</code>（<code>AuthGroupFile</code> ディレクティブで指定）が有効なファイルパスを保持していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. ユーザー名が未設定の場合、<code>AUTHZ_DENIED_NO_USER</code> を返す。 2. 設定されたグループファイルが存在しない場合、エラーをログ出力し <code>AUTHZ_DENIED</code> を返す。 3. <code>groups_for_user</code> を呼び出し、当該ユーザーが所属する全グループを <code>apr_table_t</code> に取得する。 4. グループファイルにユーザーが存在しない場合、<code>AUTHZ_DENIED</code> を返す。 5. <code>ap_expr_str_exec</code> を用いて <code>parsed_require_args</code> を評価し、要求されたグループ名のリストを得る。 6. 要求された各グループ名に対し、<code>apr_table_get</code> を用いてユーザーの所属グループテーブルと照合する。 7. 一致するグループがあれば <code>AUTHZ_GRANTED</code> を返し、すべて不一致であれば <code>AUTHZ_DENIED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/aaa/mod_authz_groupfile.c:295</code>（<code>authz_group_provider</code> 構造体を通じて登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>groups_for_user</code>: ユーザーの所属グループ一覧を取得。</li>
+<li><code>ap_expr_str_exec</code>: 認可条件式の評価。</li>
+<li><code>ap_getword_conf</code>: 要求されたグループ名のトークン分割。</li>
+<li><code>ap_log_rerror</code>: エラーおよびデバッグ情報の出力。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>authz_groupfile_config_rec</code>: ディレクトリごとの設定（グループファイルパス等）を保持。</li>
+<li><code>apr_table_t</code>: ユーザーが所属するグループのキャッシュ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ユーザー未認証**: <code>r-&gt;user</code> が NULL の場合、即座に拒否。</li>
+<li>**ファイルI/Oエラー**: <code>groups_for_user</code> が失敗した場合、エラーログを出力して拒否。</li>
+<li>**グループ不一致**: ユーザーがグループファイルに存在しない、または指定されたグループに所属していない場合、拒否。</li>
+<li>**式評価エラー**: <code>ap_expr_str_exec</code> が失敗した場合、エラーログを出力して拒否。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエストごとにグループファイルを走査するため、大規模なグループファイルではパフォーマンスへの影響を考慮すること。</li>
+<li><code>groups_for_user</code> が返す <code>apr_table_t</code> はリクエストプール（<code>r-&gt;pool</code>）を使用しており、メモリ管理は適切に行われている。</li>
 </ul></body></html>

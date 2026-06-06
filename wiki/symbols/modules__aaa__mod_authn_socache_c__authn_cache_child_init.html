@@ -6,22 +6,39 @@
 <li>定義箇所: <code>modules/aaa/mod_authn_socache.c:138</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>子プロセス生成時に、認証キャッシュ用のグローバルミューテックスを初期化し、プロセス間での同期を可能にする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void authn_cache_child_init(apr_pool_t *p, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code>: 子プロセスのライフサイクルを管理するメモリプール。</li>
+<li><code>s</code>: サーバー設定レコード。</li>
+<li>出力: なし（副作用として <code>authn_cache_mutex</code> を初期化）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>モジュールが設定済み（<code>configured</code> が真）であること。未設定の場合は処理をスキップする。</li>
+<li><code>authn_cache_mutex</code> がグローバルに定義されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>configured</code> フラグを確認し、偽であれば即座に終了する。 2. <code>apr_global_mutex_lockfile</code> を使用して、キャッシュ保護用ミューテックスのロックファイルパスを取得する。 3. <code>apr_global_mutex_child_init</code> を呼び出し、子プロセス内でミューテックスを再初期化する。 4. 初期化に失敗した場合、<code>ap_log_error</code> を使用して <code>APLOG_CRIT</code> レベルでエラーログを出力する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>ap_hook_child_init</code> を介して Apache HTTP Server の子プロセス初期化フェーズで呼び出される（<code>modules/aaa/mod_authn_socache.c:462</code>）。</li>
+<li>呼び出し先: <code>apr_global_mutex_lockfile</code>, <code>apr_global_mutex_child_init</code>, <code>ap_log_error</code>（いずれも APR/Apache API）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>authn_cache_mutex</code>: キャッシュアクセスを排他制御するためのグローバルミューテックス。</li>
+<li><code>server_rec</code>: サーバー設定情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_global_mutex_child_init</code> が <code>APR_SUCCESS</code> 以外の値を返した場合、エラーログが出力されるが、プロセスは終了せずに継続する。</li>
+<li><code>configured</code> が偽の場合、ミューテックスの初期化は行われない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は子プロセスごとの初期化を担当する。マルチプロセス環境において、親プロセスで作成されたミューテックスを子プロセスで正しく再接続するために不可欠である。</li>
+<li><code>configured</code> フラグの管理状態と、ミューテックスのライフサイクルが整合していることを確認すること。</li>
 </ul></body></html>

@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/http2/h2_workers.h:31</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 モジュールにおいて、セカンダリ接続（C2）を並列実行するための専用スレッドプールを管理するメイン構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct h2_workers h2_workers;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>h2_workers_create</code>（実装側）により、最小・最大スレッド数およびアイドル制限時間が設定されます。</li>
+<li>**出力**: <code>h2_mplx</code> 等の上位層に対し、接続処理を並列化するためのスレッドリソースを提供します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は、Apache HTTP Server の MPM とは独立したスレッド管理を行います。</li>
+<li>登録される接続プロデューサー（<code>ap_conn_producer_t</code>）のコールバック関数は、スレッドセーフである必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**スレッドプール管理**: 指定されたスレッド数に基づき、ワーカーのライフサイクルを制御します。</li>
+<li>**負荷適応**: アイドル状態のスレッドを一定時間後に終了させ、リソース消費を最適化します。</li>
+<li>**接続処理**: <code>h2_workers_activate</code> によりアクティブ化されたプロデューサーから、アイドル中のワーカーが接続（<code>conn_rec</code>）を取得し処理を実行します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元（参照元）**:</li>
+<li><code>modules/http2/h2_c1.c</code>: プロセス単位のインスタンスとして保持。</li>
+<li><code>modules/http2/h2_mplx.c</code>: 多重化処理のコンテキストとして利用。</li>
+<li><code>modules/http2/h2_session.c</code>: セッション処理の引数として利用。</li>
+<li>**呼び出し先**:</li>
+<li>構造体自体の内部実装は <code>modules/http2/h2_workers.c</code> に存在します。</li>
+<li>接続処理において <code>ap_conn_producer_t</code> のコールバック（<code>next</code>, <code>done</code>, <code>shutdown</code>）を呼び出します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_conn_producer_t</code>: 接続ソースを定義し、ワーカーと紐付ける構造体。</li>
+<li><code>conn_rec</code>: ワーカーが処理する個別の接続オブジェクト。</li>
+<li><code>h2_mplx</code>: 本構造体を利用してリクエストの多重化を行う上位層。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>スレッド生成の失敗や、プロデューサーの登録・終了処理における同期不整合が発生する可能性があります。</li>
+<li><code>idle_limit</code> の設定値が不適切な場合、リソース消費量とスレッド生成コストのバランスが崩れる可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本機能は HTTP/2 のストリーム処理効率化のために設計されています。</li>
+<li>構造体の詳細なフィールド定義は <code>h2_workers.c</code> を参照してください。</li>
+<li><code>h2_workers_join</code> を呼び出す際は、進行中の処理が完了するまで待機する仕様である点に注意してください。</li>
 </ul></body></html>

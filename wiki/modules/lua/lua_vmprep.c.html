@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/lua/lua_vmprep.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/lua/lua_vmprep.c</h1>
+<h2>概要</h2>
+<p><code>lua_vmprep.c</code> は、Apache HTTP Server 内で動作する Lua 仮想マシン（VM）のライフサイクル管理、初期化、および設定を行う中核的な実装ファイルです。Apache のメモリプール（<code>apr_pool_t</code>）と Lua VM の状態を統合し、リクエストやサーバーのスコープに応じた VM の生成・キャッシュ・破棄を制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> のインフラ層に位置し、他の Lua 関連モジュール（<code>lua_request.c</code>, <code>lua_dbd.c</code> 等）が利用する <code>lua_State</code> を提供します。特に、Apache のマルチスレッド環境における VM のスレッドセーフな共有や、設定ファイルで定義された VM 仕様（<code>ap_lua_vm_spec</code>）に基づく VM の構築を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**VM ライフサイクル管理**: <code>apr_pool_t</code> のクリーンアップハンドラを利用した <code>lua_State</code> の自動破棄。</li>
+<li>**VM 構築と初期化**: <code>luaL_newstate</code> による生成、標準ライブラリのロード、および <code>package.path</code>/<code>cpath</code> の動的調整。</li>
+<li>**Apache 統合**: <code>apache2</code> Lua モジュールのロードと、HTTP ステータスコード等の定数定義の注入。</li>
+<li>**キャッシュ戦略**: <code>AP_LUA_CACHE_STAT</code> 等のポリシーに基づく、ファイル変更検知と VM の再ロード制御。</li>
+<li>**同期制御**: マルチスレッド環境下での <code>lua_ivm_mutex</code> 等を用いた排他制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>VM 構築・管理</h3>
+<ul>
+<li><code>ap_lua_get_lua_state</code>: VM を取得するメインエントリポイント。キャッシュの確認、必要に応じた <code>vm_construct</code> の呼び出しを行う。</li>
+<li><code>vm_construct</code>: <code>lua_State</code> を新規作成し、パス設定や初期スクリプト実行を行う低レベル関数。</li>
+<li><code>server_vm_construct</code>: サーバーレベルの VM を構築し、リソースリスト（<code>apr_reslist</code>）に登録するためのラッパー。</li>
+</ul>
+<h3>Apache 統合</h3>
+<ul>
+<li><code>ap_lua_load_apache2_lmodule</code>: Lua VM 内に <code>apache2</code> テーブルを作成し、HTTP 定数（<code>OK</code>, <code>DECLINED</code> 等）を登録する。</li>
+<li><code>makeintegerfield</code>: Lua スタック上に整数定数を定義するためのマクロ。</li>
+</ul>
+<h3>同期・クリーンアップ</h3>
+<ul>
+<li><code>ap_lua_init_mutex</code>: グローバルな Lua ミューテックスを初期化する。</li>
+<li><code>cleanup_lua</code> / <code>server_cleanup_lua</code>: プール破棄時に <code>lua_close</code> を呼び出すためのコールバック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **VM 取得**: <code>ap_lua_get_lua_state</code> が呼び出されると、スコープ（<code>AP_LUA_SCOPE_SERVER</code> 等）に応じてキャッシュを検索。 2. **構築**: キャッシュミス時は <code>vm_construct</code> が呼ばれ、<code>luaL_newstate</code> で VM を生成。<code>munge_path</code> で Lua の検索パスを Apache の設定に合わせて修正。 3. **初期化**: <code>spec-&gt;cb</code> が指定されていれば、ユーザー定義の初期化コールバックを実行。 4. **ロード**: <code>bytecode</code> があれば直接ロードし、なければ <code>luaL_loadfile</code> でファイルを読み込む。 5. **キャッシュ管理**: <code>codecache</code> ポリシーに従い、<code>apr_stat</code> でファイルの更新日時を確認し、必要に応じて <code>luaL_loadfile</code> を再実行する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_lua.h</code>: モジュール共通定義。</li>
+<li><code>lua_config.h</code>: 設定構造体。</li>
+<li><code>apr_pool_t</code>, <code>apr_reslist_t</code>: Apache ポータブルランタイムによるメモリ管理とリソースプール。</li>
+<li><code>lua.h</code>, <code>lauxlib.h</code>: Lua C API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/lua/lua_vmprep.h</code>: 本ファイルの公開インターフェースと <code>ap_lua_vm_spec</code> 構造体の定義。</li>
+<li><code>modules/lua/mod_lua.c</code>: モジュールのメインエントリポイント。</li>
+<li><code>modules/lua/lua_request.c</code>: <code>ap_lua_get_lua_state</code> を利用してリクエスト処理を行う実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>lua_State</code> のライフサイクルは、<code>apr_pool_t</code> のクリーンアップハンドラに依存しています。プールが破棄されると自動的に <code>lua_close</code> が呼ばれます。</li>
+<li>**排他制御**: <code>AP_LUA_SCOPE_SERVER</code> スコープでは <code>apr_reslist</code> を使用して VM をプールしますが、これには <code>ap_lua_mutex</code> による排他制御が伴います。</li>
+<li>**未実装・省略**: <code>pstack_dump</code> 関数は <code>#if 0</code> で無効化されており、デバッグ目的で残されています。また、HTTP ステータスコードの定数定義は非常に多いため、一部がコメントアウトされています。</li>
+<li>**注意点**: <code>munge_path</code> は Lua の <code>package.path</code> を文字列操作で書き換えるため、パスの形式が期待通りでない場合にエラーが発生する可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__ap_lua_init_mutex.html" target="wiki-view">`ap_lua_init_mutex`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__pstack_dump.html" target="wiki-view">`pstack_dump`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__ap_lua_load_apache2_lmodule.html" target="wiki-view">`ap_lua_load_apache2_lmodule`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__cleanup_lua.html" target="wiki-view">`cleanup_lua`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__server_cleanup_lua.html" target="wiki-view">`server_cleanup_lua`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__munge_path.html" target="wiki-view">`munge_path`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__loadjitmodule.html" target="wiki-view">`loadjitmodule`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__vm_construct.html" target="wiki-view">`vm_construct`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__copy_vm_spec.html" target="wiki-view">`copy_vm_spec`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__server_vm_construct.html" target="wiki-view">`server_vm_construct`</a></li>
+<li><a href="../../symbols/modules__lua__lua_vmprep_c__ap_lua_get_lua_state.html" target="wiki-view">`ap_lua_get_lua_state`</a></li>
+</ul></body></html>

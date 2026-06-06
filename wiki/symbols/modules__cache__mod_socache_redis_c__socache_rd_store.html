@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/cache/mod_socache_redis.c:211</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Redis バックエンドを使用して、共有オブジェクトキャッシュ（socache）にデータを保存します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t socache_rd_store(ap_socache_instance_t *ctx, server_rec *s,
+                              const unsigned char *id, unsigned int idlen,
+                              apr_time_t expiry,
+                              unsigned char *ucaData, unsigned int nData,
+                              apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: Redis インスタンスのコンテキスト。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>id</code>, <code>idlen</code>: キャッシュ識別子とその長さ。</li>
+<li><code>expiry</code>: キャッシュの有効期限（絶対時刻）。</li>
+<li><code>ucaData</code>, <code>nData</code>: 保存するデータ本体とそのサイズ。</li>
+<li><code>p</code>: メモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>socache_rd_id2key</code> によるキー変換が成功すること。</li>
+<li><code>expiry</code> から現在時刻を引いた値（TTL）が正の数であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>socache_rd_id2key</code> を呼び出し、内部 ID を Redis 用の文字列キーに変換します。 2. <code>expiry</code> と現在時刻から TTL（秒単位）を算出します。TTL が 0 以下の場合は <code>APR_EINVAL</code> を返します。 3. <code>apr_redis_setex</code> を使用して、算出された TTL を伴うデータを Redis に保存します。 4. 保存処理が失敗した場合は、エラーログを出力し、そのステータスコードを返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_socache_redis.c:393</code>（直接的な参照が確認されています）。</li>
+<li>**呼び出し先**:</li>
+<li><code>socache_rd_id2key</code>: キー変換用。</li>
+<li><code>apr_time_sec</code>, <code>apr_time_now</code>: 時間計算用。</li>
+<li><code>apr_redis_setex</code>: Redis へのデータ書き込み用。</li>
+<li><code>ap_log_error</code>: エラーログ出力用。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: Redis 接続ハンドル（<code>rc</code>）を保持するコンテキスト構造体。</li>
+<li><code>server_rec</code>: サーバー設定情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>socache_rd_id2key</code> が失敗した場合: <code>APR_EINVAL</code> を返します。</li>
+<li>TTL が 0 以下の場合: <code>APR_EINVAL</code> を返します。</li>
+<li><code>apr_redis_setex</code> が失敗した場合: <code>APR_SUCCESS</code> 以外のステータスを返し、エラーログを記録します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_socache_provider_t</code> の <code>store</code> プロバイダー関数として登録されています。</li>
+<li><code>apr_redis_setex</code> の第 6 引数（フラグ）は <code>0</code> で固定されています。</li>
 </ul></body></html>

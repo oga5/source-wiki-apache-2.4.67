@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_heartbeat.c:92</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたファイルパスからハートビート情報を読み込み、バックエンドサーバーの負荷状態（<code>busy</code>, <code>ready</code>, <code>lastseen</code>, <code>port</code>）を解析してハッシュテーブルに格納する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t readfile_heartbeats(const char *path, apr_hash_t *servers, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>path</code>: ハートビート情報が記述されたファイルパス。</li>
+<li><code>servers</code>: サーバー情報を格納するための <code>apr_hash_t</code>。</li>
+<li><code>pool</code>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>path</code> が <code>NULL</code> の場合は即座に <code>APR_SUCCESS</code> を返す。</li>
+<li>ファイル内の各行は <code>&lt;IP&gt; &lt;query_string&gt;</code> の形式である必要がある。</li>
+<li><code>#</code> で始まる行はコメントとして無視される。</li>
+<li>サーバーの <code>seen</code> 値が更新されない場合、初期値は <code>-1</code> となる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. ファイルをバイナリ・バッファモードでオープンする。 2. <code>apr_brigade</code> を使用してファイル内容を読み込み、行単位（<code>apr_brigade_split_line</code>）で分割する。 3. 各行を解析し、IPアドレスをキーとして <code>servers</code> ハッシュから <code>hb_server_t</code> を取得または新規作成する。 4. <code>argstr_to_table</code> を用いてクエリ文字列を解析し、<code>busy</code>, <code>ready</code>, <code>lastseen</code>, <code>port</code> の各値をサーバー構造体に反映する。 5. **ヒューリスティック処理**: <code>busy</code> が 0 かつ <code>ready</code> が 0 でない場合、サーバーが起動直後であると判断し、過負荷を防ぐために <code>ready</code> 値を 1/4 に調整する。 6. 全行の処理完了後、<code>APR_SUCCESS</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/balancers/mod_lbmethod_heartbeat.c:253</code>（ソースコード内の直接的な参照）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_file_open</code>, <code>apr_file_info_get</code>, <code>apr_brigade_split_line</code> 等の APR 関数。</li>
+<li><code>argstr_to_table</code>: クエリ文字列の解析に使用。</li>
+<li><code>apr_hash_get</code>, <code>apr_hash_set</code>: サーバー情報の管理に使用。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hb_server_t</code>: 各バックエンドサーバーの負荷状態を保持する構造体。</li>
+<li><code>apr_hash_t</code>: サーバーリストを管理するハッシュテーブル。</li>
+<li><code>apr_bucket_brigade</code>: ファイル読み込み用の一時バッファ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ファイルが開けない場合、またはファイル情報の取得に失敗した場合は、そのエラーコードを返す。</li>
+<li>行が空の場合や、IPアドレスとクエリ文字列の区切り（スペース）が存在しない行はスキップされる。</li>
+<li><code>bsize</code> が 0 の場合は読み込み終了とみなす。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエスト毎に呼び出される可能性があるため、メモリ管理には <code>pool</code> を適切に使用している。</li>
+<li><code>ready</code> 値の 1/4 調整は、起動直後のサーバーへの急激な負荷集中を避けるための重要なヒューリスティックである。</li>
+<li>ファイルフォーマットの変更や解析ロジックの拡張を行う際は、<code>argstr_to_table</code> の仕様と整合性をとること。</li>
 </ul></body></html>

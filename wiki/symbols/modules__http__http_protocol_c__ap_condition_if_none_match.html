@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/http/http_protocol.c:397</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストに含まれる <code>If-None-Match</code> ヘッダーを評価し、リソースの ETag との比較に基づいて条件付きリクエストのステータスを判定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>ap_condition_e ap_condition_if_none_match(request_rec *r, apr_table_t *headers)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストを保持する <code>request_rec</code> 構造体。<code>r-&gt;headers_in</code> から <code>If-None-Match</code> ヘッダーを取得し、<code>r-&gt;method_number</code> でメソッドを判定します。</li>
+<li><code>headers</code>: 比較対象の ETag を含む <code>apr_table_t</code>。</li>
+<li>**出力**:</li>
+<li><code>ap_condition_e</code> 型の列挙値:</li>
+<li><code>AP_CONDITION_STRONG</code>: 条件が強力に一致（または <code>*</code> 指定）。</li>
+<li><code>AP_CONDITION_WEAK</code>: 条件が弱く一致。</li>
+<li><code>AP_CONDITION_NOMATCH</code>: 条件が一致しない。</li>
+<li><code>AP_CONDITION_NONE</code>: <code>If-None-Match</code> ヘッダーが存在しない。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> はメモリ確保に使用され、リクエスト終了時に自動解放されます。</li>
+<li><code>If-None-Match</code> が <code>*</code> の場合、無条件に <code>AP_CONDITION_STRONG</code> を返します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>r-&gt;headers_in</code> から <code>If-None-Match</code> を取得します。存在しない場合は <code>AP_CONDITION_NONE</code> を返します。 2. 値が <code>*</code> であれば <code>AP_CONDITION_STRONG</code> を返します。 3. <code>GET</code> メソッドの場合:</p>
+<ul>
+<li><code>Range</code> ヘッダーが存在すれば <code>ap_find_etag_strong</code> で強力な一致を判定します。</li>
+<li><code>Range</code> がなければ <code>ap_find_etag_weak</code> で弱い一致を判定します。</li>
+<p>4. <code>GET</code> 以外の場合:</p>
+<li><code>ap_find_etag_strong</code> を使用して強力な一致のみを判定します。</li>
+<p>5. 一致しない場合は <code>AP_CONDITION_NOMATCH</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/cache_storage.c:327</code></li>
+<li><code>modules/http/http_protocol.c:601</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_get</code> (APR)</li>
+<li><code>ap_find_etag_strong</code> / <code>ap_find_etag_weak</code> (内部ユーティリティ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報および入力ヘッダーの保持。</li>
+<li><code>apr_table_t</code>: ヘッダー情報の格納。</li>
+<li><code>ap_condition_e</code>: 戻り値の列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>If-None-Match</code> ヘッダーが存在しない場合、判定を行わず <code>AP_CONDITION_NONE</code> を返します。</li>
+<li><code>ETag</code> ヘッダーが <code>headers</code> 引数内に存在しない場合、一致判定は行われず <code>AP_CONDITION_NOMATCH</code> となります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>RFC 2616 (Section 13.3.3) のエンティティタグ比較ルールに基づいています。</li>
+<li>弱い比較は <code>GET</code> または <code>HEAD</code> リクエストでのみ許可される仕様ですが、本関数は <code>GET</code> メソッドのみを明示的にチェックしています。</li>
 </ul></body></html>

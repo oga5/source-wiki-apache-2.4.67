@@ -6,22 +6,62 @@
 <li>定義箇所: <code>server/mpm_fdqueue.c:31</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の MPM（<code>event</code> や <code>worker</code>）において、ワーカー・スレッドのアイドル状態管理、スレッドのブロッキング制御、およびメモリプール（<code>recycled_pools</code>）の再利用リストを管理するための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct fd_queue_info_t {
+    apr_uint32_t volatile idlers;
+    apr_thread_mutex_t *idlers_mutex;
+    apr_thread_cond_t *wait_for_idler;
+    int terminated;
+    int max_idlers;
+    int max_recycled_pools;
+    apr_uint32_t recycled_pools_count;
+    struct recycled_pool *volatile recycled_pools;
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ap_queue_info_create</code> を通じて初期化され、各 <code>ap_queue_info_*</code> 関数群の第一引数として渡されます。</li>
+<li>**出力**: <code>idlers</code> カウンタの状態や、<code>recycled_pools</code> リストの操作結果を保持します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>idlers</code> フィールドは <code>apr_atomic</code> 操作によって更新されます。</li>
+<li><code>idlers</code> の値は <code>zero_pt</code> を基準とし、以下のように解釈されます：</li>
+<li><code>&gt;= zero_pt</code>: アイドル状態のワーカー・スレッド数。</li>
+<li><code>&lt; zero_pt</code>: アイドル・ワーカーを待機しているスレッド数。</li>
+<li><code>recycled_pools</code> はアトミックな操作を介して管理されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**アイドル管理**: ワーカーがアイドル状態になった際、<code>ap_queue_info_set_idle</code> を通じて <code>idlers</code> を更新し、待機中のリスナーを <code>wait_for_idler</code> 条件変数で起床させます。</li>
+<li>**メモリ再利用**: <code>ap_queue_info_push_pool</code> および <code>ap_queue_info_pop_pool</code> を使用し、<code>recycled_pools</code> リストを介してメモリプールの再利用を行い、割り当てコストを削減します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li><code>server/mpm_fdqueue.c</code> 内の各 <code>ap_queue_info_*</code> 関数</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_thread_mutex_t</code> (同期)</li>
+<li><code>apr_thread_cond_t</code> (同期)</li>
+<li><code>recycled_pool</code> (データ構造)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>recycled_pool</code>: メモリプールの再利用リストを構成する要素。</li>
+<li><code>apr_thread_mutex_t</code>: <code>idlers_mutex</code> として使用。</li>
+<li><code>apr_thread_cond_t</code>: <code>wait_for_idler</code> として使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>terminated</code> フラグが設定された場合、ワーカーは終了処理へ移行します。</li>
+<li><code>idlers</code> カウンタが負の値になることは、待機スレッドが存在することを意味し、正常な動作範囲内です。</li>
+<li><code>recycled_pools_count</code> が <code>max_recycled_pools</code> を超える場合、メモリ再利用の制限がかかる可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>idlers</code> の <code>zero_pt</code> はマジックナンバーとして機能するため、アトミック操作時の加減算ロジックを変更する際は注意が必要です。</li>
+<li>本構造体は <code>APR_HAS_THREADS</code> が有効な環境でのみ使用されます。</li>
+<li><code>ap_queue_info_pop_pool</code> 等の関数は呼び出し側のスレッドコンテキストに依存する制約があるため、実装の変更時には <code>server/mpm_fdqueue.c</code> 内の同期設計を確認してください。</li>
 </ul></body></html>

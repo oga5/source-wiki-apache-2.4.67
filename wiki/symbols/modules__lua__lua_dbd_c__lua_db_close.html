@@ -6,22 +6,42 @@
 <li>定義箇所: <code>modules/lua/lua_dbd.c:59</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Lua スクリプトから利用されているデータベース接続を明示的に終了し、関連するリソースを解放します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<p><code>int lua_db_close(lua_State *L)</code></p>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: Lua ステート <code>L</code>（スタックから <code>lua_db_handle</code> を取得）。</li>
+<li>**出力**: スタックのトップに <code>apr_status_t</code> 型の戻り値（成功時は 0、失敗時はエラーコード）を数値としてプッシュし、1 を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lua_get_db_handle(L)</code> により、有効な <code>lua_db_handle</code> が取得できる必要があります。</li>
+<li>接続が既に閉じられている場合（<code>db-&gt;alive</code> が 0）、関数は何も行わず 0 を返します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>lua_get_db_handle</code> を呼び出し、現在のデータベースハンドルを取得します。 2. 接続が生存している場合（<code>db-&gt;alive</code> が真）:</p>
+<ul>
+<li><code>db-&gt;type</code> が <code>LUA_DBTYPE_APR_DBD</code> の場合、<code>apr_dbd_close</code> を実行し、関連する <code>apr_pool_t</code> を破棄します。</li>
+<li>それ以外の場合、オプション関数 <code>ap_dbd_close</code> を取得して実行します。</li>
+<p>3. 接続状態をリセットします（<code>driver</code>, <code>handle</code>, <code>pool</code> を <code>NULL</code> に設定し、<code>alive</code> を 0 に変更）。 4. スタックをクリアし、終了ステータスをプッシュして呼び出し元へ戻ります。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/lua/lua_dbd.c:690</code> にて <code>lua_pushcfunction</code> を介して登録されています。</li>
+<li>**呼び出し先**: <code>lua_get_db_handle</code>, <code>apr_dbd_close</code>, <code>apr_pool_destroy</code>, <code>APR_RETRIEVE_OPTIONAL_FN(ap_dbd_close)</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lua_db_handle</code>: データベース接続状態、ドライバ、ハンドル、メモリプールを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>db</code> が <code>NULL</code> の場合、または <code>db-&gt;alive</code> が偽の場合は何も実行されません。</li>
+<li><code>APR_RETRIEVE_OPTIONAL_FN</code> が <code>NULL</code> を返す場合、外部 DBD クローズ処理はスキップされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>lua_db_gc</code> と同様のクリーンアップロジックを共有していますが、明示的なクローズを目的としています。</li>
+<li><code>apr_pool_destroy</code> を呼び出すため、この関数実行後に当該ハンドルを再利用することはできません。</li>
 </ul></body></html>

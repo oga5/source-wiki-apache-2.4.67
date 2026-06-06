@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/session/mod_session.c:180</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>セッションデータ（<code>session_rec</code>）の変更状態を確認し、必要に応じてシリアライズおよびストレージへの永続化を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_session_save(request_rec *r, session_rec *z)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>z</code>: 保存対象のセッション構造体。</li>
+<li>**出力**: </li>
+<li><code>APR_SUCCESS</code>: 保存成功、または保存不要と判断された場合。</li>
+<li><code>APR_EGENERAL</code>: 保存失敗（二重保存の試行、期限切れ、バックエンド未設定、またはエンコード/保存エラー）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>z</code> が <code>NULL</code> の場合は何もしない。</li>
+<li><code>z-&gt;written</code> が真の場合、二重保存とみなされエラーを返す。</li>
+<li>セッションが期限切れ（<code>z-&gt;expiry &lt; now</code>）の場合、保存は行われない。</li>
+<li><code>dirty</code> フラグが立っていない場合、かつ有効期限の更新が微小であるか、<code>maxage</code> が設定されていない場合は保存をスキップする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **検証**: 二重保存の試行や期限切れセッションの保存試行をチェックし、該当する場合はエラーを返す。 2. **有効期限の更新**: 設定（<code>dconf-&gt;maxage</code>）に基づき、セッションの有効期限を再計算する。 3. **保存判定**: <code>dirty</code> フラグや更新間隔の閾値を確認し、変更がない場合は処理を終了する。 4. **エンコード**: <code>ap_run_session_encode</code> を呼び出し、セッションデータをシリアライズする。 5. **永続化**: <code>ap_run_session_save</code> を呼び出し、バックエンド（Cookie/DBD等）へ書き出す。 6. **完了**: 成功時に <code>z-&gt;written</code> を 1 に設定する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/session/mod_session.c:486</code>（<code>session_output_filter</code> 内）</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_run_session_encode</code>（フック）</li>
+<li><code>ap_run_session_save</code>（フック）</li>
+<li><code>ap_log_rerror</code>（ログ出力）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_rec</code>: セッション内容、<code>dirty</code> フラグ、有効期限を保持。</li>
+<li><code>session_dir_conf</code>: ディレクトリ単位のセッション設定（<code>maxage</code> 等）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**二重保存**: <code>z-&gt;written</code> が設定されている場合に <code>APR_EGENERAL</code> を返す。</li>
+<li>**期限切れ**: 既に期限が切れているセッションを保存しようとすると <code>APR_EGENERAL</code> を返す。</li>
+<li>**バックエンド未設定**: <code>ap_run_session_save</code> が <code>DECLINED</code> を返した場合、保存先がないものとして <code>APR_EGENERAL</code> を返す。</li>
+<li>**処理エラー**: エンコードまたは保存フックが <code>OK</code> 以外を返した場合、そのエラーコードを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>session_output_filter</code> から呼び出されることを想定している。</li>
+<li><code>dirty</code> フラグによる最適化が行われているため、変更がない場合はフックが実行されない。</li>
+<li>内部リダイレクトが発生した場合、フィルタ経由で複数回呼び出される可能性があるため、<code>written</code> フラグによるガードが重要である。</li>
 </ul></body></html>

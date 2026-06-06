@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/proxy/ajp_header.c:217</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache の <code>request_rec</code> 構造体から情報を抽出し、AJP v13 プロトコルの <code>FORWARD_REQUEST</code> パケット形式へ直列化（マーシャリング）して <code>ajp_msg_t</code> バッファに格納する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ajp_marshal_into_msgb(ajp_msg_t *msg,
+                                   request_rec *r,
+                                   apr_uri_t *uri,
+                                   const char *secret)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>msg</code>: 操作対象の <code>ajp_msg_t</code> バッファ。</li>
+<li><code>r</code>: Apache のリクエスト情報構造体。</li>
+<li><code>uri</code>: 解析済みのリクエスト URI。</li>
+<li><code>secret</code>: AJP 認証用シークレット（オプション）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時は <code>APR_EGENERAL</code> または <code>AJP_EOVERFLOW</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>msg</code> は事前に確保されていること。</li>
+<li><code>r</code> は有効なリクエストコンテキストであること。</li>
+<li><code>ajp_msg_reset(msg)</code> が実行され、バッファが初期化される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: リクエストメソッド、SSL 状態、ヘッダー数を特定。 2. **ヘッダー構築**: <code>CMD_AJP13_FORWARD_REQUEST</code> を先頭に、プロトコル、パス、IP、ホスト名、ポート、SSL フラグ、ヘッダー数を順次追加。 3. **ヘッダーのシリアライズ**: <code>headers_in</code> テーブルを走査し、既知のヘッダーは ID に変換、未知のヘッダーは文字列として追加。 4. **属性の追加**: シークレット、リモートユーザー、認証タイプ、クエリ文字列、JVM ルートを順次追加。 5. **SSL 情報**: HTTPS 通信時のみ、証明書、暗号スイート、セッション、キーサイズ、プロトコル名を属性として追加。 6. **環境変数**: <code>AJP_</code> で始まる環境変数をリクエスト属性として追加。 7. **終了**: <code>SC_A_ARE_DONE</code> を付与して終了。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: ソースコード内での直接的な呼び出し元は明示されていませんが、<code>mod_proxy_ajp.c</code> 等のプロキシ処理ループから呼び出されることが想定されます。</li>
+<li>**呼び出し先**: </li>
+<li><code>ajp_msg_*</code> 系関数（<code>ajp_msg_reset</code>, <code>ajp_msg_append_*</code>）</li>
+<li><code>sc_for_req_method_by_id</code>, <code>sc_for_req_header</code></li>
+<li><code>ap_proxy_conn_is_https</code>, <code>ap_proxy_ssl_val</code></li>
+<li><code>ap_get_useragent_host</code>, <code>ap_get_server_name</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_t</code>: AJP 通信用のメッセージバッファ。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>apr_table_t</code>: ヘッダーや環境変数の保持に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**AJP_EOVERFLOW**: メッセージバッファへの書き込み時に容量不足が発生した場合。</li>
+<li>**APR_EGENERAL**: メッセージの初期構築やシークレット、SSL キーサイズの追加に失敗した場合。</li>
+<li>**未知のメソッド**: メソッドが特定できない場合、<code>SC_M_JK_STORED</code> として扱い、属性としてメソッド名を追加する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ajp_msg_t</code> のメモリは <code>r-&gt;pool</code> に依存するため、リクエスト終了時に自動解放される。</li>
+<li><code>sc_for_req_header</code> は固定長バッファと <code>memcmp</code> を使用した最適化が行われているため、ヘッダー定義の変更時は注意が必要。</li>
+<li>EBCDIC 環境における文字列変換の考慮が一部コメントアウトされている（<code>XXXX</code>）。</li>
 </ul></body></html>

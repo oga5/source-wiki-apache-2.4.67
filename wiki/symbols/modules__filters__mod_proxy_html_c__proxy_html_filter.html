@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/filters/mod_proxy_html.c:886</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の出力フィルタとして、HTML コンテンツ内の URL や属性を動的に書き換えるためのメイン処理を実行する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t proxy_html_filter(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキストを含む <code>ap_filter_t</code> 構造体。</li>
+<li><code>bb</code>: 処理対象のデータを含む <code>apr_bucket_brigade</code>。</li>
+<li>**出力**: </li>
+<li>戻り値: <code>apr_status_t</code>（成功時は <code>APR_SUCCESS</code>）。</li>
+<li>副作用: 書き換えられた HTML データが後続のフィルタへ渡される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>check_filter_init</code> により、実行時コンテキスト (<code>saxctxt</code>) が初期化されている必要がある。</li>
+<li><code>libxml2</code> のパーサコンテキストは、リクエスト終了時に <code>htmlFreeParserCtxt</code> で解放されるようプールに登録される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化確認**: <code>check_filter_init</code> を呼び出し、コンテキストがなければデータをそのまま通過させる。 2. **バケット走査**: ブリゲード内の各バケットを順次処理する。</p>
+<ul>
+<li>**メタデータ**: EOS (End of Stream) 受信時にパーサを終了し、残りのバッファをフラッシュする。</li>
+<li>**データ**: </li>
+<li>パーサ未初期化時: 最初の数バイトをバッファリングして文字コードを判定（<code>mod_xml2enc</code> 連携）。その後、<code>htmlCreatePushParserCtxt</code> でパーサを生成し、解析を開始する。</li>
+<li>パーサ初期化済み: <code>consume_buffer</code> を通じてデータをパーサへ送り、置換処理を実行する。</li>
+<p>3. **終了処理**: 処理完了後、ブリゲードをクリーンアップする。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のフィルタチェーン（<code>ap_register_output_filter_protocol</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>check_filter_init</code>: コンテキストの取得。</li>
+<li><code>htmlCreatePushParserCtxt</code> / <code>htmlFreeParserCtxt</code>: <code>libxml2</code> による解析制御。</li>
+<li><code>consume_buffer</code>: パーサへのデータ供給。</li>
+<li><code>metafix</code>: <code>&lt;meta&gt;</code> タグの処理。</li>
+<li><code>ap_pass_brigade</code>: 後続フィルタへのデータ転送。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>saxctxt</code>: フィルタの実行状態を保持する構造体。</li>
+<li><code>apr_bucket_brigade</code>: 処理対象のデータストリーム。</li>
+<li><code>htmlParserCtxt</code>: <code>libxml2</code> のパーサコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**初期データ不足**: 4バイト未満のデータは解析せず、バッファに蓄積する。</li>
+<li>**パーサ生成失敗**: <code>htmlCreatePushParserCtxt</code> が失敗した場合、フィルタを解除しデータをそのまま通過させる。</li>
+<li>**読み込みエラー**: <code>apr_bucket_read</code> が失敗した場合、エラーログを出力する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>libxml2</code> のパーサはストリーム処理を行うため、メモリ消費量は <code>ProxyHTMLBufSize</code> に依存する。</li>
+<li><code>USE_OLD_LIBXML2</code> マクロの有無により、パーサオプションの適用方法が異なる。</li>
+<li><code>apr_pool_cleanup_register</code> を使用して、パーサのメモリリークを防止している。</li>
 </ul></body></html>

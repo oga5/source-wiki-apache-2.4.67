@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/aaa/mod_auth_digest.c:121</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP Digest 認証におけるクライアントの状態を共有メモリ上で保持するためのデータ構造です。リプレイ攻撃防止のための nonce カウント管理や、クライアントの追跡に使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct hash_entry {
+    unsigned long      key;                     /* エントリのキー */
+    struct hash_entry *next;                    /* バケット内の次のエントリ */
+    unsigned long      nonce_count;             /* nonce カウントチェック用 */
+    char               last_nonce[NONCE_LEN+1]; /* ワンタイム nonce 用 */
+} client_entry;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は <code>client_list</code>（ハッシュテーブル）内の要素として管理されます。</li>
+<li><code>nonce_count</code> はリクエストごとに更新され、リプレイ攻撃の検出に使用されます。</li>
+<li><code>last_nonce</code> は最後に使用された nonce を保持し、有効性の検証に用いられます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリ（<code>apr_shm</code>）上に配置されるため、アクセスには <code>client_lock</code> によるプロセス間同期が必須です。</li>
+<li><code>next</code> ポインタは共有メモリ内の相対アドレスまたは適切なポインタ管理下にある必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>get_client()</code> 関数により、特定のキーに基づいてハッシュテーブルから該当する <code>client_entry</code> が検索されます。</li>
+<li><code>add_client()</code> 関数により、新しいクライアント情報がリストに追加されます。</li>
+<li><code>gc()</code> 関数（ガベージコレクション）により、メモリ不足時に古いエントリが削除される LRU 的な管理が行われます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>get_client</code>、<code>add_client</code>、および共有メモリの初期化・管理を行う関数群から参照されます。</li>
+<li>呼び出し先: 本構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>client_list</code>: <code>client_entry</code> を要素として持つハッシュテーブル構造。</li>
+<li><code>digest_header_rec</code>: パースされた <code>Authorization</code> ヘッダー情報を保持し、本構造体と照合されます。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリが利用できない環境では、nonce カウントチェック等の機能が制限されます。</li>
+<li>ハッシュテーブルの衝突（<code>HASH_DEPTH</code>）が発生した場合、連結リストを辿る処理が発生します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>共有メモリ上のデータであるため、ポインタの扱いやメモリレイアウトには細心の注意を払ってください。</li>
 </ul></body></html>

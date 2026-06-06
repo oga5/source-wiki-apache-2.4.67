@@ -6,22 +6,51 @@
 <li>定義箇所: <code>server/util_cookies.c:177</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP ヘッダーから特定のクッキー値を抽出し、必要に応じて対象のクッキーをヘッダーから削除（フィルタリング）した新しいヘッダー文字列を構築するコールバック関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int extract_cookie_line(void *varg, const char *key, const char *val)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>varg</code>: <code>ap_cookie_do</code> 構造体へのポインタ（検索対象のクッキー名、リクエストコンテキスト、抽出結果を保持）。</li>
+<li><code>key</code>: ヘッダー名（例: <code>Cookie</code>）。</li>
+<li><code>val</code>: ヘッダーの値（クッキー文字列）。</li>
+<li>**出力**:</li>
+<li>常に <code>1</code> を返します。</li>
+<li>副作用として、<code>varg</code> が指す構造体の <code>encoded</code> フィールドに抽出したクッキー値を格納し、<code>new_cookies</code> テーブルにフィルタリング後のヘッダーを書き込みます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>varg</code> は <code>ap_cookie_do</code> 型としてキャスト可能であること。</li>
+<li>文字列操作には <code>v-&gt;r-&gt;pool</code>（リクエストプール）を使用するため、呼び出し元でメモリ管理が保証されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_strtok</code> を使用し、カンマ（<code>,</code>）およびセミコロン（<code>;</code>）を区切り文字としてヘッダー値をトークン化します。 2. 各トークンを走査し、指定されたクッキー名と一致するか確認します。 3. 一致した場合:</p>
+<ul>
+<li><code>v-&gt;encoded</code> に値を保存します。</li>
+<li>既に値が存在し、かつ今回抽出した値と異なる場合は <code>v-&gt;duplicated</code> を <code>1</code> に設定します。</li>
+<p>4. 一致しない場合:</p>
+<li><code>$</code> で始まる属性（<code>$Path</code> 等）を除外した上で、残りのクッキーを <code>new_cookie</code> 文字列として再構築します。</li>
+<p>5. 処理終了後、残存するクッキーが存在すれば <code>v-&gt;new_cookies</code> テーブルに格納します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/util_cookies.c:256</code> において <code>apr_table_do</code> の引数として呼び出されます。</li>
+<li>**呼び出し先**: <code>apr_pstrdup</code>, <code>apr_pstrcat</code>, <code>apr_strtok</code>, <code>apr_isspace</code>, <code>apr_table_addn</code>（すべて APR ライブラリ関数）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_cookie_do</code>: クッキー抽出処理の状態を保持する構造体。</li>
+<li><code>apr_table_t</code>: ヘッダーの格納および再構築に使用されるテーブル構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**重複クッキー**: 同一リクエスト内に同じ名前のクッキーが異なる値で存在する場合、<code>v-&gt;duplicated</code> が <code>1</code> に設定されます。</li>
+<li>**メモリ不足**: <code>apr_pstrdup</code> 等のメモリ割り当て失敗時は、APR の規約に従いプロセスが終了する可能性があります。</li>
+<li>**空のヘッダー**: 入力 <code>val</code> が空の場合、トークン化処理はスキップされ、何も抽出されません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_table_do</code> からのコールバックとして設計されています。</li>
+<li>クッキーのパースロジックは RFC 2109/2965 に基づいていますが、<code>$</code> で始まる属性の扱いに依存しているため、仕様変更時はこのフィルタリング条件を確認してください。</li>
 </ul></body></html>

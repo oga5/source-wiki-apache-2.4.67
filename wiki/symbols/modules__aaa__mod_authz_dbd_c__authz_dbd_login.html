@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_dbd.c:115</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>データベース（DBD）を使用してユーザーのログインまたはログアウト処理を実行し、必要に応じてリダイレクト処理とセッション関連フックの呼び出しを行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int authz_dbd_login(request_rec *r, authz_dbd_cfg *cfg, const char *action)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>cfg</code>: データベースクエリ設定を含む <code>authz_dbd_cfg</code> 構造体。</li>
+<li><code>action</code>: 実行するアクション名（ログ出力用）。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 処理成功。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: 設定欠如、DB接続失敗、またはクエリ実行失敗時。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cfg-&gt;query</code> が設定されていること。</li>
+<li><code>mod_dbd</code> が有効であり、<code>dbd_handle(r)</code> が有効なデータベース接続を返すこと。</li>
+<li>すべてのメモリ割り当ては <code>r-&gt;pool</code> に依存し、リクエスト終了時に自動解放される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **クエリ実行**: 設定された <code>cfg-&gt;query</code> をプリペアドステートメントとして取得し、<code>r-&gt;user</code> を引数として実行。 2. **リダイレクト判定**:</p>
+<ul>
+<li><code>cfg-&gt;redirect</code> が有効な場合、<code>Referer</code> ヘッダーからリダイレクト先を取得。</li>
+<li><code>cfg-&gt;redir_query</code> が設定されている場合、データベースからリダイレクト先を取得。</li>
+<p>3. **リダイレクト設定**: <code>newuri</code> が特定された場合、<code>r-&gt;status</code> を <code>HTTP_MOVED_TEMPORARILY</code> に設定し、<code>Location</code> ヘッダーを付与。 4. **フック実行**: <code>authz_dbd_run_client_login</code> を呼び出し、外部モジュールへログイン成功を通知。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>dbdlogin_check_authorization</code> (アクション: &quot;login&quot;)</li>
+<li><code>dbdlogout_check_authorization</code> (アクション: &quot;logout&quot;)</li>
+<li>**呼び出し先**:</li>
+<li><code>dbd_handle</code> (DB接続取得)</li>
+<li><code>apr_dbd_pvquery</code> / <code>apr_dbd_pvselect</code> (クエリ実行)</li>
+<li><code>authz_dbd_run_client_login</code> (フック通知)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびメモリプール管理。</li>
+<li><code>authz_dbd_cfg</code>: データベースクエリおよびリダイレクト設定。</li>
+<li><code>ap_dbd_t</code>: データベース接続ハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**設定不備**: クエリが未定義の場合、エラーログを出力し <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**DB接続エラー**: <code>dbd_handle</code> が失敗した場合、エラーログを出力し <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**クエリ実行失敗**: SQL エラー発生時、エラーメッセージをログに記録し <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**リダイレクトクエリ失敗**: リダイレクト先取得クエリが失敗しても、ログイン処理自体は継続される（非クリティカルなエラーとして処理）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>client_login</code> フックの設計意図は本モジュール固有のロジックに依存しているため、変更時は注意が必要。</li>
+<li>リダイレクトクエリの反復処理において、<code>apr_dbd_get_row</code> のループ内で <code>res</code> のクリーンアップが適切に行われるよう注意すること。</li>
 </ul></body></html>

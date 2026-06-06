@@ -6,22 +6,64 @@
 <li>定義箇所: <code>modules/http2/h2_c1_io.h:29</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 セッションにおけるクライアント接続（C1）の入出力処理を抽象化し、Apache HTTP Server の接続フィルタスタックとプロトコル層間のデータ転送を管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    struct h2_session *session;
+    apr_bucket_brigade *output;
+    int is_tls;
+    int unflushed;
+    apr_time_t cooldown_usecs;
+    apr_int64_t warmup_size;
+    apr_size_t write_size;
+    apr_time_t last_write;
+    apr_int64_t bytes_read;
+    apr_int64_t bytes_written;
+    int buffer_output;
+    apr_off_t buffered_len;
+    apr_off_t flush_threshold;
+    unsigned int is_flushed : 1;
+    unsigned int is_passing : 1;
+    char *scratch;
+    apr_size_t ssize;
+    apr_size_t slen;
+} h2_c1_io;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>h2_session</code> へのポインタ、および <code>apr_bucket_brigade</code> を介したデータ。</li>
+<li>**出力**: 接続フィルタスタックへのデータ送出（<code>ap_pass_brigade</code> 経由）、および内部バッファ（<code>scratch</code>）の状態管理。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_session</code> と対になって動作します。</li>
+<li><code>output</code> メンバは <code>apr_bucket_brigade</code> として初期化されている必要があります。</li>
+<li><code>write_size</code> 等の定数は、TLS レコードサイズや MTU と整合している必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**出力バッファリング**: <code>output</code> ブリゲードにデータを蓄積し、<code>flush_threshold</code> に基づいてネットワークへの書き込みを最適化します。</li>
+<li>**フラッシュ制御**: <code>is_flushed</code> および <code>is_passing</code> ビットフラグにより、再帰的なフラッシュ呼び出しを防止し、適切なタイミングで <code>ap_pass_brigade</code> を実行します。</li>
+<li>**スクラッチ領域**: <code>scratch</code> バッファを使用して、効率的なデータ読み込みと一時的なデータ保持を行います。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>h2_c1_io.c</code> 内の <code>h2_c1_io_init</code> 等の関数群から参照されています。</li>
+<li>**呼び出し先**: <code>apr_bucket_brigade</code> API および Apache HTTP Server のフィルタ API（<code>ap_pass_brigade</code> 等）を呼び出します。</li>
+<li>※詳細なコールグラフは提供されたソース excerpt には含まれていません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_session</code>: 本構造体を所有し、セッションライフサイクルを管理します。</li>
+<li><code>apr_bucket_brigade</code>: データ転送の基本単位として使用されます。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>is_passing</code> フラグによる再帰呼び出しの検知。</li>
+<li><code>flush_threshold</code> を超えた際のフラッシュ処理の強制。</li>
+<li><code>scratch</code> 領域のメモリ不足や、ブリゲード操作時の APR エラーコード。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は書き込みの集約を担うため、パフォーマンスチューニング時は <code>write_size</code> や <code>flush_threshold</code> の設定値に注意してください。</li>
+<li>デバッグ時には <code>h2_c1_io_bb_log</code> を使用して、ブリゲード内のバケット状態（EOS, FLUSH 等）を追跡することが推奨されます。</li>
 </ul></body></html>

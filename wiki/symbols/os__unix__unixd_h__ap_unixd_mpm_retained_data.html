@@ -6,22 +6,54 @@
 <li>定義箇所: <code>os/unix/unixd.h:113</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の MPM（Multi-Processing Module）が、サーバーの再起動（graceful restart）を跨いで状態を保持するために使用するデータ構造です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    void            *baton;
+    int volatile    mpm_state;
+    int volatile    shutdown_pending;
+    int volatile    restart_pending;
+    int volatile    is_ungraceful;
+    ap_generation_t my_generation;
+    int             module_loads;
+    int             was_graceful;
+    int             num_buckets;
+    int             max_buckets;
+} ap_unixd_mpm_retained_data;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は直接的な関数ではありません。</li>
+<li><code>ap_unixd_mpm_get_retained_data()</code> 関数を介して、保持されているインスタンスへのポインタを取得します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mpm_state</code>, <code>shutdown_pending</code>, <code>restart_pending</code>, <code>is_ungraceful</code> は <code>volatile</code> 修飾されており、シグナルハンドラから非同期に更新されることを前提としています。</li>
+<li>再起動時にもデータが維持されるよう、<code>ap_retained_data_create</code> を通じて管理される必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>MPM のメインループは、シグナルハンドラによって更新された <code>shutdown_pending</code> や <code>restart_pending</code> などのフラグを監視し、停止や再起動の制御フローを決定します。</li>
+<li><code>num_buckets</code> および <code>max_buckets</code> は、動的なリスナーバケット数に応じてリソースを適切に割り当てるために使用されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元（参照元）**:</li>
+<li><code>os/unix/unixd.c</code>: <code>retained_data</code> の生成および取得処理。</li>
+<li><code>server/mpm/event/event.c</code>, <code>server/mpm/prefork/prefork.c</code>, <code>server/mpm/worker/worker.c</code>: 各 MPM 実装において、状態保持のために本構造体を参照。</li>
+<li>**呼び出し先**:</li>
+<li>情報なし（本構造体はデータ保持を目的としており、特定の関数を呼び出すものではありません）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_unix_identity_t</code>: ユーザー/グループ ID 管理用。</li>
+<li><code>unixd_config_rec</code>: サーバーの Unix 実行環境設定用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_retained_data_create</code> による初期化に失敗した場合、MPM は再起動時の状態引き継ぎができず、予期せぬ動作を引き起こす可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体のメンバを変更する場合は、再起動時のバイナリ互換性および各 MPM 実装での整合性に注意してください。</li>
+<li>シグナルハンドラから更新されるメンバについては、アトミック性やメモリバリアの要件を考慮する必要があります。</li>
 </ul></body></html>

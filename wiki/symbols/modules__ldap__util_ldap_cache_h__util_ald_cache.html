@@ -6,22 +6,68 @@
 <li>定義箇所: <code>modules/ldap/util_ldap_cache.h:43</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>LDAP 検索、比較、DN 比較の結果を保持するキャッシュのメタデータ、統計情報、および操作インターフェースを管理するためのメイン構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct util_ald_cache {
+    unsigned long size;
+    unsigned long maxentries;
+    unsigned long numentries;
+    unsigned long fullmark;
+    apr_time_t marktime;
+    unsigned long ttl;
+    unsigned long (*hash)(void *);
+    int (*compare)(void *, void *);
+    void * (*copy)(util_ald_cache_t *cache, void *);
+    void (*free)(util_ald_cache_t *cache, void *);
+    void (*display)(request_rec *r, util_ald_cache_t *cache, void *);
+    util_cache_node_t **nodes;
+    unsigned long numpurges;
+    double avg_purgetime;
+    apr_time_t last_purge;
+    unsigned long npurged;
+    unsigned long fetches;
+    unsigned long hits;
+    unsigned long inserts;
+    unsigned long removes;
+#if APR_HAS_SHARED_MEMORY
+    apr_shm_t *shm_addr;
+    apr_rmm_t *rmm_addr;
+#endif
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: キャッシュ操作関数（<code>fetch</code>, <code>insert</code>, <code>remove</code> 等）の引数として渡され、キャッシュの構成情報や統計を保持します。</li>
+<li>**出力**: キャッシュ内のノード配列（<code>nodes</code>）や、実行時の統計情報（ヒット数、パージ回数等）を保持します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fullmark</code> はキャッシュ容量の 3/4 に達した時点を追跡するために使用されます。</li>
+<li><code>APR_HAS_SHARED_MEMORY</code> が有効な場合、<code>shm_addr</code> および <code>rmm_addr</code> を介してプロセス間で共有されるメモリ領域を管理します。</li>
+<li>キャッシュ内のデータは、<code>util_ald_alloc</code> を使用して確保され、<code>util_ald_free</code> を通じて明示的に解放される必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キャッシュ管理**: 登録された関数ポインタ（<code>hash</code>, <code>compare</code>, <code>copy</code>, <code>free</code>, <code>display</code>）を使用して、ペイロードのハッシュ計算、照合、メモリ確保、解放、表示を抽象的に実行します。</li>
+<li>**パージ処理**: キャッシュが <code>fullmark</code> に達すると、TTL 期限切れのノードを解放するパージ処理がトリガーされます。</li>
+<li>**統計更新**: フェッチ、ヒット、挿入、削除の各操作時に対応するカウンタが更新されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ldap/util_ldap_cache.h</code> 内で <code>util_ald_cache_t</code> として <code>typedef</code> されています。具体的な呼び出し元については、提供されたソース範囲内では特定できません。</li>
+<li>**呼び出し先**: 構造体内の関数ポインタを介して、<code>util_ldap_cache.c</code> で実装された各ノード型の操作関数を呼び出します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>util_cache_node_t</code>: キャッシュ内の個別のエントリを管理するリンクリスト構造体。</li>
+<li><code>util_ald_cache_t</code>: 本構造体の別名（<code>typedef</code>）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>キャッシュが <code>fullmark</code> に達した際、パージ処理が実行されます。</li>
+<li>共有メモリ環境下では、<code>apr_rmm</code> を介したオフセット管理が行われるため、ポインタの直接参照は避ける必要があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はインターフェース定義に特化しています。具体的なハッシュアルゴリズムやロック制御の詳細については <code>util_ldap_cache_mgr.c</code> を参照してください。</li>
+<li>共有メモリ利用時のメモリ断片化や効率的な割り当て戦略については、今後の検討課題です。</li>
 </ul></body></html>

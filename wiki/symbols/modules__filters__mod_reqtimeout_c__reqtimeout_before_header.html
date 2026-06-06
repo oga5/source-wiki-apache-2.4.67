@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/filters/mod_reqtimeout.c:404</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>新しいリクエストの処理開始に先立ち、<code>mod_reqtimeout</code> の接続ごとの状態（<code>reqtimeout_con_cfg</code>）をヘッダー読み取りフェーズ用に初期化する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void reqtimeout_before_header(request_rec *r, conn_rec *c)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>c</code>: 現在の接続構造体。</li>
+<li>**出力**: なし（副作用として <code>c</code> に紐付く接続設定構造体を更新）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c-&gt;conn_config</code> に <code>reqtimeout_module</code> の設定が格納されている必要がある。</li>
+<li><code>c-&gt;base_server-&gt;module_config</code> にサーバーごとの設定が存在する必要がある（<code>AP_DEBUG_ASSERT</code> により検証）。</li>
+<li>接続の生存期間に依存する <code>ccfg-&gt;socket</code> および <code>ccfg-&gt;tmpbb</code> は保持される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_get_module_config</code> を使用して、接続設定 <code>ccfg</code> を取得する。設定が存在しない場合は即座に終了する。 2. サーバー設定 <code>cfg</code> を取得する。 3. <code>ccfg</code> の状態を以下のように更新する:</p>
+<ul>
+<li><code>type</code> を <code>&quot;header&quot;</code> に設定。</li>
+<li><code>timeout_at</code> および <code>max_timeout_at</code> を <code>0</code> にリセット。</li>
+<li><code>in_keep_alive</code> を <code>c-&gt;keepalives &gt; 0</code> に基づいて設定。</li>
+<p>4. <code>INIT_STAGE</code> マクロを呼び出し、サーバー設定 <code>cfg</code> に基づいてヘッダー読み取り用のステージ設定を <code>ccfg</code> に適用する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_pre_read_request</code> に登録されており、リクエスト読み取り直前のフックとして呼び出される（<code>modules/filters/mod_reqtimeout.c:636</code>）。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>（Apache API）、<code>INIT_STAGE</code>（マクロ）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>reqtimeout_con_cfg</code>: 接続ごとの状態管理構造体。</li>
+<li><code>reqtimeout_srv_cfg</code>: サーバーごとの設定構造体。</li>
+<li><code>request_rec</code>, <code>conn_rec</code>: Apache HTTP Server のコア構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ccfg</code> が <code>NULL</code> の場合、何もせず正常終了する。</li>
+<li><code>cfg</code> が <code>NULL</code> の場合、<code>AP_DEBUG_ASSERT</code> によりデバッグビルド環境ではアサーションエラーが発生する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエストごとに呼び出されるため、接続全体で共有されるリソース（ソケットや一時バッファ）を誤ってクリアしないよう注意すること。</li>
+<li><code>INIT_STAGE</code> マクロの定義および <code>reqtimeout_con_cfg</code> の構造変更時には、本関数での初期化ロジックとの整合性を確認すること。</li>
 </ul></body></html>

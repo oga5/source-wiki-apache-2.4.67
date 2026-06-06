@@ -1,46 +1,43 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__cluster.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/cluster</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/cluster</code> には 2 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/cluster</code> は、Apache HTTP Server のクラスター環境におけるサーバー負荷情報の共有を担うサブシステムです。ディレクトリ境界に基づき、ハートビート信号の送受信を行うモジュール群で構成されます。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**負荷情報のブロードキャスト**: 自サーバーの稼働状況（Ready/Busy）を定期的にネットワークへ通知する。</li>
+<li>**クラスター状態の監視・集約**: ネットワーク上のハートビート信号を監視し、バックエンドサーバーの稼働状態を収集・永続化する。</li>
+<li>**ロードバランシングへのデータ提供**: 収集した情報を共有メモリ（<code>slotmem</code>）等に保持し、他モジュール（<code>mod_lbmethod_heartbeat</code> 等）が動的な負荷分散判断を行えるようにする。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/cluster/mod_heartbeat.c</code></li>
-<li><code>modules/cluster/mod_heartmonitor.c</code></li>
+<li><code>mod_heartbeat.c</code>: 負荷情報を送信する情報発信側モジュール。</li>
+<li><code>mod_heartmonitor.c</code>: ハートビート信号を監視・集約する情報受信側モジュール。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>hb_ctx_t</code></li>
-<li><code>hm_server_t</code></li>
-<li><code>hm_ctx_t</code></li>
-<li><code>hm_slot_server_ctx_t</code></li>
+<li><code>hb_ctx_t</code>: <code>mod_heartbeat</code> の設定および実行時状態。</li>
+<li><code>hm_ctx_t</code>: <code>mod_heartmonitor</code> のサーバー単位の設定と実行時状態。</li>
+<li><code>hm_server_t</code>: 個々のバックエンドサーバーの稼働状態（IP, ポート, 負荷統計）。</li>
+<li><code>hm_slot_server_ctx_t</code>: 共有メモリ上のサーバー状態管理用構造体。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **送信**: <code>mod_heartbeat</code> が <code>mod_watchdog</code> を介して定期的にスコアボードを走査し、UDP マルチキャストで負荷情報を送信する。 2. **受信・集約**: <code>mod_heartmonitor</code> が <code>mod_watchdog</code> を介してソケットをポーリングし、パケットを受信・解析する。 3. **永続化**: <code>mod_heartmonitor</code> が収集した情報を <code>slotmem</code>（共有メモリ）またはファイルへ書き出し、ロードバランサーが参照可能な状態にする。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>ap_mpm.h</code></li>
-<li><code>scoreboard.h</code></li>
-<li><code>mod_watchdog.h</code></li>
-<li><code>http_core.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>apr_hash.h</code></li>
+<li><code>mod_watchdog.h</code>: バックグラウンドタスクの定期実行。</li>
+<li><code>scoreboard.h</code>: サーバーの稼働状況（Ready/Busy）の取得。</li>
+<li><code>ap_slotmem.h</code>: 共有メモリによるプロセス間通信。</li>
+<li><code>apr_network_io.h</code> / <code>apr_poll.h</code>: UDP 通信およびイベント駆動の待機。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code> 等の Apache HTTP Server コア API。</li>
 </ul>
 <h2>内部構成</h2>
 <ul>
 <li>子モジュール数: 0</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/cluster/mod_heartmonitor.c</code> 2. <code>modules/cluster/mod_heartbeat.c</code></p>
+<p>1. <code>modules/cluster/mod_heartmonitor.c</code>（監視・集約側のロジックを理解する） 2. <code>modules/cluster/mod_heartbeat.c</code>（送信側のロジックを理解する）</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li><code>HEARTBEAT_INTERVAL</code> や <code>HM_UPDATE_SEC</code> などの固定値を実行時設定へ移行する計画の進捗。</li>
+<li>共有メモリ操作における排他制御の堅牢性向上。</li>
 </ul></body></html>

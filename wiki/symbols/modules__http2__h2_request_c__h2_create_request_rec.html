@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/http2/h2_request.c:374</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 のリクエスト表現 (<code>h2_request</code>) を Apache HTTP Server のネイティブなリクエスト構造体 (<code>request_rec</code>) に変換し、Apache のリクエスト処理パイプラインへ投入する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>request_rec *h2_create_request_rec(const h2_request *req, conn_rec *c, int no_body);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>req</code>: 変換元の <code>h2_request</code> オブジェクト。</li>
+<li><code>c</code>: 接続を表す <code>conn_rec</code> オブジェクト。</li>
+<li><code>no_body</code>: ボディの有無を示すフラグ。</li>
+<li>**出力**:</li>
+<li>成功時: 初期化済みの <code>request_rec</code> 構造体へのポインタ。</li>
+<li>失敗時: <code>NULL</code> (内部で <code>ap_die</code> を呼び出し、エラー応答を送信済み)。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req-&gt;authority</code> が存在すること (<code>AP_DEBUG_ASSERT</code> による検証)。</li>
+<li>Apache のバージョンに応じて <code>ap_create_request</code> または <code>my_ap_create_request</code> を使用してメモリが確保される。</li>
+<li>処理の過程で <code>r-&gt;per_dir_config</code> が <code>r-&gt;server-&gt;lookup_defaults</code> に設定される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **リクエスト生成**: <code>ap_create_request</code> 等を用いて <code>request_rec</code> を作成。 2. **ヘッダー設定**: <code>assign_headers</code> を呼び出し、HTTP/2 ヘッダーを <code>headers_in</code> にマッピング。 3. **リクエストライン構築**: メソッドやスキーム、パスに基づき <code>r-&gt;the_request</code> を生成。<code>CONNECT</code> メソッドやプロキシ設定に応じた特殊処理を行う。 4. **バリデーション**: <code>ap_parse_request_line</code> および <code>ap_check_request_header</code> でリクエストの整合性を確認。 5. **パイプライン投入**: <code>ap_add_input_filter_handle</code> で HTTP 入力フィルタを追加し、<code>ap_post_read_request</code> を実行してフックを起動。 6. **エラー処理**: 異常発生時は <code>die</code> ラベルへ遷移し、<code>ap_die</code> でエラー応答を生成後、<code>EOR</code> (End of Request) バケットを挿入してリクエストを終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_c2.c:748</code></li>
+<li><code>modules/http2/h2_c2_filter.c:658</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_create_request</code> / <code>my_ap_create_request</code></li>
+<li><code>assign_headers</code></li>
+<li><code>ap_run_pre_read_request</code></li>
+<li><code>ap_parse_request_line</code></li>
+<li><code>ap_check_request_header</code></li>
+<li><code>ap_post_read_request</code></li>
+<li><code>ap_die</code></li>
+<li><code>ap_bucket_eor_create</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_request</code>: HTTP/2 固有のリクエスト情報。</li>
+<li><code>request_rec</code>: Apache の標準リクエスト構造体。</li>
+<li><code>conn_rec</code>: Apache の接続構造体。</li>
+<li><code>apr_bucket_brigade</code>: EOR バケットの送出に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req-&gt;http_status</code> が設定されている場合、即座に <code>die</code> へ遷移しエラー応答を返す。</li>
+<li><code>CONNECT</code> メソッドでスキームやパスが含まれている場合、<code>HTTP_BAD_REQUEST</code> を返す。</li>
+<li><code>H2ProxyRequests</code> が有効でスキームや権限情報が欠落している場合、<code>HTTP_BAD_REQUEST</code> を返す。</li>
+<li><code>ap_post_read_request</code> が失敗した場合、エラーログを出力して <code>ap_die</code> を実行する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>Apache のバージョンによる API の差異を <code>AP_MODULE_MAGIC_AT_LEAST</code> マクロで吸収しているため、修正時はバージョン互換性に注意すること。</li>
+<li><code>ap_die</code> 呼び出し後は <code>EOR</code> バケットを挿入してリクエストのライフサイクルを正しく終了させる必要がある。</li>
 </ul></body></html>

@@ -6,22 +6,43 @@
 <li>定義箇所: <code>modules/filters/mod_buffer.c:189</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>入力フィルタチェーンにおいて、上流から読み込んだデータをバッファリングし、呼び出し元が要求するサイズ分を効率的に提供する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t buffer_in_filter(ap_filter_t *f, apr_bucket_brigade *bb,
+                              ap_input_mode_t mode, apr_read_type_e block,
+                              apr_off_t readbytes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: フィルタ構造体 <code>f</code>、バケットブリゲード <code>bb</code>、読み込みモード <code>mode</code>、ブロック設定 <code>block</code>、要求バイト数 <code>readbytes</code>。</li>
+<li>**出力**: <code>apr_status_t</code> 型のステータスコード。成功時は <code>APR_SUCCESS</code> を返し、<code>bb</code> に要求されたデータが格納される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>AP_MODE_READBYTES</code> モード時のみバッファリングを行う。</li>
+<li>初期リクエスト（<code>ap_is_initial_req</code>）に対してのみ有効。</li>
+<li>フィルタコンテキスト <code>f-&gt;ctx</code> はリクエストプールに紐付いており、リクエスト終了時に自動解放される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 初回呼び出し時に <code>buffer_ctx</code> を作成し、設定を読み込む。 2. **透過処理**: 初期リクエストでない場合、または <code>AP_MODE_READBYTES</code> 以外のモードでは、下流のフィルタへ処理を委譲する。 3. **バッファリング**: バッファが空の場合、設定された <code>BufferSize</code> に達するか、EOS/Flush バケットに遭遇するまで上流からデータを読み込み、内部の <code>ctx-&gt;bb</code> に蓄積する。 4. **データ提供**: <code>apr_brigade_partition</code> を使用して、蓄積されたデータから要求された <code>readbytes</code> 分を切り出し、呼び出し元の <code>bb</code> へ移動させる。 5. **終了処理**: EOS バケットを読み込んだ場合、フィルタをチェーンから削除する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache フィルタチェーン（<code>ap_get_brigade</code> 経由）。</li>
+<li>**呼び出し先**: <code>ap_get_brigade</code>（上流フィルタ）、<code>ap_remove_input_filter</code>。</li>
+<li>補足: <code>modules/filters/mod_buffer.c:341</code> にて <code>ap_register_input_filter</code> により登録されている。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buffer_ctx</code>: 実行時の状態（メインバッファ <code>bb</code>、一時バッファ <code>tmp</code>、残り容量 <code>remaining</code> 等）を保持。</li>
+<li><code>buffer_conf</code>: ディレクトリ単位の設定（バッファサイズ上限）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**エラー発生**: 上流の <code>ap_get_brigade</code> がエラーを返した場合、そのステータスをそのまま返す。</li>
+<li>**データ不足**: 上流からデータが取得できない場合、空のブリゲードを返す。</li>
+<li>**サブクエスト**: 初期リクエストでない場合はバッファリングを行わず、フィルタを即座に削除する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>入力フィルタは <code>AP_MODE_READBYTES</code> 以外のモード（<code>GETLINE</code> 等）ではバッファリングを行わず透過する仕様である。</li>
+<li>メモリ管理はリクエストプールに依存しているため、明示的な解放は不要。</li>
 </ul></body></html>

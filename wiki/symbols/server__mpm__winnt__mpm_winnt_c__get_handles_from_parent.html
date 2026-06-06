@@ -6,22 +6,54 @@
 <li>定義箇所: <code>server/mpm/winnt/mpm_winnt.c:270</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>親プロセスからパイプ経由で渡された、子プロセスの実行に必要な同期オブジェクトおよび共有メモリのハンドルを取得・初期化します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void get_handles_from_parent(server_rec *s, HANDLE *child_exit_event,
+                                    apr_proc_mutex_t **child_start_mutex,
+                                    apr_shm_t **scoreboard_shm)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>pipe</code>: グローバル変数（<code>winnt_rewrite_args</code>で設定された標準入力ハンドル）。</li>
+<li>**出力**:</li>
+<li><code>child_exit_event</code>: 親プロセスから受け取った終了イベントハンドル。</li>
+<li><code>child_start_mutex</code>: 初期化済みのプロセス間ミューテックス。</li>
+<li><code>scoreboard_shm</code>: 初期化および再接続済みの共有メモリ領域。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pipe</code> が有効なハンドルとしてオープンされていること。</li>
+<li>呼び出し側で <code>s-&gt;process-&gt;pool</code> が有効であること。</li>
+<li>親プロセスが <code>send_handles_to_child</code> を通じて、定義された順序（readyイベント、exitイベント、mutex、scoreboard）でハンドルをパイプに書き込んでいること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **Readyイベントの取得**: パイプから <code>ready_event</code> を読み取り、シグナルを送ってからクローズします。 2. **終了イベントの取得**: パイプから <code>child_exit_event</code> を読み取ります。 3. **ミューテックスの取得**: パイプからミューテックスハンドルを読み取り、<code>apr_os_proc_mutex_put</code> を用いて APR オブジェクトに変換します。 4. **スコアボードの取得**: パイプから共有メモリハンドルを読み取り、<code>apr_os_shm_put</code> で変換します。 5. **スコアボードの再接続**: <code>ap_reopen_scoreboard</code> を呼び出し、共有メモリをプロセス空間にマッピングします。 6. **スコアボードの初期化**: <code>ap_init_scoreboard</code> を呼び出し、共有メモリ内のポインタ配列を再リンクします。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/winnt/mpm_winnt.c:1670</code></li>
+<li>**呼び出し先**: </li>
+<li><code>ReadFile</code> (Windows API)</li>
+<li><code>SetEvent</code>, <code>CloseHandle</code> (Windows API)</li>
+<li><code>apr_os_proc_mutex_put</code>, <code>apr_os_shm_put</code> (APR)</li>
+<li><code>ap_reopen_scoreboard</code>, <code>ap_init_scoreboard</code> (Apache MPM)</li>
+<li><code>ap_log_error</code> (Apache Logging)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: サーバー設定情報。</li>
+<li><code>apr_proc_mutex_t</code>: プロセス間同期用ミューテックス。</li>
+<li><code>apr_shm_t</code>: プロセス間共有メモリ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>各 <code>ReadFile</code> でデータの読み取りに失敗、またはサイズが不一致の場合、<code>APEXIT_CHILDINIT</code> でプロセスを異常終了させます。</li>
+<li><code>apr_os_proc_mutex_put</code> や <code>apr_os_shm_put</code> が失敗した場合、エラーログを出力し <code>APEXIT_CHILDINIT</code> で終了します。</li>
+<li>スコアボードの再オープンまたは初期化に失敗した場合、同様に終了します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は子プロセスの初期化フェーズで一度だけ実行されます。</li>
+<li>パイプからの読み取り順序は <code>send_handles_to_child</code> と厳密に一致させる必要があります。</li>
+<li><code>pipe</code> 変数はグローバルスコープで管理されているため、並列実行は想定されていません。</li>
 </ul></body></html>

@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/ssl/ssl_util_stapling.c:266</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OCSP レスポンスを <code>socache</code>（セッションキャッシュ）に保存し、後続の TLS ハンドシェイクで再利用可能にする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>BOOL stapling_cache_response(server_rec *s, modssl_ctx_t *mctx,
+                             OCSP_RESPONSE *rsp, certinfo *cinf,
+                             BOOL ok, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>mctx</code>: SSL モジュールコンテキスト。</li>
+<li><code>rsp</code>: 保存対象の <code>OCSP_RESPONSE</code> オブジェクト。</li>
+<li><code>cinf</code>: 証明書情報（キャッシュキー <code>cinf-&gt;idx</code> を保持）。</li>
+<li><code>ok</code>: レスポンスが有効か否かを示すフラグ。</li>
+<li><code>pool</code>: メモリ割り当て用プール。</li>
+<li>**出力**: 成功時に <code>TRUE</code>、失敗時に <code>FALSE</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>MAX_STAPLING_DER</code>（10KB）を超えるサイズのレスポンスは保存できない。</li>
+<li>キャッシュバックエンドがスレッドセーフでない場合（<code>AP_SOCACHE_FLAG_NOTMPSAFE</code>）、呼び出し元で排他制御が必要。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>i2d_OCSP_RESPONSE</code> を用いて <code>rsp</code> を DER 形式にエンコードする。 2. エンコード後のデータ長が <code>MAX_STAPLING_DER</code> を超える場合はエラー終了する。 3. <code>ok</code> フラグに基づき、キャッシュの有効期限（<code>stapling_cache_timeout</code> または <code>stapling_errcache_timeout</code>）を計算する。 4. DER データの先頭に <code>ok</code> フラグ（1バイト）を付与する。 5. キャッシュバックエンドがスレッドセーフでない場合、<code>stapling_cache_mutex_on</code> を呼び出す。 6. <code>mc-&gt;stapling_cache-&gt;store</code> を実行してキャッシュに書き込む。 7. 必要に応じて <code>stapling_cache_mutex_off</code> を呼び出し、結果を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_util_stapling.c:583</code>（<code>stapling_renew_response</code> 内での呼び出しが確認されている）。</li>
+<li>**呼び出し先**: </li>
+<li><code>i2d_OCSP_RESPONSE</code> (OpenSSL)</li>
+<li><code>mc-&gt;stapling_cache-&gt;store</code> (キャッシュバックエンド)</li>
+<li><code>stapling_cache_mutex_on/off</code> (排他制御)</li>
+<li><code>ap_log_error</code> (エラーログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>OCSP_RESPONSE</code>: OpenSSL の OCSP レスポンス構造体。</li>
+<li><code>certinfo</code>: 証明書とキャッシュキーを保持する構造体。</li>
+<li><code>SSLModConfigRec</code>: キャッシュ設定を保持するグローバル設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**エンコード失敗**: <code>i2d_OCSP_RESPONSE</code> が 0 以下の値を返した場合。</li>
+<li>**サイズ超過**: <code>resp_derlen + 1</code> が <code>MAX_STAPLING_DER</code> を超えた場合。</li>
+<li>**ストア失敗**: <code>mc-&gt;stapling_cache-&gt;store</code> が <code>APR_SUCCESS</code> 以外を返した場合。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>resp_der</code> バッファのサイズ制限（<code>MAX_STAPLING_DER</code>）は、OCSP レスポンスの肥大化に対するガードレールとして機能している。</li>
+<li>キャッシュのタイムアウト値は <code>modssl_ctx_t</code> から取得されるため、設定変更が即座に反映される。</li>
 </ul></body></html>

@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/dav/fs/dbm.c:52</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_dav_fs</code> におけるファイルシステムリポジトリのプロパティ（Dead Properties）を管理するための、DBM データベース接続状態および関連メタデータを保持する構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct dav_db {
+    apr_pool_t *pool;
+    apr_dbm_t *file;
+    int version;
+    dav_buffer ns_table;
+    short ns_count;
+    int ns_table_dirty;
+    apr_hash_t *uri_index;
+    dav_buffer wb_key;
+    apr_datum_t iter;
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 構造体内の各フィールドは、データベースのオープン時に初期化され、プロパティの読み書きや反復処理の過程で更新されます。</li>
+<li>**出力**: <code>dav_db</code> を介して DBM ファイルへの永続的な書き込み（<code>dav_dbm_store</code> 等）や、メモリ上の名前空間テーブルの更新が行われます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pool</code>: データベース接続のライフサイクルを管理する <code>apr_pool_t</code> に紐付いています。</li>
+<li><code>ns_table</code>: XML 名前空間 URI を保持し、DBM キーの最適化に使用されます。</li>
+<li><code>uri_index</code>: URI からテーブルインデックスへのマッピングを保持するハッシュテーブルです。</li>
+<li><code>wb_key</code>: <code>dav_build_key</code> で使用される静的バッファとして機能します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**データベース管理**: <code>dav_propdb_open</code> により初期化され、<code>METADATA</code> キーからバージョン情報と名前空間テーブルを構築します。</li>
+<li>**キー生成**: <code>dav_build_key</code> が <code>uri_index</code> を参照し、名前空間 ID とプロパティ名から <code>#:name</code> 形式の DBM キーを生成します。</li>
+<li>**反復処理**: <code>iter</code> フィールドを使用して DBM 内のキーを順次走査し、メタデータキーをスキップしながらプロパティを抽出します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>dav_fs_dbm_error</code>, <code>dav_dbm_close</code>, <code>dav_dbm_fetch</code>, <code>dav_dbm_store</code>, <code>dav_dbm_delete</code>, <code>dav_dbm_exists</code>, <code>dav_dbm_firstkey</code>, <code>dav_dbm_nextkey</code>, <code>dav_dbm_freedatum</code>, <code>dav_build_key</code> 等の <code>dbm.c</code> 内の関数。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、関数呼び出しは行いません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_dbm_t</code>: 基盤となる DBM ファイルハンドル。</li>
+<li><code>dav_buffer</code>: 名前空間テーブルおよびキー生成用バッファ。</li>
+<li><code>apr_hash_t</code>: URI インデックス用ハッシュマップ。</li>
+<li><code>apr_datum_t</code>: DBM のキーおよび値のデータ型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ管理**: <code>dav_db</code> は <code>apr_pool_t</code> に依存しており、プール解放時に適切にクローズされない場合、リソースリークが発生します。</li>
+<li>**並行性**: DBM の性質上、読み取りと書き込みが重なる際の再試行ロジックが不足しており、整合性が損なわれる可能性があります。</li>
+<li>**バッファ制約**: <code>dav_build_key</code> が使用する <code>wb_key</code> は静的バッファであるため、呼び出し直後に結果をコピーする必要があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>METADATA</code> のマイナーバージョン更新ロジックは現在不完全です。</li>
+<li>高負荷環境下での並行書き込みに対する堅牢性を向上させる必要があります。</li>
+<li><code>ns_table_dirty</code> フラグは、名前空間テーブルが変更された際にデータベースへ書き戻す必要があることを示します。</li>
 </ul></body></html>

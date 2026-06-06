@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/session/mod_session.c:91</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストに関連付けられたセッションデータをロードし、<code>session_rec</code> 構造体として提供します。セッションが存在しない場合や期限切れの場合は、新規の空セッションを作成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_session_load(request_rec *r, session_rec **z)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト情報 (<code>request_rec</code>)。</li>
+<li><code>z</code>: ロードされたセッション構造体 (<code>session_rec</code>) を格納するためのポインタ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>。エラー時はエラーコードを返します。</li>
+<li><code>*z</code>: 取得または生成された <code>session_rec</code> へのポインタ。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dconf-&gt;enabled</code> が有効であること。</li>
+<li><code>session_included</code> により、対象リクエストがセッション処理の対象パスに含まれていること。</li>
+<li>セッションデータはリクエストプール (<code>r-&gt;pool</code>) 上で管理され、リクエスト終了時に自動的に解放されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **設定確認**: ディレクトリ設定を確認し、セッションが有効かつ対象パスか判定します。 2. **ロード**: <code>ap_run_session_load</code> フックを呼び出し、バックエンドからセッションデータを取得します。 3. **デコード**: <code>ap_run_session_decode</code> フックを呼び出し、取得したデータを <code>session_rec</code> の <code>entries</code> テーブルに展開します。 4. **有効期限検証**: セッションの <code>expiry</code> を現在時刻と比較し、期限切れの場合はセッションを破棄（<code>zz = NULL</code>）します。 5. **初期化**: セッションが存在しない場合、<code>apr_pcalloc</code> で新規 <code>session_rec</code> を作成し、<code>entries</code> テーブルを初期化します。 6. **設定適用**: 設定に基づき <code>maxage</code> を適用し、必要に応じて <code>expiry</code> を計算します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/session/mod_session.c</code> 内の各処理（<code>session_fixups</code> 等）。</li>
+<li><code>modules/aaa/mod_auth_form.c</code>（<code>APR_RETRIEVE_OPTIONAL_FN</code> を介して利用）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_run_session_load</code> (フック)</li>
+<li><code>ap_run_session_decode</code> (フック)</li>
+<li><code>session_included</code> (内部関数)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_rec</code>: セッションのキー・値ペアや有効期限を保持する構造体。</li>
+<li><code>session_dir_conf</code>: ディレクトリ単位のセッション設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ストレージ未設定**: <code>ap_run_session_load</code> が <code>DECLINED</code> を返した場合、<code>APR_EGENERAL</code> を返します。</li>
+<li>**デコード失敗**: <code>ap_run_session_decode</code> がエラーを返した場合、セッションはロードされず、空のセッションとして扱われます。</li>
+<li>**期限切れ**: セッションが期限切れの場合、既存データは無視され、新規の空セッションが作成されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>dirty</code> フラグが立っていない場合、保存処理はスキップされます。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用するため、呼び出し側でのメモリ解放は不要です。</li>
+<li>内部リダイレクトが発生した場合、連鎖するリクエストに対してもセッション処理が適用される点に注意してください。</li>
 </ul></body></html>

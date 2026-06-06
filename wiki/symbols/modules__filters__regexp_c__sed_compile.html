@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/filters/regexp.c:132</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>文字列形式の正規表現を、<code>sed_step</code> が解釈可能なバイトコード形式へ変換する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>char *sed_compile(sed_commands_t *commands, sed_comp_args *compargs,
+                  char *ep, char *endbuf, int seof);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>commands</code>: <code>cp</code>（現在の解析位置）を含むコマンド構造体。</li>
+<li><code>compargs</code>: コンパイル結果を格納する引数構造体。</li>
+<li><code>ep</code>: バイトコード書き込み先バッファの開始ポインタ。</li>
+<li><code>endbuf</code>: バッファの終了ポインタ（境界チェック用）。</li>
+<li><code>seof</code>: 正規表現の終了文字。</li>
+<li>**出力**:</li>
+<li>成功時: バイトコード書き込み後のバッファ末尾ポインタ。</li>
+<li>失敗時: <code>NULL</code>（エラー発生時、<code>regerr</code> を経由して報告）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>NBRA</code>（キャプチャグループ数）は 9 に制限されている。</li>
+<li><code>ep</code> は呼び出し元が確保した十分なサイズのバッファを指している必要がある。</li>
+<li>コンパイル中、<code>bracket</code> スタックにより <code>\(</code> と <code>\)</code> のネストが管理される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>GETC()</code> マクロを用いて入力文字列を順次読み込み、<code>ep</code> に対応するバイトコード（<code>CDOT</code>, <code>CCL</code>, <code>CBRA</code>, <code>CKET</code>, <code>CCHR</code> 等）を書き込む。 2. <code>*</code> や <code>{n,m}</code> などの修飾子を検出した場合、直前のバイトコードにフラグ（<code>STAR</code>, <code>RNGE</code>）を付与する。 3. <code>[</code> から始まる文字クラスはビットマップ形式（<code>CCL</code>）または拡張形式（<code>CXCL</code>）に変換する。 4. <code>\(</code> <code>\)</code> のネストを <code>bracket</code> スタックで追跡し、対応が取れていない場合はエラーを発生させる。 5. 終了文字 <code>seof</code> に到達した時点で <code>CCEOF</code> を書き込み終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/filters/sed0.c:992</code> での呼び出しが確認されている。</li>
+<li>**呼び出し先**: <code>regerr</code>（エラー報告用）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sed_commands_t</code>: コンパイル対象のコマンド状態を保持。</li>
+<li><code>sed_comp_args</code>: コンパイル結果（<code>circf</code>, <code>nbra</code> 等）を格納。</li>
+<li><code>regexp.h</code>: バイトコード定数（<code>CBRA</code>, <code>CCHR</code>, <code>CCL</code> 等）を定義。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バッファオーバーフロー**: <code>ep &gt;= endbuf</code> となった場合、<code>SEDCOMPILE_ERROR(50)</code> を発行。</li>
+<li>**構文エラー**: 括弧の不一致（エラー42）、範囲指定の不正（エラー16, 44, 45, 46）、キャプチャグループの制限超過（エラー43）などで <code>regerr</code> を呼び出し <code>NULL</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は非常に古い AT&amp;T <code>sed</code> の実装を継承しており、<code>goto</code> を多用した制御フローを持つ。</li>
+<li>メモリ管理は呼び出し元に依存するため、<code>endbuf</code> による境界チェックが必須である。</li>
+<li><code>_advance</code> 内のバックトラッキングロジックと密接に関連しているため、バイトコードの変更時は <code>regexp.h</code> の定義と併せて確認すること。</li>
 </ul></body></html>

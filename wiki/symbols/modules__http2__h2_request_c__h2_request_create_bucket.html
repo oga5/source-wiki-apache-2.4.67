@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/http2/h2_request.c:290</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 リクエスト表現 (<code>h2_request</code>) を Apache HTTP Server のリクエスト処理パイプラインで使用可能な <code>apr_bucket</code> に変換します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_bucket *h2_request_create_bucket(const h2_request *req, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>req</code>: 変換対象の <code>h2_request</code> 構造体（読み取り専用）。</li>
+<li><code>r</code>: 現在の接続に関連付けられた <code>request_rec</code> 構造体。</li>
+<li>**出力**:</li>
+<li>成功時: Apache のリクエスト処理パイプラインに投入可能な <code>apr_bucket</code> へのポインタ。</li>
+<li>失敗時: <code>apr_bucket_request_create</code> の仕様に従い、メモリ不足等の場合は <code>NULL</code> またはエラー状態のバケットを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req-&gt;method</code> および <code>req-&gt;authority</code> が <code>NULL</code> でないこと（<code>AP_DEBUG_ASSERT</code> により検証）。</li>
+<li><code>r-&gt;pool</code> はバケットの生存期間を管理するために使用されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>req-&gt;headers</code> のコピーを <code>r-&gt;pool</code> 上に作成します。 2. <code>req-&gt;method</code> が <code>CONNECT</code> の場合、<code>uri</code> を <code>req-&gt;authority</code> に設定します。 3. フォワードプロキシ設定 (<code>H2_CONF_PROXY_REQUESTS</code>) が有効な場合、または <code>scheme</code> が <code>http</code>/<code>https</code> 以外の場合は、<code>scheme</code>、<code>authority</code>、<code>path</code> を結合して絶対 URI を生成します。 4. 上記以外の場合は、<code>req-&gt;path</code> をそのまま <code>uri</code> として使用します。 5. 最終的に <code>ap_bucket_request_create</code> を呼び出し、メソッド、URI、プロトコルバージョン (&quot;HTTP/2.0&quot;)、ヘッダーテーブルを格納したバケットを生成して返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_c2_filter.c:126</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_clone</code></li>
+<li><code>ap_cstr_casecmp</code></li>
+<li><code>h2_config_cgeti</code></li>
+<li><code>apr_psprintf</code></li>
+<li><code>ap_bucket_request_create</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_request</code>: HTTP/2 のリクエスト情報を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト処理における中心的な構造体。</li>
+<li><code>apr_bucket</code>: Apache のデータ転送用バケット。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req-&gt;method</code> や <code>req-&gt;authority</code> が欠落している場合、デバッグビルドではアサーションエラーが発生します。</li>
+<li><code>apr_psprintf</code> や <code>apr_table_clone</code> がメモリ不足に陥った場合、Apache のメモリ管理ポリシーに従いプロセスが終了するか、呼び出し元へエラーが伝播します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は HTTP/2 の擬似ヘッダーを Apache の標準的なリクエスト形式へ適合させる重要なブリッジです。</li>
+<li>プロキシ設定やスキームの検証ロジックに変更を加える際は、<code>h2_config</code> との整合性に注意してください。</li>
 </ul></body></html>

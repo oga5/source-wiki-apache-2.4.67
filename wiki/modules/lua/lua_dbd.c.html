@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/lua/lua_dbd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/lua/lua_dbd.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_lua</code> において、データベース接続（DBD: Database Driver）機能を提供するモジュールです。Lua スクリプトから APR (Apache Portable Runtime) の DBD フレームワークを介して、SQL クエリの実行、結果の取得、プリペアドステートメントの管理を可能にします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> の拡張機能の一部として、Lua VM 内のオブジェクトと Apache の DBD インフラストラクチャを橋渡しします。<code>lua_dbd.h</code> で定義された構造体を実装し、Lua のテーブルをデータベースハンドルや結果セットとしてラップします。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続管理**: <code>mod_dbd</code> または直接的な APR DBD ドライバを用いたデータベース接続の取得と解放。</li>
+<li>**クエリ実行**: SQL クエリの実行および結果セットの Lua テーブルへの変換。</li>
+<li>**プリペアドステートメント**: SQL 文の事前コンパイルと、パラメータのバインド実行。</li>
+<li>**リソース管理**: Lua のガベージコレクション (<code>__gc</code>) を利用したデータベース接続の自動クローズ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>接続・ライフサイクル管理</h3>
+<ul>
+<li><code>lua_db_acquire</code>: Lua から呼び出される接続開始関数。<code>mod_dbd</code> または指定ドライバを使用。</li>
+<li><code>lua_db_close</code>: 接続を明示的に閉じる。</li>
+<li><code>lua_db_gc</code>: Lua オブジェクト破棄時に呼ばれるクリーンアップ関数。</li>
+<li><code>lua_db_active</code>: 接続の生存確認。</li>
+</ul>
+<h3>クエリ・データ操作</h3>
+<ul>
+<li><code>lua_db_query</code>: 非選択系クエリ（INSERT/UPDATE等）の実行。</li>
+<li><code>lua_db_select</code>: 選択系クエリの実行と結果セットの生成。</li>
+<li><code>lua_db_get_row</code>: 結果セットから行データを取得（イテレータ的役割）。</li>
+<li><code>lua_db_escape</code>: SQL インジェクション防止のための文字列エスケープ。</li>
+</ul>
+<h3>プリペアドステートメント</h3>
+<ul>
+<li><code>lua_db_prepare</code>: SQL 文をコンパイルしてステートメントオブジェクトを作成。</li>
+<li><code>lua_db_prepared</code>: 既存の <code>DBDPrepareSQL</code> 定義済みステートメントを取得。</li>
+<li><code>lua_db_prepared_select</code> / <code>lua_db_prepared_query</code>: バインド変数を用いた実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>lua_db_acquire</code> が <code>request_rec</code> からコンテキストを取得し、<code>lua_push_db_handle</code> で Lua テーブルを生成。このテーブルには <code>__gc</code> メタメソッドが設定され、接続の生存期間を管理します。 2. **クエリ実行**: <code>lua_db_select</code> 等が呼ばれると、<code>lua_get_db_handle</code> で内部の <code>lua_db_handle</code> を取り出し、APR DBD API を呼び出します。 3. **結果処理**: <code>lua_db_select</code> は結果セットを <code>lua_db_result_set</code> 構造体としてラップし、<code>__call</code> メタメソッドに <code>lua_db_get_row</code> を割り当てます。これにより、Lua 側で <code>resultset(row_no)</code> のような呼び出しが可能になります。 4. **エラーハンドリング**: APR DBD から返されるエラーコードを <code>apr_dbd_error</code> で文字列化し、Lua の <code>nil</code> とエラーメッセージとして返します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_lua.h</code>: <code>mod_lua</code> の基本定義。</li>
+<li><code>lua_dbd.h</code>: 共有データ構造と関数プロトタイプ。</li>
+<li><code>apr_dbd.h</code> / <code>mod_dbd.h</code>: APR のデータベース抽象化レイヤー。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/database/mod_dbd.c</code>: <code>mod_lua</code> が利用する Apache 側の DBD 管理モジュール。</li>
+<li><code>modules/lua/mod_lua.c</code>: <code>mod_lua</code> のメインエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>lua_db_handle</code> は <code>apr_pool_t</code> を保持しており、接続が閉じられるかガベージコレクションされる際にプールが破棄されます。</li>
+<li>**制約**: <code>lua_db_get_row</code> において、<code>alpha</code> フラグが真の場合、カラム名によるアクセスが可能ですが、それ以外はインデックスベースとなります。</li>
+<li>**注意点**: <code>mod_dbd</code> 経由の接続は Apache のライフサイクルに依存するため、Lua 側で <code>close</code> を呼んでも即座に物理接続が切断されない場合があります。</li>
+<li>**省略箇所**: プリペアドステートメントのパラメータバインドにおける型変換の詳細は、APR DBD の実装に依存するため、本ファイルでは単純な文字列変換 (<code>lua_tostring</code>) に留めています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__ap_lua_check_request_rec.html" target="wiki-view">`ap_lua_check_request_rec`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_get_db_handle.html" target="wiki-view">`lua_get_db_handle`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_get_result_set.html" target="wiki-view">`lua_get_result_set`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_close.html" target="wiki-view">`lua_db_close`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_gc.html" target="wiki-view">`lua_db_gc`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_active.html" target="wiki-view">`lua_db_active`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_query.html" target="wiki-view">`lua_db_query`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_escape.html" target="wiki-view">`lua_db_escape`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_get_row.html" target="wiki-view">`lua_db_get_row`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_select.html" target="wiki-view">`lua_db_select`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_prepared_select.html" target="wiki-view">`lua_db_prepared_select`</a></li>
+<li><a href="../../symbols/modules__lua__lua_dbd_c__lua_db_prepared_query.html" target="wiki-view">`lua_db_prepared_query`</a></li>
+</ul></body></html>

@@ -6,22 +6,60 @@
 <li>定義箇所: <code>server/mpm_unix.c:184</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>終了処理において、すべての子プロセスおよび追加の管理対象プロセスを段階的に回収（reap）します。時間経過に応じて <code>SIGTERM</code> から <code>SIGKILL</code> へとシグナルをエスカレーションし、プロセスの終了を強制します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_reclaim_child_processes(int terminate, ap_reclaim_callback_fn_t *mpm_callback)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>terminate</code> (int): <code>1</code> の場合、即座に <code>SIGTERM</code> を送信するフェーズを開始します。<code>0</code> の場合は待機から開始します。</li>
+<li><code>mpm_callback</code> (ap_reclaim_callback_fn_t*): プロセスが回収された際に呼び出されるコールバック関数。</li>
+<li>戻り値: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>max_daemons</code> は <code>ap_mpm_query(AP_MPMQ_MAX_DAEMON_USED, ...)</code> により取得されます。</li>
+<li>スコアボード上のプロセスおよび <code>extras</code> リストに登録されたプロセスを対象とします。</li>
+<li><code>not_dead_yet</code> が 0 になるか、<code>GIVEUP</code> アクションに到達するまでループが継続されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **アクションテーブルの定義**: 経過時間に応じて <code>DO_NOTHING</code>, <code>SEND_SIGTERM</code>, <code>SEND_SIGKILL</code>, <code>GIVEUP</code> を実行するスケジュールを保持します。 2. **ループ処理**:</p>
+<ul>
+<li><code>waittime</code> を指数関数的に増加させ（最大1秒）、<code>apr_sleep</code> で待機します。</li>
+<li>現在の経過時間に基づき、実行すべきアクション（<code>cur_action</code>）を決定します。</li>
+<li>**スコアボードの走査**: <code>ap_get_scoreboard_process</code> で取得した各プロセスに対し <code>reclaim_one_pid</code> を実行し、成功時に <code>mpm_callback</code> を呼び出します。</li>
+<li>**追加プロセスの走査**: <code>extras</code> リストを辿り、同様に <code>reclaim_one_pid</code> を実行して回収を試みます。</li>
+<li>**その他**: <code>APR_HAS_OTHER_CHILD</code> が定義されている場合、<code>apr_proc_other_child_refresh_all</code> を呼び出します。</li>
+<p>3. **終了条件**: 全プロセスが回収されるか、<code>GIVEUP</code> アクションに到達した時点で終了します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/prefork/prefork.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>reclaim_one_pid</code> (内部関数)</li>
+<li><code>ap_mpm_query</code></li>
+<li><code>ap_get_scoreboard_process</code></li>
+<li><code>ap_unregister_extra_mpm_process</code></li>
+<li><code>apr_sleep</code>, <code>apr_time_now</code>, <code>apr_time_from_sec</code></li>
+<li><code>apr_proc_other_child_refresh_all</code> (条件付き)</li>
+<li><code>mpm_callback</code> (引数として渡された関数)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>extra_process_t</code>: 追加の管理対象プロセスを保持するリスト構造。</li>
+<li><code>process_score</code>: スコアボード内のプロセス状態情報。</li>
+<li><code>action_t</code>: 実行されるシグナル送信等のアクション種別。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid == 0</code> のスコアボードエントリは無視されます。</li>
+<li><code>ap_unregister_extra_mpm_process</code> が期待通りに動作しない場合、<code>AP_DEBUG_ASSERT</code> により停止します。</li>
+<li><code>GIVEUP</code> アクションに到達すると、回収が完了していなくても関数は終了します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>waittime</code> の増加ロジックは、最後のプロセスが終了した際に迅速に反応できるよう、最大1秒に制限されています。</li>
+<li><code>extras</code> リストの走査中に <code>ap_unregister_extra_mpm_process</code> を呼び出すと、<code>cur_extra</code> が指すポインタが無効になる可能性があるため、ループ内でのポインタ管理に注意が必要です。</li>
 </ul></body></html>

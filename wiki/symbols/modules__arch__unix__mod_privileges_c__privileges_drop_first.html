@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/arch/unix/mod_privileges.c:312</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバー起動時に、全仮想ホスト（vhost）で必要とされる特権セットを統合し、プロセスに対して初期的な権限降格（または適用）を行う。<code>mod_unixd</code> による <code>setuid</code> 実行前に特権を確定させるために使用される。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int privileges_drop_first(apr_pool_t *pool, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pool</code>: メモリ割り当てに使用するプール。</li>
+<li><code>s</code>: サーバー設定のルート構造体。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返す。失敗時は <code>PDROP_CHECK</code> マクロによりエラーが処理される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本関数は <code>APR_HOOK_FIRST</code> としてフックされており、<code>mod_unixd</code> の権限降格処理よりも先に実行される必要がある。</li>
+<li>Solaris 等の特権（Privileges）API が利用可能な環境であることを前提とする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>priv_allocset()</code> で一時的な特権セット <code>ppriv</code> を確保する。 2. <code>priv_setid</code>（システム設定値）を <code>ppriv</code> にコピーする。 3. 全ての仮想ホスト（<code>s</code> から <code>s-&gt;next</code> を辿る）を走査し、各 vhost の設定（<code>priv_cfg</code>）に含まれる特権を <code>priv_union</code> を用いて <code>ppriv</code> に統合する。 4. <code>setppriv</code> を呼び出し、現在のプロセスの <code>PRIV_PERMITTED</code> および <code>PRIV_EFFECTIVE</code> セットを統合後の <code>ppriv</code> に設定する。 5. <code>priv_freeset()</code> で一時メモリを解放する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_drop_privileges</code> により登録され、サーバー起動シーケンスから呼び出される（<code>modules/arch/unix/mod_privileges.c:413</code>）。</li>
+<li>**呼び出し先**:</li>
+<li><code>priv_allocset</code>, <code>priv_copyset</code>, <code>priv_union</code>, <code>priv_freeset</code>（Solaris 特権 API）</li>
+<li><code>ap_get_module_config</code>（Apache 設定取得）</li>
+<li><code>setppriv</code>（システムコール）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>priv_cfg</code>: 各 vhost の特権設定を保持する構造体。</li>
+<li><code>priv_set_t</code>: Solaris の特権セットを表現するデータ型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>PDROP_CHECK</code> マクロにより、<code>setppriv</code> が失敗した場合はエラーとして処理される。</li>
+<li>仮想ホストリストが空の場合、<code>priv_setid</code> のみが適用される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_unixd</code> の <code>setuid</code> 実行前に特権を確定させる必要があるため、フックの順序（<code>APR_HOOK_FIRST</code>）を変更してはならない。</li>
+<li>マルチスレッド環境では <code>setppriv</code> の挙動が制限されるため、本モジュールは非スレッド環境での使用を前提としている。</li>
 </ul></body></html>

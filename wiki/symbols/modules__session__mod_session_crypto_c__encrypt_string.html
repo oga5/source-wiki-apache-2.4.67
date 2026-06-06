@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/session/mod_session_crypto.c:246</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>セッション文字列を暗号化し、改ざん検知用の MAC を付与した上で Base64 エンコードされた文字列として出力する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t encrypt_string(request_rec *r, const apr_crypto_t *f,
+                            session_crypto_dir_conf *dconf, const char *in, char **out)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>f</code>: <code>apr_crypto</code> コンテキスト。</li>
+<li><code>dconf</code>: 暗号化設定（パスフレーズ等を含む）。</li>
+<li><code>in</code>: 暗号化対象の文字列。</li>
+<li>**出力**:</li>
+<li><code>out</code>: Base64 エンコードされた暗号化済み文字列（成功時）。</li>
+<li>戻り値: <code>apr_status_t</code> 型のステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dconf-&gt;passphrases</code> に少なくとも1つのパスフレーズが格納されていること。</li>
+<li><code>r-&gt;pool</code> が有効であり、メモリ割り当てに使用可能であること。</li>
+<li><code>APU_HAVE_CRYPTO</code> が有効であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_uuid_get</code> でソルト（UUID）を生成する。 2. <code>crypt_init</code> を呼び出し、暗号アルゴリズムを特定する。 3. <code>dconf</code> 内の最初のパスフレーズを使用して <code>apr_crypto_passphrase</code> で鍵を生成する。 4. <code>apr_crypto_block_encrypt_init</code> で暗号化コンテキストを初期化する。 5. <code>apr_crypto_block_encrypt</code> および <code>finish</code> を用いて入力文字列を暗号化する。 6. <code>[MAC(16バイト)][Salt(16バイト)][IV][Ciphertext]</code> の形式でデータを連結する。 7. <code>compute_auth</code> を呼び出し、連結データに対して SipHash による MAC を生成・付与する。 8. <code>apr_base64_encode</code> を用いて最終的な文字列を生成し、<code>out</code> に格納する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/session/mod_session_crypto.c:494</code> (セッションエンコード処理内)</li>
+<li>**呼び出し先**: <code>crypt_init</code>, <code>apr_uuid_get</code>, <code>apr_crypto_passphrase</code>, <code>apr_crypto_block_encrypt_init</code>, <code>apr_crypto_block_encrypt</code>, <code>apr_crypto_block_encrypt_finish</code>, <code>compute_auth</code>, <code>apr_base64_encode</code>, <code>apr_palloc</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_crypto_dir_conf</code>: 暗号化設定を保持する構造体。</li>
+<li><code>request_rec</code>: リクエストごとのメモリプール (<code>r-&gt;pool</code>) を提供。</li>
+<li><code>apr_crypto_t</code>: 暗号化ライブラリのコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>パスフレーズからの鍵生成失敗 (<code>APR_STATUS_IS_ENOKEY</code>)。</li>
+<li>指定された暗号アルゴリズムのサポート外 (<code>APR_STATUS_IS_EKEYTYPE</code>)。</li>
+<li>パディング設定の不整合 (<code>APR_STATUS_IS_EPADDING</code>)。</li>
+<li>暗号化処理 (<code>encrypt_init</code>, <code>encrypt</code>, <code>finish</code>) のいずれかが失敗した場合、エラーログを出力して即座に終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>dconf-&gt;passphrases</code> のインデックス 0 のパスフレーズのみを使用する。</li>
+<li>メモリ割り当てはすべて <code>r-&gt;pool</code> に依存しており、リクエスト終了時に自動的に解放される。</li>
+<li>MAC の計算には <code>compute_auth</code> を使用しており、タイミング攻撃耐性のため <code>ap_memeq_timingsafe</code> が内部的に利用される。</li>
 </ul></body></html>

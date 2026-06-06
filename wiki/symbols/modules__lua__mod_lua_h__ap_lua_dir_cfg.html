@@ -6,22 +6,61 @@
 <li>定義箇所: <code>modules/lua/mod_lua.h:114</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>mod_lua</code> モジュールにおいて、ディレクトリ単位の設定（Lua スクリプトのパス、VM スコープ、キャッシュ設定、ハンドラマッピングなど）を保持・管理するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    apr_array_header_t *package_paths;
+    apr_array_header_t *package_cpaths;
+    apr_array_header_t *mapped_handlers;
+    apr_array_header_t *mapped_filters;
+    apr_pool_t *pool;
+    unsigned int vm_scope;
+    unsigned int vm_min;
+    unsigned int vm_max;
+    apr_hash_t *hooks;
+    const char *dir;
+    ap_lua_inherit_t inherit;
+    unsigned int codecache;
+} ap_lua_dir_cfg;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: Apache の設定ファイル（<code>httpd.conf</code> 等）で指定されたディレクティブに基づき、<code>mod_lua</code> の設定読み込み関数によって値が設定されます。</li>
+<li>**出力**: リクエスト処理時に <code>ap_get_module_config</code> を介して取得され、Lua VM の初期化やスクリプト実行の制御パラメータとして利用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pool</code> フィールドは、設定のライフサイクルを管理するための APR プールを指す必要があります。</li>
+<li><code>vm_scope</code> は <code>AP_LUA_SCOPE_ONCE</code>, <code>REQUEST</code>, <code>CONN</code>, <code>SERVER</code> のいずれかである必要があります。</li>
+<li><code>codecache</code> は <code>AP_LUA_CACHE_NEVER</code>, <code>STAT</code>, <code>FOREVER</code> のいずれかである必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ディレクトリごとの Lua 実行環境を定義します。</li>
+<li><code>mapped_handlers</code> および <code>mapped_filters</code> により、特定のパスに対する Lua スクリプトの割り当てを管理します。</li>
+<li><code>vm_min</code> / <code>vm_max</code> を用いて、当該ディレクトリで利用する Lua VM のインスタンス数を制御します。</li>
+<li><code>inherit</code> 設定により、サブディレクトリにおける親設定の継承順序を決定します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/lua/lua_config.c</code>: 設定のチェックやハンドラのマッピング時に参照・操作されます。</li>
+<li><code>modules/lua/mod_lua.c</code>: リクエスト処理の各フェーズで <code>ap_get_module_config</code> を通じて取得されます。</li>
+<li>**呼び出し先**: </li>
+<li>本構造体自体はデータ保持用であり、直接的な関数呼び出しは行いません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_array_header_t</code>: パスやハンドラリストの保持に使用。</li>
+<li><code>apr_hash_t</code>: <code>hooks</code>（<code>wombat_hook_info</code>）の管理に使用。</li>
+<li><code>ap_lua_inherit_t</code>: 設定継承の挙動を定義する列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>設定の継承において <code>inherit</code> の値が不適切な場合、意図しない順序でスクリプトが実行される可能性があります。</li>
+<li><code>vm_min</code> が <code>vm_max</code> を超えるような設定値が与えられた場合の挙動は、VM 管理ロジックの実装に依存します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_lua</code> の設定管理の基盤です。フィールドを追加する際は、<code>mod_lua.c</code> 内のコンフィグマージ関数（<code>merge_dir_config</code> 等）で適切に値が引き継がれるよう注意してください。</li>
+<li><code>hooks</code> ハッシュのキーと値の型については、<code>mod_lua</code> の内部的なフック管理の実装を参照してください。</li>
 </ul></body></html>

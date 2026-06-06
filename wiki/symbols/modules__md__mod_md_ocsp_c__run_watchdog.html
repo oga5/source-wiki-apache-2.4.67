@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/md/mod_md_ocsp.c:157</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_watchdog</code> を利用して、OCSP レスポンスの定期的な更新処理（<code>md_ocsp_renew</code>）を実行し、次回の実行タイミングをスケジュールする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t run_watchdog(int state, void *baton, apr_pool_t *ptemp)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>state</code>: <code>mod_watchdog</code> から通知される現在の状態（<code>AP_WATCHDOG_STATE_STARTING</code>, <code>RUNNING</code>, <code>STOPPING</code>）。</li>
+<li><code>baton</code>: <code>md_ocsp_ctx_t</code> 型のコンテキストへのポインタ。</li>
+<li><code>ptemp</code>: 一時的なメモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li>**出力**:</li>
+<li>常に <code>APR_SUCCESS</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>baton</code> は有効な <code>md_ocsp_ctx_t</code> 構造体を指している必要がある。</li>
+<li><code>mod_watchdog</code> がロードされ、初期化されていることが前提となる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **状態遷移の処理**:</p>
+<ul>
+<li><code>AP_WATCHDOG_STATE_STARTING</code> / <code>STOPPING</code>: ログ出力のみを行う。</li>
+<li><code>AP_WATCHDOG_STATE_RUNNING</code>:</li>
+<li><code>next_run_default()</code> を呼び出し、デフォルトの次回実行時刻を取得する。</li>
+<li><code>md_ocsp_renew()</code> を呼び出し、各証明書の OCSP レスポンスを更新する（<code>next_run</code> はこの関数内で更新される）。</li>
+<li>現在時刻と <code>next_run</code> の差分から <code>wait_time</code> を計算する。</li>
+<li><code>wd_set_interval()</code> を呼び出し、次回の実行をスケジュールする。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/mod_md_ocsp.c:275</code> (<code>wd_register_callback</code> 経由)</li>
+<li><code>modules/md/mod_md_ocsp.c:192</code> (自身による再帰的スケジュール)</li>
+<li><code>modules/md/mod_md_drive.c:297</code> および <code>406</code> (直接的な呼び出し元として確認)</li>
+<li>**呼び出し先**:</li>
+<li><code>md_ocsp_renew</code></li>
+<li><code>next_run_default</code></li>
+<li><code>wd_set_interval</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_ocsp_ctx_t</code>: Watchdog の実行コンテキストを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_ocsp_renew</code> が失敗した場合の具体的なエラーハンドリングは本関数内には記述されていない。</li>
+<li><code>wait_time</code> が負の値になる場合の挙動は、<code>wd_set_interval</code> の実装に依存する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_watchdog</code> のコールバックとして動作するため、スレッドセーフティおよび <code>mod_watchdog</code> のライフサイクル管理に注意すること。</li>
+<li><code>md_ocsp_renew</code> が <code>next_run</code> を更新するロジックが、OCSP 更新の頻度を決定する主要な要因となる。</li>
 </ul></body></html>

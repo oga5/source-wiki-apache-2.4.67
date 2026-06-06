@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/cache/mod_file_cache.c:309</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュされた静的ファイルのリソース（ファイルハンドルまたはメモリマップ）を使用して、HTTP レスポンスを生成・送信する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int file_cache_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報）。</li>
+<li>**出力**: <code>int</code>（Apache HTTP Server のステータスコード。<code>OK</code>, <code>DECLINED</code>, またはエラーコード）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>file_cache_xlat</code> フックが事前に実行され、<code>r-&gt;request_config</code> に <code>a_file</code> 構造体が格納されている必要がある。</li>
+<li><code>GET</code> メソッドのみを処理対象とする。</li>
+<li><code>r-&gt;handler</code> がデフォルト値または <code>*/*</code> に一致する必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **検証**: リクエストメソッドが <code>GET</code> でない場合、またはハンドラが不適切な場合は <code>DECLINED</code> を返す。 2. **コンテキスト取得**: <code>ap_get_module_config</code> を使用して、<code>file_cache_module</code> に関連付けられた <code>a_file</code> 構造体を取得。見つからない場合は <code>DECLINED</code> を返す。 3. **リクエスト処理**:</p>
+<ul>
+<li>リクエストボディを破棄（<code>ap_discard_request_body</code>）。</li>
+<li><code>Last-Modified</code> ヘッダーを事前計算値（<code>match-&gt;mtimestr</code>）で最適化して設定。</li>
+<li><code>Content-Length</code> ヘッダーを事前計算値（<code>match-&gt;sizestr</code>）で設定。</li>
+<li><code>ap_meets_conditions</code> で条件付きリクエスト（<code>If-Modified-Since</code> 等）を評価。</li>
+<p>4. **レスポンス送信**: <code>r-&gt;header_only</code> が偽の場合、<code>is_mmapped</code> フラグに応じて <code>mmap_handler</code> または <code>sendfile_handler</code> を呼び出し、データを送信する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のハンドラフック機構（<code>ap_hook_handler</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_discard_request_body</code>, <code>ap_update_mtime</code>, <code>ap_rationalize_mtime</code>, <code>apr_rfc822_date</code>, <code>apr_table_setn</code>, <code>ap_set_etag</code>, <code>ap_meets_conditions</code></li>
+<li><code>mmap_handler</code> (条件付き)</li>
+<li><code>sendfile_handler</code> (条件付き)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>a_file</code>: キャッシュされたファイルのメタデータ（<code>finfo</code>, <code>mtimestr</code>, <code>sizestr</code>, <code>is_mmapped</code>）を保持。</li>
+<li><code>request_rec</code>: Apache のリクエスト状態を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>match</code> が <code>NULL</code> の場合: キャッシュ対象外として <code>DECLINED</code> を返す。</li>
+<li><code>GET</code> 以外のメソッド: <code>DECLINED</code> を返す。</li>
+<li><code>ap_discard_request_body</code> が失敗した場合: そのエラーコードをそのまま返す。</li>
+<li><code>ap_meets_conditions</code> が <code>OK</code> 以外を返した場合: そのステータスを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>Last-Modified</code> や <code>Content-Length</code> の計算をスキップして事前計算値を使用することで性能を最適化している。</li>
+<li><code>mmap_handler</code> と <code>sendfile_handler</code> の呼び出しは、<code>match-&gt;is_mmapped</code> の値に依存する。</li>
+<li>リクエストボディの読み込みと破棄は、将来的な拡張を見越して実装されている。</li>
 </ul></body></html>

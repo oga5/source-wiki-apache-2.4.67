@@ -1,58 +1,47 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__dav__main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/dav/main</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/dav/main</code> には 8 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/dav/main</code> は、Apache HTTP Server における WebDAV (RFC 4918) 実装の中核を担うディレクトリです。リポジトリやストレージの実装から独立したプロトコル処理の抽象レイヤーを提供し、WebDAV メソッドのディスパッチ、プロパティ管理、ロック制御、および拡張可能なプロバイダーインターフェースを定義します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プロトコル実装**: WebDAV メソッド（PROPFIND, PUT, LOCK 等）のハンドリングと XML レスポンスの生成。</li>
+<li>**抽象化レイヤー**: リポジトリ、プロパティDB、ロック管理、バージョン管理のためのフック（<code>dav_hooks_*</code>）の定義。</li>
+<li>**プロバイダー管理**: 外部モジュールが DAV 機能を拡張するための登録・検索メカニズムの提供。</li>
+<li>**共通ユーティリティ**: XML 解析、If ヘッダーのパース、自動バージョン管理、エラーハンドリングの共通化。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/dav/main/liveprop.c</code></li>
-<li><code>modules/dav/main/mod_dav.c</code></li>
-<li><code>modules/dav/main/mod_dav.h</code></li>
-<li><code>modules/dav/main/props.c</code></li>
-<li><code>modules/dav/main/providers.c</code></li>
-<li><code>modules/dav/main/std_liveprop.c</code></li>
-<li><code>modules/dav/main/util.c</code></li>
-<li><code>modules/dav/main/util_lock.c</code></li>
+<li><code>mod_dav.h</code>: API 定義、データ構造、フックの宣言。</li>
+<li><code>mod_dav.c</code>: メインハンドラ、リクエストディスパッチ、設定管理。</li>
+<li><code>util.c</code>: 汎用ユーティリティ、If ヘッダー処理、自動バージョン管理。</li>
+<li><code>props.c</code>: プロパティデータベース（<code>propdb</code>）の管理とトランザクション処理。</li>
+<li><code>util_lock.c</code>: ロック管理、再帰的ロック適用、ロック・ヌルリソースの制御。</li>
+<li><code>liveprop.c</code>: ライブプロパティの名前空間管理と検索。</li>
+<li><code>std_liveprop.c</code>: 標準的なライブプロパティ（<code>DAV:</code> 名前空間）の実装。</li>
+<li><code>providers.c</code>: プロバイダー登録・検索のための Apache API ラッパー。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>dav_dir_conf</code></li>
-<li><code>dav_server_conf</code></li>
-<li><code>dav_label_walker_ctx</code></li>
-<li><code>dav_error</code></li>
-<li><code>dav_response</code></li>
-<li><code>dav_hooks_propdb</code></li>
-<li><code>dav_hooks_locks</code></li>
-<li><code>dav_hooks_vsn</code></li>
-<li><code>dav_hooks_repository</code></li>
-<li><code>dav_hooks_liveprop</code></li>
+<li>**フック構造体**: <code>dav_hooks_repository</code>, <code>dav_hooks_propdb</code>, <code>dav_hooks_locks</code>, <code>dav_hooks_vsn</code>, <code>dav_hooks_liveprop</code></li>
+<li>**リソース管理**: <code>dav_resource</code> (リソースの抽象表現), <code>dav_propdb</code> (プロパティ操作コンテキスト)</li>
+<li>**設定**: <code>dav_dir_conf</code> (ディレクトリごとの DAV 設定)</li>
+<li>**エラー**: <code>dav_error</code> (スタックベースのエラー管理構造体)</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **リクエスト捕捉**: <code>mod_dav.c</code> が Apache の <code>handler</code> フックを介してリクエストを捕捉。 2. **リソース解決**: 設定されたプロバイダーの <code>get_resource</code> を呼び出し、リクエスト URI を <code>dav_resource</code> に変換。 3. **メソッド実行**: メソッドに応じた <code>dav_method_*</code> 関数が呼び出され、必要に応じて <code>util.c</code> や <code>props.c</code> のユーティリティを利用。 4. **プロパティ/ロック処理**: <code>props.c</code> や <code>util_lock.c</code> がプロバイダーのフックを介してバックエンドと連携。 5. **応答生成**: <code>dav_send_multistatus</code> を通じて XML 形式のレスポンスをクライアントへ返却。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>mod_dav.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_hash.h</code></li>
-<li><code>util_xml.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>http_request.h</code></li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code>, <code>http_request.h</code></li>
+<li>**APR**: <code>apr_pools.h</code>, <code>apr_hash.h</code>, <code>apr_strings.h</code>, <code>apr_tables.h</code></li>
+<li>**XML**: <code>util_xml.h</code> (Apache XML 解析 API)</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本ディレクトリは <code>mod_dav</code> のコアロジックを構成しており、サブディレクトリ（<code>fs</code> など）に配置される具体的なストレージ実装を統合する役割を持ちます。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/dav/main/mod_dav.h</code> 2. <code>modules/dav/main/mod_dav.c</code> 3. <code>modules/dav/main/util.c</code> 4. <code>modules/dav/main/props.c</code> 5. <code>modules/dav/main/util_lock.c</code> 6. <code>modules/dav/main/liveprop.c</code> 7. <code>modules/dav/main/std_liveprop.c</code> 8. <code>modules/dav/main/providers.c</code></p>
+<p>1. <code>mod_dav.h</code> (API とフック定義の理解) 2. <code>mod_dav.c</code> (全体的なリクエストフローの把握) 3. <code>util.c</code> (共通ユーティリティと検証ロジック) 4. <code>props.c</code> (プロパティ管理とトランザクション) 5. <code>util_lock.c</code> (ロック管理の仕組み) 6. <code>liveprop.c</code> / <code>std_liveprop.c</code> (ライブプロパティの拡張) 7. <code>providers.c</code> (プロバイダー登録メカニズム)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>現在未使用である <code>dav_server_conf</code> の将来的な活用方針。</li>
+<li>複雑なメソッド（<code>COPY</code>/<code>MOVE</code> 等）におけるエラー伝播の完全な最適化。</li>
+<li>XML 名前空間管理におけるガベージコレクションの実装。</li>
 </ul></body></html>

@@ -6,22 +6,52 @@
 <li>定義箇所: <code>server/mpm/prefork/prefork.c:1345</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Prefork MPM の設定値（<code>ServerLimit</code>, <code>MaxRequestWorkers</code>, <code>StartServers</code>, <code>MinSpareServers</code>）を検証し、コンパイル時の制限や論理的な整合性に基づいて値を補正する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int prefork_check_config(apr_pool_t *p, apr_pool_t *plog,
+                                apr_pool_t *ptemp, server_rec *s);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>p</code>, <code>plog</code>, <code>ptemp</code>: 設定用メモリプール。</li>
+<li><code>s</code>: 現在のサーバー設定レコード。</li>
+<li>**出力**: 常に <code>OK</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained-&gt;mpm-&gt;module_loads</code> が 1 の場合、初回起動（startup）とみなされる。</li>
+<li><code>ServerLimit</code> は再起動を跨いで変更できない（<code>retained-&gt;first_server_limit</code> に固定される）。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ServerLimit の検証**:</p>
+<ul>
+<li><code>MAX_SERVER_LIMIT</code> を超える場合は上限値に切り詰め、1 未満の場合は 1 に引き上げる。</li>
+<li>再起動時に <code>retained-&gt;first_server_limit</code> と異なる値が指定された場合、警告を出して元の値に戻す。</li>
+<p>2. **MaxRequestWorkers (<code>ap_daemons_limit</code>) の検証**:</p>
+<li><code>ServerLimit</code> を超える場合は <code>ServerLimit</code> に切り詰め、1 未満の場合は 1 に引き上げる。</li>
+<p>3. **StartServers (<code>ap_daemons_to_start</code>) の検証**:</p>
+<li>1 未満の場合は 1 に引き上げる。</li>
+<p>4. **MinSpareServers (<code>ap_daemons_min_free</code>) の検証**:</p>
+<li>1 未満の場合は 1 に引き上げる。</li>
+<p>5. **ログ出力**: 各補正処理において、初回起動時は <code>APLOG_STARTUP</code> フラグ付きでコンソールへ、それ以外はエラーログへ警告を出力する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_check_config</code> により登録され、設定チェックフェーズで呼び出される。</li>
+<li>**呼び出し先**: <code>ap_log_error</code>（ログ出力用）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained</code>: <code>prefork_retained_data</code> 型。再起動を跨ぐ設定状態（<code>first_server_limit</code> 等）を保持。</li>
+<li>グローバル変数: <code>server_limit</code>, <code>ap_daemons_limit</code>, <code>ap_daemons_to_start</code>, <code>ap_daemons_min_free</code>。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>設定値が許容範囲外の場合、プログラムを停止させるのではなく、警告を出力した上で安全な最小値または最大値に自動補正する。</li>
+<li>再起動時の <code>ServerLimit</code> 変更試行は無視され、初回起動時の値が強制される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は設定の整合性を保つためのガードレールとして機能する。</li>
+<li><code>ap_daemons_to_start &gt; ap_daemons_limit</code> や <code>ap_daemons_max_free &lt; ap_daemons_min_free + 1</code> といった複雑な依存関係のチェックは、この関数ではなく <code>prefork_run()</code> 内で行われる。</li>
 </ul></body></html>

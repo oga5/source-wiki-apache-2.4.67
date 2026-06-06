@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/dav/main/util_lock.c:260</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebDAV の再帰的なロック操作において、対象リソースの子孫リソースに対して間接的なロック（indirect lock）を記録するためのコールバック関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static dav_error * dav_lock_walker(dav_walk_resource *wres, int calltype)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>wres</code>: 現在処理中のリソース情報を含む <code>dav_walk_resource</code> 構造体。</li>
+<li><code>calltype</code>: 呼び出しの種類（本関数内では未使用）。</li>
+<li>**出力**:</li>
+<li>成功時は <code>NULL</code> を返します。</li>
+<li>失敗時は <code>dav_error</code> 構造体へのポインタを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>wres-&gt;walk_ctx</code> には、ロックデータベースのフックや適用対象のロック情報を含む <code>dav_walker_ctx</code> が格納されている必要があります。</li>
+<li><code>wres-&gt;resource</code> は有効なリソースオブジェクトである必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ルート判定**: <code>wres-&gt;resource</code> がロック操作の起点（<code>ctx-&gt;w.root</code>）と同一である場合、間接ロックを設定せずに即座に <code>NULL</code> を返します。 2. **ロックの追加**: 上記以外の場合、<code>ctx-&gt;w.lockdb-&gt;hooks-&gt;append_locks</code> を呼び出し、現在のリソースに対して <code>ctx-&gt;lock</code> を間接ロックとして追加します。 3. **エラー処理**:</p>
+<ul>
+<li>サーバーエラー（<code>500 Internal Server Error</code> 等）が発生した場合は、そのエラーを即座に返します。</li>
+<li>それ以外のエラーが発生した場合は、<code>dav_add_response</code> を呼び出してマルチステータスレスポンスにエラー情報を追加し、処理を継続します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/main/util_lock.c</code> 内の <code>dav_add_lock</code> 関数から、<code>dav_walker_ctx</code> の <code>func</code> メンバとして参照されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>wres-&gt;resource-&gt;hooks-&gt;is_same_resource</code></li>
+<li><code>ctx-&gt;w.lockdb-&gt;hooks-&gt;append_locks</code></li>
+<li><code>dav_add_response</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_walk_resource</code>: ウォーカー処理中のリソース状態を保持。</li>
+<li><code>dav_walker_ctx</code>: ロック操作のコンテキスト（ロックデータベースフックや適用するロック情報）。</li>
+<li><code>dav_error</code>: 操作失敗時のエラー詳細。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**リソース不一致**: ルートリソースに対してはロックを適用しないガード節が存在します。</li>
+<li>**ロック追加失敗**: <code>append_locks</code> が失敗した場合、サーバーエラーであれば処理が中断されます。クライアントエラー等の場合はマルチステータスレスポンスに記録されますが、全体のロック処理が不完全な状態になる可能性がある旨がソース内のコメントで指摘されています。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>walk</code> フック経由で呼び出されるため、再帰的なロック適用における各ノードの処理単位となります。</li>
+<li>エラー発生時の挙動（マルチステータスへの追加 vs 処理の中断）については、将来的な改善の余地がある旨のコメントがソース内に残されています。</li>
 </ul></body></html>

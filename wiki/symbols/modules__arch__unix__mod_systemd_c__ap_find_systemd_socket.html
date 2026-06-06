@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/arch/unix/mod_systemd.c:125</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>systemd のソケットアクティベーション機能により引き継がれたファイルディスクリプタの中から、指定されたポート番号に一致するものを検索して返します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_find_systemd_socket(process_rec *process, apr_port_t port);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>process</code>: プロセス情報を保持する <code>process_rec</code> 構造体（ログ出力に使用）。</li>
+<li><code>port</code>: 検索対象のポート番号（<code>apr_port_t</code>）。</li>
+<li>**出力**:</li>
+<li>成功時: 指定ポートに対応するファイルディスクリプタ（整数）。</li>
+<li>失敗時: <code>-1</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sd_listen_fds(0)</code> が正常に実行可能であること。</li>
+<li>環境変数 <code>LISTEN_FDS</code> が設定されており、有効な整数値として解析可能であること。</li>
+<li><code>SD_LISTEN_FDS_START</code> から始まる範囲のファイルディスクリプタが、systemd によって引き継がれていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>sd_listen_fds(0)</code> を呼び出し、引き継がれたソケットの総数を取得します。エラーまたはソケットが存在しない場合はログを出力して終了します。 2. 環境変数 <code>LISTEN_FDS</code> を取得し、引き継がれたソケットの数（<code>fdcount</code>）を特定します。 3. <code>SD_LISTEN_FDS_START</code> から <code>SD_LISTEN_FDS_START + fdcount - 1</code> までの範囲でループし、各ファイルディスクリプタに対して <code>sd_is_socket_inet</code> を呼び出します。 4. 指定された <code>port</code> と一致するソケットが見つかった場合、そのファイルディスクリプタを返します。 5. 全てのソケットを確認しても一致するものがない場合、<code>-1</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/listen.c</code> 内でオプション関数として取得・利用されています。</li>
+<li>**呼び出し先**:</li>
+<li><code>sd_listen_fds</code> (systemd API)</li>
+<li><code>sd_is_socket_inet</code> (systemd API)</li>
+<li><code>ap_log_perror</code> (Apache 内部関数)</li>
+<li><code>getenv</code> (標準ライブラリ)</li>
+<li><code>atoi</code> (標準ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process_rec</code>: プロセス管理用構造体。</li>
+<li><code>SD_LISTEN_FDS_START</code>: systemd ソケットの開始インデックスを示す定数。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sd_listen_fds</code> が負の値を返した場合、環境変数の解析エラーとしてログを出力し <code>-1</code> を返します。</li>
+<li><code>sd_listen_fds</code> が <code>0</code> を返した場合、ソケットが一つも設定されていないと判断し、ログを出力して <code>-1</code> を返します。</li>
+<li>指定ポートに一致するソケットが見つからない場合、ループ終了後に <code>-1</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はオプション関数として登録されており、<code>server/listen.c</code> から <code>APR_RETRIEVE_OPTIONAL_FN</code> を介して動的に解決されます。</li>
+<li><code>sd_is_socket_inet</code> の引数に <code>0, 0, -1</code> を渡しており、アドレスファミリーやソケットタイプを限定せずにポート番号のみで照合を行っています。</li>
 </ul></body></html>

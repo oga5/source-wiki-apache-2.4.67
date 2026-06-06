@@ -6,22 +6,57 @@
 <li>定義箇所: <code>os/win32/ap_regkey.c:58</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows レジストリキーを開く、または作成し、そのハンドルを APR プールに関連付けて管理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_regkey_open(ap_regkey_t **newkey,
+                            const ap_regkey_t *parentkey,
+                            const char *keyname,
+                            apr_int32_t flags,
+                            apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>parentkey</code>: 親レジストリキーへのポインタ。</li>
+<li><code>keyname</code>: 開く/作成するキーの名称。</li>
+<li><code>flags</code>: 操作フラグ（<code>APR_READ</code>, <code>APR_WRITE</code>, <code>APR_CREATE</code>, <code>APR_EXCL</code>）。</li>
+<li><code>pool</code>: リソース管理に使用する APR プール。</li>
+<li>**出力**:</li>
+<li><code>newkey</code>: 成功時に初期化された <code>ap_regkey_t</code> 構造体へのポインタが格納される。</li>
+<li>戻り値: <code>apr_status_t</code> 型のステータスコード（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>parentkey</code> は有効な <code>ap_regkey_t</code> を指している必要がある。</li>
+<li><code>pool</code> は <code>newkey</code> の生存期間を管理するために使用される。</li>
+<li><code>flags</code> に <code>APR_CREATE</code> が含まれる場合、キーが存在しなければ作成される。</li>
+<li><code>flags</code> に <code>APR_EXCL</code> が含まれる場合、キーが既に存在するとエラー（<code>APR_EEXIST</code>）となる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>flags</code> に基づき、Win32 API のアクセス権限（<code>KEY_QUERY_VALUE</code>, <code>KEY_READ</code>, <code>KEY_WRITE</code>）を決定する。 2. 実行環境に応じて Unicode (<code>RegCreateKeyExW</code> / <code>RegOpenKeyExW</code>) または ANSI (<code>RegCreateKeyEx</code> / <code>RegOpenKeyEx</code>) の Win32 API を選択して呼び出す。 3. Win32 API の戻り値が成功でない場合、<code>APR_FROM_OS_ERROR</code> を用いてエラーを返却する。 4. <code>APR_EXCL</code> が指定されており、かつキーが既に存在していた場合は <code>RegCloseKey</code> を実行し <code>APR_EEXIST</code> を返却する。 5. 成功時、<code>pool</code> から <code>ap_regkey_t</code> 用のメモリを確保し、ハンドルを格納する。 6. <code>apr_pool_cleanup_register</code> を呼び出し、プール破棄時に <code>regkey_cleanup</code> が自動実行されるよう登録する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/arch/win32/mod_win32.c</code></li>
+<li><code>server/mpm/winnt/nt_eventlog.c</code></li>
+<li><code>server/mpm/winnt/service.c</code></li>
+<li>**呼び出し先**:</li>
+<li>Win32 API: <code>RegCreateKeyEx</code>, <code>RegOpenKeyEx</code>, <code>RegCloseKey</code></li>
+<li>APR: <code>apr_palloc</code>, <code>apr_pool_cleanup_register</code>, <code>apr_conv_utf8_to_ucs2</code> (Unicode環境時)</li>
+<li>内部関数: <code>regkey_cleanup</code> (クリーンアップハンドラとして登録)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_regkey_t</code>: レジストリキーハンドル (<code>HKEY</code>) と関連付けられた <code>apr_pool_t</code> を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_conv_utf8_to_ucs2</code> が失敗した場合、変換エラーを返却する。</li>
+<li><code>keyname</code> が長すぎる場合、<code>APR_ENAMETOOLONG</code> を返却する。</li>
+<li>Win32 API が失敗した場合、対応する OS エラーコードを <code>apr_status_t</code> に変換して返却する。</li>
+<li><code>APR_EXCL</code> 指定時にキーが既に存在する場合、<code>APR_EEXIST</code> を返却する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_regkey_t</code> のライフサイクル管理の起点であり、<code>regkey_cleanup</code> と対になる。</li>
+<li>Unicode/ANSI の切り替えは <code>APR_HAS_UNICODE_FS</code> および <code>APR_HAS_ANSI_FS</code> マクロに依存している。</li>
 </ul></body></html>

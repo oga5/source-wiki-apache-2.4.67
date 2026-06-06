@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/mappers/mod_speling.c:197</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストされた URL がサーバー上に存在しない場合に、ファイルシステムを走査してスペルミスや大文字小文字の不一致を補完し、リダイレクトまたは候補の提示を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int check_speling(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （現在の HTTP リクエスト情報）</li>
+<li>**出力**: <code>int</code> （Apache のステータスコード。成功時は <code>HTTP_MOVED_PERMANENTLY</code> または <code>HTTP_MULTIPLE_CHOICES</code>、処理対象外やエラー時は <code>DECLINED</code> を返す）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>CheckSpelling</code> ディレクティブによりモジュールが有効化されていること。</li>
+<li>リクエストメソッドが <code>GET</code> であること。</li>
+<li>リクエストされたパスがファイルシステム上に存在しないこと（<code>r-&gt;finfo.filetype == APR_NOFILE</code>）。</li>
+<li>サブリクエストではなく、プロキシリクエストでもないこと。</li>
+<li>リクエスト URI が <code>/</code> ではないこと。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **パス分解**: リクエストされた <code>r-&gt;filename</code> をディレクトリパスとファイル名に分割する。 2. **ディレクトリ走査**: 親ディレクトリを <code>apr_dir_open</code> で開き、全ファイルを読み込む。 3. **類似度判定**: 各ファイル名に対し以下の順で判定を行う。</p>
+<ul>
+<li>大文字小文字の不一致 (<code>strcasecmp</code>)。</li>
+<li><code>spdist()</code> による編集距離判定（<code>cfg-&gt;check_case_only</code> が無効な場合）。</li>
+<li><code>cfg-&gt;check_basename_match</code> が有効な場合、拡張子を除いたベース名での比較。</li>
+<p>4. **レスポンス決定**:</p>
+<li>候補が 1 つかつ確実性が高い場合、<code>301 Moved Permanently</code> を返し、<code>Location</code> ヘッダで修正先へリダイレクトする。</li>
+<li>候補が複数ある場合、<code>300 Multiple Choices</code> を返し、<code>r-&gt;notes</code> に候補リストを格納して HTML 形式の選択肢を生成する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache の <code>fixups</code> フック（<code>register_hooks</code> にて <code>ap_hook_fixups</code> に登録）。</li>
+<li>**呼び出し先**: <code>spdist()</code>（類似度計算）、<code>apr_dir_open</code>/<code>apr_dir_read</code>（ファイル探索）、<code>qsort</code>（候補のソート）、<code>ap_escape_uri</code>/<code>ap_escape_html</code>（出力のサニタイズ）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>spconfig</code>: モジュールの設定保持。</li>
+<li><code>misspelled_file</code>: 候補ファイル名と品質（<code>sp_reason</code>）を保持する構造体。</li>
+<li><code>apr_array_header_t</code>: 候補リストの格納に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ディレクトリ走査失敗**: <code>apr_dir_open</code> が失敗した場合は <code>DECLINED</code> を返す。</li>
+<li>**無限ループ回避**: 修正後の URL がリクエスト元と一致する場合（壊れたシンボリックリンク等）、リダイレクトせずに <code>OK</code> を返して終了する。</li>
+<li>**パフォーマンス**: ディレクトリ内のファイル数に比例して走査コストが増大する。</li>
+<li>**曖昧性**: 候補が複数ある場合は <code>300 Multiple Choices</code> となり、自動リダイレクトは行われない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>r-&gt;pool</code> を使用してメモリ管理を行っているため、明示的な解放は不要。</li>
+<li><code>spdist</code> は「1文字の誤り」までを許容する設計となっている。</li>
+<li><code>mod_negotiation</code> と同様の <code>notes</code> テーブル利用パターンを採用しているため、修正時は関連性に注意すること。</li>
 </ul></body></html>

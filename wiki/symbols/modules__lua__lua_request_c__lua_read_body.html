@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/lua/lua_request.c:233</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストのボディを読み込み、メモリバッファに格納する。主に POST や PUT リクエストで送信されたデータを Lua スクリプトから利用可能にするために使用される。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int lua_read_body(request_rec *r, const char **rbuf, apr_off_t *size, apr_off_t maxsize);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: リクエスト情報を保持する <code>request_rec</code> 構造体。</li>
+<li><code>maxsize</code>: 読み込みを許可する最大バイト数（0の場合は制限なし）。</li>
+<li>**出力**:</li>
+<li><code>rbuf</code>: 読み込んだボディデータを格納するバッファへのポインタ。</li>
+<li><code>size</code>: 実際に読み込まれたデータのバイト数。</li>
+<li>戻り値: 処理結果を示すステータスコード（<code>OK</code>, <code>DONE</code>, またはエラーコード）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>メモリ割り当ては <code>r-&gt;pool</code> を使用して行われるため、リクエスト終了時に自動的に解放される。</li>
+<li><code>maxsize</code> が指定されており、リクエストの残りデータ長がこれを超える場合、読み込みは行われず <code>APR_EINCOMPLETE</code> が返される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_setup_client_block</code> を呼び出し、クライアントからのデータ受信準備を行う。 2. <code>ap_should_client_block</code> でボディの存在を確認する。存在しない場合は <code>DONE</code> を返す。 3. ボディが存在する場合、<code>r-&gt;remaining</code> を基に <code>apr_pcalloc</code> でメモリを確保する。 4. <code>ap_get_client_block</code> をループ内で呼び出し、バッファが満たされるまでデータを読み込む。 5. 読み込み中にエラーが発生した場合は <code>APR_EINCOMPLETE</code> を返す。 6. 正常終了時は <code>OK</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/lua/lua_request.c</code> 内の各箇所（行402、行478付近）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_setup_client_block</code></li>
+<li><code>ap_should_client_block</code></li>
+<li><code>ap_get_client_block</code></li>
+<li><code>apr_pcalloc</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報を保持する構造体。</li>
+<li><code>apr_off_t</code>: ファイルサイズやオフセットを扱うための型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>maxsize</code> を超えるデータが送信された場合: <code>APR_EINCOMPLETE</code> を返す。</li>
+<li><code>ap_get_client_block</code> による読み込みが失敗した場合: <code>APR_EINCOMPLETE</code> を返す。</li>
+<li><code>ap_setup_client_block</code> がエラーを返した場合: そのエラーコードをそのまま返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用してメモリを確保するため、呼び出し側で明示的な解放は不要である。</li>
+<li><code>maxsize</code> の設定は、巨大なリクエストボディによるメモリ枯渇を防ぐための重要なセキュリティ境界である。</li>
 </ul></body></html>

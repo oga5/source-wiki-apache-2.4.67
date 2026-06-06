@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/filters/mod_filter.c:331</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の設定ディレクティブ <code>FilterProtocol</code> を処理し、指定されたフィルタまたはフィルタプロバイダに対して、HTTP プロトコル上の制約や挙動（キャッシュ、バイトレンジ、プロキシ変換など）を定義するフラグを設定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static const char *filter_protocol(cmd_parms *cmd, void *CFG, const char *fname,
+                                   const char *pname, const char *proto)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cmd</code>: 設定コマンドのパラメータ構造体。</li>
+<li><code>CFG</code>: モジュールの設定構造体 (<code>mod_filter_cfg</code>)。</li>
+<li><code>fname</code>: 対象フィルタ名。</li>
+<li><code>pname</code>: 対象プロバイダ名（省略可能）。</li>
+<li><code>proto</code>: プロトコルフラグの文字列（<code>change=yes</code>, <code>byteranges=no</code> 等）。</li>
+<li>**出力**: 成功時は <code>NULL</code>、エラー時はエラーメッセージ文字列を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fname</code> で指定されたフィルタが <code>cfg-&gt;live_filters</code> に登録されている必要があります。</li>
+<li><code>pname</code> が指定された場合、そのフィルタに関連付けられたプロバイダリスト内に該当するプロバイダが存在する必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>cfg-&gt;live_filters</code> から <code>fname</code> に一致するフィルタを検索します。 2. <code>proto</code> 引数が <code>NULL</code> の場合、<code>pname</code> をプロトコル文字列として扱い、フィルタ全体にフラグを適用します。 3. <code>pname</code> が指定されている場合、フィルタのプロバイダリストを走査し、一致するプロバイダを特定してそのプロバイダ固有のフラグとして適用します。 4. <code>proto</code> 文字列を <code>;</code>, <code>,</code>, <code> </code>, <code>\t</code> を区切り文字としてトークン化し、以下のフラグをビット演算で設定します：</p>
+<ul>
+<li><code>change=yes</code>: <code>AP_FILTER_PROTO_CHANGE</code> | <code>AP_FILTER_PROTO_CHANGE_LENGTH</code></li>
+<li><code>change=no</code>: 上記フラグを解除</li>
+<li><code>change=1:1</code>: <code>AP_FILTER_PROTO_CHANGE</code></li>
+<li><code>byteranges=no</code>: <code>AP_FILTER_PROTO_NO_BYTERANGE</code></li>
+<li><code>proxy=no</code>: <code>AP_FILTER_PROTO_NO_PROXY</code></li>
+<li><code>proxy=transform</code>: <code>AP_FILTER_PROTO_TRANSFORM</code></li>
+<li><code>cache=no</code>: <code>AP_FILTER_PROTO_NO_CACHE</code></li>
+<p>5. 最終的に特定された対象（フィルタまたはプロバイダ）の <code>proto_flags</code> メンバを更新します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/filters/mod_filter.c:753</code> において <code>AP_INIT_TAKE23</code> マクロ経由で <code>FilterProtocol</code> ディレクティブとして登録されています。</li>
+<li>**呼び出し先**: <code>apr_hash_get</code>（フィルタ検索）、<code>apr_strtok</code>（文字列解析）、<code>strcasecmp</code>（文字列比較）、<code>apr_pstrdup</code>（メモリ確保）等の APR API を利用しています。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_filter_cfg</code>: モジュール全体の設定を保持。</li>
+<li><code>ap_filter_rec_t</code>: フィルタの定義情報を保持。</li>
+<li><code>ap_filter_provider_t</code>: フィルタプロバイダの情報を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>指定したフィルタ名が存在しない場合、エラーメッセージを返します。</li>
+<li>指定したプロバイダ名がフィルタ内に存在しない場合、エラーメッセージを返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は設定フェーズでのみ実行されます。</li>
+<li><code>proto_flags</code> は実行時の <code>filter_harness</code> におけるプロトコル整合性チェックに使用されます。</li>
+<li><code>cmd-&gt;temp_pool</code> を使用して文字列のコピーを行っているため、設定読み込み中のメモリ管理は適切に行われています。</li>
 </ul></body></html>

@@ -6,22 +6,54 @@
 <li>定義箇所: <code>server/log.c:367</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバー設定 (<code>server_rec</code>) に基づき、エラーログの出力先（パイプ、syslog、またはファイル）を初期化およびオープンする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int open_error_log(server_rec *s, int is_main, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: 設定対象のサーバーレコード。<code>s-&gt;error_fname</code> にログ出力先パスまたはコマンドが格納されている。</li>
+<li><code>is_main</code>: メインサーバーか否かを示すフラグ。</li>
+<li><code>p</code>: ログオープンに使用するメモリプール。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返す。</li>
+<li>失敗時は <code>DONE</code> を返す。</li>
+<li>成功時、<code>s-&gt;error_log</code> にオープンされた <code>apr_file_t</code> が格納される（syslog の場合は <code>NULL</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>s-&gt;error_fname</code> が <code>|</code> で始まる場合、パイプ経由のログ出力として処理される。</li>
+<li><code>syslog</code> が有効な場合、<code>syslog</code> または <code>syslog:facility</code> 形式の指定を解釈する。</li>
+<li>それ以外の場合はファイルパスとして扱い、<code>ap_server_root_relative</code> で絶対パスへ変換する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **パイプログ**: <code>|</code> で始まる場合、<code>log_child</code> を呼び出し、子プロセスを生成してパイプを <code>s-&gt;error_log</code> に割り当てる。 2. **syslog**: <code>syslog</code> 指定の場合、<code>openlog</code> を使用してシステムログを初期化する。<code>facility</code> 指定がある場合は対応する値を検索し、ない場合は <code>LOG_LOCAL7</code> を使用する。 3. **ファイルログ**: 上記以外の場合、<code>apr_file_open</code> を <code>APR_APPEND | APR_WRITE | APR_CREATE | APR_LARGEFILE</code> モードで実行し、ファイルを開く。 4. **エラーハンドリング**: 各ステップで失敗した場合は <code>ap_log_error</code> を通じてエラーメッセージを出力し、<code>DONE</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/log.c:501</code> (メインサーバーのログ初期化)</li>
+<li><code>server/log.c:564</code> (仮想ホストのログ初期化)</li>
+<li>**呼び出し先**:</li>
+<li><code>log_child</code> (パイプログ用)</li>
+<li><code>ap_log_error</code> (エラー報告用)</li>
+<li><code>apr_file_open</code> (ファイルオープン用)</li>
+<li><code>openlog</code> (syslog 初期化用)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: ログ設定 (<code>error_fname</code>) と出力先ハンドル (<code>error_log</code>) を保持。</li>
+<li><code>apr_file_t</code>: オープンされたログファイルのハンドル。</li>
+<li><code>TRANS</code>: syslog のファシリティ名と値の対応表。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>パイプコマンドの起動失敗: <code>log_child</code> が <code>APR_SUCCESS</code> 以外を返すと <code>DONE</code> を返す。</li>
+<li>無効なパス: <code>ap_server_root_relative</code> が失敗、または <code>apr_file_open</code> が失敗すると <code>DONE</code> を返す。</li>
+<li>不正な syslog ファシリティ: 定義されていないファシリティが指定された場合、エラーを記録して <code>DONE</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>is_main</code> フラグは、パイプログの stderr 継承制御に使用される。</li>
+<li>syslog 関連の処理は <code>#ifdef HAVE_SYSLOG</code> で囲まれており、プラットフォーム依存性がある。</li>
+<li>パイプログのコマンド型 (<code>cmdtype</code>) は、互換性維持のため <code>APR_PROGRAM_ENV</code> と <code>APR_SHELLCMD_ENV</code> の分岐が存在する。</li>
 </ul></body></html>

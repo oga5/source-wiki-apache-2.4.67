@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/arch/win32/mod_isapi.c:625</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ISAPI 拡張から提供されたステータス行およびヘッダー文字列を解析し、Apache の <code>request_rec</code> に反映させることで、HTTP レスポンスヘッダーを構築します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_ssize_t send_response_header(isapi_cid *cid,
+                                 const char *stat,
+                                 const char *head,
+                                 apr_size_t statlen,
+                                 apr_size_t headlen)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cid</code>: ISAPI 接続コンテキスト。</li>
+<li><code>stat</code>: ステータス行文字列（NULL 可）。</li>
+<li><code>head</code>: ヘッダー文字列（NULL 可）。</li>
+<li><code>statlen</code>, <code>headlen</code>: 各文字列の長さ。</li>
+<li>**出力**:</li>
+<li>戻り値: 解析および消費したヘッダーのバイト数（<code>apr_ssize_t</code>）。エラー時は <code>-1</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cid-&gt;r-&gt;pool</code> が有効であり、メモリ割り当てに使用されます。</li>
+<li><code>cid-&gt;ecb</code> が初期化されており、HTTP ステータスコードの同期先として使用されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **入力正規化**: <code>stat</code> または <code>head</code> が欠落している場合、入力文字列を再配置して解析可能な形式に整えます。 2. **ステータス行の構築**: <code>stat</code> が数値で始まらない場合、<code>Status: </code> プレフィックスを付与して Apache が解釈可能な形式に変換します。 3. **ヘッダー解析**: <code>ap_scan_script_header_err_strs_ex</code> を呼び出し、Apache のリクエスト構造体にヘッダーを適用します。 4. **ステータスコードの同期**: 解析結果、<code>cid-&gt;r-&gt;status</code>、および <code>cid-&gt;ecb-&gt;dwHttpStatusCode</code> の間でステータスコードの整合性を図ります。 5. **完了判定**: 内部サーバーエラーが発生した場合は <code>-1</code> を返し、それ以外は消費したバイト数を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/arch/win32/mod_isapi.c</code> 内の複数の箇所（行 826, 917, 1098, 1105, 1330）から呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_scan_script_header_err_strs_ex</code> (Apache API)</li>
+<li><code>ap_get_status_line</code> (Apache API)</li>
+<li><code>ap_log_rerror</code> (Apache API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>isapi_cid</code>: ISAPI 拡張のリクエスト処理状態を保持する構造体。</li>
+<li><code>EXTENSION_CONTROL_BLOCK</code> (ECB): ISAPI 拡張とのインターフェース構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cid-&gt;r-&gt;status</code> が <code>HTTP_INTERNAL_SERVER_ERROR</code> に設定された場合、関数は <code>-1</code> を返して処理を中断します。</li>
+<li>ヘッダーが NULL 終端されていない場合、<code>apr_pstrndup</code> を使用して安全なコピーを作成します。</li>
+<li>ステータスコードが特定できない場合は <code>HTTP_OK</code> をデフォルト値として使用し、デバッグログを出力します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は ISAPI の <code>HSE_REQ_SEND_RESPONSE_HEADER</code> 相当の処理を担います。</li>
+<li><code>fake_async</code> 関連の処理や、IIS との挙動差異（ヘッダー末尾の <code>\r\n</code> の扱い等）を吸収するロジックが含まれています。変更時は <code>ap_scan_script_header_err_strs_ex</code> の仕様との整合性に注意してください。</li>
 </ul></body></html>

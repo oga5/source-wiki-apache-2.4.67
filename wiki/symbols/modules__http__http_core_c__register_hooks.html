@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/http/http_core.c:290</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の起動プロセスにおいて、HTTP プロトコル処理に必要なサーバーフックの登録およびフィルタの登録を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void register_hooks(apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>apr_pool_t *p</code>（設定用メモリプール）</li>
+<li>**出力**: なし（副作用としてサーバーのフックテーブルおよびフィルタテーブルを更新）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本関数はサーバー起動時の初期化フェーズで呼び出される。</li>
+<li>登録されるフィルタおよびフックは、以降の接続処理において HTTP プロトコルスタックの挙動を決定付ける。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **フックの登録**: 以下のサーバーライフサイクルイベントを登録する。</p>
+<ul>
+<li><code>post_config</code>: <code>http_post_config</code> を実行。</li>
+<li><code>process_connection</code>: <code>ap_process_http_connection</code> を <code>APR_HOOK_REALLY_LAST</code> で登録。</li>
+<li><code>map_to_storage</code>: <code>ap_send_http_trace</code> および <code>http_send_options</code> を登録。</li>
+<li><code>http_scheme</code> / <code>default_port</code>: それぞれ <code>http_scheme</code> と <code>http_port</code> を登録。</li>
+<li><code>create_request</code>: <code>http_create_request</code> を登録。</li>
+<p>2. **フィルタの登録**: 以下のフィルタを <code>AP_FTYPE_PROTOCOL</code> または <code>AP_FTYPE_TRANSCODE</code> として登録し、対応するハンドルをグローバル変数に保持する。</p>
+<li><code>HTTP_IN</code> (<code>ap_http_filter</code>)</li>
+<li><code>HTTP_HEADER</code> (<code>ap_http_header_filter</code>)</li>
+<li><code>CHUNK</code> (<code>ap_http_chunk_filter</code>)</li>
+<li><code>HTTP_OUTERROR</code> (<code>ap_http_outerror_filter</code>)</li>
+<li><code>BYTERANGE</code> (<code>ap_byterange_filter</code>)</li>
+<p>3. **メソッド初期化**: <code>ap_method_registry_init(p)</code> を呼び出し、HTTP メソッドのレジストリを初期化する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache HTTP Server のモジュールロード機構（直接の呼び出し元はソースコード上では明示されていないが、<code>http_config.h</code> の <code>register_hooks</code> 型定義に従い、サーバー起動時に自動的に呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_hook_*</code> 系関数（フック登録用）</li>
+<li><code>ap_register_input_filter</code> / <code>ap_register_output_filter</code>（フィルタ登録用）</li>
+<li><code>ap_method_registry_init</code>（メソッド初期化）</li>
+<li>各種コールバック関数（<code>http_post_config</code>, <code>ap_process_http_connection</code>, <code>ap_http_filter</code> 等）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: 設定用メモリプール。</li>
+<li><code>ap_http_input_filter_handle</code> 等のグローバルフィルタハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>メモリ不足により <code>apr_pool_t</code> 関連の操作やフィルタ登録が失敗した場合、サーバーの起動が中断される可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>http_core.c</code> における設定の起点である。フィルタの追加やフックの優先順位（<code>APR_HOOK_MIDDLE</code>, <code>APR_HOOK_REALLY_LAST</code> 等）を変更する際は、他のモジュールとの競合に注意すること。</li>
+<li>ツールが提示した <code>docs/manual/...</code> 等の参照先は、本関数を直接呼び出しているのではなく、モジュール開発のサンプルコードとして言及されているものである。</li>
 </ul></body></html>

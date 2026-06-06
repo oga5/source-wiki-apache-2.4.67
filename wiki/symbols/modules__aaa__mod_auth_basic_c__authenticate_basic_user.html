@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/aaa/mod_auth_basic.c:291</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP Basic 認証スキームにおけるユーザー認証の仲介を行います。設定された認証プロバイダーを順次呼び出し、クライアントから提供された資格情報の検証を試みます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int authenticate_basic_user(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のHTTPリクエスト情報)</li>
+<li>**出力**: <code>int</code> (Apache HTTP Server のステータスコード: <code>OK</code>, <code>DECLINED</code>, <code>HTTP_UNAUTHORIZED</code>, <code>HTTP_INTERNAL_SERVER_ERROR</code>)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>AuthType</code> が <code>Basic</code> に設定されている必要があります。</li>
+<li><code>AuthName</code> が設定されている必要があります（未設定時は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返します）。</li>
+<li><code>authoritative</code> 設定が有効な場合、認証失敗は即座に <code>HTTP_UNAUTHORIZED</code> を返します。無効な場合は <code>DECLINED</code> を返し、後続の認証モジュールへ処理を委譲します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期チェック**: リクエストの認証タイプが <code>Basic</code> か確認し、非該当なら <code>DECLINED</code> を返します。 2. **資格情報取得**: <code>get_basic_auth</code> を呼び出し、<code>Authorization</code> ヘッダーからユーザー名とパスワードを抽出します。 3. **アルゴリズム適用**: <code>AuthBasicUseDigestAlgorithm</code> が指定されている場合、ユーザー名・レルム・パスワードから MD5 ハッシュを生成します。 4. **プロバイダー照会**: 設定されたプロバイダーリストを走査します。プロバイダー未設定時はデフォルトプロバイダーを使用します。 5. **検証**: プロバイダーの <code>check_password</code> または <code>get_realm_hash</code> を呼び出し、認証結果（<code>AUTH_GRANTED</code>, <code>AUTH_DENIED</code>, <code>AUTH_USER_NOT_FOUND</code> 等）を取得します。 6. **結果判定**: 認証成功時は <code>OK</code> を返します。失敗時は設定に応じてエラーログを出力し、必要に応じて <code>note_basic_auth_failure</code> を呼び出して <code>WWW-Authenticate</code> ヘッダーを付与し、適切な HTTP ステータスコードを返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_check_authn</code> に登録されており、Apache の認証フックとして呼び出されます。</li>
+<li>**呼び出し先**: </li>
+<li><code>get_basic_auth</code> (資格情報抽出)</li>
+<li><code>ap_lookup_provider</code> (デフォルトプロバイダー取得)</li>
+<li><code>note_basic_auth_failure</code> (認証失敗時のレスポンスヘッダー付与)</li>
+<li>各種認証プロバイダーの <code>check_password</code> または <code>get_realm_hash</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストごとの状態とプールを保持。</li>
+<li><code>auth_basic_config_rec</code>: ディレクトリ単位の認証設定（プロバイダーリスト、権限委譲フラグ等）。</li>
+<li><code>authn_provider_list</code>: 認証プロバイダーの連結リスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**認証失敗**: <code>AUTH_DENIED</code> または <code>AUTH_USER_NOT_FOUND</code> の場合、<code>authoritative</code> 設定に基づき <code>HTTP_UNAUTHORIZED</code> または <code>DECLINED</code> を返します。</li>
+<li>**設定不備**: <code>AuthName</code> がない場合や、プロバイダーがロードできない場合は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返します。</li>
+<li>**プロバイダーエラー**: <code>AUTH_GENERAL_ERROR</code> が発生した場合は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は認証の「仲介」に特化しています。実際のパスワード照合ロジックは <code>mod_authn_xxx</code> モジュール側に隠蔽されています。</li>
+<li>メモリ割り当ては <code>r-&gt;pool</code> を使用しているため、明示的な解放は不要です。</li>
+<li>認証結果のキャッシュや詳細なプロバイダーの挙動については、<code>mod_authn_core</code> の仕様を参照してください。</li>
 </ul></body></html>

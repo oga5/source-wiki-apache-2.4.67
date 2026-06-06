@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/examples/mod_case_filter_in.c:64</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントから送信されるリクエストボディのデータを読み取り、すべて大文字に変換して後続のフィルタへ渡す入力フィルタです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t CaseFilterInFilter(ap_filter_t *f,
+                                apr_bucket_brigade *pbbOut,
+                                ap_input_mode_t eMode,
+                                apr_read_type_e eBlock,
+                                apr_off_t nBytes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキストを含むフィルタ構造体。</li>
+<li><code>pbbOut</code>: 変換後のデータを格納する出力バケットブリゲード。</li>
+<li><code>eMode</code>, <code>eBlock</code>, <code>nBytes</code>: <code>ap_get_brigade</code> に渡される読み取りモードおよびサイズ指定。</li>
+<li>**出力**: </li>
+<li>戻り値: <code>apr_status_t</code> 型のステータスコード（成功時は <code>APR_SUCCESS</code>）。</li>
+<li><code>pbbOut</code>: 大文字変換されたデータバケットが追加されたブリゲード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>初回呼び出し時に <code>f-&gt;ctx</code> が初期化され、一時的なバケットブリゲード <code>pbbTmp</code> が作成されます。</li>
+<li>既存のバケットを直接書き換えるのではなく、新しいヒープバケットを作成して置き換えることで、ファイルやソケットバケットの整合性を保護します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>f-&gt;ctx</code> が未初期化であれば、<code>CaseFilterInContext</code> を割り当て、一時ブリゲード <code>pbbTmp</code> を作成します。 2. <code>pbbTmp</code> が空の場合、<code>ap_get_brigade</code> を呼び出して入力データを取得します。 3. <code>pbbTmp</code> 内のバケットを走査します。</p>
+<ul>
+<li>EOS（ストリーム終了）バケットはそのまま <code>pbbOut</code> に移動します。</li>
+<li>それ以外のバケットは <code>apr_bucket_read</code> でデータを読み込み、<code>apr_toupper</code> で大文字に変換します。</li>
+<li>変換後のデータは <code>apr_bucket_heap_create</code> で新しいヒープバケットとして生成し、<code>pbbOut</code> に追加します。</li>
+<li>処理済みの入力バケットは <code>apr_bucket_delete</code> で破棄します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のフィルタチェーン（<code>ap_get_brigade</code> 経由で呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_brigade</code>（<code>f-&gt;next</code> に対して呼び出し）。</li>
+<li><code>apr_bucket_read</code>, <code>apr_bucket_heap_create</code>, <code>apr_bucket_delete</code> 等の APR バケット操作関数。</li>
+<li><code>apr_toupper</code>（文字変換用）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>CaseFilterInContext</code>: フィルタ実行中の状態（一時ブリゲード <code>pbbTmp</code>）を保持。</li>
+<li><code>ap_filter_t</code>: フィルタチェーンのノード。</li>
+<li><code>apr_bucket_brigade</code>: バケットの連結リスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_get_brigade</code> がエラーを返した場合、そのステータスをそのまま返却します。</li>
+<li><code>eMode</code> が <code>AP_MODE_EATCRLF</code> の場合、変換を行わずに即座に終了します。</li>
+<li><code>apr_bucket_read</code> が失敗した場合、処理を中断しエラーを返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本フィルタは <code>AP_FTYPE_RESOURCE</code> として登録されるため、リクエストヘッダーの変換には使用できません。</li>
+<li><code>apr_bucket_heap_create</code> に <code>free</code> 関数を渡すことで、メモリの自動解放を保証しています。</li>
 </ul></body></html>

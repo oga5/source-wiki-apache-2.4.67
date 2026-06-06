@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/cache/mod_socache_redis.c:93</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Redis バックエンドを利用した共有オブジェクトキャッシュ（socache）インスタンスを初期化し、接続先サーバーのプールを構築する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t socache_rd_init(ap_socache_instance_t *ctx,
+                             const char *namespace,
+                             const struct ap_socache_hints *hints,
+                             server_rec *s, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: 初期化対象の <code>ap_socache_instance_t</code>。<code>servers</code> メンバにカンマ区切りのサーバーリストが格納されている必要がある。</li>
+<li><code>namespace</code>: キャッシュキーのプレフィックスとして使用する文字列。</li>
+<li><code>s</code>: サーバー設定を取得するための <code>server_rec</code>。</li>
+<li><code>p</code>: メモリ割り当てに使用するプール。</li>
+<li>**出力**:</li>
+<li>成功時は <code>APR_SUCCESS</code> を返す。</li>
+<li>失敗時は <code>apr_status_t</code> エラーコードを返す。</li>
+<li><code>ctx-&gt;rc</code> に初期化済みの <code>apr_redis_t</code> ハンドルが設定される。</li>
+<li><code>ctx-&gt;tag</code> に <code>namespace</code> を含む文字列が設定される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;servers</code> に有効な Redis サーバーリスト（<code>host:port</code> 形式）が含まれていること。</li>
+<li><code>ctx-&gt;taglen</code> は 16 バイト以下であること（<code>AP_DEBUG_ASSERT</code> による制約）。</li>
+<li><code>socache_redis_module</code> の設定構造体 <code>socache_rd_svr_cfg</code> がサーバー設定に紐付いていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_mpm_query</code> を使用してスレッド制限数を取得する。 2. <code>ctx-&gt;servers</code> を解析し、サーバーの総数をカウントする。 3. <code>apr_redis_create</code> を呼び出し、Redis オブジェクトを生成する。 4. サーバーリストを再度走査し、各サーバーに対して以下の処理を行う：</p>
+<ul>
+<li><code>apr_parse_addr_port</code> でホスト名とポートを抽出（ポート未指定時は <code>RD_DEFAULT_SERVER_PORT</code> を使用）。</li>
+<li><code>apr_redis_server_create</code> でサーバー接続設定（タイムアウト、TTL 等）を生成。</li>
+<li><code>apr_redis_add_server</code> でプールにサーバーを追加。</li>
+<p>5. <code>namespace</code> を基に <code>ctx-&gt;tag</code> を生成し、その長さを <code>ctx-&gt;taglen</code> に格納する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_socache_redis.c:391</code>（<code>socache_redis_module</code> のプロバイダー定義の一部として参照）。</li>
+<li>**呼び出し先**: <code>apr_redis_create</code>, <code>apr_redis_server_create</code>, <code>apr_redis_add_server</code>, <code>apr_parse_addr_port</code>, <code>ap_mpm_query</code>, <code>ap_get_module_config</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: Redis インスタンスのコンテキスト。</li>
+<li><code>socache_rd_svr_cfg</code>: サーバーごとの接続設定（TTL, 読み書きタイムアウト）。</li>
+<li><code>apr_redis_t</code>: APR Redis クライアントハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバーリストの解析失敗、または <code>apr_redis_create</code> / <code>apr_redis_server_create</code> / <code>apr_redis_add_server</code> のいずれかが失敗した場合、エラーログを出力して <code>apr_status_t</code> を返す。</li>
+<li>ホスト名が指定されていない場合、<code>APR_EINVAL</code> を返す。</li>
+<li><code>ctx-&gt;taglen</code> が 16 バイトを超える場合、デバッグビルドではアサーションエラーが発生する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_socache_redis</code> の初期化フェーズで一度だけ実行される。</li>
+<li><code>ctx-&gt;taglen</code> の制約（16 バイト以下）は、キャッシュキーの生成ロジックに直結するため、名前空間の設計時に注意が必要。</li>
+<li><code>apr_redis</code> ライブラリのバージョン要件（<code>APU_MAJOR_VERSION</code> 1.6 以上）が満たされている環境でのみ動作する。</li>
 </ul></body></html>

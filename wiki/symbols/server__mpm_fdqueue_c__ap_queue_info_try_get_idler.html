@@ -6,22 +6,41 @@
 <li>定義箇所: <code>server/mpm_fdqueue.c:133</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>利用可能なアイドル状態のワーカーを、ブロッキングせずに即座に確保（予約）します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_queue_info_try_get_idler(fd_queue_info_t *queue_info)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>queue_info</code> - アイドル状態管理構造体へのポインタ。</li>
+<li>**出力**: </li>
+<li><code>APR_SUCCESS</code>: アイドルワーカーの確保に成功。</li>
+<li><code>APR_EAGAIN</code>: 現在利用可能なアイドルワーカーが存在しない。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>queue_info</code> は <code>ap_queue_info_create</code> によって初期化済みであること。</li>
+<li><code>idlers</code> カウンタは <code>zero_pt</code> を基準としたオフセット値で管理されており、<code>idlers &lt;= zero_pt</code> の状態はアイドルワーカーが存在しないことを示す。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>queue_info-&gt;idlers</code> の値を読み取ります。 2. 値が <code>zero_pt</code> 以下であれば、アイドルワーカーがないと判断し <code>APR_EAGAIN</code> を返します。 3. <code>apr_atomic_cas32</code> (Compare-And-Swap) を使用し、現在の <code>idlers</code> 値から 1 を減算した値への更新を試みます。 4. CAS が失敗した場合（他スレッドによる更新が発生した場合）、ループの先頭に戻り再試行します。 5. CAS が成功した場合、アイドルワーカーを確保できたものとして <code>APR_SUCCESS</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/mpm/event/event.c:1427</code> (確認済み)</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_atomic_cas32</code> (APR ライブラリ関数)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fd_queue_info_t</code>: アイドル状態管理構造体。<code>idlers</code> カウンタおよび <code>zero_pt</code> を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**競合**: 高負荷時に複数のスレッドが同時に <code>idlers</code> を更新しようとした場合、CAS 操作によりアトミック性が保証されます。</li>
+<li>**枯渇**: アイドルワーカーがゼロの場合、待機せずに即座に <code>APR_EAGAIN</code> を返すため、呼び出し側で適切なリトライまたは待機処理が必要です。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はロックフリーなアトミック操作を利用して高速な状態遷移を実現しています。</li>
+<li><code>idlers</code> カウンタの <code>zero_pt</code> は、待機中のスレッド数とアイドル中のスレッド数を区別するためのマジックナンバーであるため、変更時は注意が必要です。</li>
 </ul></body></html>

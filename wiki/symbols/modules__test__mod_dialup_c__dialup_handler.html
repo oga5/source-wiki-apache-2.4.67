@@ -6,22 +6,41 @@
 <li>定義箇所: <code>modules/test/mod_dialup.c:132</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server において、低速なネットワーク接続（ダイヤルアップ回線）をシミュレートするためのメインハンドラです。リクエストをインターセプトし、帯域制限を適用するための初期設定と非同期送信の予約を行います。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int dialup_handler(request_rec *r);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （処理対象のリクエスト情報）</li>
+<li>**出力**: <code>int</code> （Apache のステータスコード。成功時は <code>SUSPENDED</code>、条件不一致時は <code>DECLINED</code>、エラー時はエラーコードを返す）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストメソッドが <code>GET</code> であること。</li>
+<li>対象がファイルであること。</li>
+<li>設定（<code>dialup_dcfg_t</code>）で <code>bytes_per_second</code> が 0 以外に設定されていること。</li>
+<li><code>ap_meets_conditions</code> による条件チェックを通過すること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **条件判定**: メソッドやファイルタイプを確認し、対象外であれば <code>DECLINED</code> を返します。 2. **設定取得**: ディレクトリ設定から帯域制限値を取得します。 3. **ファイルオープン**: 対象ファイルを読み込みモードで開き、リクエストプールに紐付けます。 4. **メタデータ設定**: 最終更新日時、ETag、Accept-Ranges、Content-Length を設定します。 5. **コンテキスト初期化**: <code>dialup_baton_t</code> を生成し、バケットブリゲード（<code>bb</code>, <code>tmpbb</code>）を作成してファイル内容を挿入します。 6. **初期送信**: <code>dialup_send_pulse</code> を呼び出し、最初のデータパルスを送信します。 7. **非同期予約**: 処理が完了していない場合、<code>ap_mpm_register_timed_callback</code> を用いて 1 秒後に <code>dialup_callback</code> が実行されるよう予約し、<code>SUSPENDED</code> を返してリクエスト処理を一時停止します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のハンドラフック（<code>ap_hook_handler</code> により <code>APR_HOOK_ALMOST_LAST</code> で登録）。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>, <code>apr_file_open</code>, <code>ap_meets_conditions</code>, <code>dialup_send_pulse</code>, <code>ap_mpm_register_timed_callback</code> 等の Apache/APR API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報。</li>
+<li><code>dialup_dcfg_t</code>: ディレクトリごとの設定（帯域制限値）。</li>
+<li><code>dialup_baton_t</code>: 非同期処理のコンテキスト（バケットブリゲード、ファイル記述子、リクエスト情報）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ファイルが開けない場合や、条件チェック（<code>ap_meets_conditions</code>）で失敗した場合は <code>DECLINED</code> を返します。</li>
+<li><code>dialup_send_pulse</code> が <code>SUSPENDED</code> または <code>DONE</code> 以外の値を返した場合は、そのエラーコードをそのまま返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SUSPENDED</code> ステータスを利用して非同期 I/O を実現しています。MPM の実装に依存するため、環境によっては挙動が異なる可能性があります。</li>
+<li>エラーハンドリングは最小限であり、<code>ap_pass_brigade</code> 等の失敗時の詳細なログ出力は省略されています。</li>
 </ul></body></html>

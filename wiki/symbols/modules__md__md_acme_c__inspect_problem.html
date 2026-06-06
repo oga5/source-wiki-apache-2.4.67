@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/md/md_acme.c:170</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ACME サーバーから返された HTTP レスポンスを解析し、エラー内容（Problem）を特定して適切な Apache ステータスコードへ変換する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t inspect_problem(md_acme_req_t *req, const md_http_response_t *res)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>req</code>: ACME リクエストのコンテキスト構造体。</li>
+<li><code>res</code>: サーバーからの HTTP レスポンス。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 判定されたステータスコード。成功時は <code>APR_SUCCESS</code>、エラー時は <code>APR_EAGAIN</code>（再試行推奨）や <code>APR_EINVAL</code>、<code>APR_EACCES</code> 等が返される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req</code> および <code>res</code> は有効なポインタであること。</li>
+<li><code>req-&gt;resp_hdrs</code> にレスポンスヘッダーが格納されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. レスポンスの <code>Content-Type</code> を確認し、<code>application/problem+json</code> であれば RFC 7807 形式のエラーとして解析する。 2. JSON 内の <code>type</code> フィールドを抽出し、<code>problem_status_get</code> を用いて内部ステータスコードにマッピングする。 3. 解析したエラー情報を <code>req-&gt;result</code> に記録し、ログを出力する。 4. JSON 形式でない、または解析できない場合は、HTTP ステータスコード（400, 401, 403, 404）に基づき、対応する <code>apr_status_t</code> を返す。 5. 未知のステータスコードの場合は <code>APR_EGENERAL</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/md_acme.c:323</code>（<code>md_acme_req_send</code> 内のレスポンス処理フロー）</li>
+<li>**呼び出し先**:</li>
+<li><code>md_util_parse_ct</code></li>
+<li><code>md_json_read_http</code></li>
+<li><code>problem_status_get</code></li>
+<li><code>md_json_gets</code></li>
+<li><code>md_result_problem_set</code></li>
+<li><code>md_log_perror</code></li>
+<li><code>md_result_printf</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_acme_req_t</code>: リクエストの状態と結果を保持。</li>
+<li><code>md_http_response_t</code>: HTTP レスポンスの生データ。</li>
+<li><code>md_json_t</code>: 解析されたエラー詳細（Problem JSON）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Content-Type</code> が <code>application/problem+json</code> でない場合、HTTP ステータスコードによるフォールバック判定が行われる。</li>
+<li><code>problem_status_get</code> が <code>APR_EAGAIN</code> を返す場合、呼び出し元で再試行ロジックがトリガーされる。</li>
+<li>JSON 解析に失敗した場合や、期待するフィールドが存在しない場合は、HTTP ステータスコードに基づくデフォルトの処理へ移行する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は ACME プロトコルのエラーハンドリングの要であり、サーバー側の仕様変更（新しいエラー型の追加など）に応じて <code>problem_status_get</code> のマッピングを更新する必要がある。</li>
+<li><code>req-&gt;p</code>（リクエストプール）を使用してメモリを確保しているため、リクエスト終了時のプール破棄によりメモリリークは防止される。</li>
 </ul></body></html>

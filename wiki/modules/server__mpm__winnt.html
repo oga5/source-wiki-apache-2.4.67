@@ -1,55 +1,44 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/server__mpm__winnt.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/winnt</h1>
 <h2>システム内での役割</h2>
-<p><code>server/mpm/winnt</code> には 6 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>server/mpm/winnt</code> は、Windows 環境における Apache HTTP Server のマルチプロセッシングモジュール（MPM）です。Windows のプロセスモデル（親プロセスによる管理と子プロセスによるリクエスト処理）を実装し、Windows サービスとしての実行や、I/O Completion Port (IOCP) を活用した高効率な接続処理を提供します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プロセス管理**: 親プロセスによる子プロセスの生成、監視、およびライフサイクル管理。</li>
+<li>**サービス統合**: Windows サービスコントロールマネージャ (SCM) との対話、およびサービスとしてのインストール/制御。</li>
+<li>**接続処理**: IOCP を用いた非同期 I/O によるスレッドベースのリクエスト処理。</li>
+<li>**プラットフォーム抽象化**: Windows 特有のイベントログ出力や、プロセス間通信（IPC）の同期制御。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>server/mpm/winnt/child.c</code></li>
-<li><code>server/mpm/winnt/mpm_default.h</code></li>
-<li><code>server/mpm/winnt/mpm_winnt.c</code></li>
-<li><code>server/mpm/winnt/mpm_winnt.h</code></li>
-<li><code>server/mpm/winnt/nt_eventlog.c</code></li>
-<li><code>server/mpm/winnt/service.c</code></li>
+<li><code>child.c</code>: 子プロセスのメインループおよび IOCP を用いた接続管理。</li>
+<li><code>mpm_default.h</code>: スレッド数やプロセス制限などのデフォルト設定値。</li>
+<li><code>mpm_winnt.c</code>: MPM のメインロジック、プロセスオーケストレーション。</li>
+<li><code>mpm_winnt.h</code>: モジュール内共通の型定義、関数プロトタイプ、定数。</li>
+<li><code>nt_eventlog.c</code>: <code>stderr</code> を Windows イベントログへリダイレクトする機能。</li>
+<li><code>service.c</code>: Windows サービスとしてのライフサイクル管理と SCM インターフェース。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>LPOVERLAPPED</code></li>
-<li><code>struct</code></li>
-<li><code>winnt_conn_ctx_t</code></li>
-<li><code>io_state_e</code></li>
-<li><code>accept_filter_e</code></li>
-<li><code>waitlist_e</code></li>
-<li><code>ap_signal_parent_e</code></li>
-<li><code>nt_service_ctx_t</code></li>
-<li><code>DWORD</code></li>
+<li><code>winnt_conn_ctx_t</code>: 接続状態と <code>OVERLAPPED</code> 構造体を保持する接続コンテキスト。</li>
+<li><code>nt_service_ctx_t</code>: サービス状態やスレッドハンドルを保持するサービスコンテキスト。</li>
+<li><code>ap_signal_parent_e</code>: 親プロセスへのシグナル（シャットダウン、再起動等）を定義する列挙型。</li>
+<li><code>io_state_e</code>, <code>accept_filter_e</code>: I/O 状態や接続フィルタの定義。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **起動**: <code>mpm_winnt.c</code> が起動引数を解析し、サービスモードであれば <code>service.c</code> を介して SCM と連携。 2. **プロセス生成**: 親プロセスが <code>create_process()</code> を呼び出し、ハンドルを継承した子プロセスを生成。 3. **接続受け入れ**: 子プロセス内のリスナー・スレッドが <code>AcceptEx</code> 等で接続を待ち受け、IOCP を介してワーカー・スレッドへ通知。 4. **リクエスト処理**: ワーカー・スレッドが <code>GetQueuedCompletionStatus</code> で接続を取得し、HTTP 処理を実行。 5. **終了**: シャットダウンイベントを検知すると、全スレッドを停止し、プロセスをクリーンアップ。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>httpd.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>apr_lib.h</code></li>
-<li><code>mpm_winnt.h</code></li>
-<li><code>apr_portable.h</code></li>
-<li><code>ap_listen.h</code></li>
-<li><code>apr.h</code></li>
-<li><code>http_main.h</code></li>
-<li><code>http_config.h</code></li>
+<li>**APR (Apache Portable Runtime)**: プロセス、スレッド、共有メモリ、ミューテックス等のプラットフォーム抽象化。</li>
+<li>**Windows API**: <code>windows.h</code>, <code>mswsock.h</code> 等を通じた SCM 操作、IOCP、ソケット拡張機能。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>ap_mpm.h</code> 等のサーバーコアインターフェース。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは Windows 専用であり、他の MPM とは異なり単一プロセスモデル（<code>HARD_SERVER_LIMIT</code> = 1）を前提としています。子プロセス内のスレッドプールが並列処理の主軸となります。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>server/mpm/winnt/mpm_winnt.h</code> 2. <code>server/mpm/winnt/mpm_default.h</code> 3. <code>server/mpm/winnt/mpm_winnt.c</code> 4. <code>server/mpm/winnt/service.c</code> 5. <code>server/mpm/winnt/child.c</code> 6. <code>server/mpm/winnt/nt_eventlog.c</code></p>
+<p>1. <code>server/mpm/winnt/mpm_winnt.h</code> (全体像と共通定義) 2. <code>server/mpm/winnt/mpm_default.h</code> (制限値と構成パラメータ) 3. <code>server/mpm/winnt/mpm_winnt.c</code> (プロセス管理のメインロジック) 4. <code>server/mpm/winnt/child.c</code> (接続処理とスレッド管理) 5. <code>server/mpm/winnt/service.c</code> (サービス制御) 6. <code>server/mpm/winnt/nt_eventlog.c</code> (ログ出力)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>現在の設計では <code>stderr</code> のリダイレクトが他モジュールと競合する可能性があるため、より安全なログ統合手法の検討が必要。</li>
+<li><code>winnt_conn_ctx_t</code> の再利用ロジックにおけるエラーパスでのメモリリークの精査。</li>
 </ul></body></html>

@@ -1,55 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__dav__fs.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/dav/fs</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/dav/fs</code> には 5 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/dav/fs</code> は、Apache HTTP Server の <code>mod_dav</code> モジュールに対し、ローカルファイルシステムを WebDAV リポジトリとして公開するためのバックエンド実装です。このモジュールはディレクトリ境界に基づいて構成されており、ファイルシステム上の実体と WebDAV リソースの橋渡しを行います。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**リポジトリ提供**: ファイルシステム上のパスを WebDAV リソースとして抽象化し、読み書きやディレクトリ走査を可能にする。</li>
+<li>**メタデータ管理**: ファイルやディレクトリに付随する WebDAV プロパティ（Dead Properties）を DBM 形式で永続化する。</li>
+<li>**ロック管理**: <code>DAVLockDB</code> を介したリソースのロック状態（直接ロックおよび間接ロック）の管理と永続化。</li>
+<li>**モジュール統合**: <code>mod_dav</code> が要求するフックインターフェースを実装し、Apache の設定と連携させる。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/dav/fs/dbm.c</code></li>
-<li><code>modules/dav/fs/lock.c</code></li>
-<li><code>modules/dav/fs/mod_dav_fs.c</code></li>
-<li><code>modules/dav/fs/repos.c</code></li>
-<li><code>modules/dav/fs/repos.h</code></li>
+<li><code>modules/dav/fs/dbm.c</code>: プロパティ管理のための DBM データベース操作層。</li>
+<li><code>modules/dav/fs/lock.c</code>: ロック情報の永続化と解決ロジック。</li>
+<li><code>modules/dav/fs/mod_dav_fs.c</code>: モジュールのエントリポイントおよび設定管理。</li>
+<li><code>modules/dav/fs/repos.c</code>: リポジトリ操作のメイン実装。</li>
+<li><code>modules/dav/fs/repos.h</code>: 公開 API およびインターフェース定義。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>dav_db</code></li>
-<li><code>dav_propdb_metadata</code></li>
-<li><code>dav_deadprop_rollback</code></li>
-<li><code>dav_namespace_map</code></li>
-<li><code>dav_locktoken</code></li>
-<li><code>dav_lock_discovery_fixed</code></li>
-<li><code>dav_lock_discovery</code></li>
-<li><code>dav_lock_indirect</code></li>
-<li><code>dav_lockdb_private</code></li>
-<li><code>dav_lockdb_combined</code></li>
+<li>**リポジトリ/リソース**: <code>dav_resource_private</code>, <code>dav_fs_walker_context</code></li>
+<li>**ロック関連**: <code>dav_lockdb_combined</code>, <code>dav_lock_discovery</code>, <code>dav_lock_indirect</code>, <code>dav_locktoken</code></li>
+<li>**DBM/プロパティ**: <code>dav_db</code>, <code>dav_propdb_metadata</code></li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **初期化**: <code>mod_dav_fs.c</code> が <code>DAVLockDB</code> 設定を読み込み、<code>dav_fs_register</code> を通じて <code>mod_dav</code> にプロバイダーを登録する。 2. **リソース解決**: <code>repos.c</code> がリクエストパスを物理パスへ変換し、<code>dav_resource</code> を構築する。 3. **プロパティ/ロック操作**: <code>dbm.c</code> および <code>lock.c</code> が <code>.DAV</code> ディレクトリ内の DBM ファイルを操作し、メタデータやロック状態の読み書きを行う。 4. **ディレクトリ走査**: <code>repos.c</code> が再帰的にファイルシステムを探索し、各リソースに対してコールバックを実行する。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>apr_strings.h</code></li>
-<li><code>mod_dav.h</code></li>
-<li><code>repos.h</code></li>
-<li><code>apr_file_io.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>apr.h</code></li>
-<li><code>apr_dbm.h</code></li>
-<li><code>apr_version.h</code></li>
+<li>**APR**: <code>apr_dbm.h</code>, <code>apr_file_io.h</code>, <code>apr_strings.h</code>, <code>apr_uuid.h</code> 等</li>
+<li>**Apache HTTPD**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code></li>
+<li>**DAV**: <code>mod_dav.h</code></li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは <code>mod_dav</code> のプロバイダーとして機能する単一のサブシステムであり、内部にサブモジュールは持ちません。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/dav/fs/repos.h</code> 2. <code>modules/dav/fs/repos.c</code> 3. <code>modules/dav/fs/lock.c</code> 4. <code>modules/dav/fs/dbm.c</code> 5. <code>modules/dav/fs/mod_dav_fs.c</code></p>
+<p>1. <code>modules/dav/fs/repos.h</code> (インターフェースの理解) 2. <code>modules/dav/fs/repos.c</code> (リポジトリ操作の核心) 3. <code>modules/dav/fs/lock.c</code> (ロック管理の詳細) 4. <code>modules/dav/fs/dbm.c</code> (メタデータ永続化の仕組み) 5. <code>modules/dav/fs/mod_dav_fs.c</code> (モジュール構成と設定)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>DBM 操作における並行書き込み時の再試行ロジックの欠如が示唆されており、高負荷時の整合性保証について精緻化が必要。</li>
+<li><code>COPY</code>/<code>MOVE</code> 操作におけるファイルとプロパティの不整合リスクに対する堅牢性の検証。</li>
 </ul></body></html>

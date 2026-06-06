@@ -6,22 +6,53 @@
 <li>定義箇所: <code>os/win32/ap_regkey.c:403</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows レジストリ内の指定されたキーに対して、型を問わないバイナリデータ（raw data）を書き込みます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_regkey_value_raw_set(ap_regkey_t *key,
+                                     const char *valuename,
+                                     const void *value,
+                                     apr_size_t valuesize,
+                                     apr_int32_t valuetype,
+                                     apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>key</code>: 操作対象のレジストリキー（<code>ap_regkey_t</code> 構造体）。</li>
+<li><code>valuename</code>: 書き込む値の名前（文字列）。</li>
+<li><code>value</code>: 書き込むデータへのポインタ。</li>
+<li><code>valuesize</code>: 書き込むデータのサイズ（バイト単位）。</li>
+<li><code>valuetype</code>: レジストリ値の型（例: <code>REG_BINARY</code>, <code>REG_DWORD</code> 等）。</li>
+<li><code>pool</code>: メモリ割り当てに使用する APR プール。</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>、失敗時は OS エラーコードを <code>apr_status_t</code> に変換した値を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>key</code> は <code>ap_regkey_open</code> 等で適切に初期化されている必要があります。</li>
+<li><code>valuename</code> は NULL 終端文字列である必要があります。</li>
+<li><code>APR_HAS_UNICODE_FS</code> が有効な場合、内部で <code>apr_conv_utf8_to_ucs2</code> を使用して Unicode 変換が行われます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. OS 環境が Unicode 対応の場合、<code>valuename</code> を UTF-8 から UCS-2 に変換します。変換失敗時や名前が長すぎる場合はエラーを返します。 2. OS のレジストリ書き込み API を呼び出します（Unicode 環境では <code>RegSetValueExW</code>、ANSI 環境では <code>RegSetValueEx</code>）。 3. API の戻り値が <code>ERROR_SUCCESS</code> でない場合、<code>APR_FROM_OS_ERROR</code> を用いて APR 形式のエラーコードに変換して返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>os/win32/ap_regkey.c:605</code></li>
+<li><code>server/mpm/winnt/nt_eventlog.c:69</code></li>
+<li>呼び出し先:</li>
+<li><code>RegSetValueExW</code> または <code>RegSetValueEx</code> (Win32 API)</li>
+<li><code>apr_conv_utf8_to_ucs2</code> (APR)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_regkey_t</code>: レジストリキーハンドル (<code>HKEY</code>) を保持するコンテナ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>valuename</code> の変換失敗: <code>apr_conv_utf8_to_ucs2</code> が失敗した場合、そのエラーコードを返します。</li>
+<li>名前長超過: 変換後の名前がバッファサイズ（256文字）を超える場合、<code>APR_ENAMETOOLONG</code> を返します。</li>
+<li>OS レジストリ操作失敗: <code>RegSetValueEx</code> が失敗した場合、対応する Win32 エラーコードが返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_regkey_value_set</code> 等の他の値設定関数と異なり、型変換を行わずに直接バイナリとして書き込みます。</li>
+<li>Unicode/ANSI の切り替えはコンパイル時のマクロ (<code>APR_HAS_UNICODE_FS</code>, <code>APR_HAS_ANSI_FS</code>) に依存します。</li>
 </ul></body></html>

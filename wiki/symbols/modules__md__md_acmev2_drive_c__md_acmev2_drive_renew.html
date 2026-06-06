@@ -6,22 +6,62 @@
 <li>定義箇所: <code>modules/md/md_acmev2_drive.c:151</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ACMEv2 プロトコルを用いた証明書の更新プロセスを統括し、注文の作成から検証、証明書の取得までの一連のライフサイクルを管理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t md_acmev2_drive_renew(md_acme_driver_t *ad, md_proto_driver_t *d, md_result_t *result)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ad</code>: ACME ドライバのコンテキスト。</li>
+<li><code>d</code>: プロトコルドライバのコンテキスト。</li>
+<li><code>result</code>: 処理結果およびエラー情報を格納する構造体。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理の成功 (<code>APR_SUCCESS</code>) または失敗を示すステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_acme_drive_set_acct</code> により、有効な ACME アカウントが設定されている必要がある。</li>
+<li>既に証明書チェーンが存在する場合、本関数は処理を中断する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **アカウント設定**: <code>md_acme_drive_set_acct</code> を呼び出し、使用する ACME アカウントを確定する。 2. **注文の準備**: <code>ad_setup_order</code> を呼び出し、既存の注文をロードするか、新規注文を作成する。 3. **注文の更新と検証**: サーバーから注文状態を取得し、<code>INVALID</code> であればローカルの注文データを破棄して再試行する。 4. **チャレンジ実行**: <code>md_acme_order_start_challenges</code> によりドメイン認証を開始する。<code>EINVAL</code> が発生した場合は注文を破棄して再試行する。 5. **状態監視**:</p>
+<ul>
+<li><code>md_acme_order_monitor_authzs</code>: ドメイン検証の完了を待機。</li>
+<li><code>md_acme_order_await_ready</code>: 注文が <code>READY</code> 状態になるのを待機。</li>
+<li><code>READY</code> 状態であれば <code>md_acme_drive_setup_cred_chain</code> を実行。</li>
+<li><code>md_acme_order_await_valid</code>: 注文が <code>VALID</code> 状態になるのを待機。</li>
+<p>6. **完了**: 証明書 URL が存在することを確認し、成功を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/md_acme_drive.c:805</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ad_setup_order</code></li>
+<li><code>md_acme_drive_set_acct</code></li>
+<li><code>md_acme_order_update</code></li>
+<li><code>md_acme_order_purge</code></li>
+<li><code>md_acme_order_start_challenges</code></li>
+<li><code>md_acme_order_monitor_authzs</code></li>
+<li><code>md_acme_order_await_ready</code></li>
+<li><code>md_acme_drive_setup_cred_chain</code></li>
+<li><code>md_acme_order_await_valid</code></li>
+<li><code>md_result_set</code> / <code>md_result_log</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_acme_driver_t</code>: ACME 固有のドライバ状態。</li>
+<li><code>md_proto_driver_t</code>: プロトコル共通のドライバ状態。</li>
+<li><code>md_result_t</code>: 処理結果の記録用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**注文無効化**: サーバー側で注文が <code>INVALID</code> と判断された場合、ローカルの注文データがパージされる。</li>
+<li>**検証失敗**: <code>md_acme_order_monitor_authzs</code> 等の待機関数がタイムアウトまたはエラーを返した場合、処理を中断する。</li>
+<li>**証明書欠落**: 注文が <code>VALID</code> 状態であっても証明書 URL が取得できない場合は <code>APR_EINVAL</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>注文の再試行ロジック（<code>retry</code> ラベル）は、ドメイン構成変更などでサーバー側から <code>EINVAL</code> が返された場合の自動復旧を目的としている。</li>
+<li>デバッグ時は <code>md_result_t</code> に記録されるアクティビティログを確認することで、ステートマシンのどの段階で停止しているか特定可能。</li>
 </ul></body></html>

@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/http/http_filters.c:137</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP チャンク転送エンコーディングにおけるチャンクサイズ行を解析し、状態遷移を管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t parse_chunk_size(http_ctx_t *ctx, const char *buffer, apr_size_t len, int linelimit, int strict)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: フィルタの状態を保持する <code>http_ctx_t</code> 構造体。</li>
+<li><code>buffer</code>: 解析対象のデータバッファ。</li>
+<li><code>len</code>: バッファの長さ。</li>
+<li><code>linelimit</code>: 許容される最大行長。</li>
+<li><code>strict</code>: RFC 準拠の厳格なチェックを行うかどうかのフラグ。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: 解析成功。</li>
+<li><code>APR_EINVAL</code>: プロトコル違反（不正な文字、CRLF 不足など）。</li>
+<li><code>APR_ENOSPC</code>: サイズオーバーフローまたは行長制限超過。</li>
+<li><code>APR_EGENERAL</code>: 想定外の状態遷移。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;state</code> は、現在のチャンク解析フェーズ（<code>BODY_CHUNK</code>, <code>BODY_CHUNK_PART</code>, <code>BODY_CHUNK_END</code> 等）を正確に反映している必要があります。</li>
+<li><code>ctx-&gt;remaining</code> は、現在のチャンクの残りのサイズを保持します。</li>
+<li><code>ctx-&gt;chunk_bws</code> は、チャンクヘッダ内の空白（LWS）の数を追跡し、10を超えないことを保証します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. バッファ内の各文字を ASCII に変換し、<code>ctx-&gt;state</code> に基づいて逐次処理します。 2. **チャンク終了処理**: <code>BODY_CHUNK_END</code> 状態では CRLF を確認し、次のチャンク開始へ遷移します。 3. **サイズ解析**: <code>BODY_CHUNK_PART</code> 状態では、16進数を読み取り <code>ctx-&gt;remaining</code> を更新します。オーバーフロー時は <code>APR_ENOSPC</code> を返します。 4. **拡張フィールド**: <code>;</code> が現れると <code>BODY_CHUNK_EXT</code> へ遷移し、制御文字を排除しつつ拡張情報をスキップします。 5. **行長制限**: 処理した総バイト数 <code>ctx-&gt;chunk_used</code> が <code>linelimit</code> を超えた場合、エラーを返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http/http_filters.c:545</code>（<code>ap_http_filter</code> 内から呼び出される）。</li>
+<li>**呼び出し先**: <code>ap_xlate_proto_from_ascii</code>（文字変換）、<code>apr_isxdigit</code> / <code>apr_iscntrl</code>（文字種判定）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>http_ctx_t</code>: チャンク解析の状態（<code>state</code>）、残余サイズ（<code>remaining</code>）、ビット数（<code>chunkbits</code>）、使用量（<code>chunk_used</code>）を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**オーバーフロー**: チャンクサイズが <code>apr_off_t</code> の範囲を超える場合、または <code>linelimit</code> を超える場合に <code>APR_ENOSPC</code> を返します。</li>
+<li>**フォーマット違反**: 16進数以外の文字、CRLF の欠落、または <code>strict</code> モードでの不正な改行シーケンスに対し <code>APR_EINVAL</code> を返します。</li>
+<li>**空白制限**: チャンクヘッダ内の空白が10個を超えると <code>APR_EINVAL</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ctx-&gt;state</code> の遷移は RFC 7230 に基づく厳密なステートマシンです。変更時は <code>http_ctx_t</code> の定義と整合性を確認してください。</li>
+<li><code>strict</code> フラグは、プロトコル違反に対してどの程度寛容であるかを制御します。</li>
 </ul></body></html>

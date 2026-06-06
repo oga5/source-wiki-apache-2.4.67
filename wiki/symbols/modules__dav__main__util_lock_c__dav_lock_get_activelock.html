@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/dav/main/util_lock.c:42</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>dav_lock</code> 構造体のリストを、WebDAV の <code>&lt;activelock&gt;</code> XML 要素を含む文字列に変換します。主に <code>PROPFIND</code> レスポンスやロック情報の提示に使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>const char *dav_lock_get_activelock(request_rec *r, dav_lock *lock, dav_buffer *pbuf)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>lock</code>: 変換対象の <code>dav_lock</code> 構造体リストの先頭。</li>
+<li><code>pbuf</code>: 出力用バッファ（<code>NULL</code> の場合は内部バッファを使用）。</li>
+<li>**出力**:</li>
+<li>変換された XML 文字列を格納したバッファのポインタ（<code>pbuf-&gt;buf</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> がメモリ割り当てに使用されます。</li>
+<li><code>lock</code> が <code>NULL</code> またはロックプロバイダーが未定義の場合、空文字列を返します。</li>
+<li><code>lock-&gt;owner</code> が存在する場合、それは名前空間宣言や <code>xml:lang</code> を含む完全な <code>&lt;DAV:owner&gt;</code> 要素である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. ロックリストを走査し、必要なバッファサイズを概算して <code>dav_check_bufsize</code> で確保します。 2. 各 <code>dav_lock</code> 要素に対し、以下の XML 構造を構築します。</p>
+<ul>
+<li><code>&lt;D:locktype&gt;</code>: <code>DAV_LOCKTYPE_WRITE</code> に対応する要素。</li>
+<li><code>&lt;D:lockscope&gt;</code>: <code>DAV_LOCKSCOPE_EXCLUSIVE</code> または <code>SHARED</code> に対応する要素。</li>
+<li><code>&lt;D:depth&gt;</code>: <code>DAV_INFINITY</code> なら <code>infinity</code>、それ以外は <code>0</code>。</li>
+<li><code>&lt;D:owner&gt;</code>: 存在すればそのまま追加。</li>
+<li><code>&lt;D:timeout&gt;</code>: <code>DAV_TIMEOUT_INFINITE</code> または現在時刻との差分（<code>Second-N</code> 形式）。</li>
+<li><code>&lt;D:locktoken&gt;</code>: フック <code>format_locktoken</code> を介して生成されたトークン。</li>
+<p>3. 構築した XML 文字列をバッファに順次追加し、最終的な文字列を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/dav/main/mod_dav.c:3348</code></li>
+<li><code>modules/dav/main/props.c:382</code></li>
+<li>**呼び出し先**:</li>
+<li><code>hooks-&gt;format_locktoken</code> (ロックプロバイダーのフック)</li>
+<li><code>dav_check_bufsize</code></li>
+<li><code>dav_buffer_append</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_lock</code>: ロック情報を保持する構造体。</li>
+<li><code>dav_buffer</code>: 文字列構築用の中間バッファ。</li>
+<li><code>dav_hooks_locks</code>: ロック操作用フック構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lock-&gt;rectype</code> が <code>DAV_LOCKREC_INDIRECT_PARTIAL</code> の場合、<code>DAV_DEBUG</code> が有効であれば設計エラーとして警告メッセージが埋め込まれます。</li>
+<li><code>now &gt;= lock-&gt;timeout</code> の場合、タイムアウト値として <code>Second-0</code> が出力されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>dav_buffer</code> を使用した効率的な文字列構築を行っています。</li>
+<li><code>lock-&gt;owner</code> の内容は検証されずそのまま出力されるため、呼び出し側で妥当な XML であることを保証する必要があります。</li>
+<li><code>###</code> コメントで示されている通り、内部エラー発生時のログ出力やエラーハンドリングの改善が検討事項として残されています。</li>
 </ul></body></html>

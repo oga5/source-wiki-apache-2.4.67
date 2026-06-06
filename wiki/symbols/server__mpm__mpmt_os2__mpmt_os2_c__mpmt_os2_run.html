@@ -6,22 +6,61 @@
 <li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2.c:111</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OS/2 プラットフォームにおける MPM のメインエントリーポイントとして、親プロセスと子プロセスの分岐、およびプロセスごとの初期化処理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int mpmt_os2_run(apr_pool_t *_pconf, apr_pool_t *plog, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>_pconf</code>: 設定用プール。</li>
+<li><code>plog</code>: ログ用プール。</li>
+<li><code>s</code>: サーバー設定レコード。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 正常終了（再起動時）。</li>
+<li><code>DONE</code>: 子プロセス終了時。</li>
+<li><code>!OK</code>: エラー発生時。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_thread_limit</code> に基づき、プロセスあたりの最大ファイルハンドル数が設定される。</li>
+<li>共有メモリ名 <code>/sharemem/httpd/parent_info.&lt;ppid&gt;</code> の存在有無により、現在のプロセスが親か子かを判定する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>DosSetMaxFH</code> でファイルハンドル制限を設定し、共有メモリ名を作成する。 2. **プロセス判定**: <code>DosGetNamedSharedMem</code> を試行。</p>
+<ul>
+<li>**子プロセスの場合**:</li>
+<li><code>ap_mpm_accept_mutex</code> を共有メモリから取得。</li>
+<li>リスナーソケットを共有メモリから復元し、<code>apr_os_sock_put</code> で APR ハンドルへ変換。</li>
+<li><code>DosFreeMem</code> で共有メモリを解放。</li>
+<li><code>ap_mpm_child_main</code> を呼び出し、リクエスト処理を開始。</li>
+<li>**親プロセスの場合**:</li>
+<li><code>ap_setup_listeners</code> でリスナーソケットを準備。</li>
+<li><code>master_main</code> を呼び出し、子プロセスの監視と管理を行う。</li>
+<li>終了時に <code>ap_my_generation</code> を更新し、必要に応じてエラーログを出力。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_mpm</code> により登録（<code>server/mpm/mpmt_os2/mpmt_os2.c:530</code>）。</li>
+<li>**呼び出し先**:</li>
+<li><code>master_main</code>（親プロセス時）</li>
+<li><code>ap_mpm_child_main</code>（子プロセス時）</li>
+<li><code>ap_setup_listeners</code>, <code>ap_log_error</code>, <code>ap_log_pid</code>, <code>ap_remove_pid</code> 等の Apache API。</li>
+<li><code>DosSetMaxFH</code>, <code>DosGetNamedSharedMem</code>, <code>DosFreeMem</code> 等の OS/2 API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>parent_info_t</code>: プロセス間で共有されるリスナー情報とミューテックスを保持する構造体。</li>
+<li><code>ap_listen_rec</code>: リスナーソケットの情報を管理。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>DosGetNamedSharedMem</code> が失敗した場合は親プロセスとして動作する。</li>
+<li><code>ap_setup_listeners</code> が 1 未満のソケットを返した場合、エラーログを出力して終了する。</li>
+<li><code>master_main</code> が <code>OK</code> 以外を返した場合、PID ファイルを削除して終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OS/2 の <code>Dos</code> 系 API に強く依存している。</li>
+<li>共有メモリの所有権は親プロセスにあり、子プロセスは読み取り後に解放する設計となっている。</li>
+<li><code>HARD_SERVER_LIMIT</code>（10）等の制限値がプロセス管理に影響するため注意が必要。</li>
 </ul></body></html>

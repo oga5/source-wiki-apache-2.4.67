@@ -6,22 +6,41 @@
 <li>定義箇所: <code>modules/http2/h2_bucket_eos.c:32</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 ストリームの終了（EOS: End of Stream）を表現するためのカスタム APR バケット構造体です。ストリームのライフサイクルとバケットチェーン上のメタデータを紐付ける役割を持ちます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    apr_bucket_refcount refcount;
+    h2_stream *stream;
+} h2_bucket_eos;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: バケット生成時に <code>h2_stream</code> へのポインタが保持されます。</li>
+<li>**出力**: バケット破棄時に、保持している <code>h2_stream</code> に対して <code>H2_SEV_EOS_SENT</code> イベントがディスパッチされます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は <code>apr_bucket</code> のデータ領域として使用されます。</li>
+<li><code>refcount</code> は APR バケットの参照カウント管理に使用されます。</li>
+<li><code>stream</code> は、バケットが破棄されるまで有効な <code>h2_stream</code> オブジェクトを指している必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **生成**: <code>h2_bucket_eos_create</code> により、ストリームと紐付けられたバケットが作成されます。 2. **伝搬**: バケットチェーン上を移動しますが、メタデータバケットであるため <code>bucket_read</code> はデータを返しません。 3. **破棄**: <code>bucket_destroy</code> が呼び出されると、<code>h2_stream_dispatch</code> を通じて <code>H2_SEV_EOS_SENT</code> イベントが発行され、ストリームの終了処理がトリガーされます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>h2_bucket_eos.c</code> 内の <code>h2_bucket_eos_create</code>、<code>bucket_read</code>、<code>bucket_destroy</code> 等から参照されます。また、<code>h2_c1_io.c</code> および <code>h2_session.c</code> が本ヘッダーをインクルードしています。</li>
+<li>**呼び出し先**: <code>h2_stream_dispatch</code>（イベント発行時）および APR のバケット管理関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_bucket</code>: APR が提供するバケットの基底構造。</li>
+<li><code>h2_stream</code>: HTTP/2 ストリームの状態管理を行う構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ストリームが既に破棄されている場合、<code>bucket_destroy</code> 内でのイベント発行時に不正なアクセスが発生する可能性があるため、<code>apr_pool_cleanup_kill</code> を用いたライフサイクル管理が行われています。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本バケットはメタデータとして扱われるため、データ読み取りは行われません。</li>
+<li>ストリームの生存期間とバケットの生存期間が異なるケースを考慮し、<code>bucket_cleanup</code> と <code>bucket_destroy</code> の両方で安全なポインタ管理を行っています。修正時は二重解放や解放済みポインタへのアクセスに注意してください。</li>
 </ul></body></html>

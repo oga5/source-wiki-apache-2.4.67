@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/md/md_curl.c:106</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>libcurl</code> から受信した HTTP レスポンスボディのデータを、<code>apr_bucket_brigade</code> を介して内部のレスポンス構造体に書き込むためのコールバック関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>size_t resp_data_cb(void *data, size_t len, size_t nmemb, void *baton)</code></pre>
+<ul>
+<li><code>data</code>: 受信したデータブロックへのポインタ。</li>
+<li><code>len</code>: データ要素のサイズ。</li>
+<li><code>nmemb</code>: データ要素の数。</li>
+<li><code>baton</code>: <code>md_curl_internals_t</code> 構造体へのポインタ。</li>
+</ul>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>libcurl</code> から渡されるデータチャンクおよび <code>md_curl_internals_t</code> コンテキスト。</li>
+<li>**出力**: 正常に処理された場合は書き込んだバイト数（<code>len * nmemb</code>）、エラーまたは制限超過時は <code>0</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>baton</code> は <code>md_curl_internals_t</code> 型としてキャスト可能であること。</li>
+<li><code>internals-&gt;response</code> および <code>res-&gt;body</code> が初期化されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 受信データサイズ（<code>blen = len * nmemb</code>）を算出します。 2. <code>res-&gt;req-&gt;resp_limit</code> が設定されている場合、現在の <code>res-&gt;body</code> の長さに <code>blen</code> を加算し、制限を超えていないか確認します。制限を超える場合は <code>0</code> を返し、<code>libcurl</code> に処理を中断させます。 3. <code>apr_brigade_write</code> を使用して、受信データを <code>res-&gt;body</code> に書き込みます。 4. 書き込みに失敗した場合は <code>0</code> を返し、成功した場合は <code>blen</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>libcurl</code> の内部イベントループ（<code>curl_easy_setopt</code> で <code>CURLOPT_WRITEFUNCTION</code> に登録）。</li>
+<li>**呼び出し先**: <code>apr_brigade_length</code>, <code>apr_brigade_write</code>（APR ライブラリ関数）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_curl_internals_t</code>: リクエストのコンテキストを保持。</li>
+<li><code>md_http_response_t</code>: レスポンスデータとボディバッファ（<code>apr_bucket_brigade</code>）を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**レスポンスサイズ制限**: <code>resp_limit</code> を超えるデータを受信した場合、<code>0</code> を返して転送を停止します。</li>
+<li>**書き込みエラー**: <code>apr_brigade_write</code> が <code>APR_SUCCESS</code> 以外を返した場合、<code>0</code> を返して転送を停止します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>libcurl</code> の書き込みコールバックとして動作するため、戻り値が <code>len * nmemb</code> と一致しない場合、<code>libcurl</code> はエラーとしてリクエストを終了させます。</li>
+<li><code>resp_limit</code> のチェックは、メモリ消費を抑えるための重要な保護機能です。</li>
 </ul></body></html>

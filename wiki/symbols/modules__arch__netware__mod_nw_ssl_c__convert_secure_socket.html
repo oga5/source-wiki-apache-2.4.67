@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/arch/netware/mod_nw_ssl.c:329</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>既存の接続ソケットに対して、NetWare ネイティブの SSL/TLS 機能を有効化し、暗号化通信へ移行させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int convert_secure_socket(conn_rec *c, apr_socket_t *csd)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 現在の接続を表す <code>conn_rec</code> 構造体。</li>
+<li><code>csd</code>: SSL を適用する <code>apr_socket_t</code> 型のソケット。</li>
+<li>**出力**:</li>
+<li><code>int</code>: <code>WSAIoctl</code> の実行結果（成功時は <code>0</code>、失敗時は <code>SOCKET_ERROR</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>numcerts</code>（グローバル変数）の状態に基づき、証明書リストを使用するか、KMO（Key Management Object）のデフォルト証明書を使用するかが決定される。</li>
+<li><code>apr_os_sock_get</code> を介して、APR ソケットからネイティブな <code>SOCKET</code> ハンドルが取得可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_os_sock_get</code> でネイティブソケットを取得。 2. <code>WSAIoctl</code> を呼び出し、<code>SO_TLS_SET_FLAGS</code> で <code>SO_TLS_ENABLE</code>（証明書がない場合は <code>SO_TLS_BLIND_ACCEPT</code> を併用）を設定。 3. <code>SO_TLS_UNCLEAN_SHUTDOWN</code> フラグを設定。 4. <code>numcerts</code> の有無に応じて <code>tlsclientopts</code> 構造体を構築：</p>
+<ul>
+<li><code>numcerts &gt; 0</code>: <code>certarray</code> を使用し、<code>WAL_PROV_DER</code> プロバイダを指定。</li>
+<li><code>numcerts == 0</code>: <code>SSL CertificateIP</code> を使用し、<code>WAL_PROV_KMO</code> プロバイダを指定。</li>
+<p>5. <code>WSAIoctl</code> の <code>SO_TLS_SET_CLIENT</code> を呼び出し、SSL 設定をソケットに適用。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/arch/netware/mod_nw_ssl.c:717</code>（直接的な呼び出しを確認）。</li>
+<li>**呼び出し先**: <code>WSAIoctl</code>（WinSock API）、<code>apr_os_sock_get</code>（APR API）、<code>memset</code>、<code>unicpy</code>、<code>unilen</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: Apache の接続情報。</li>
+<li><code>tlsclientopts</code>, <code>nwtlsopts</code>, <code>sslserveropts</code>: NetWare ネイティブの SSL 設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>WSAIoctl</code> が <code>SOCKET_ERROR</code> を返した場合、<code>WSAGetLastError()</code> を用いてエラーログを出力し、そのエラーコードを呼び出し元へ返却する。</li>
+<li>証明書リストが空の場合、デフォルトの KMO 証明書へのフォールバックが行われる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は NetWare の WinSock 拡張に強く依存している。</li>
+<li><code>numcerts</code> はモジュール内で管理されるグローバルな証明書数である。</li>
+<li><code>SO_TLS_BLIND_ACCEPT</code> の使用は、証明書が提供されない環境での接続を許可するが、セキュリティ要件に応じて注意が必要である。</li>
 </ul></body></html>

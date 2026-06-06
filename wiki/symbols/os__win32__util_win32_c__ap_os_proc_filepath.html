@@ -6,22 +6,58 @@
 <li>定義箇所: <code>os/win32/util_win32.c:30</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>現在実行中のプロセス（Apache）のフルパスを取得し、UTF-8文字列として呼び出し元へ提供します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_os_proc_filepath(char **binpath, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>binpath</code>: 取得したパスを格納する文字列ポインタへのポインタ。</li>
+<li><code>p</code>: メモリ確保に使用する <code>apr_pool_t</code>。</li>
+<li>**出力**:</li>
+<li>成功時: <code>APR_SUCCESS</code> を返し、<code>*binpath</code> にパスが格納される。</li>
+<li>失敗時: <code>apr_status_t</code> 型のエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code> は有効なAPRプールである必要があります。</li>
+<li>Windows環境において、OSがUnicodeをサポートしているか（<code>APR_HAS_UNICODE_FS</code>）、ANSIのみか（<code>APR_HAS_ANSI_FS</code>）に応じて処理が分岐します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **Unicode環境 (<code>APR_HAS_UNICODE_FS</code>)**:</p>
+<ul>
+<li><code>GetModuleFileNameW</code> を呼び出し、ワイド文字でパスを取得します。</li>
+<li>取得したパスを <code>apr_conv_ucs2_to_utf8</code> を用いてUTF-8へ変換します。</li>
+<li>変換後の文字列は <code>apr_palloc</code> でプールから確保されます。</li>
+<p>2. **ANSI環境 (<code>APR_HAS_ANSI_FS</code>)**:</p>
+<li><code>GetModuleFileName</code> を呼び出し、ANSI文字列としてパスを取得します。</li>
+<li><code>apr_pstrdup</code> を用いてプールからメモリを確保し、パスをコピーします。</li>
+<p>3. **共通**:</p>
+<li>Windows APIの呼び出しに失敗した場合、<code>apr_get_os_error()</code> を通じてエラーを伝播させます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/winnt/mpm_winnt.c:581</code></li>
+<li><code>server/mpm/winnt/mpm_winnt.c:1128</code></li>
+<li>**呼び出し先**:</li>
+<li>Windows API: <code>GetModuleFileNameW</code> または <code>GetModuleFileName</code></li>
+<li>APR: <code>apr_get_os_error</code>, <code>apr_palloc</code>, <code>apr_conv_ucs2_to_utf8</code>, <code>apr_pstrdup</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: メモリ管理に使用。</li>
+<li><code>apr_wchar_t</code>: Unicodeパス格納用の一時バッファ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>GetModuleFileName</code> 系APIが失敗した場合、OSのエラーコードが返されます。</li>
+<li>Unicode変換時に <code>apr_conv_ucs2_to_utf8</code> が失敗した場合、そのエラーコードが返されます。</li>
+<li>変換後の文字列長が想定を超えた場合、<code>APR_ENAMETOOLONG</code> が返される可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>APR_HAS_UNICODE_FS</code> および <code>APR_HAS_ANSI_FS</code> マクロに強く依存しています。</li>
+<li>Unicode変換ロジックは、Windows環境における文字コードの差異を吸収するための重要な箇所です。</li>
+<li>将来的にAPR側の機能と重複する可能性があるため、APRの更新状況に応じて統合を検討してください。</li>
 </ul></body></html>

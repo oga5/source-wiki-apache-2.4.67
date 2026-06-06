@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/md/mod_md.c:1299</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>TLS-ALPN-01 チャレンジに使用する証明書と秘密鍵を、指定されたサーバー名と鍵タイプに基づいて <code>md_store</code> から取得します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int md_get_challenge_cert(conn_rec *c, const char *servername,
+                                 md_srv_conf_t *sc,
+                                 md_pkey_type_t key_type,
+                                 const char **pcert_pem,
+                                 const char **pkey_pem)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 現在の接続情報 (<code>conn_rec</code>)。メモリプールとして使用。</li>
+<li><code>servername</code>: 対象のサーバー名。</li>
+<li><code>sc</code>: サーバー設定構造体 (<code>md_srv_conf_t</code>)。</li>
+<li><code>key_type</code>: 検索対象の鍵タイプ (<code>md_pkey_type_t</code>)。</li>
+<li>**出力**:</li>
+<li><code>pcert_pem</code>: 成功時に証明書の PEM 文字列が格納されるポインタ。</li>
+<li><code>pkey_pem</code>: 成功時に秘密鍵の PEM 文字列が格納されるポインタ。</li>
+<li>戻り値: 成功時は <code>OK</code>、失敗または該当なしの場合は <code>DECLINED</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sc-&gt;mc-&gt;reg</code> が有効なレジストリを保持していること。</li>
+<li><code>c-&gt;pool</code> がリクエストの生存期間中有効であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. サーバー設定 <code>sc</code> に含まれる鍵仕様 (<code>md_pkeys_spec_count</code>) を反復処理します。 2. 指定された <code>key_type</code> と一致する鍵仕様を特定します。 3. <code>tls_alpn01_fnames</code> を使用して、該当する証明書と鍵のファイル名を生成します。 4. <code>md_store_load</code> を呼び出し、<code>MD_SG_CHALLENGES</code> ストアから証明書と鍵を順次読み込みます。 5. 読み込みに成功した場合、<code>pcert_pem</code> と <code>pkey_pem</code> に値をセットし <code>OK</code> を返します。 6. いずれかの読み込みで <code>ENOENT</code> 以外のエラーが発生した場合は、処理を中断し <code>DECLINED</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/mod_md.c:1377</code></li>
+<li><code>modules/md/mod_md.c:1380</code></li>
+<li><code>modules/md/mod_md.c:1383</code></li>
+<li>**呼び出し先**:</li>
+<li><code>md_reg_store_get</code></li>
+<li><code>md_pkeys_spec_count</code></li>
+<li><code>md_pkeys_spec_get</code></li>
+<li><code>tls_alpn01_fnames</code></li>
+<li><code>md_store_load</code></li>
+<li><code>ap_log_cerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_srv_conf_t</code>: サーバー単位の MD 設定。</li>
+<li><code>md_store_t</code>: 証明書およびチャレンジデータの永続化ストア。</li>
+<li><code>md_pkey_spec_t</code>: 鍵の仕様定義。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>指定された <code>key_type</code> に一致する鍵仕様が存在しない場合、ループを抜けて <code>DECLINED</code> を返します。</li>
+<li>ストア内に該当ファイルが存在しない場合 (<code>APR_ENOENT</code>)、次の鍵仕様の検索へ進みます。</li>
+<li>ストアからの読み込みでシステムエラーが発生した場合、<code>cleanup</code> ラベルへジャンプし <code>DECLINED</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_ssl</code> の証明書コールバック等から呼び出されることを想定しています。</li>
+<li><code>c-&gt;pool</code> を使用してメモリを割り当てているため、接続終了時にメモリは解放されます。</li>
 </ul></body></html>

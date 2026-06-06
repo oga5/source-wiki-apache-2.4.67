@@ -6,22 +6,54 @@
 <li>定義箇所: <code>server/mpm_unix.c:119</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定された子プロセスの終了状態を監視し、必要に応じてシグナル（<code>SIGTERM</code> または <code>SIGKILL</code>）を送信してプロセスの回収を試みます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int reclaim_one_pid(pid_t pid, action_t action)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pid</code>: 回収対象のプロセスID。</li>
+<li><code>action</code>: プロセスが終了していない場合に実行するアクション（<code>action_t</code> 型）。</li>
+<li>**出力**:</li>
+<li><code>int</code>: プロセスが既に終了しているか、アクションの結果として回収処理が完了したとみなされる場合は <code>1</code> を返します。プロセスがまだ生存しており、かつアクションが <code>DO_NOTHING</code> 等で即時終了を強制しない場合は <code>0</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid</code> は 1 以上である必要があります（1 未満の場合は即座に <code>1</code> を返します）。</li>
+<li><code>apr_proc_wait</code> を使用して非ブロッキング（<code>APR_NOWAIT</code>）で状態を確認します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_proc_wait</code> を呼び出し、対象プロセスの状態を確認します。 2. プロセスが既に終了している場合（<code>APR_CHILD_DONE</code>）、<code>ap_process_child_status</code> を呼び出して終了ステータスを処理し、<code>1</code> を返します。 3. プロセスが生存している場合、引数 <code>action</code> に基づき以下のいずれかを行います：</p>
+<ul>
+<li><code>DO_NOTHING</code>: 何もせず <code>0</code> を返します。</li>
+<li><code>SEND_SIGTERM</code> / <code>SEND_SIGTERM_NOLOG</code>: <code>SIGTERM</code> を送信し、<code>0</code> を返します。</li>
+<li><code>SEND_SIGKILL</code>: <code>SIGKILL</code> を送信し、<code>0</code> を返します。</li>
+<li><code>GIVEUP</code>: ログ出力のみを行い、<code>0</code> を返します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm_unix.c</code> 内のプロセス回収ループ（<code>ap_reclaim_child_processes</code> や <code>ap_relieve_child_processes</code> に関連する箇所）から呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_proc_wait</code> (APR)</li>
+<li><code>ap_process_child_status</code></li>
+<li><code>ap_log_error</code></li>
+<li><code>kill</code> (システムコール)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid_t</code>: プロセスID型。</li>
+<li><code>action_t</code>: プロセス回収時の挙動を定義する列挙型（<code>DO_NOTHING</code>, <code>SEND_SIGTERM</code>, <code>SEND_SIGTERM_NOLOG</code>, <code>SEND_SIGKILL</code>, <code>GIVEUP</code>）。</li>
+<li><code>apr_proc_t</code>: APRのプロセス管理構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid &lt; 1</code>: 不正なPIDとして無視され、<code>1</code> が返されます。</li>
+<li><code>apr_proc_wait</code> が <code>APR_CHILD_NOTDONE</code> 以外を返した場合、プロセスは終了済みとみなされ、それ以上のシグナル送信は行われません。</li>
+<li><code>kill</code> システムコールが失敗した場合の戻り値は本関数内では評価されません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>server/mpm_unix.c</code> 内のプロセス回収ロジックの末端を担います。</li>
+<li><code>action</code> の各ケースにおいて、ログ出力の有無やシグナルの種類が厳密に定義されているため、新しいアクションを追加する際は <code>action_t</code> の定義と併せて確認してください。</li>
 </ul></body></html>

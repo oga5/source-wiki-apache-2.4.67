@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/filters/mod_xml2enc.c:102</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>XML/HTML コンテンツの文字エンコーディング変換を行うフィルタを初期化し、Apache の出力フィルタチェーンに登録する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t xml2enc_filter(request_rec* r, const char* enc, unsigned int mode)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>enc</code>: 変換対象または変換先の文字エンコーディング名。</li>
+<li><code>mode</code>: 処理モード（<code>ENCIO_OUTPUT</code>, <code>ENCIO_INPUT</code>, <code>ENCIO_INPUT_CHECKS</code> のいずれか）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mode</code> が <code>ENCIO_OUTPUT</code> または <code>ENCIO_INPUT</code> の場合、<code>apr_xlate_open</code> による変換器の初期化が必須。</li>
+<li><code>mode</code> が <code>ENCIO_INPUT_CHECKS</code> の場合、変換器は初期化されず、後続の「スニッフィング（自動検出）」処理で初期化される。</li>
+<li>変換器のメモリ確保およびフィルタコンテキストの割り当てには、<code>r-&gt;pool</code> が使用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **モード判定**: <code>mode</code> に基づき、<code>apr_xlate_open</code> を用いて <code>UTF-8</code> と <code>enc</code> 間の変換器を準備する。 2. **エラーハンドリング**: 不正なモードが指定された場合、または変換器のオープンに失敗した場合はエラーログを出力し、処理を中断する。 3. **コンテキスト生成**: <code>xml2ctx</code> 構造体を確保し、フラグと変換器を設定する。 4. **フィルタ登録**: <code>ap_add_output_filter</code> を呼び出し、<code>xml2enc</code> フィルタを現在の接続の出力チェーンに追加する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_proxy_html.c</code> が <code>APR_RETRIEVE_OPTIONAL_FN</code> を介して本関数を呼び出す。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_xlate_open</code>: 文字コード変換器の作成。</li>
+<li><code>apr_pcalloc</code> / <code>apr_palloc</code>: メモリ確保。</li>
+<li><code>ap_log_rerror</code>: エラーログ出力。</li>
+<li><code>ap_add_output_filter</code>: フィルタの登録。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>xml2ctx</code>: フィルタの実行状態（変換器、バッファ、フラグ）を保持する構造体。</li>
+<li><code>request_rec</code>: リクエストごとのメモリプール（<code>r-&gt;pool</code>）を提供。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**サポート外のエンコーディング**: <code>apr_xlate_open</code> が失敗した場合、<code>APR_EINVAL</code> 等が返され、フィルタは登録されない。</li>
+<li>**不正なモード**: 定義されていない <code>mode</code> が渡された場合、<code>APR_EGENERAL</code> を返しログを出力する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>APR_DECLARE_OPTIONAL_FN</code> により公開されており、他のモジュール（<code>mod_proxy_html</code> 等）から動的に利用される。</li>
+<li><code>libxml2</code> のエンコーディング検出ロジックに依存しているため、変換器の初期化タイミングがモードによって異なる点に注意すること。</li>
 </ul></body></html>

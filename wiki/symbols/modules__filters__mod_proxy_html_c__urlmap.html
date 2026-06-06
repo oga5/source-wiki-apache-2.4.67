@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/filters/mod_proxy_html.c:94</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTML コンテンツ内の URL や属性を書き換えるための置換ルールを保持するデータ構造です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct urlmap {
+    struct urlmap *next;
+    unsigned int flags;
+    unsigned int regflags;
+    union {
+        const char *c;
+        ap_regex_t *r;
+    } from;
+    const char *to;
+    ap_expr_info_t *cond;
+} urlmap;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: <code>ProxyHTMLURLMap</code> ディレクティブ等により設定される置換元パターン（文字列または正規表現）、置換先文字列、および適用条件式。</li>
+<li>出力: 連結リストの次要素へのポインタ (<code>next</code>) を含む、評価可能なルールセット。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>next</code> ポインタにより、複数のルールが連結リストとして管理されます。</li>
+<li><code>from</code> 共用体は、<code>flags</code> に基づいて文字列 (<code>c</code>) またはコンパイル済み正規表現 (<code>r</code>) のいずれかとして解釈されます。</li>
+<li><code>cond</code> が設定されている場合、ルール適用時に <code>ap_expr</code> による評価が必要です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエスト処理時に <code>fixup_rules</code> を介して、現在のリクエスト環境で有効なルールのみが抽出・評価されます。</li>
+<li>HTML 解析中に <code>pstartElement</code> 等のコールバックから参照され、属性値が <code>from</code> パターンに一致する場合、<code>to</code> で指定された値へ置換されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>mod_proxy_html.c</code> 内の <code>fixup_rules</code> や、設定反映処理、および SAX コールバック関数群。</li>
+<li>呼び出し先: <code>ap_regex_t</code> (正規表現エンジン)、<code>ap_expr_info_t</code> (条件式評価エンジン)。</li>
+<li>注: 具体的な関数呼び出しのフローについては、ソースコード内の参照箇所（<code>ctx-&gt;map</code> 等）から推測される範囲に留まります。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_html_conf</code>: モジュール設定全体を保持し、<code>urlmap</code> のリストを管理します。</li>
+<li><code>saxctxt</code>: 実行時のコンテキストであり、適用対象の <code>urlmap</code> リストを保持します。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cond</code>（条件式）の評価失敗時、そのルールは適用されません。</li>
+<li>正規表現のコンパイルエラーやメモリ不足時には、<code>apr_pmemdup</code> 等のメモリ管理機構に依存します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>apr_pool_t</code> 上で管理されるため、リクエスト終了時に自動的に解放されます。</li>
+<li><code>from</code> 共用体の切り替えは <code>flags</code> に依存するため、フラグ操作時の整合性に注意してください。</li>
 </ul></body></html>

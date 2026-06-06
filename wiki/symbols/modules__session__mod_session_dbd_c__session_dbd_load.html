@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/session/mod_session_dbd.c:167</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストに関連付けられたセッションをデータベースから読み込み、<code>session_rec</code> 構造体として復元する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t session_dbd_load(request_rec * r, session_rec ** z)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のリクエスト情報。</li>
+<li><code>z</code>: 復元されたセッションを格納するためのポインタのポインタ。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 成功時は <code>OK</code> または <code>APR_SUCCESS</code>、失敗時はエラーコード、対象外の場合は <code>DECLINED</code> を返す。</li>
+<li><code>z</code>: 成功時に <code>session_rec</code> 構造体へのポインタが設定される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_dbd</code> がロードされ、データベース接続が利用可能であること。</li>
+<li>設定（<code>session_dbd_dir_conf</code>）に基づき、クッキー名またはユーザー名が特定できること。</li>
+<li>セッションデータはリクエストの生存期間（<code>r-&gt;pool</code>）に依存して管理される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **設定取得**: <code>r-&gt;per_dir_config</code> から <code>session_dbd_dir_conf</code> を取得。 2. **キー特定**: 設定に基づき、クッキー名またはユーザー名をセッションキーとして特定。特定できない場合は <code>DECLINED</code> を返す。 3. **キャッシュ確認**: <code>r-&gt;main-&gt;notes</code> に該当セッションが既に存在するか確認し、あればそれを返して終了。 4. **DB読み込み**:</p>
+<ul>
+<li>匿名セッションの場合: <code>ap_cookie_read</code> でクッキーを読み取り、<code>dbd_load</code> を実行。</li>
+<li>ユーザー紐付けセッションの場合: <code>r-&gt;user</code> をキーとして <code>dbd_load</code> を実行。</li>
+<p>5. **セッション生成**: データベースから取得した値を用いて <code>session_rec</code> を初期化。UUID が含まれる場合は解析して格納。 6. **キャッシュ保存**: 取得した <code>session_rec</code> を <code>r-&gt;main-&gt;notes</code> に保存し、再パースを回避。 7. **ヘッダー設定**: <code>Cache-Control: no-cache, private</code> を追加し、セッションを含むページのキャッシュを抑制。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/session/mod_session_dbd.c:635</code> にて <code>ap_hook_session_load</code> に登録されている。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>, <code>apr_pstrcat</code>, <code>apr_table_get</code>, <code>ap_cookie_read</code>, <code>dbd_load</code>, <code>apr_pcalloc</code>, <code>apr_table_make</code>, <code>apr_uuid_parse</code>, <code>apr_table_setn</code>, <code>apr_table_addn</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_rec</code>: セッション情報を保持する構造体。</li>
+<li><code>session_dbd_dir_conf</code>: ディレクトリ単位の DBD 設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**DECLINED**: 設定でキーが特定できない場合や、セッション対象外のリクエストの場合。</li>
+<li>**エラー**: <code>dbd_load</code> が失敗した場合、そのエラーコードをそのまま返す。</li>
+<li>**未ログイン**: <code>peruser</code> 設定時に <code>r-&gt;user</code> が存在しない場合、セッションは読み込まれない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;main-&gt;notes</code> を利用して同一リクエスト内での重複読み込みを防止している。</li>
+<li><code>dbd_load</code> の結果が <code>APR_SUCCESS</code> 以外の場合、処理は中断される。</li>
+<li>セッションの生存期間は <code>r-&gt;pool</code> に紐付いているため、リクエスト終了後にセッションデータへアクセスしないこと。</li>
 </ul></body></html>

@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/http/http_etag.c:214</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストされたリソースに対して、設定（<code>FileETag</code> ディレクティブ）およびファイル属性に基づいた一意な <code>ETag</code> 文字列を生成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>char *ap_make_etag_ex(request_rec *r, etag_rec *er)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。<code>r-&gt;per_dir_config</code> から設定を取得し、<code>r-&gt;vlist_validator</code> があれば検証情報を統合します。</li>
+<li><code>er</code>: ETag 生成に必要なファイル情報（<code>finfo</code>）や強制弱タグフラグ（<code>force_weak</code>）を含む構造体。</li>
+<li>**出力**: 生成された <code>ETag</code> 文字列（<code>char *</code>）。メモリは <code>r-&gt;pool</code> から割り当てられます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>etag_bits</code> が <code>ETAG_NONE</code> の場合、空文字列 <code>&quot;&quot;</code> を返します。</li>
+<li>生成される文字列は <code>r-&gt;pool</code> の生存期間に依存します。</li>
+<li><code>er-&gt;finfo</code> が有効である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **設定評価**: <code>core_dir_config</code> から <code>etag_bits</code> を取得し、適用すべき属性を決定します。 2. **弱タグ判定**: <code>er-&gt;force_weak</code> が真の場合、または <code>r-&gt;vlist_validator</code> が存在しそれが弱タグである場合、<code>W/</code> プレフィックスを付与します。 3. **強力な ETag の生成**: <code>AP_REQUEST_IS_STRONG_ETAG(r)</code> が真、または <code>ETAG_DIGEST</code> が設定されている場合、<code>make_digest_etag</code> を呼び出し SHA1 ハッシュを生成します。 4. **属性ベースの生成**: 通常時は inode, size, mtime を連結した文字列を生成します。</p>
+<ul>
+<li>ファイルの最終更新時刻がリクエスト時刻から 1 秒以内の場合、安全のため弱タグとして扱います。</li>
+<li><code>etag_bits</code> に応じて inode, size, mtime を選択的に含めます。</li>
+<p>5. **VLV 統合**: <code>r-&gt;vlist_validator</code> が存在する場合、生成した ETag の末尾に結合します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/dav/fs/repos.c:1903</code></li>
+<li><code>modules/http/http_etag.c:364</code> (ラッパー <code>ap_make_etag</code>)</li>
+<li><code>modules/http/http_etag.c:380</code> (ラッパー <code>ap_set_etag</code>)</li>
+<li><code>modules/http/http_etag.c:404</code> (ラッパー <code>ap_set_etag_fd</code>)</li>
+<li>**呼び出し先**:</li>
+<li><code>make_digest_etag</code> (条件付き)</li>
+<li><code>etag_start</code>, <code>etag_end</code></li>
+<li><code>etag_uint64_to_hex</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストコンテキスト。</li>
+<li><code>etag_rec</code>: ETag 生成の入力パラメータを保持。</li>
+<li><code>core_dir_config</code>: <code>FileETag</code> ディレクティブの設定値。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>etag_bits</code> が <code>ETAG_NONE</code> の場合、ETag 生成をスキップし空文字列を返します。</li>
+<li>ファイル情報が取得できない場合（<code>APR_NOFILE</code>）、mtime のみを使用して ETag を生成します。</li>
+<li><code>r-&gt;vlist_validator</code> が存在する場合、その内容に応じて ETag 全体が弱タグ化されることがあります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用するため、メモリリークの心配はありません。</li>
+<li><code>make_digest_etag</code> はファイル読み込みを伴うため、パフォーマンスへの影響を考慮してください。</li>
+<li><code>ETAG_BACKWARD</code> は <code>etag_bits</code> が未設定（<code>ETAG_UNSET</code>）の場合のデフォルト動作として機能します。</li>
 </ul></body></html>

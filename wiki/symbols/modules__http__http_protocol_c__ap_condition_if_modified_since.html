@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/http/http_protocol.c:438</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストに含まれる <code>If-Modified-Since</code> ヘッダーを評価し、リソースが条件を満たしているかを判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>ap_condition_e ap_condition_if_modified_since(request_rec *r, apr_table_t *headers)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体 (<code>request_rec</code>)。<code>headers_in</code> から <code>If-Modified-Since</code> を取得し、<code>mtime</code> や <code>request_time</code> を参照する。</li>
+<li><code>headers</code>: 比較対象のヘッダーテーブル。<code>Last-Modified</code> および <code>Date</code> を取得するために使用。</li>
+<li>**出力**:</li>
+<li><code>ap_condition_e</code> 型の列挙値:</li>
+<li><code>AP_CONDITION_NONE</code>: ヘッダーが存在しない場合。</li>
+<li><code>AP_CONDITION_NOMATCH</code>: 条件を満たさない場合。</li>
+<li><code>AP_CONDITION_WEAK</code>: 条件を満たすが、弱一致（Range リクエスト等）の場合。</li>
+<li><code>AP_CONDITION_STRONG</code>: 条件を満たす強一致の場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>時刻比較はすべて秒単位で行われる（HTTP 仕様の最小時間分解能に基づく）。</li>
+<li><code>Last-Modified</code> が解析不能な場合は、<code>r-&gt;mtime</code> または現在時刻が使用される。</li>
+<li><code>Date</code> が解析不能な場合は、<code>r-&gt;request_time</code> が使用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>r-&gt;headers_in</code> から <code>If-Modified-Since</code> ヘッダーを取得する。存在しない場合は <code>AP_CONDITION_NONE</code> を返す。 2. <code>headers</code> から <code>Last-Modified</code> (mtime) と <code>Date</code> (reqtime) を解析し、秒単位の数値に変換する。 3. <code>If-Modified-Since</code> の値 (ims) と比較する。 4. <code>ims &gt;= mtime</code> かつ <code>ims &lt;= reqtime</code> の場合:</p>
+<ul>
+<li><code>reqtime &lt; mtime + 60</code> かつ <code>Range</code> ヘッダーが存在する場合は <code>AP_CONDITION_NOMATCH</code> を返す。</li>
+<li><code>reqtime &lt; mtime + 60</code> で <code>Range</code> ヘッダーがない場合は <code>AP_CONDITION_WEAK</code> を返す。</li>
+<li>それ以外は <code>AP_CONDITION_STRONG</code> を返す。</li>
+<p>5. 条件を満たさない場合は <code>AP_CONDITION_NOMATCH</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/cache_storage.c:329</code></li>
+<li><code>modules/http/http_protocol.c:623</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_get</code> (APR)</li>
+<li><code>apr_time_sec</code> (APR)</li>
+<li><code>apr_date_parse_http</code> (APR)</li>
+<li><code>apr_time_now</code> (APR)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびヘッダー保持に使用。</li>
+<li><code>apr_table_t</code>: ヘッダーの格納および検索に使用。</li>
+<li><code>ap_condition_e</code>: 戻り値の列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>If-Modified-Since</code> ヘッダーがリクエストに含まれない場合、即座に <code>AP_CONDITION_NONE</code> を返す。</li>
+<li><code>Range</code> ヘッダーが存在する場合、弱一致 (<code>AP_CONDITION_WEAK</code>) は許可されず <code>AP_CONDITION_NOMATCH</code> となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_meets_conditions</code> による条件付きリクエスト評価フローの一部として呼び出される。</li>
+<li>時刻解析には <code>apr_date_parse_http</code> を使用しているため、RFC 準拠のフォーマット以外は <code>APR_DATE_BAD</code> となり、フォールバック処理が実行される点に注意すること。</li>
 </ul></body></html>

@@ -6,22 +6,45 @@
 <li>定義箇所: <code>server/util_mutex.c:129</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server におけるミューテックス（排他制御）の動作設定（メカニズム、ディレクトリ、オプション）を保持し、管理するための内部構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    apr_int32_t options;    /* ミューテックスのオプションフラグ */
+    int set;                /* 設定が明示的に指定されたかを示すフラグ */
+    int none;               /* ミューテックスを無効化するかを示すフラグ */
+    int omit_pid;           /* ファイル名にPIDを含めないかを示すフラグ */
+    apr_lockmech_e mech;    /* 使用するロックメカニズム (APR定義) */
+    const char *dir;        /* ロックファイルを作成するディレクトリパス */
+} mutex_cfg_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は直接的な関数ではありませんが、<code>ap_set_mutex</code> 等のディレクティブハンドラによって設定値が入力され、<code>mxcfg_lookup</code> 等の関数を通じて解決された設定が出力（参照）されます。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mxcfg_by_type</code> ハッシュテーブル内で管理され、サーバーの起動期間中（<code>pconf</code> プール）有効です。</li>
+<li><code>mxcfg_lookup</code> により、特定のミューテックス設定 &gt; デフォルト設定 &gt; 登録時のデフォルト値 の優先順位で解決されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>flock</code> や <code>fcntl</code> を使用する場合、<code>get_mutex_filename</code> が本構造体の <code>dir</code> と <code>omit_pid</code> を参照してロックファイルのパスを生成します。</li>
+<li><code>omit_pid</code> が偽の場合、ファイル名に PID が付与され、プロセスごとの競合を回避する設計となっています。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/util_mutex.c</code> 内の <code>ap_set_mutex</code>（設定更新）、<code>mxcfg_lookup</code>（設定取得）、<code>get_mutex_filename</code>（パス生成）、<code>ap_dump_mutexes</code>（デバッグ出力）などから参照されています。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、直接的な関数呼び出しは行いません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_lockmech_e</code>: APR が提供するロックメカニズムの列挙型。</li>
+<li><code>mxcfg_by_type</code>: <code>server/util_mutex.c</code> 内で定義される、型名と <code>mutex_cfg_t</code> を紐付けるハッシュテーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mxcfg_lookup</code> で該当する型が見つからない場合、デフォルト設定が適用されます。</li>
+<li><code>dir</code> が指定されていない場合、APR のデフォルトのロックディレクトリが使用されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はミューテックスの「設定」を保持するものであり、実際のロック取得・解放ロジックは APR (<code>apr_proc_mutex_lock</code> 等) に委譲されています。</li>
+<li>メモリ管理は <code>pconf</code> プールに依存しているため、設定のライフサイクルはサーバーの起動期間と一致します。</li>
 </ul></body></html>

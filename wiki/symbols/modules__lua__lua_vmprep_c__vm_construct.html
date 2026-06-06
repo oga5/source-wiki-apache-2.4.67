@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/lua/lua_vmprep.c:333</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>ap_lua_vm_spec</code> 構造体に基づき、新しい Lua 仮想マシン（<code>lua_State</code>）を構築・初期化し、Apache のライフサイクル管理下に置く。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t vm_construct(lua_State **vm, void *params, apr_pool_t *lifecycle_pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>vm</code>: 生成された <code>lua_State</code> を格納するポインタのポインタ。</li>
+<li><code>params</code>: <code>ap_lua_vm_spec</code> 構造体へのポインタ（VM の設定情報）。</li>
+<li><code>lifecycle_pool</code>: VM の生存期間を管理する Apache メモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時は <code>APR_EBADF</code> 等のステータスコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>params</code> は <code>ap_lua_vm_spec</code> 型としてキャスト可能であること。</li>
+<li><code>lifecycle_pool</code> は有効なメモリプールであり、VM 破棄時のクリーンアップに使用される。</li>
+<li>Lua のレジストリには、<code>lifecycle_pool</code> が <code>&quot;Apache2.Wombat.pool&quot;</code> というキーで格納される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>luaL_newstate()</code> で VM を生成し、標準ライブラリをロードする（<code>AP_ENABLE_LUAJIT</code> 定義時は JIT も有効化）。 2. <code>spec-&gt;package_paths</code> および <code>spec-&gt;package_cpaths</code> が指定されていれば、<code>munge_path</code> を呼び出して Lua の検索パスを調整する。 3. <code>spec-&gt;cb</code> が存在する場合、ユーザー定義の初期化コールバックを実行する。 4. <code>spec-&gt;bytecode</code> があればそれをロードし、なければ <code>spec-&gt;file</code> を読み込む。 5. <code>lua_pcall</code> を実行してスクリプトを初期化する。 6. <code>AP_ENABLE_LUAJIT</code> 定義時は <code>loadjitmodule</code> を実行する。 7. <code>lifecycle_pool</code> を Lua レジストリに保存し、生成した <code>lua_State</code> を <code>*vm</code> に代入する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/lua/lua_vmprep.c</code> 内の関数（<code>ap_lua_get_lua_state</code> 等から呼び出される）。</li>
+<li>**呼び出し先**:</li>
+<li><code>luaL_newstate</code>, <code>luaL_openlibs</code>, <code>luaL_loadbuffer</code>, <code>luaL_loadfile</code>, <code>lua_pcall</code> (Lua C API)</li>
+<li><code>munge_path</code>, <code>loadjitmodule</code> (内部関数)</li>
+<li><code>spec-&gt;cb</code> (コールバック関数)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lua_State</code>: Lua 仮想マシンの状態。</li>
+<li><code>ap_lua_vm_spec</code>: VM の構築パラメータ（パス、バイトコード、ファイルパス、コールバック等）。</li>
+<li><code>apr_pool_t</code>: メモリ管理およびクリーンアップ用プール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>luaL_loadfile</code> または <code>lua_pcall</code> が失敗した場合、エラーログを出力し <code>APR_EBADF</code> を返す。</li>
+<li>メモリ割り当てエラー（<code>LUA_ERRMEM</code>）が発生した場合も同様にエラーとして扱われる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_lua_get_lua_state</code> 等から呼び出される低レベルな構築関数である。</li>
+<li><code>lifecycle_pool</code> は Lua VM の生存期間と密接に関連しており、プールが破棄されると VM も無効化される前提で設計されている。</li>
+<li><code>munge_path</code> によるパス操作は文字列置換に依存しているため、パス設定の形式には注意が必要である。</li>
 </ul></body></html>

@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/cache/mod_cache_disk.c:135</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>一時ファイルから最終的なキャッシュファイルパスへ、ディレクトリ構造の欠落を考慮したリトライ付きのリネーム処理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t safe_file_rename(disk_cache_conf *conf,
+                                     const char *src, const char *dest,
+                                     apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>conf</code>: ディスクキャッシュの設定情報。</li>
+<li><code>src</code>: リネーム元の一時ファイルパス。</li>
+<li><code>dest</code>: リネーム先の最終的なキャッシュファイルパス。</li>
+<li><code>pool</code>: メモリ割り当てに使用する APR プール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 操作の成功（<code>APR_SUCCESS</code>）または失敗を示すステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>src</code> は既に存在し、書き込み可能な一時ファイルであること。</li>
+<li><code>dest</code> の親ディレクトリは、<code>htcacheclean</code> 等の外部プロセスによって削除されている可能性がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_file_rename</code> を呼び出し、リネームを試みる。 2. 成功した場合は直ちに終了する。 3. 失敗した場合、最大2回まで以下のリトライ処理を行う。</p>
+<ul>
+<li>0.001秒間待機する。</li>
+<li><code>mkdir_structure</code> を呼び出し、<code>dest</code> に必要なディレクトリ構造を再作成する。</li>
+<li>再度 <code>apr_file_rename</code> を試みる。</li>
+<p>4. 最終的なリネーム結果を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_cache_disk.c:174</code>（<code>file_cache_el_final</code> 内から呼び出される）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_file_rename</code></li>
+<li><code>apr_sleep</code></li>
+<li><code>mkdir_structure</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>disk_cache_conf</code>: キャッシュ設定を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_file_rename</code> が権限不足やファイルシステムエラーで失敗し続ける場合、最終的にエラーコードが返される。</li>
+<li><code>mkdir_structure</code> が失敗した場合、リネームは行われず、ループの次の反復へ進む。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は、<code>htcacheclean</code> がディレクトリを削除する競合状態を回避するために設計されている。</li>
+<li>待機時間は固定の1ミリ秒であり、高負荷環境下での挙動については注意が必要である。</li>
 </ul></body></html>

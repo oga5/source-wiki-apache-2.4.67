@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/lua/mod_lua.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/lua/mod_lua.c</h1>
+<h2>概要</h2>
+<p><code>mod_lua.c</code> は Apache HTTP Server の Lua モジュールのメインエントリポイントです。HTTP リクエスト処理の各フェーズ（ハンドラ、フィルタ、認証、フック）を Lua スクリプトに委譲するためのブリッジ機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/lua</code> サブシステムにおける「司令塔」です。設定のパース、Lua VM のライフサイクル管理、Apache の各フックと Lua 関数を結びつけるハーネス（Harness）の実装を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>LuaRoot</code>, <code>LuaScope</code>, <code>LuaHook*</code> などのディレクティブを処理し、ディレクトリ単位の設定をマージする。</li>
+<li>**フックハーネス**: Apache の各フェーズ（translate_name, fixups, authz 等）を Lua 関数へルーティングする。</li>
+<li>**フィルタ管理**: 入出力フィルタの登録と、Lua コルーチンを用いたストリーム処理の制御。</li>
+<li>**VM ライフサイクル**: <code>create_vm_spec</code> を通じた VM の生成と、<code>ap_lua_release_state</code> によるリソース解放。</li>
+<li>**共有メモリ管理**: マルチプロセス環境下での VM 共有のためのグローバルミューテックスと共有メモリの初期化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・構造体</h3>
+<ul>
+<li><code>ap_lua_dir_cfg</code>: ディレクトリ単位の Lua 設定（パス、ハンドラ、フィルタ、VM スコープ）。</li>
+<li><code>lua_filter_ctx</code>: フィルタ処理中のコンテキスト。Lua コルーチン（<code>lua_State</code>）とバケットブリゲードを保持。</li>
+<li><code>lua_authz_provider_spec</code>: 認証プロバイダとして登録された Lua 関数のメタデータ。</li>
+</ul>
+<h3>フック・ハンドラ</h3>
+<ul>
+<li><code>lua_handler</code>: <code>lua-script</code> ハンドラを処理するメイン関数。</li>
+<li><code>lua_request_rec_hook_harness</code>: 各種フックを Lua に委譲する汎用ハーネス。</li>
+<li><code>lua_output_filter_handle</code> / <code>lua_input_filter_handle</code>: Lua を用いたストリームフィルタリングの実装。</li>
+</ul>
+<h3>ライフサイクル・ユーティリティ</h3>
+<ul>
+<li><code>create_vm_spec</code>: リクエスト情報に基づき、VM の実行環境（スコープ、プール）を構築する。</li>
+<li><code>ap_lua_release_state</code>: VM の状態を解放、またはリソースリストへ返却する。</li>
+<li><code>report_lua_error</code>: Lua スタックからエラーを抽出し、HTTP 500 レスポンスとして出力する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>lua_register_hooks</code> が Apache の各フックポイントにハーネス関数を登録。 2. **リクエスト処理**:</p>
+<ul>
+<li>各フックが呼ばれると、<code>lua_request_rec_hook_harness</code> が設定から該当する Lua スクリプトを特定。</li>
+<li><code>create_vm_spec</code> が VM のスコープ（Once, Request, Conn, Server）を決定し、<code>ap_lua_get_lua_state</code> で VM を取得。</li>
+<li><code>lua_pcall</code> で Lua 関数を実行し、戻り値を Apache のステータスコードに変換。</li>
+<p>3. **フィルタ処理**:</p>
+<li><code>lua_setup_filter_ctx</code> で Lua コルーチンを初期化。</li>
+<li><code>lua_resume</code> を使用して、バケットブリゲードのデータが渡されるたびに Lua 側で処理（Yield/Resume）を行う。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_lua.h</code>: 共通定義とマクロ。</li>
+<li><code>lua_apr.h</code>, <code>lua_config.h</code>: Lua と APR のブリッジおよび設定処理。</li>
+<li><code>apr_shm.h</code>, <code>apr_thread_mutex.h</code>: 共有メモリと排他制御。</li>
+<li><code>mod_auth.h</code>: 認証プロバイダ登録用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>lua_vmprep.c</code>: VM の生成とキャッシュロジックの詳細。</li>
+<li><code>lua_request.c</code>: Lua から Apache の <code>request_rec</code> を操作するための API 実装。</li>
+<li><code>lua_config.c</code>: 設定ディレクティブの内部表現。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を多用しています。VM のスコープ（<code>vm_scope</code>）によって、VM がどのプールに紐付くかが決まるため、メモリリークを防ぐには <code>ap_lua_release_state</code> の呼び出しが必須です。</li>
+<li>**コルーチン**: フィルタ処理では <code>lua_resume</code> を使用しており、Lua 側で <code>coroutine.yield()</code> を呼び出すことで Apache のフィルタチェーンと協調動作します。</li>
+<li>**未実装**: <code>LuaHookInsertFilter</code> はソース内で未実装としてマークされています。</li>
+<li>**ByteCodeHack**: 設定パース時に Lua コードをバイトコード化して保持する「ハック」が含まれており、複雑なディレクティブ処理を行っています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__mod_lua_c__lua_authz_provider_spec.html" target="wiki-view">`lua_authz_provider_spec`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__lua_authz_provider_func.html" target="wiki-view">`lua_authz_provider_func`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__lua_filter_ctx.html" target="wiki-view">`lua_filter_ctx`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__shm_cleanup_wrapper.html" target="wiki-view">`shm_cleanup_wrapper`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__report_lua_error.html" target="wiki-view">`report_lua_error`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__lua_open_callback.html" target="wiki-view">`lua_open_callback`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__lua_open_hook.html" target="wiki-view">`lua_open_hook`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__cr_ctx.html" target="wiki-view">`cr_ctx`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__hack_section_baton.html" target="wiki-view">`hack_section_baton`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__register_check_user_id_hook.html" target="wiki-view">`register_check_user_id_hook`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__register_check_user_id_block.html" target="wiki-view">`register_check_user_id_block`</a></li>
+<li><a href="../../symbols/modules__lua__mod_lua_c__register_insert_filter_hook.html" target="wiki-view">`register_insert_filter_hook`</a></li>
+</ul></body></html>

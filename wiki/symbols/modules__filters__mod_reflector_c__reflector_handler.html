@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/filters/mod_reflector.c:46</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>受信した <code>POST</code> リクエストのボディをそのままレスポンスとしてクライアントに送り返す（リフレクションする）ためのハンドラ。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int reflector_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（Apache リクエスト構造体）</li>
+<li>**出力**: <code>int</code>（HTTP ステータスコードまたは <code>DECLINED</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストのハンドラ名が <code>&quot;reflector&quot;</code> であること。</li>
+<li><code>POST</code> メソッドのみをサポートする（<code>OPTIONS</code> メソッドは <code>ap_send_http_options</code> で処理される）。</li>
+<li>サブリクエストや接続が閉じている場合は処理を行わず <code>OK</code> を返す。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **メソッド検証**: <code>POST</code> または <code>OPTIONS</code> 以外は <code>HTTP_METHOD_NOT_ALLOWED</code> を返す。 2. **ヘッダー転送**: 設定に基づき <code>header_do</code> を呼び出し、リクエストヘッダーをレスポンスヘッダーへコピーする。 3. **メタデータ設定**: <code>Last-Modified</code>、<code>Accept-Ranges</code>、<code>Content-Length</code>、<code>Content-Type</code> をリクエストから引き継ぐ。 4. **ストリーム転送**:</p>
+<ul>
+<li><code>ap_get_brigade</code> で入力フィルタからデータを読み取る。</li>
+<li><code>EOS</code> (End of Stream) バケットを検出するまで、読み取ったデータを <code>bbout</code> ブリゲードへ書き込み、<code>ap_pass_brigade</code> で出力フィルタへ渡すループを実行する。</li>
+<p>5. **終了**: 正常終了時に <code>OK</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のハンドラフック（<code>ap_hook_handler</code> により <code>reflector_hooks</code> で登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>header_do</code>（ヘッダーコピー用）</li>
+<li><code>ap_get_brigade</code>, <code>ap_pass_brigade</code>（ストリーム処理用）</li>
+<li><code>ap_parse_strict_length</code>, <code>ap_set_content_length</code> 等の Apache API</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>reflector_cfg</code>: ディレクトリ単位の設定（ヘッダーマッピングルール等）を保持。</li>
+<li><code>apr_bucket_brigade</code>: 入出力データのバッファリングに使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Content-Length</code> が不正な場合: <code>HTTP_BAD_REQUEST</code> を返す。</li>
+<li><code>ap_get_brigade</code> または <code>ap_pass_brigade</code> が失敗した場合: エラーログを出力し、適切なエラーコード（<code>HTTP_BAD_REQUEST</code> または <code>AP_FILTER_ERROR</code>）を返す。</li>
+<li><code>POST</code> 以外のメソッド: <code>HTTP_METHOD_NOT_ALLOWED</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>POST</code> リクエストのボディをメモリ経由で転送するストリーミング実装です。</li>
+<li><code>bucket-&gt;length == 0</code> のメタデータバケットはスキップされます。</li>
+<li><code>ap_pass_brigade</code> の戻り値は <code>AP_FILTER_ERROR</code> として処理されます。</li>
 </ul></body></html>

@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_ajp.c:30</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>ajp://</code> スキームの URL を解析・正規化し、Apache の内部的なプロキシリクエスト形式（<code>proxy:ajp://...</code>）へ変換します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_ajp_canon(request_rec *r, char *url)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>url</code>: 正規化対象の URL 文字列。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 成功時。<code>r-&gt;filename</code> に正規化された内部 URL が格納されます。</li>
+<li><code>DECLINED</code>: <code>ajp:</code> スキームではない場合。</li>
+<li><code>HTTP_BAD_REQUEST</code>: URL 解析やエンコード処理に失敗した場合。</li>
+<li><code>HTTP_FORBIDDEN</code>: パスやクエリ文字列に不正な制御文字が含まれる場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>url</code> は <code>ajp:</code> で始まる必要があります。</li>
+<li><code>r-&gt;pool</code> を使用してメモリを割り当てます。</li>
+<li><code>proxy-nocanon</code> または <code>proxy-noencode</code> ノートの設定により、パスのエンコード処理がスキップされる場合があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **スキーム確認**: <code>ajp:</code> 接頭辞を確認し、以降の文字列を処理対象とします。 2. **ネットワーク位置の解析**: <code>ap_proxy_canon_netloc</code> を使用してホスト名とポートを抽出します。 3. **パスとクエリの処理**:</p>
+<ul>
+<li><code>proxy-nocanon</code> 設定時は生のパスを使用します。</li>
+<li><code>proxy-noencode</code> 設定時はエンコード済みのパスと <code>r-&gt;args</code> を使用します。</li>
+<li>通常時は <code>ap_proxy_canonenc_ex</code> を使用してパスをエンコードします。</li>
+<p>4. **バリデーション**: パスおよびクエリ文字列に制御文字やスペースが含まれていないか検証します。 5. **URL 再構築**: ホスト（IPv6 の場合はブラケットで囲む）、ポート、パス、クエリを結合し、<code>proxy:ajp://</code> 形式の文字列を <code>r-&gt;filename</code> に設定します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>proxy_hook_canon_handler</code> に登録されており、Apache のリクエスト処理フェーズで呼び出されます。</li>
+<li>**呼び出し先**: <code>ap_proxy_port_of_scheme</code>, <code>ap_proxy_canon_netloc</code>, <code>ap_proxy_canonenc_ex</code>, <code>ap_scan_vchar_obstext</code> 等の <code>mod_proxy</code> ユーティリティ関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびメモリプール (<code>r-&gt;pool</code>) を保持。</li>
+<li><code>core_dir_config</code>: ディレクトリ単位の設定（エンコードフラグの判定に使用）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**解析エラー**: <code>ap_proxy_canon_netloc</code> が失敗した場合、<code>HTTP_BAD_REQUEST</code> を返します。</li>
+<li>**不正文字**: パスやクエリに制御文字が含まれる場合、<code>HTTP_FORBIDDEN</code> を返します。</li>
+<li>**エンコード失敗**: <code>ap_proxy_canonenc_ex</code> が <code>NULL</code> を返した場合、<code>HTTP_BAD_REQUEST</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_proxy</code> のカノニカライザとして機能します。</li>
+<li>IPv6 アドレスのホスト名指定時にブラケットを付与する処理が含まれています。</li>
+<li><code>proxy-nocanon</code> 等のノート設定による挙動の変化に注意してください。</li>
 </ul></body></html>

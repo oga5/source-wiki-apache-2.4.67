@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/core/mod_watchdog.c:386</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の設定フェーズにおいて、<code>mod_watchdog</code> が使用するデフォルトの Watchdog インスタンスを生成し、プロセス間排他制御用のミューテックスを登録する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int wd_pre_config_hook(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pconf</code>: 設定用メモリプール。</li>
+<li><code>plog</code>, <code>ptemp</code>: ログおよび一時用メモリプール（本関数内では未使用）。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返す。</li>
+<li>失敗時は <code>apr_status_t</code> 型の戻り値（エラーコード）を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_mpm_query</code> を用いて MPM がフォークをサポートしているかを確認する。</li>
+<li><code>pconf</code> プールは、Watchdog インスタンスおよびミューテックスのライフサイクルを管理するために使用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_mpm_query</code> で <code>AP_MPMQ_IS_FORKED</code> を取得し、MPM の動作モードを確認する。 2. <code>ap_watchdog_get_instance</code> を呼び出し、以下のインスタンスを生成する:</p>
+<ul>
+<li><code>AP_WATCHDOG_SINGLETON</code>: シングルトンモードのインスタンス。</li>
+<li><code>AP_WATCHDOG_DEFAULT</code>: デフォルトのインスタンス。</li>
+<p>3. MPM がフォークをサポートしていない場合、親プロセス用の <code>AP_WATCHDOG_DEFAULT</code> インスタンスを追加で生成する。 4. <code>ap_mutex_register</code> を呼び出し、<code>wd_proc_mutex_type</code> に関連付けられたプロセス間ミューテックスを登録する。 5. 正常終了時に <code>OK</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/core/mod_watchdog.c:647</code> にて <code>ap_hook_pre_config</code> に登録されている。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_mpm_query</code></li>
+<li><code>ap_watchdog_get_instance</code></li>
+<li><code>ap_mutex_register</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_watchdog_t</code>: 生成される監視インスタンスの構造体。</li>
+<li><code>apr_pool_t</code>: リソース管理に使用されるメモリプール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_watchdog_get_instance</code> または <code>ap_mutex_register</code> が <code>APR_SUCCESS</code> 以外の値を返した場合、そのエラーコードを即座に返して処理を中断する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はサーバー起動時の設定フェーズで実行されるため、ここで生成されたインスタンスはサーバーのライフサイクル全体で有効となる。</li>
+<li><code>mpm_is_forked</code> の判定により、非フォーク型 MPM における親プロセス専用の Watchdog 生成ロジックが分岐するため、MPM 固有の挙動変更時には注意が必要である。</li>
 </ul></body></html>

@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/cluster/mod_heartmonitor.c:55</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_heartmonitor</code> モジュールにおける、サーバー単位の設定および実行時の状態を保持するためのコンテキスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct hm_ctx_t
+{
+    int active;
+    const char *storage_path;
+    ap_watchdog_t *watchdog;
+    apr_interval_time_t interval;
+    apr_sockaddr_t *mcast_addr;
+    apr_status_t status;
+    volatile int keep_running;
+    apr_socket_t *sock;
+    apr_pool_t *p;
+    apr_hash_t *servers;
+    server_rec *s;
+} hm_ctx_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は関数引数として各処理へ渡され、状態の参照や更新に使用されます。</p>
+<ul>
+<li>**入力**: モジュール初期化時および実行時の設定値（<code>storage_path</code>, <code>interval</code>, <code>mcast_addr</code> 等）。</li>
+<li>**出力**: 監視ループ内でのソケット状態、サーバー情報のハッシュテーブル（<code>servers</code>）、および実行ステータス。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code> (メモリプール) は、モジュールのライフサイクルに合わせて適切に管理される必要があります。</li>
+<li><code>servers</code> ハッシュテーブルは、ハートビートメッセージの受信に伴い <code>hm_get_server</code> 等を通じて動的に更新されます。</li>
+<li><code>keep_running</code> は監視タスクの継続制御に使用されるため、スレッドセーフなアクセスが求められます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_watchdog</code> を介したバックグラウンドタスクの実行状態を管理します。</li>
+<li>UDP ソケット（<code>sock</code>）を介したハートビート信号の受信と、解析結果に基づく <code>servers</code> ハッシュテーブルの更新を行います。</li>
+<li>定期的に <code>hm_update_stats</code> を呼び出し、収集したサーバー情報を共有メモリ（<code>slotmem</code>）またはファイルへ永続化します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>hm_listen</code>, <code>hm_file_update_stat</code>, <code>hm_update_stat</code>, <code>hm_file_update_stats</code>, <code>hm_slotmem_update_stats</code>, <code>hm_update_stats</code>, <code>hm_get_server</code>, <code>hm_processmsg</code>, <code>hm_recv</code> 等のモジュール内関数。</li>
+<li>**呼び出し先**: 構造体内部の各フィールド（<code>watchdog</code>, <code>sock</code>, <code>servers</code> 等）が各処理で参照・操作されます。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hm_server_t</code>: <code>servers</code> ハッシュテーブル内に格納される個々のバックエンドサーバーの状態。</li>
+<li><code>ap_watchdog_t</code>: バックグラウンド監視タスクの制御用。</li>
+<li><code>apr_hash_t</code>: サーバーリストの管理に使用。</li>
+<li><code>server_rec</code>: Apache HTTP Server のサーバー設定情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>status</code> フィールドにより、ソケットの初期化や通信時のエラー状態を保持します。</li>
+<li><code>storage_path</code> が指定されていない場合や、共有メモリへの書き込み失敗時に <code>hm_update_stats</code> がエラーを返す可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>hm_ctx_t</code> は <code>apr_pool_t</code> を保持しており、メモリリークを防ぐため、モジュールの終了処理時に適切にプールが破棄されることを確認してください。</li>
+<li><code>servers</code> ハッシュテーブルの操作は、<code>mod_watchdog</code> のコールバック内で行われるため、他のスレッドからのアクセス競合に注意が必要です。</li>
+<li><code>HM_UPDATE_SEC</code> 等の定数については、将来的に実行時設定へ移行する計画があります。</li>
 </ul></body></html>

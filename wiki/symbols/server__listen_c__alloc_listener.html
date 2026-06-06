@@ -6,22 +6,72 @@
 <li>定義箇所: <code>server/listen.c:439</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>設定ファイルで指定された <code>Listen</code> ディレクティブに基づき、新しいリスナー構造体（<code>ap_listen_rec</code>）を生成し、グローバルなリスナーリスト（<code>ap_listeners</code>）に追加する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static const char *alloc_listener(process_rec *process, const char *addr,
+                                  apr_port_t port, const char* proto,
+                                  const char *scope_id, void *slave,
+                                  apr_pool_t *temp_pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>process</code>: プロセス管理用構造体（メモリプールを含む）。</li>
+<li><code>addr</code>: バインド対象の IP アドレスまたはホスト名。</li>
+<li><code>port</code>: バインド対象のポート番号。</li>
+<li><code>proto</code>: プロトコル名（例: &quot;http&quot;）。</li>
+<li><code>scope_id</code>: IPv6 スコープ ID。</li>
+<li><code>slave</code>: スレーブリスナーのポインタ。</li>
+<li><code>temp_pool</code>: 一時的なメモリプール。</li>
+<li>**出力**:</li>
+<li>成功時は <code>NULL</code> を返す。</li>
+<li>失敗時はエラーメッセージ（<code>const char *</code>）を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listeners</code> はサーバーのライフサイクルを通じて生存する連結リストである。</li>
+<li>同一の IP:ポート に対して複数のリスナーを定義することはできない。</li>
+<li><code>apr_sockaddr_info_get</code> により取得されたアドレス順序を維持する必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>find_listeners</code> を呼び出し、指定された IP:ポート が既に存在しないか確認する。 2. <code>apr_sockaddr_info_get</code> を使用して、指定されたアドレスとポートからソケットアドレス構造体を取得する。 3. 取得したアドレスリストをループし、各アドレスに対して以下の処理を行う:</p>
+<ul>
+<li><code>ap_listen_rec</code> 構造体を <code>process-&gt;pool</code> から割り当てる。</li>
+<li><code>apr_socket_create</code> でソケットを作成する。</li>
+<li>IPv6 環境でアドレス解決に失敗した場合、次のアドレスへスキップする。</li>
+<li><code>apr_sockaddr_zone_set</code> が利用可能な場合、スコープ ID を適用する。</li>
+<li>新しいリスナーを <code>ap_listeners</code> リストの末尾に追加する。</li>
+<p>4. 成功した場合は <code>NULL</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/listen.c:1057</code> (設定解析時)</li>
+<li>**呼び出し先**:</li>
+<li><code>find_listeners</code></li>
+<li><code>apr_sockaddr_info_get</code></li>
+<li><code>ap_log_perror</code></li>
+<li><code>apr_palloc</code></li>
+<li><code>apr_pstrdup</code></li>
+<li><code>apr_socket_create</code></li>
+<li><code>apr_sockaddr_zone_set</code> (条件付き)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listen_rec</code>: リスナー情報を保持する構造体。</li>
+<li><code>process_rec</code>: プロセス全体の情報を保持する構造体。</li>
+<li><code>apr_sockaddr_t</code>: APR のソケットアドレス構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**重複定義**: 同一の IP:ポート が既に存在する場合、「Cannot define multiple Listeners...」を返す。</li>
+<li>**スレーブ競合**: 既存のリスナーとスレーブ設定が競合する場合、「Cannot define a slave...」を返す。</li>
+<li>**アドレス解決失敗**: <code>apr_sockaddr_info_get</code> が失敗した場合、「Listen setup failed」を返す。</li>
+<li>**ソケット作成失敗**: <code>apr_socket_create</code> が失敗した場合、「Listen setup failed」を返す。</li>
+<li>**スコープ設定失敗**: <code>apr_sockaddr_zone_set</code> が失敗した場合、「Listen step failed」を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>process-&gt;pool</code> を使用してメモリを割り当てるため、サーバー再起動時までリスナー情報が保持される。</li>
+<li><code>apr_socket_create</code> の呼び出しにおいて、プラットフォーム固有の挙動（特に IPv6）が考慮されている。</li>
+<li><code>ap_listeners</code> リストの末尾を探索する処理が含まれており、リストが長くなる場合は計算量に注意が必要。</li>
 </ul></body></html>

@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/aaa/mod_authnz_fcgi.c:191</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>FastCGI バックエンドから指定されたバイト数（<code>buflen</code>）のデータを完全に読み込むまで、<code>recv_data</code> を繰り返し呼び出すラッパー関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t recv_data_full(const fcgi_provider_conf *conf,
+                                   request_rec *r,
+                                   apr_socket_t *s,
+                                   char *buf,
+                                   apr_size_t buflen)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>conf</code>: FastCGI プロバイダー設定。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>s</code>: 通信に使用するソケット。</li>
+<li><code>buf</code>: 受信データを格納するバッファ。</li>
+<li><code>buflen</code>: 読み込むべき合計バイト数。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>。読み込み中にエラーが発生した場合は、<code>recv_data</code> が返したエラーコードをそのまま返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buf</code> は少なくとも <code>buflen</code> バイト以上のメモリ領域を確保している必要があります。</li>
+<li><code>recv_data</code> が正常に動作する環境（ソケット接続済み）であることを前提とします。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>cumulative_len</code>（累積読み込みバイト数）を 0 に初期化します。 2. <code>cumulative_len</code> が <code>buflen</code> に達するまで、以下のループを実行します。</p>
+<ul>
+<li>残りの読み込み必要量（<code>buflen - cumulative_len</code>）を計算します。</li>
+<li><code>recv_data</code> を呼び出し、データを <code>buf</code> のオフセット位置に読み込みます。</li>
+<li><code>recv_data</code> が <code>APR_SUCCESS</code> 以外を返した場合は、即座にその値を返して終了します。</li>
+<li>読み込んだバイト数を <code>cumulative_len</code> に加算します。</li>
+<p>3. 全データの読み込みが完了した時点で <code>APR_SUCCESS</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/aaa/mod_authnz_fcgi.c:500</code></li>
+<li><code>modules/aaa/mod_authnz_fcgi.c:662</code></li>
+<li>**呼び出し先**:</li>
+<li><code>recv_data</code> (同ファイル内)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fcgi_provider_conf</code>: FastCGI バックエンドの接続情報を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト状態を保持する構造体。</li>
+<li><code>apr_socket_t</code>: APR のソケット抽象化構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**通信エラー**: <code>recv_data</code> がエラーを返した場合、そのエラーコードを伝播します。</li>
+<li>**部分的な読み込み**: <code>recv_data</code> が一度に要求された全量を読み込めない場合でも、ループによって <code>buflen</code> に達するまで再試行されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は、FastCGI レコードのヘッダーやペイロードを確実に取得するために使用されます。</li>
+<li><code>recv_data</code> の挙動に依存しているため、通信タイムアウトや切断時の挙動は <code>recv_data</code> の実装を確認してください。</li>
 </ul></body></html>

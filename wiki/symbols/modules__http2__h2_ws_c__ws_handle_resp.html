@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/http2/h2_ws.c:197</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 上の WebSocket ハンドシェイクにおいて、バックエンドからのレスポンスを検査し、プロトコル変換の成否を判定してレスポンスバケットを書き換える。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void ws_handle_resp(conn_rec *c2, h2_conn_ctx_t *conn_ctx,
+                           struct ws_filter_ctx *ws_ctx, apr_bucket *b)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c2</code>: 処理対象の接続レコード。</li>
+<li><code>conn_ctx</code>: ストリームごとの接続コンテキスト。</li>
+<li><code>ws_ctx</code>: フィルタの実行状態を保持するコンテキスト。</li>
+<li><code>b</code>: 検査対象のレスポンスバケット。</li>
+<li>出力: 引数 <code>b</code> を介してレスポンスを置換し、<code>ws_ctx</code> および <code>conn_ctx</code> の状態を更新する。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ws_ctx-&gt;has_final_response</code> が真の場合、本関数は何もせず終了する。</li>
+<li><code>Sec-WebSocket-Accept</code> ヘッダーの検証には、<code>ws_ctx-&gt;ws_accept_base64</code> に格納された期待値を使用する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **レスポンス検査**: レスポンスステータスを確認する。 2. **101 Switching Protocols の処理**:</p>
+<ul>
+<li><code>Sec-WebSocket-Accept</code> ヘッダーが期待値と一致する場合、<code>make_valid_resp</code> を呼び出し <code>200 OK</code> に変換する。</li>
+<li>一致しない場合、<code>make_invalid_resp</code> を呼び出し <code>502 Bad Gateway</code> に変換する。</li>
+<p>3. **エラー処理**: 200 未満のステータスは透過させ、200 以上 300 未満のステータスは <code>502 Bad Gateway</code> に変換する。 4. **バケット置換**: <code>b_override</code> が生成された場合、元のバケットを削除し、新しいバケットを挿入する。 5. **状態更新**: 最終レスポンスが確定した場合、<code>ws_ctx</code> および <code>conn_ctx</code> の <code>has_final_response</code> フラグを立てる。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>modules/http2/h2_ws.c:314</code> (出力フィルタ <code>h2_c2_ws_filter_out</code> 内)</li>
+<li>呼び出し先: <code>make_valid_resp</code>, <code>make_invalid_resp</code>, <code>apr_bucket_delete</code>, <code>APR_BUCKET_INSERT_BEFORE</code>, <code>APR_BUCKET_INSERT_AFTER</code>, <code>apr_bucket_eos_create</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: Apache HTTPD の接続構造体。</li>
+<li><code>h2_conn_ctx_t</code>: HTTP/2 ストリームごとの接続コンテキスト。</li>
+<li><code>ws_filter_ctx</code>: WebSocket フィルタの実行状態（Accept キー、完了フラグ等）を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Sec-WebSocket-Accept</code> ヘッダーが欠落または不一致の場合、<code>502 Bad Gateway</code> を返し、<code>override_body</code> を設定して以降のボディを破棄する。</li>
+<li>101 以外の成功ステータス（2xx）が返された場合、WebSocket 接続として不適切とみなし <code>502 Bad Gateway</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>H2_C2_WS_OUT</code> フィルタの一部として動作する。</li>
+<li><code>AP_HAS_RESPONSE_BUCKETS</code> の定義有無により、レスポンスヘッダーの取得方法が分岐する。</li>
+<li>変換後のレスポンスは <code>c2-&gt;pool</code> を使用してメモリ管理される。</li>
 </ul></body></html>

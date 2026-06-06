@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/cache/cache_storage.c:428</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストの URI コンポーネント（ホスト名、スキーム、ポート、パス、クエリ文字列）を正規化し、キャッシュの一貫した識別キーを生成する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t cache_canonicalise_key(request_rec *r, apr_pool_t* p,
+                                           const char *path, const char *query,
+                                           apr_uri_t *parsed_uri,
+                                           const char **key)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>p</code>: メモリ割り当てに使用するプール。</li>
+<li><code>path</code>, <code>query</code>: 正規化対象のパスとクエリ文字列。</li>
+<li><code>parsed_uri</code>: 解析済みの URI 構造体。</li>
+<li>**出力**:</li>
+<li><code>key</code>: 生成された正規化済みキー文字列（出力引数）。</li>
+<li>戻り値: <code>APR_SUCCESS</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>*key</code> が既に設定されている場合、関数は即座に <code>APR_SUCCESS</code> を返し、再計算を行わない。</li>
+<li>リクエストのライフサイクルを通じて一貫したキーを生成するため、リクエスト設定（<code>request_config</code>）にキーを保持することが推奨される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ホスト名の決定**: プロキシリクエストか否かに応じて、<code>base_uri</code> または <code>ap_get_server_name</code> を使用して正規ホスト名を決定する。 2. **スキームの決定**: <code>parsed_uri</code> または <code>ap_http_scheme</code> を使用し、小文字に変換して保持する。 3. **ポートの決定**: プロキシ設定やスキームのデフォルトポートに基づき、適切なポート文字列を生成する。 4. **セッション ID の除外**: <code>CacheIgnoreSessionID</code> 設定に基づき、パスやクエリ文字列から指定されたセッション識別子を削除する。 5. **キーの構築**: <code>scheme://hostname:port/path?query</code> の形式で文字列を連結し、<code>*key</code> に格納する。 6. **ログ出力**: 生成されたキーをデバッグログに出力する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/cache_storage.c</code> 内の関数（<code>cache_generate_key_default</code> 等）から呼び出される。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>, <code>ap_get_server_name</code>, <code>ap_http_scheme</code>, <code>apr_uri_port_of_scheme</code>, <code>ap_strrchr_c</code>, <code>ap_strstr_c</code>, <code>ap_log_rerror</code> 等の Apache/APR API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストコンテキスト。</li>
+<li><code>cache_server_conf</code>: キャッシュモジュールの設定（<code>CacheIgnoreQueryString</code> や <code>CacheIgnoreSessionID</code> を保持）。</li>
+<li><code>apr_uri_t</code>: URI の各要素を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ホスト名やスキームが特定できない場合、<code>_default_</code> や空文字列を使用してキー生成を継続する。</li>
+<li>クエリ文字列が空の場合、<code>?</code> 以降の処理を適切にスキップする。</li>
+<li>セッション ID の削除処理において、クエリ文字列内のサブキーマッチングを避けるため、区切り文字（<code>&amp;</code>, <code>=</code>）を考慮した厳密な検索を行う。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリバースプロキシとフォワードプロキシの両方で一貫したキーを生成するよう設計されている。<code>r-&gt;proxyreq</code> の状態によってパスが分岐するため、修正時は両方のケースへの影響を考慮すること。</li>
+<li><code>r-&gt;parsed_uri</code> はリクエスト処理中に変更される可能性があるため、初回生成時にキーをキャッシュしておくことが重要である。</li>
 </ul></body></html>

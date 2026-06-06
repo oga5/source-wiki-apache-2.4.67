@@ -6,22 +6,41 @@
 <li>定義箇所: <code>modules/core/mod_watchdog.c:74</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Watchdog インスタンスに関連付けられたワーカースレッドを安全に終了させ、登録されているすべてのコールバックに対して <code>STOPPING</code> 状態を通知します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t wd_worker_cleanup(void *data)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>data</code> (型: <code>void *</code>) - <code>ap_watchdog_t</code> 構造体へのポインタ。</li>
+<li>**出力**: <code>apr_status_t</code> - スレッドの終了処理結果（<code>apr_thread_join</code> の戻り値）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>data</code> は有効な <code>ap_watchdog_t</code> 構造体を指している必要があります。</li>
+<li>スレッドが開始されていない場合（<code>thread_started</code> が 1 以外）、本関数は何もせず <code>APR_SUCCESS</code> を返します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>thread_started</code> アトミック変数をチェックし、未開始であれば即座に終了します。 2. <code>is_running</code> が真の場合、登録されたコールバックリスト（<code>callbacks</code>）を走査します。 3. 各コールバックに対して <code>AP_WATCHDOG_STATE_STOPPING</code> 状態を引数としてコールバック関数を呼び出し、ステータスを <code>APR_EOF</code> に更新します。 4. <code>is_running</code> を 0 に設定します。 5. <code>apr_thread_join</code> を呼び出し、ワーカースレッドの終了を待機します。 6. スレッドの終了ステータスを返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/core/mod_watchdog.c:285</code> にて、<code>apr_pool_pre_cleanup_register</code> を介してプール破棄時のクリーンアップハンドラとして登録されています。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_atomic_read32</code></li>
+<li>登録されたコールバック関数（<code>wl-&gt;callback_fn</code>）</li>
+<li><code>apr_thread_join</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_watchdog_t</code>: 監視インスタンスのメイン構造体。</li>
+<li><code>watchdog_list_t</code>: 登録されたコールバック関数のリンクリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>スレッドが既に終了している、あるいは開始に失敗している場合、<code>thread_started</code> のチェックにより安全にスキップされます。</li>
+<li><code>apr_thread_join</code> が失敗した場合、そのエラーコードがそのまま呼び出し元に返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はプール破棄のフックとして登録されるため、直接呼び出すのではなく、関連するプールが破棄されるタイミングで自動的に実行されます。</li>
+<li>コールバック実行中にエラーが発生した場合のハンドリングは、各コールバック関数の実装に依存します。</li>
 </ul></body></html>

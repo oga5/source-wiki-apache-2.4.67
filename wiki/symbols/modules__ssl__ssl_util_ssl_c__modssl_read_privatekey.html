@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/ssl/ssl_util_ssl.c:77</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたファイルから秘密鍵を読み込み、OpenSSL の <code>EVP_PKEY</code> 構造体として返します。PEM 形式、Base64 エンコードされた DER 形式、およびバイナリ DER 形式を順次試行する自動判別機能を備えています。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>EVP_PKEY *modssl_read_privatekey(const char *filename, pem_password_cb *cb, void *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>filename</code>: 読み込む秘密鍵ファイルのパス。</li>
+<li><code>cb</code>: パスフレーズが必要な場合に呼び出されるコールバック関数。</li>
+<li><code>s</code>: コールバック関数に渡されるユーザーデータ。</li>
+<li>**出力**:</li>
+<li>成功時: 読み込まれた秘密鍵へのポインタ (<code>EVP_PKEY*</code>)。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>filename</code> で指定されたファイルは、読み取り権限がある状態で存在する必要があります。</li>
+<li>内部で <code>BIO</code> を使用してファイルを開くため、ファイルシステムのリソースが利用可能である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>以下の順序で読み込みを試行し、最初に成功した形式を採用します。</p>
+<p>1. **PEM 形式**: <code>PEM_read_bio_PrivateKey</code> を使用して試行します。 2. **Base64 エンコードされた DER 形式**: <code>BIO_f_base64()</code> を適用した BIO を経由して <code>d2i_PrivateKey_bio</code> を使用して試行します。 3. **バイナリ DER 形式**: <code>d2i_PrivateKey_bio</code> を直接使用して試行します。</p>
+<p>各ステップで <code>BIO</code> オブジェクトの生成と解放（<code>BIO_free</code> または <code>BIO_free_all</code>）が適切に行われます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_engine_pphrase.c:227</code> (直接の呼び出しを確認)</li>
+<li>**呼び出し先**:</li>
+<li>OpenSSL API: <code>BIO_new_file</code>, <code>PEM_read_bio_PrivateKey</code>, <code>BIO_free</code>, <code>BIO_new</code>, <code>BIO_f_base64</code>, <code>BIO_push</code>, <code>d2i_PrivateKey_bio</code>, <code>BIO_free_all</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>EVP_PKEY</code>: OpenSSL の秘密鍵構造体。</li>
+<li><code>BIO</code>: OpenSSL の I/O 抽象化レイヤー。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ファイルが存在しない、または読み取り不可の場合、各ステップで <code>NULL</code> が返されます。</li>
+<li>どの形式でも読み込みに失敗した場合、最終的に <code>NULL</code> が返されます。</li>
+<li>パスフレーズが不正な場合、<code>PEM_read_bio_PrivateKey</code> が失敗し、後続の形式判定へ進みます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OpenSSL の複数の読み込み関数をラップしており、将来的な OpenSSL の API 変更（特に <code>d2i_PrivateKey_bio</code> 等の挙動）に際しては、各ステップの戻り値と <code>BIO</code> の解放処理が正しく維持されているか確認してください。</li>
+<li><code>BIO</code> のスタック操作（<code>BIO_push</code>）を行っているため、エラー発生時のメモリリークを防ぐための <code>BIO_free_all</code> の呼び出し順序には注意が必要です。</li>
 </ul></body></html>

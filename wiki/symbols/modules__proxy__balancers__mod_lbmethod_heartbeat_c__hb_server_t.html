@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_heartbeat.c:49</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>外部のハートビート情報に基づいた負荷分散において、各バックエンドサーバーの現在の負荷状態と識別情報を保持するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct hb_server_t {
+    const char *ip;         /* サーバーのIPアドレス */
+    int busy;               /* 処理中のリクエスト数 */
+    int ready;              /* 待機中のスレッド数 */
+    int port;               /* サーバーのポート番号 */
+    int id;                 /* サーバー識別子 */
+    apr_time_t seen;        /* 最後にハートビートを受信した時刻 */
+    proxy_worker *worker;   /* 関連付けられたプロキシワーカー */
+} hb_server_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体はデータ保持用であり、関数ではありません。<code>readfile_heartbeats</code> 等の解析処理によって各フィールドが設定され、<code>find_best_hb</code> 等の選定ロジックにおいて、負荷分散の判断基準として読み取られます。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>seen</code> フィールドは、最後にハートビートを受信した時刻を示します。<code>LBM_HEARTBEAT_MAX_LASTSEEN</code>（10秒）を超えて更新されていないサーバーは、生存していないとみなされます。</li>
+<li><code>worker</code> フィールドは、<code>mod_proxy</code> の <code>proxy_worker</code> 構造体と紐付けられます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は、ハートビート情報の解析結果を格納するコンテナとして機能します。<code>find_best_hb</code> は、この構造体の <code>ready</code> 値に基づいて確率的に転送先を選択します。また、起動直後で <code>busy=0</code> かつ <code>ready</code> が大きい場合、過負荷防止のために <code>ready</code> 値を 1/4 に調整するヒューリスティック処理の対象となります。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>readfile_heartbeats</code> および <code>readslot_heartbeats</code> が本構造体のインスタンスを生成・更新します。<code>find_best_hb</code> が選定ロジック内で参照します。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、直接的な関数呼び出しは行いません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_worker</code>: <code>mod_proxy</code> が管理するバックエンドサーバーの定義。</li>
+<li><code>lb_hb_ctx_t</code>: モジュール全体のコンテキスト。</li>
+<li><code>apr_hash_t</code>: サーバー情報を管理するハッシュテーブルの要素として利用されます。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ハートビート情報が欠落している場合、<code>seen</code> の値が更新されず、生存判定から除外されます。</li>
+<li><code>apr_pcalloc</code> によるメモリ確保が失敗した場合、プログラムは異常終了する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_lbmethod_heartbeat.c</code> 内でのみ使用される内部表現です。</li>
+<li>サーバーの負荷状態を動的に反映するため、<code>find_best_hb</code> 内でリクエスト毎に生成される一時的なプール（<code>tpool</code>）上で管理されることが一般的です。</li>
 </ul></body></html>

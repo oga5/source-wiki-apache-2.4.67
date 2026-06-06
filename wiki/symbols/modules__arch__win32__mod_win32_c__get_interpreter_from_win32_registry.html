@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/arch/win32/mod_win32.c:141</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windowsレジストリを走査し、指定されたファイル拡張子に関連付けられたスクリプトインタープリタの実行パスを取得します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static char* get_interpreter_from_win32_registry(apr_pool_t *p, const char* ext, int strict);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li><code>ext</code>: 検索対象のファイル拡張子（例: <code>.pl</code>）。</li>
+<li><code>strict</code>: 真の場合、<code>ExecCGI</code> 動詞のみを検索対象とします。偽の場合は <code>Open</code> 動詞へのフォールバックを許可します。</li>
+<li>**出力**:</li>
+<li>成功時: インタープリタの実行パスを含む文字列（<code>apr_pool_t</code> 上に割り当て）。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ext</code> が <code>NULL</code> の場合は直ちに <code>NULL</code> を返します。</li>
+<li>検索結果の文字列は、リクエスト終了時に自動解放されるメモリプール上に確保されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>AP_REGKEY_CLASSES_ROOT</code> を起点に、拡張子に対応するキーを開きます。 2. 拡張子に関連付けられたファイルタイプ名を取得します。 3. 以下の順序でレジストリキーを探索し、コマンドパスを取得します：</p>
+<ul>
+<li>1) ファイルタイプ名キーの <code>SHELL\EXECCGI\COMMAND</code></li>
+<li>2) 拡張子キーの <code>SHELL\EXECCGI\COMMAND</code></li>
+<li>3) <code>strict</code> が偽の場合、ファイルタイプ名キーの <code>SHELL\OPEN\COMMAND</code></li>
+<li>4) <code>strict</code> が偽の場合、拡張子キーの <code>SHELL\OPEN\COMMAND</code></li>
+<p>4. 取得したパスが空でないことを確認し、成功すればその文字列を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/arch/win32/mod_win32.c:419</code>（<code>ap_cgi_build_command</code> 内から呼び出されることを確認）。</li>
+<li>**呼び出し先**: <code>ap_regkey_open</code>, <code>ap_regkey_value_get</code>, <code>ap_regkey_close</code>（APRのレジストリ操作関数群）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: メモリ管理に使用。</li>
+<li><code>ap_regkey_t</code>: レジストリキーのハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>レジストリキーが存在しない、またはアクセス権限がない場合は <code>NULL</code> を返します。</li>
+<li><code>strict</code> モードで <code>ExecCGI</code> が見つからない場合、あるいは <code>strict</code> が偽で <code>ExecCGI</code> と <code>Open</code> の両方が見つからない場合は <code>NULL</code> を返します。</li>
+<li>取得したレジストリ値が空文字列である場合は失敗とみなされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>レジストリ検索はコストが高いため、将来的な最適化として、検索結果を拡張子ハッシュにキャッシュする実装が推奨されています。</li>
+<li>現在のコードでは、<code>name_key</code> および <code>type_key</code> のクローズ処理が条件分岐ごとに適切に行われるよう設計されています。変更時はリソースリークに注意してください。</li>
 </ul></body></html>

@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/slotmem/mod_slotmem_shm.c:196</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>永続化ファイルから共有メモリ領域へデータを読み込み、MD5チェックサムと記述子（<code>sharedslotdesc_t</code>）を用いてデータの整合性を検証・復元する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t restore_slotmem(sharedslotdesc_t *desc,
+                                    const char *storename, apr_size_t size,
+                                    apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>desc</code>: 共有メモリの構成情報を含む構造体へのポインタ。</li>
+<li><code>storename</code>: 永続化ファイルのパス。</li>
+<li><code>size</code>: 共有メモリセグメントの総サイズ。</li>
+<li><code>pool</code>: ファイル操作に使用するメモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果。成功時は <code>APR_SUCCESS</code>、不整合時は <code>APR_EMISMATCH</code>、読み込み不足時は <code>APR_INCOMPLETE</code> 等を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリ領域は <code>[desc] [num_free] [data_slots] [inuse_array]</code> の順でレイアウトされている必要がある。</li>
+<li><code>AP_SLOTMEM_OFFSET</code> 定数により、データ領域の開始位置が厳密に定義されている。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 指定された <code>storename</code> を読み書きモードで開く。 2. ファイルからデータ領域（<code>desc</code> の直後から <code>size</code> まで）を読み込む。 3. ファイルの末尾（EOF）に達していない場合、MD5チェックサムを読み込み、メモリ上のデータから計算したハッシュ値と比較する。 4. さらに記述子（<code>desc</code>）の整合性を確認するため、ファイル末尾の記述子データとメモリ上の <code>desc</code> を比較する。 5. 互換性のため、EOFに達した場合はチェックサムや記述子の検証をスキップし、成功として扱う。 6. 最後にファイルを閉じる。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/slotmem/mod_slotmem_shm.c:430</code>（<code>slotmem_attach</code> 内で呼び出される）。</li>
+<li>**呼び出し先**: <code>apr_file_open</code>, <code>apr_file_read_full</code>, <code>apr_file_eof</code>, <code>apr_md5</code>, <code>memcmp</code>, <code>ap_log_error</code>, <code>apr_file_close</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sharedslotdesc_t</code>: スロットの構成情報（サイズ、個数、型）を保持するヘッダー。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>APR_EMISMATCH</code>: MD5ハッシュまたは記述子の内容が一致しない場合に発生。</li>
+<li><code>APR_INCOMPLETE</code>: ファイルの読み込みサイズが期待値と異なる場合に発生。</li>
+<li><code>APR_EOF</code>: ファイルが予期せず終了した場合の処理分岐。</li>
+<li>互換性対応: 古い形式の永続化ファイルでチェックサムや記述子情報が存在しない場合、EOF判定により検証をバイパスして成功を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_slotmem_shm.c</code> の永続化ロジックの中核であり、ファイルフォーマットの変更は <code>store_slotmem</code> との整合性に注意すること。</li>
+<li><code>AP_SLOTMEM_OFFSET</code> はメモリレイアウトの境界を決定するため、構造体定義の変更時には必ず確認が必要。</li>
 </ul></body></html>

@@ -6,22 +6,47 @@
 <li>定義箇所: <code>server/mpm/prefork/prefork.c:243</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>accept()</code> 呼び出し時に発生する競合を防ぐため、プロセス間ミューテックスのロックを取得する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t accept_mutex_on(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: なし（グローバルな <code>my_bucket</code> を参照）。</li>
+<li>**出力**: 成功時は <code>APR_SUCCESS</code> を返す。失敗時は内部でプロセスを終了させるため、呼び出し元へは戻らない。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>my_bucket</code> が初期化済みであること。</li>
+<li>本関数は子プロセスから呼び出されることを想定している。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>my_bucket-&gt;mutex</code> に対して <code>apr_proc_mutex_lock</code> を実行する。 2. ロック取得に失敗した場合、現在のプロセス世代（<code>my_generation</code>）とスコアボード上の実行世代を比較する。</p>
+<ul>
+<li>世代が異なる場合: デバッグログを出力し、<code>clean_child_exit(0)</code> を呼び出して正常終了する。</li>
+<li>世代が一致する場合: 緊急ログを出力し、<code>exit(APEXIT_CHILDFATAL)</code> を呼び出して異常終了する。</li>
+<p>3. ロック取得に成功した場合は <code>APR_SUCCESS</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/prefork/prefork.c:573</code> にて <code>SAFE_ACCEPT</code> マクロ経由で呼び出される。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_proc_mutex_lock</code> (APR)</li>
+<li><code>ap_log_error</code> (Apache Core)</li>
+<li><code>clean_child_exit</code> (本ファイル内)</li>
+<li><code>exit</code> (標準ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>prefork_child_bucket</code>: ミューテックスを保持する構造体。</li>
+<li><code>prefork_retained_data</code>: 世代管理に使用される構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ミューテックスのロック取得失敗時、プロセスは終了する。</li>
+<li>世代不一致時は <code>clean_child_exit</code> による終了、それ以外は <code>APEXIT_CHILDFATAL</code> による異常終了となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>test/time-sem.c</code> に同名の関数が存在するが、これらはテスト用であり本実装とは無関係である。</li>
+<li><code>SAFE_ACCEPT</code> マクロ経由での呼び出しが前提となっているため、直接呼び出す際は注意が必要。</li>
 </ul></body></html>

@@ -6,22 +6,62 @@
 <li>定義箇所: <code>modules/md/md_status.c:100</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定された JSON オブジェクトが、Managed Domain (MD) のジョブ状態として妥当であるかを検証します。特に、ステージング領域にある完了済みのジョブに対して、必要な成果物（証明書ファイル）が存在するかを確認します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int md_job_json_seems_valid(md_json_t *json, md_store_t *store,
+                            md_store_group_t group, const char *name,
+                            apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>json</code>: 検証対象の <code>md_json_t</code> オブジェクト。</li>
+<li><code>store</code>: ストレージハンドル。</li>
+<li><code>group</code>: ストレージグループ（例: <code>MD_SG_STAGING</code>）。</li>
+<li><code>name</code>: ドメイン名。</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li>**出力**:</li>
+<li><code>TRUE</code> (1): JSON が妥当、または検証不要な状態。</li>
+<li><code>FALSE</code> (0): JSON が無効、または必要な成果物が欠落している。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>json</code> が <code>NULL</code> の場合は常に <code>FALSE</code> を返します。</li>
+<li>ステージンググループ (<code>MD_SG_STAGING</code>) かつジョブが完了 (<code>MD_KEY_FINISHED</code>) しており、通知済み (<code>MD_KEY_NOTIFIED_RENEWED</code>) である場合、厳密な整合性チェックが行われます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>json</code> が <code>NULL</code> であれば即座に <code>FALSE</code> を返す。 2. グループが <code>MD_SG_STAGING</code> で、かつジョブが完了状態であることを確認する。 3. 完了状態であれば、以下の整合性を確認する：</p>
+<ul>
+<li><code>md_exists</code> を呼び出し、該当ドメインのディレクトリが存在することを確認する。</li>
+<li><code>md_load</code> を呼び出し、ドメイン設定を読み込む。</li>
+<li>読み込んだドメイン内の全証明書について、<code>md_pubcert_load</code> を呼び出し、公開鍵仕様に基づいた証明書ファイルがストレージ上に存在することを確認する。</li>
+<p>4. 上記のいずれかのチェックで失敗した場合は <code>FALSE</code> を返し、すべて通過した場合は <code>TRUE</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/md_status.c:133</code></li>
+<li><code>modules/md/md_status.c:419</code></li>
+<li>**呼び出し先**:</li>
+<li><code>md_exists</code></li>
+<li><code>md_load</code></li>
+<li><code>md_cert_count</code></li>
+<li><code>md_pkeys_spec_get</code></li>
+<li><code>md_pubcert_load</code></li>
+<li><code>md_json_getb</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_json_t</code>: JSON データの保持構造。</li>
+<li><code>md_store_t</code>: ストレージ抽象化層。</li>
+<li><code>md_t</code>: 管理対象ドメインの定義構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_json_getb</code> でキーが見つからない場合や、<code>md_load</code> が <code>APR_SUCCESS</code> を返さない場合は <code>FALSE</code> と判定されます。</li>
+<li>ステージング領域以外のグループが指定された場合は、詳細なファイル存在チェックをスキップし <code>TRUE</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は、ジョブのメタデータ（JSON）と実際のファイルシステム上の状態（証明書ファイル）の同期を確認する重要なガードレールです。</li>
+<li><code>MD_SG_STAGING</code> 以外のグループに対する検証ロジックは現在実装されておらず、常に <code>TRUE</code> を返す仕様となっています。</li>
 </ul></body></html>

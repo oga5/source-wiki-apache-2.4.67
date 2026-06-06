@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_scgi.c:363</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バックエンド（SCGIサーバー）からのレスポンスを読み込み、ヘッダー解析および後続のフィルタリング処理（<code>X-Sendfile</code> や内部リダイレクトの判定）を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int pass_response(request_rec *r, proxy_conn_rec *conn)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>conn</code>: バックエンドへの接続情報。</li>
+<li>**出力**: </li>
+<li><code>OK</code>: 処理成功。</li>
+<li><code>AP_FILTER_ERROR</code>: フィルタリング失敗。</li>
+<li>その他: <code>ap_scan_script_header_err_brigade_ex</code> が返すエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> はリクエストの生存期間中有効であること。</li>
+<li><code>conn-&gt;sock</code> は有効なバックエンドソケットであること。</li>
+<li>SCGI プロトコル特有のボディフレーミングが使用されるため、<code>Content-Length</code> や <code>Transfer-Encoding</code> ヘッダーは、コアによる自動決定を優先するために削除される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バケット作成**: <code>SOCKET_EX</code> バケットを作成し、バックエンドソケットと統計カウンタを紐付けてブリゲードに挿入する。 2. **ヘッダー解析**: <code>ap_scan_script_header_err_brigade_ex</code> を呼び出し、バックエンドからのレスポンスヘッダーを解析する。 3. **ヘッダー調整**: <code>Content-Length</code> および <code>Transfer-Encoding</code> をヘッダーから削除する。 4. **<code>X-Sendfile</code> 処理**: 設定されている場合、指定されたヘッダーを検索し、存在すれば <code>scgi_request_config</code> を設定してサブリクエストへ移行する。 5. **内部リダイレクト処理**: 設定されている場合、<code>Location</code> ヘッダー等を検索し、内部リダイレクトが必要であれば同様に <code>scgi_request_config</code> を設定する。 6. **転送**: 上記の特殊処理に該当しない場合、<code>ap_pass_brigade</code> を介してレスポンスボディをクライアントへ転送する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_scgi.c:582</code> (SCGIハンドラのメインフロー内)。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_palloc</code>, <code>apr_brigade_create</code>, <code>apr_bucket_eos_create</code>, <code>apr_table_get</code>, <code>apr_table_unset</code>, <code>apr_brigade_destroy</code> (APR API)</li>
+<li><code>bucket_socket_ex_create</code> (カスタムバケット生成)</li>
+<li><code>ap_scan_script_header_err_brigade_ex</code>, <code>ap_log_rerror</code>, <code>ap_get_module_config</code>, <code>ap_set_module_config</code>, <code>ap_pass_brigade</code> (Apache HTTPd API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_conn_rec</code>: バックエンド接続状態。</li>
+<li><code>scgi_config</code>: ディレクトリ単位の設定（<code>ProxySCGISendfile</code> 等）。</li>
+<li><code>scgi_request_config</code>: リクエスト処理中の内部リダイレクトやファイル送信指示。</li>
+<li><code>socket_ex_data</code>: ソケット読み込みと統計更新のためのデータ構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ヘッダー解析失敗時: <code>ap_scan_script_header_err_brigade_ex</code> がエラーを返し、ログ出力後にブリゲードを破棄して終了する。</li>
+<li>フィルタリング失敗時: <code>ap_pass_brigade</code> がエラーを返した場合、<code>AP_FILTER_ERROR</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>scgi_handler</code> から呼び出される。</li>
+<li><code>X-Sendfile</code> や内部リダイレクトの判定ロジックは、<code>r-&gt;err_headers_out</code> と <code>r-&gt;headers_out</code> の両方を走査する。</li>
+<li><code>SOCKET_EX</code> バケットを使用することで、ソケット読み込み時の統計カウンタ更新を透過的に行っている。</li>
 </ul></body></html>

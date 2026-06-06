@@ -6,22 +6,57 @@
 <li>定義箇所: <code>server/core_filters.c:453</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTPレスポンスデータをフィルタチェーンから受け取り、OSのソケットへ効率的に書き出すためのコア出力フィルタです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_core_output_filter(ap_filter_t *f, apr_bucket_brigade *new_bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>f</code>: フィルタチェーンのコンテキスト情報を含む <code>ap_filter_t</code> 構造体。</li>
+<li><code>new_bb</code>: 送信対象のデータを含む <code>apr_bucket_brigade</code>（NULL の場合もある）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>接続が既に中断されている場合、<code>new_bb</code> があればクリーンアップし、<code>APR_ECONNABORTED</code> を返します。</li>
+<li>フィルタコンテキスト (<code>ctx</code>) が未初期化の場合は、接続プール (<code>c-&gt;pool</code>) を使用して初期化されます。</li>
+<li>内部バッファ (<code>ctx-&gt;buffered_bb</code>) にデータが存在する場合、<code>new_bb</code> の先頭に結合されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バッファ結合**: 既存のバッファと新しいブリゲードを統合します。 2. **送信判断**: <code>should_send_brigade</code> を呼び出し、フラッシュが必要か判定します。 3. **非ブロッキング書き込み**:</p>
+<ul>
+<li>ソケットのタイムアウトを一時的に 0（非ブロッキング）に設定します。</li>
+<li><code>send_brigade_nonblocking</code> を呼び出し、ソケットへデータを転送します。</li>
+<li><code>EAGAIN</code> が発生し、かつフラッシュが必要な場合は <code>apr_poll</code> を使用して書き込み可能になるまで待機します。</li>
+<p>4. **後処理**:</p>
+<li>書き込み完了後、元のソケットタイムアウトを復元します。</li>
+<li>書き込みエラー発生時は接続を中断 (<code>c-&gt;aborted = 1</code>) します。</li>
+<li>残存データは <code>setaside_remaining_output</code> を介して次回の呼び出しのために保持されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: フィルタチェーンの実行エンジン（<code>server/util_filter.c</code> 経由）。</li>
+<li>**呼び出し先**:</li>
+<li><code>should_send_brigade</code> (フラッシュ判定)</li>
+<li><code>send_brigade_nonblocking</code> (ソケット書き込み)</li>
+<li><code>setaside_remaining_output</code> (残存データの保存)</li>
+<li><code>apr_socket_timeout_get/set</code>, <code>apr_poll</code> (APR ソケット操作)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_filter_t</code>: フィルタチェーンのノード。</li>
+<li><code>core_output_filter_ctx_t</code>: 出力フィルタの永続状態（バッファ、iovec 等）。</li>
+<li><code>apr_bucket_brigade</code>: 送信データのバケットリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**接続中断**: <code>c-&gt;aborted</code> が真の場合、即座に終了します。</li>
+<li>**書き込み失敗**: <code>send_brigade_nonblocking</code> が <code>EAGAIN</code> 以外のエラーを返した場合、接続を強制終了しエラーを返します。</li>
+<li>**タイムアウト**: <code>apr_poll</code> 待機中にタイムアウトが発生した場合、その状態が呼び出し元へ伝播します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は非ブロッキング I/O を前提としています。<code>EAGAIN</code> 発生時の再試行ロジックは、<code>should_send_brigade</code> のフラッシュルールに依存しています。</li>
+<li><code>ctx-&gt;buffered_bb</code> の生存期間は <code>c-&gt;pool</code> に依存するため、接続終了時のメモリ管理に注意してください。</li>
 </ul></body></html>

@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/http/mod_mime.c:61</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ファイル名拡張子に関連付けられた、HTTP レスポンス生成に必要なメタデータ（MIME タイプ、エンコーディング、言語、ハンドラ、フィルタ等）を保持するための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct extension_info {
+    char *forced_type;
+    char *encoding_type;
+    char *language_type;
+    char *handler;
+    char *charset_type;
+    char *input_filters;
+    char *output_filters;
+} extension_info;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は、<code>AddType</code>、<code>AddEncoding</code>、<code>AddLanguage</code>、<code>AddHandler</code>、<code>AddCharset</code>、<code>AddInputFilter</code>、<code>AddOutputFilter</code> といった Apache 設定ディレクティブによって各フィールドが設定されます。</li>
+<li><code>mod_mime</code> のリクエスト処理フェーズにおいて、ファイル名から抽出された拡張子に基づき、この構造体の値が <code>request_rec</code> の各フィールドに適用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>各フィールドは <code>char *</code> 型であり、設定ファイルから読み込まれた文字列を指します。</li>
+<li>設定の継承やマージ時には、<code>apr_pmemdup</code> を用いてメモリの深いコピーが行われ、親設定の整合性が維持されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_mime</code> は、リクエストされたファイル名から拡張子を特定し、ハッシュテーブルから該当する <code>extension_info</code> を検索します。</li>
+<li>複数の拡張子を持つファイル（例: <code>file.tar.gz</code>）の場合、右から左へ順次解析が行われ、メタデータが累積的に適用されます。</li>
+<li>設定の削除（<code>RemoveType</code> 等）が行われる場合、マージ時に <code>remove_items</code> 配列と照合され、該当するフィールドがクリアされます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>add_extension_info</code>: 設定ディレクティブの解析時に本構造体を生成・更新します。</li>
+<li><code>merge_mime_dir_configs</code>: ディレクトリ設定のマージ時に使用されます。</li>
+<li><code>find_ct</code>: リクエスト処理時にハッシュテーブルから本構造体を取得します。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_pmemdup</code>, <code>apr_pcalloc</code>: メモリ確保に使用されます。</li>
+<li><code>apr_hash_get</code>: ハッシュテーブルからの検索に使用されます。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mime_dir_config</code>: 本構造体をハッシュテーブル（<code>extension_mappings</code>）として保持するディレクトリ設定構造体。</li>
+<li><code>request_rec</code>: 本構造体に格納されたメタデータが最終的に適用される Apache リクエスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>メモリ不足時には <code>apr_pcalloc</code> 等のメモリ割り当て関数が失敗する可能性があります。</li>
+<li>不正な設定や重複するディレクティブが指定された場合、設定の順序に依存してメタデータが上書きされます。</li>
+<li>フィルタの重複チェックは行われないため、設定次第で同一フィルタが複数回追加される可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>charset_type</code> 等のメンバオフセットは <code>APR_OFFSETOF</code> マクロを用いて動的に参照されており、構造体のメンバ順序を変更する際は注意が必要です。</li>
+<li>EBCDIC 環境における文字コード処理には一部課題が残されています。</li>
+<li>フィルタの重複登録を防ぐためのロジックは現在の実装には含まれていません。</li>
 </ul></body></html>

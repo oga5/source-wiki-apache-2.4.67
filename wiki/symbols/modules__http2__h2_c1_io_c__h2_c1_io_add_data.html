@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/http2/h2_c1_io.c:361</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 セッションの出力バッファまたは接続フィルタチェーンに対し、指定された生データを追加します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_c1_io_add_data(h2_c1_io *io, const char *data, size_t length)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>io</code>: 操作対象の <code>h2_c1_io</code> 構造体へのポインタ。</li>
+<li><code>data</code>: 追加するデータを含むバッファ。</li>
+<li><code>length</code>: 追加するデータのバイト数。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 操作の結果（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>io</code> は初期化済みである必要があります。</li>
+<li><code>io-&gt;buffer_output</code> が真の場合、データは内部のスクラッチバッファにコピーされます。</li>
+<li><code>io-&gt;buffer_output</code> が偽の場合、データは直接 <code>io-&gt;output</code> ブリゲードへ書き込まれます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>io-&gt;session-&gt;c1</code> に対してトレースログを出力します。 2. <code>io-&gt;buffer_output</code> が有効な場合:</p>
+<ul>
+<li><code>length</code> が 0 になるまでループし、<code>assure_scratch_space(io)</code> を呼び出してスクラッチバッファの空き容量を確保します。</li>
+<li><code>memcpy</code> を使用してデータをスクラッチバッファへコピーし、<code>io-&gt;slen</code> を更新します。</li>
+<p>3. <code>io-&gt;buffer_output</code> が無効な場合:</p>
+<li><code>apr_brigade_write</code> を呼び出し、データを直接出力ブリゲードへ書き込みます。</li>
+<li><code>io-&gt;buffered_len</code> を書き込んだバイト数分加算します。</li>
+<p>4. 最終的なステータスを返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_session.c</code>: セッション処理においてフレームデータやヘッダーを書き込む際に呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>assure_scratch_space</code> (内部関数)</li>
+<li><code>apr_brigade_write</code> (APR API)</li>
+<li><code>ap_log_cerror</code> (Apache API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_c1_io</code>: セッションの入出力状態を管理する構造体。</li>
+<li><code>apr_bucket_brigade</code>: Apache のデータ転送用バッファ構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_brigade_write</code> が失敗した場合、そのエラーコードがそのまま返されます。</li>
+<li><code>assure_scratch_space</code> が失敗した場合の挙動は、当該関数の実装に依存します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>h2_session</code> のライフサイクルに依存して動作します。</li>
+<li>スクラッチバッファへのコピーは、TLS レコードの最適化（MTU 考慮）を目的としています。</li>
+<li><code>h2_session.c</code> からの呼び出しにおいて、フレームヘッダーやパディングの書き込みにも利用されています。</li>
 </ul></body></html>

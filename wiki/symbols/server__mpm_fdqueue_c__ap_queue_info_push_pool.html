@@ -6,22 +6,45 @@
 <li>定義箇所: <code>server/mpm_fdqueue.c:217</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ワーカーが使用したメモリプール（<code>apr_pool_t</code>）を再利用可能なリストに登録し、メモリ割り当てのオーバーヘッドを削減します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_queue_info_push_pool(fd_queue_info_t *queue_info, apr_pool_t *pool_to_recycle)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>queue_info</code>: メモリプールを管理する <code>fd_queue_info_t</code> 構造体へのポインタ。</li>
+<li><code>pool_to_recycle</code>: 再利用対象の <code>apr_pool_t</code>。</li>
+<li>出力: なし（戻り値なし）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pool_to_recycle</code> が <code>NULL</code> の場合、関数は即座に終了します。</li>
+<li><code>queue_info-&gt;max_recycled_pools</code> が 0 以上の場合、現在の再利用プール数が上限に達していれば、当該プールは再利用されず <code>apr_pool_destroy</code> により破棄されます。</li>
+<li>再利用されるプールは、リストへの追加前に <code>apr_pool_clear</code> によって初期化されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 入力されたプールが <code>NULL</code> でないか確認します。 2. 再利用プール数の上限チェックを行い、上限に達している場合はプールを破棄して終了します。 3. <code>apr_pool_clear</code> を呼び出し、プールを空の状態にします。 4. <code>recycled_pool</code> 構造体をプール内に確保し、対象プールを格納します。 5. <code>apr_atomic_casptr</code> を使用したループにより、<code>queue_info-&gt;recycled_pools</code> の先頭に新しい要素をアトミックに挿入します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/mpm/event/event.c</code> (複数箇所)</li>
+<li><code>server/mpm_fdqueue.c:110</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_atomic_read32</code>, <code>apr_atomic_inc32</code>, <code>apr_atomic_casptr</code> (アトミック操作)</li>
+<li><code>apr_pool_destroy</code>, <code>apr_pool_clear</code>, <code>apr_palloc</code> (APR メモリ管理)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fd_queue_info_t</code>: 再利用プールのリストと上限設定を保持する構造体。</li>
+<li><code>recycled_pool</code>: 再利用プールを連結リストで管理するためのノード構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>max_recycled_pools</code> の上限に達した場合、プールは再利用されずに破棄されます。</li>
+<li>アトミック操作の競合が発生した場合、ループ内で再試行が行われます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数に渡されたプールは、以降 <code>queue_info</code> の管理下に入ります。</li>
+<li><code>recycled_pools_count</code> のアトミックな加算と、<code>recycled_pools</code> リストへの挿入は別々の操作であるため、厳密な整合性が必要な場合は注意してください。</li>
+<li>PR 44402 に関連し、<code>apr_atomic_casptr</code> 呼び出し後のポインタ変更を考慮した実装になっています。</li>
 </ul></body></html>

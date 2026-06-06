@@ -6,22 +6,62 @@
 <li>定義箇所: <code>modules/generators/cgi_common.h:557</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストのボディを読み取り、CGI スクリプトの標準入力（パイプ）へ転送します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t cgi_handle_request(request_rec *r, apr_file_t *script_out,
+                                       apr_bucket_brigade *bb,
+                                       char *logbuf, apr_size_t logbufbytes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>script_out</code>: スクリプトの標準入力に接続されたファイルハンドル。</li>
+<li><code>bb</code>: データを読み取るためのバケットブリゲード。</li>
+<li><code>logbuf</code>: リクエストボディの先頭部分を記録するためのバッファ（NULL 可）。</li>
+<li><code>logbufbytes</code>: <code>logbuf</code> のサイズ。</li>
+<li>**出力**:</li>
+<li>戻り値: 処理成功時は <code>APR_SUCCESS</code>、エラー時は <code>apr_status_t</code> エラーコード。</li>
+<li><code>logbuf</code>: 読み取ったボディデータの一部が格納される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;input_filters</code> からデータが取得可能であること。</li>
+<li><code>script_out</code> は書き込み可能な状態であること。</li>
+<li><code>bb</code> は呼び出し元で初期化されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_get_brigade</code> を使用してリクエストボディをループで読み取ります。 2. 各バケットを走査し、EOS（End of Stream）に達するまで以下の処理を繰り返します。</p>
+<ul>
+<li>FLUSH バケットはスキップします。</li>
+<li><code>apr_bucket_read</code> でデータを取得し、<code>logbuf</code> が指定されていればその内容をコピーします。</li>
+<li><code>apr_file_write_full</code> を使用して、取得したデータを <code>script_out</code> へ書き込みます。</li>
+<p>3. 書き込み中にエラーが発生した場合、<code>child_stopped_reading</code> フラグを立ててエラーログを出力し、残りのリクエストボディを消費（破棄）し続けます。 4. 最後に <code>logbuf</code> を使用している場合は終端文字を付与します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/generators/mod_cgi.c:612</code></li>
+<li><code>modules/generators/mod_cgid.c:1614</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_brigade</code></li>
+<li><code>apr_bucket_read</code></li>
+<li><code>apr_file_write_full</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>apr_brigade_cleanup</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>apr_bucket_brigade</code>: データストリームを管理するバケットの集合。</li>
+<li><code>apr_file_t</code>: スクリプトの入出力パイプ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_get_brigade</code> が失敗した場合、そのステータスを即座に返します。</li>
+<li><code>logbuf</code> の容量を超えるデータは切り捨てられます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_cgi</code> および <code>mod_cgid</code> の両方から利用される共通ロジックです。</li>
+<li>書き込みエラー発生時の「読み取り継続」処理は、クライアントからの接続を適切に終了させるために重要です。</li>
 </ul></body></html>

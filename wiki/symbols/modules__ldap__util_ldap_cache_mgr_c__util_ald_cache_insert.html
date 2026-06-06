@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/ldap/util_ldap_cache_mgr.c:467</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>LDAP キャッシュに新しいエントリを挿入し、必要に応じてキャッシュのパージ（削除）処理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void *util_ald_cache_insert(util_ald_cache_t *cache, void *payload)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cache</code>: 操作対象のキャッシュ構造体へのポインタ。</li>
+<li><code>payload</code>: キャッシュに格納するデータ本体。</li>
+<li>**出力**:</li>
+<li>成功時: キャッシュに格納されたデータ（<code>payload</code> のコピー）へのポインタ。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache</code> および <code>payload</code> は <code>NULL</code> であってはならない。</li>
+<li>キャッシュが満杯の場合、内部で <code>util_ald_cache_purge</code> が呼び出される。</li>
+<li>挿入されるデータは、キャッシュ構造体内の <code>copy</code> 関数ポインタを通じてキャッシュ専用メモリ領域に複製される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **容量確認**: <code>numentries</code> が <code>maxentries</code> に達している場合、<code>util_ald_cache_purge</code> を実行する。パージ後も上限に達している場合はエラーを返す。 2. **メモリ確保**: <code>util_ald_alloc</code> を使用して <code>util_cache_node_t</code> を確保する。確保失敗時はパージを試行し、再確保を試みる。 3. **データ複製**: <code>cache-&gt;copy</code> を呼び出し、ペイロードをキャッシュ管理下のメモリへ複製する。 4. **挿入**: ハッシュ値を計算し、該当するバケットの連結リストの先頭にノードを挿入する。 5. **状態更新**: <code>numentries</code> をインクリメントし、<code>fullmark</code> に達した場合は <code>marktime</code> を現在時刻に更新する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ldap/util_ldap.c</code> (複数箇所: <code>dn_compare_cache</code>, <code>compare_cache</code>, <code>search_cache</code> への挿入)</li>
+<li><code>modules/ldap/util_ldap_cache_mgr.c:325</code></li>
+<li>**呼び出し先**:</li>
+<li><code>util_ald_cache_purge</code></li>
+<li><code>util_ald_alloc</code></li>
+<li><code>util_ald_free</code></li>
+<li><code>cache-&gt;copy</code> (関数ポインタ)</li>
+<li><code>cache-&gt;hash</code> (関数ポインタ)</li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>util_ald_cache_t</code>: キャッシュ管理構造体。</li>
+<li><code>util_cache_node_t</code>: キャッシュ内の各エントリを保持する連結リストノード。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ不足**: <code>util_ald_alloc</code> または <code>cache-&gt;copy</code> が失敗した場合、エラーログを出力し <code>NULL</code> を返す。</li>
+<li>**キャッシュ溢れ**: パージ処理後も <code>numentries &gt;= maxentries</code> の状態が続く場合、挿入を中断する。</li>
+<li>**共有メモリ制約**: 共有メモリ使用時は、ポインタの直接代入ではなく <code>apr_rmm</code> 経由の管理が必要（実装上の注意点）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はキャッシュサイズ制限に達した際、強制的なパージを行う設計となっている。将来的に、より効率的なキャッシュ置換アルゴリズムへのリファクタリングが推奨される。</li>
+<li><code>LDAPSharedCacheSize</code> が小さい場合に警告ログが出力されるが、キャッシュ管理ロジック自体の改善が望まれる。</li>
 </ul></body></html>

@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/mpm/winnt/service.c:223</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows サービスコントロールマネージャ (SCM) に対して、現在のサービス状態（実行中、停止中、遷移中など）を通知し、同期を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int ReportStatusToSCMgr(int currentState, int waitHint, nt_service_ctx_t *ctx)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>currentState</code>: 設定するサービス状態（<code>SERVICE_RUNNING</code>, <code>SERVICE_STOPPED</code> 等）。</li>
+<li><code>waitHint</code>: 状態遷移に要する推定時間（ミリ秒）。</li>
+<li><code>ctx</code>: サービス状態を保持する <code>nt_service_ctx_t</code> 構造体へのポインタ。</li>
+<li>**出力**:</li>
+<li><code>int</code>: Windows API <code>SetServiceStatus</code> の戻り値（成功時は 0 以外）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;hServiceStatus</code> が有効なハンドルであること。</li>
+<li><code>ctx-&gt;ssStatus</code> 構造体は、呼び出し元によって適切に管理されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ctx-&gt;hServiceStatus</code> が存在する場合のみ処理を実行する。 2. <code>currentState</code> に応じて <code>ctx-&gt;ssStatus</code> を更新する:</p>
+<ul>
+<li><code>SERVICE_RUNNING</code>: <code>waitHint</code> と <code>dwCheckPoint</code> をリセットし、停止およびシャットダウンの受付を許可する。</li>
+<li><code>SERVICE_STOPPED</code>: <code>waitHint</code> と <code>dwCheckPoint</code> をリセットする。予期せぬ停止の場合、終了コードをエラーに設定する。</li>
+<li>その他（遷移中）: <code>dwCheckPoint</code> をインクリメントし、<code>waitHint</code> が指定されていれば更新する。</li>
+<p>3. <code>ctx-&gt;ssStatus.dwCurrentState</code> を <code>currentState</code> に更新する。 4. Windows API <code>SetServiceStatus</code> を呼び出し、SCM に状態を通知する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/winnt/service.c</code> 内の各所（サービス開始、停止、シャットダウン処理など）。</li>
+<li>**呼び出し先**:</li>
+<li><code>SetServiceStatus</code> (Windows API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>nt_service_ctx_t</code>: サービスの状態保持および SCM との通信用コンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;hServiceStatus</code> が NULL の場合、何も行わず <code>APR_SUCCESS</code> を返す。</li>
+<li><code>SetServiceStatus</code> が失敗した場合、その戻り値がそのまま返される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SERVICE_STATUS</code> 構造体の更新と SCM への通知をカプセル化している。</li>
+<li><code>dwCheckPoint</code> のインクリメントは、SCM に対してサービスが応答中であることを示すために重要である。</li>
+<li>状態遷移のロジックは <code>nt_service_ctx_t</code> 内の既存の状態に依存するため、呼び出し順序に注意すること。</li>
 </ul></body></html>

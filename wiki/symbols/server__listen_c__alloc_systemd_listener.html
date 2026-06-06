@@ -6,22 +6,57 @@
 <li>定義箇所: <code>server/listen.c:289</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>systemd ソケットアクティベーション経由で渡されたファイル記述子（fd）から、Apache HTTP Server のリスナー構造体（<code>ap_listen_rec</code>）を生成および初期化します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t alloc_systemd_listener(process_rec *process, int fd, const char *proto, ap_listen_rec **out_rec)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>process</code>: サーバーのプロセス情報（メモリプールを含む）。</li>
+<li><code>fd</code>: systemd から継承したソケットのファイル記述子。</li>
+<li><code>proto</code>: プロトコル名（例: &quot;http&quot;）。</li>
+<li><code>out_rec</code>: 生成されたリスナー構造体を格納するためのポインタ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコード。</li>
+<li><code>*out_rec</code>: 成功時に初期化済みの <code>ap_listen_rec</code> 構造体へのポインタが設定されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process-&gt;pool</code> は有効である必要があります。</li>
+<li><code>fd</code> は有効なソケット記述子である必要があります。</li>
+<li>成功時には <code>*out_rec</code> が非 NULL になります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>getsockname</code> を呼び出し、指定された <code>fd</code> のソケットアドレス情報を取得します。失敗した場合はエラーをログ出力して終了します。 2. <code>apr_os_sock_info_t</code> 構造体にソケット情報を設定します（<code>SOCK_STREAM</code> および <code>APR_PROTO_TCP</code> を指定）。 3. <code>apr_pcalloc</code> を使用して <code>ap_listen_rec</code> 構造体をメモリプールに割り当てます。 4. <code>apr_os_sock_make</code> を呼び出し、OS のソケットを APR ソケットオブジェクトに変換して <code>rec-&gt;sd</code> に格納します。 5. <code>apr_socket_addr_get</code> を呼び出し、バインドされているローカルアドレス情報を取得します。 6. <code>proto</code> を <code>rec-&gt;protocol</code> にコピーします。 7. <code>make_sock</code> を呼び出し、リスナーの最終的な設定（ソケットオプションの適用等）を行います。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/listen.c:366</code></li>
+<li><code>server/listen.c:850</code></li>
+<li>**呼び出し先**:</li>
+<li><code>getsockname</code> (システムコール)</li>
+<li><code>apr_pcalloc</code></li>
+<li><code>apr_os_sock_make</code></li>
+<li><code>apr_socket_addr_get</code></li>
+<li><code>apr_pstrdup</code></li>
+<li><code>make_sock</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listen_rec</code>: リスナー情報を保持する主要構造体。</li>
+<li><code>apr_os_sock_info_t</code>: OS 固有のソケット情報を APR に渡すための構造体。</li>
+<li><code>process_rec</code>: プロセス全体のライフサイクルを管理する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>getsockname</code> が失敗した場合、エラーログを出力し、そのステータスを返します。</li>
+<li><code>apr_os_sock_make</code> が失敗した場合、エラーログを出力し、そのステータスを返します。</li>
+<li><code>apr_socket_addr_get</code> が失敗した場合、エラーログを出力し、そのステータスを返します。</li>
+<li><code>make_sock</code> の実行結果がエラーの場合、そのステータスを返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>HAVE_SYSTEMD</code> マクロで囲まれた環境でのみ使用されることを想定しています。</li>
+<li><code>make_sock</code> の呼び出しが最終ステップであり、ここでソケットオプションの適用が行われます。</li>
+<li><code>fd</code> の所有権は呼び出し元に依存するため、クローズ処理のタイミングに注意してください。</li>
 </ul></body></html>

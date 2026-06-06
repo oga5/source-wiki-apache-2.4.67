@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/cache/cache_util.c:33</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>設定されたフィルタ URI（<code>filter</code>）と、対象となるリクエスト URI（<code>url</code>）およびパス（<code>path</code>）を照合し、キャッシュの適格性を判定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int uri_meets_conditions(const apr_uri_t *filter, const apr_size_t pathlen,
+                                const apr_uri_t *url, const char *path)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>filter</code>: 照合条件となる <code>apr_uri_t</code> 構造体。</li>
+<li><code>pathlen</code>: <code>path</code> 引数の長さ。</li>
+<li><code>url</code>: 比較対象の <code>apr_uri_t</code> 構造体。</li>
+<li><code>path</code>: 比較対象のパス文字列。</li>
+<li>**出力**:</li>
+<li><code>1</code>: フィルタ条件に一致した場合。</li>
+<li><code>0</code>: 一致しなかった場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>filter</code> にスキーム（<code>scheme</code>）が指定されていない場合、<code>url</code> にスキームやホスト名が含まれていると一致しません（ローカルパス専用とみなされます）。</li>
+<li><code>filter</code> にスキームが指定されている場合、<code>url</code> もスキームを持つ必要があり、大文字小文字を区別せず一致する必要があります。</li>
+<li><code>path</code> が <code>NULL</code> の場合、<code>filter-&gt;path</code> が <code>/</code> かつ <code>pathlen</code> が 1 である場合にのみ一致とみなされます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **スキーム判定**: <code>filter</code> にスキームがない場合、<code>url</code> にスキームやホスト名があれば即座に 0 を返します。 2. **スキーム一致**: <code>filter</code> にスキームがある場合、<code>url</code> のスキームと比較します。 3. **ホスト名照合**: <code>filter-&gt;hostname</code> の先頭文字に応じて以下のルールで照合します。</p>
+<ul>
+<li><code>.</code>: <code>url-&gt;hostname</code> の末尾が <code>filter-&gt;hostname</code> と一致するか確認。</li>
+<li><code>*</code>: <code>url-&gt;hostname</code> の末尾が <code>filter-&gt;hostname</code>（先頭の <code>*</code> を除く）と一致するか確認。</li>
+<li>その他: <code>url-&gt;hostname</code> と完全一致（大文字小文字無視）を確認。</li>
+<p>4. **ポート照合**: <code>filter</code> のポートが指定されている場合、<code>url</code> のポート（未指定時はスキームのデフォルトポート）と比較します。 5. **パス照合**: 最後に <code>filter-&gt;path</code> と <code>path</code> を <code>pathlen</code> 分だけ比較します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/cache_util.c</code> 内の 203 行目および 221 行目（いずれもキャッシュ設定の照合処理）。</li>
+<li>**呼び出し先**: <code>ap_cstr_casecmp</code>, <code>strlen</code>, <code>strcasecmp</code>, <code>apr_uri_port_of_scheme</code>, <code>strncmp</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_uri_t</code>: Apache Portable Runtime (APR) で定義される URI 構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>url-&gt;hostname</code> が <code>NULL</code> の場合、ホスト名の照合ロジック内で適切に処理されます。</li>
+<li><code>filter-&gt;hostname</code> が空文字列の場合、ホスト名の照合はスキップされます。</li>
+<li><code>filter-&gt;port_str</code> が空の場合、ポートの照合はスキップされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_cache</code> の設定フィルタリングにおいて、プロキシされた URI とローカルパスを区別して処理する重要な役割を担います。</li>
+<li>ホスト名のワイルドカード照合（<code>.</code> や <code>*</code>）は、<code>url-&gt;hostname</code> の長さを考慮して安全に実行されています。</li>
 </ul></body></html>

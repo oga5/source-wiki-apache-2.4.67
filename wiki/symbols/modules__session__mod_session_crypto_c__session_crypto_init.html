@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/session/mod_session_crypto.c:542</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の起動時に <code>apr_crypto</code> ドライバを初期化し、セッション暗号化に必要なコンテキストをサーバープロセスに保持させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int session_crypto_init(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: 設定用プール。</li>
+<li><code>plog</code>: ログ用プール。</li>
+<li><code>ptemp</code>: 一時作業用プール。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li>**出力**:</li>
+<li><code>OK</code> (0): 正常終了。</li>
+<li><code>APR</code> エラーコード: 初期化失敗時。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_session_crypto</code> の設定構造体 <code>session_crypto_conf</code> が <code>s-&gt;module_config</code> から取得可能であること。</li>
+<li><code>APU_HAVE_CRYPTO</code> が有効である環境であること。</li>
+<li>本関数は <code>post_config</code> フックとして登録されており、サーバー起動時に2回呼び出される仕様である。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **二重呼び出しの回避**: <code>AP_SQ_MS_CREATE_PRE_CONFIG</code> 状態であれば、初期化を行わず即座に <code>OK</code> を返す。 2. **ライブラリのロード**: 設定された暗号ライブラリ（<code>conf-&gt;library</code>）に対し、<code>apr_crypto_init</code> および <code>apr_crypto_get_driver</code> を実行する。 3. **コンテキスト生成**: <code>apr_crypto_make</code> を使用して暗号化コンテキスト <code>apr_crypto_t</code> を生成する。 4. **状態保持**: 生成されたコンテキストを <code>apr_pool_userdata_set</code> を介してサーバープロセスプール (<code>s-&gt;process-&gt;pconf</code>) に格納し、後続のリクエスト処理で利用可能にする。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_post_config</code> により、Apache HTTP Server の起動プロセスから呼び出される。</li>
+<li>**呼び出し先**: <code>apr_crypto_init</code>, <code>apr_crypto_get_driver</code>, <code>apr_crypto_make</code>, <code>ap_log_error</code>, <code>apr_pool_userdata_set</code> 等の APR/Apache API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_crypto_conf</code>: サーバー全体の設定（ライブラリ名、パラメータ等）を保持。</li>
+<li><code>apr_crypto_t</code>: 暗号化操作のコンテキスト。</li>
+<li><code>apr_crypto_driver_t</code>: 暗号化ドライバのインターフェース。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ライブラリロード失敗**: 指定された暗号ライブラリが見つからない、または初期化できない場合、エラーログを出力してエラーコードを返す。</li>
+<li>**再初期化**: <code>APR_EREINIT</code> が発生した場合は警告ログを出力し、既存の設定を継続利用する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数で生成された <code>apr_crypto_t</code> コンテキストは、<code>CRYPTO_KEY</code> というキーでプールに保存されるため、他の関数からこのキーを用いてコンテキストを取得する設計となっている。</li>
+<li>起動時の二重呼び出しは仕様であり、初回呼び出し時のリソース消費を避けるためのガード句が含まれている。</li>
 </ul></body></html>

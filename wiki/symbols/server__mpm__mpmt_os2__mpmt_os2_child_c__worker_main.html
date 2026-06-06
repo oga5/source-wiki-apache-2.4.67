@@ -6,22 +6,51 @@
 <li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2_child.c:345</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OS/2 MPM の子プロセスにおいて、個別のワーカー（スレッド）として接続リクエストを処理し、リクエストの受け取りから接続の終了までを管理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void worker_main(void *vpArg)</code></pre>
+<ul>
+<li><code>vpArg</code>: スレッドスロット番号（<code>int</code>）としてキャストして使用される。</li>
+</ul>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>vpArg</code>（スレッドスロット番号）。OS/2 キュー（<code>/queues/httpd/work.&lt;pid&gt;</code>）から読み出される <code>worker_args_t</code> 構造体（接続情報）。</li>
+<li>**出力**: なし（戻り値 <code>void</code>）。副作用としてスコアボードの更新および接続の処理を行う。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>DosSetExceptionHandler</code> により、スレッド内の例外を捕捉しプロセス全体のクラッシュを防ぐ。</li>
+<li><code>pchild</code> プールが生存していること。</li>
+<li>接続処理中、スコアボードのステータスは <code>SERVER_READY</code> から <code>SERVER_BUSY</code> 相当の状態へ遷移し、処理完了後に <code>SERVER_READY</code> へ戻る。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 例外ハンドラを登録し、OS/2 キューを開く。 2. **ループ**: <code>DosReadQueue</code> を使用して、キューから接続情報（<code>worker_args</code>）が届くのを待機する。 3. **接続処理**:</p>
+<ul>
+<li><code>ap_run_create_connection</code> で接続オブジェクトを作成。</li>
+<li><code>ap_process_connection</code> でリクエストを処理。</li>
+<li><code>ap_lingering_close</code> で接続を閉じる。</li>
+<p>4. **終了**: <code>WORKTYPE_EXIT</code> メッセージを受信するか、キューの読み取りに失敗した時点でループを脱出し、スコアボードを <code>SERVER_DEAD</code> に更新して終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/mpmt_os2/mpmt_os2_child.c</code> 内の <code>_beginthread</code> により起動される。</li>
+<li>**呼び出し先**: <code>ap_run_create_connection</code>, <code>ap_process_connection</code>, <code>ap_lingering_close</code>, <code>ap_update_child_status_from_indexes</code>, <code>DosReadQueue</code>, <code>DosOpenQueue</code> 等。</li>
+<li>**注記**: <code>server/mpm/netware/mpm_netware.c</code> や <code>server/mpm/winnt/child.c</code> にも同名の関数が存在するが、これらは別実装である。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>worker_args_t</code>: キュー経由で渡される接続情報。</li>
+<li><code>EXCEPTIONREGISTRATIONRECORD</code>: OS/2 の例外処理用構造体。</li>
+<li><code>ap_sb_handle_t</code>: スコアボードハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キューオープン失敗**: <code>DosOpenQueue</code> が失敗した場合、ログを出力し、該当スロットのスコアボードをクリアして終了する。</li>
+<li>**例外発生**: <code>thread_exception_handler</code> が呼び出され、プロセス全体を巻き込む前にスレッドが安全に終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OS/2 の <code>Dos*</code> API に強く依存している。</li>
+<li><code>pconn</code> プールは各接続処理のたびに作成・破棄され、メモリリークを防ぐ設計となっている。</li>
+<li><code>HARD_THREAD_LIMIT</code>（256）がスレッド数の上限として機能する。</li>
 </ul></body></html>

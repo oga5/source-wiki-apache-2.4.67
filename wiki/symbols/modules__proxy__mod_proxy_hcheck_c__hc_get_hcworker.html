@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_hcheck.c:482</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたプロキシワーカーに対応するヘルスチェック用ワーカー（<code>hc</code>）を取得、または存在しない場合は新規作成して返します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static proxy_worker *hc_get_hcworker(sctx_t *ctx, proxy_worker *worker, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: サーバー単位のモジュール設定（<code>sctx_t</code>）。</li>
+<li><code>worker</code>: ヘルスチェック対象のプロキシワーカー。</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li>**出力**:</li>
+<li>対象ワーカーに関連付けられたヘルスチェック用 <code>proxy_worker</code> 構造体。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;hcworkers</code> ハッシュテーブルが初期化されている必要があります。</li>
+<li>返されるワーカーには <code>PROXY_WORKER_IGNORE_ERRORS</code> および <code>PROXY_WORKER_GENERIC</code> フラグが設定されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ctx-&gt;hcworkers</code> ハッシュから、指定された <code>worker</code> に対応するヘルスチェック用ワーカーを検索します。 2. 存在しない場合:</p>
+<ul>
+<li><code>ap_proxy_define_worker</code> を使用して新規ワーカーを定義します。</li>
+<li>元のワーカーからホスト名、スキーム、タイムアウト設定、ポート番号等の属性をコピーします。</li>
+<li><code>wctx_t</code> コンテキストを初期化し、<code>create_hcheck_req</code> を呼び出してリクエストを構築します。</li>
+<li>新規作成したワーカーをハッシュに登録します。</li>
+<p>3. 存在する場合:</p>
+<li>現在のワーカー設定とヘルスチェック用ワーカーの設定を比較し、メソッドが変更されていれば <code>create_hcheck_req</code> を再実行して更新します。</li>
+<p>4. 最終的にヘルスチェック用ワーカーを返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_hcheck.c:641</code></li>
+<li>**呼び出し先**: </li>
+<li><code>apr_hash_get</code> / <code>apr_hash_set</code></li>
+<li><code>ap_proxy_define_worker</code></li>
+<li><code>ap_proxy_initialize_worker</code></li>
+<li><code>create_hcheck_req</code></li>
+<li><code>apr_uri_parse</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sctx_t</code>: サーバー設定コンテキスト。</li>
+<li><code>proxy_worker</code>: プロキシワーカー構造体。</li>
+<li><code>wctx_t</code>: ヘルスチェック用ワーカーのコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_uri_parse</code> が失敗した場合、パス情報は設定されませんが、処理は継続されます。</li>
+<li>ワーカーのポート番号が未指定の場合、<code>ap_proxy_port_of_scheme</code> を用いてスキームからデフォルトポートを導出します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は、バランサーマネージャー等による動的な設定変更を考慮し、メソッドの不一致を検知して再構築を行うロジックを含んでいます。</li>
+<li><code>hc-&gt;s-&gt;name</code> および <code>name_ex</code> には、元のワーカーのアドレスが文字列として格納されます。</li>
 </ul></body></html>

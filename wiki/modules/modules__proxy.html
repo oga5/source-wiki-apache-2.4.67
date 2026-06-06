@@ -1,73 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__proxy.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/proxy</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/proxy</code> には 24 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/proxy</code> は、Apache HTTP Server におけるプロキシサブシステムの中核です。HTTP、AJP、FastCGI、uWSGI、WebSocket、FTP など、多様なプロトコルを介したバックエンドへのリクエスト転送、ロードバランシング、および接続管理機能を提供します。このモジュールはディレクトリ境界に基づいて定義されています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プロキシ基盤の提供**: 接続プール、ワーカー管理、共有メモリ同期、URL 正規化などの共通機能の提供。</li>
+<li>**プロトコルハンドラの統合**: 各プロトコル固有の通信ロジックを <code>mod_proxy</code> のフックシステムに統合。</li>
+<li>**負荷分散とヘルスチェック**: バックエンドサーバーの監視と、トラフィックの動的な振り分け。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/proxy/ajp.h</code></li>
-<li><code>modules/proxy/ajp_header.c</code></li>
-<li><code>modules/proxy/ajp_header.h</code></li>
-<li><code>modules/proxy/ajp_link.c</code></li>
-<li><code>modules/proxy/ajp_msg.c</code></li>
-<li><code>modules/proxy/ajp_utils.c</code></li>
-<li><code>modules/proxy/mod_proxy.c</code></li>
-<li><code>modules/proxy/mod_proxy.h</code></li>
-<li><code>modules/proxy/mod_proxy_ajp.c</code></li>
-<li><code>modules/proxy/mod_proxy_balancer.c</code></li>
-<li><code>modules/proxy/mod_proxy_connect.c</code></li>
-<li><code>modules/proxy/mod_proxy_express.c</code></li>
-<li><code>modules/proxy/mod_proxy_fcgi.c</code></li>
-<li><code>modules/proxy/mod_proxy_fdpass.c</code></li>
-<li><code>modules/proxy/mod_proxy_fdpass.h</code></li>
-<li><code>modules/proxy/mod_proxy_ftp.c</code></li>
-<li><code>modules/proxy/mod_proxy_hcheck.c</code></li>
-<li><code>modules/proxy/mod_proxy_http.c</code></li>
-<li><code>modules/proxy/mod_proxy_scgi.c</code></li>
-<li><code>modules/proxy/mod_proxy_uwsgi.c</code></li>
-<li><code>modules/proxy/mod_proxy_wstunnel.c</code></li>
-<li><code>modules/proxy/proxy_util.c</code></li>
-<li><code>modules/proxy/proxy_util.h</code></li>
-<li><code>modules/proxy/scgi.h</code></li>
+<li><code>mod_proxy.c</code>, <code>mod_proxy.h</code>: プロキシのメインロジックと共通インターフェース。</li>
+<li><code>proxy_util.c</code>, <code>proxy_util.h</code>: 接続管理やURL正規化などの共通ユーティリティ。</li>
+<li><code>mod_proxy_http.c</code>, <code>mod_proxy_ajp.c</code>, <code>mod_proxy_fcgi.c</code>, <code>mod_proxy_uwsgi.c</code>, <code>mod_proxy_scgi.c</code>, <code>mod_proxy_wstunnel.c</code>, <code>mod_proxy_connect.c</code>, <code>mod_proxy_ftp.c</code>: 各プロトコルハンドラ。</li>
+<li><code>mod_proxy_balancer.c</code>, <code>mod_proxy_hcheck.c</code>: ロードバランサーおよびヘルスチェック機能。</li>
+<li><code>mod_proxy_express.c</code>, <code>mod_proxy_fdpass.c</code>: 動的ルーティングおよびFD受け渡し機能。</li>
+<li><code>ajp_*.c</code>, <code>ajp_*.h</code>, <code>scgi.h</code>: AJP/SCGI プロトコル固有の定義と実装。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>ajp_msg_t</code></li>
-<li><code>ajp_msg</code></li>
-<li><code>enctype</code></li>
-<li><code>hcmethod_t</code></li>
-<li><code>proxy_hcmethods_t</code></li>
-<li><code>proxy_wstat_t</code></li>
-<li><code>proxy_balancer</code></li>
-<li><code>proxy_worker</code></li>
-<li><code>proxy_conn_pool</code></li>
-<li><code>proxy_balancer_method</code></li>
+<li><code>proxy_server_conf</code>, <code>proxy_dir_conf</code>: サーバーおよびディレクトリ単位の設定構造体。</li>
+<li><code>proxy_worker</code>, <code>proxy_balancer</code>: バックエンドサーバーおよび負荷分散グループの定義。</li>
+<li><code>proxy_conn_rec</code>: バックエンドへの接続状態（ソケット、プール等）。</li>
+<li><code>ajp_msg_t</code>: AJP 通信用のメッセージバッファ。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **リクエスト翻訳**: <code>proxy_translate_name</code> が URL を解析し、プロキシ対象としてマーク。 2. **ワーカー選択**: <code>pre_request</code> フックにより、バランサーまたはワーカーを特定。 3. **接続取得**: <code>ap_proxy_acquire_connection</code> を呼び出し、接続プールから既存の接続を再利用または新規作成。 4. **バックエンド通信**: プロトコル固有のハンドラがリクエストを変換・送信し、レスポンスをフィルタリングしてクライアントへ転送。 5. **終了処理**: <code>ap_proxy_release_connection</code> により接続をプールへ返却。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>mod_proxy.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>ajp.h</code></li>
-<li><code>apr_version.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>apr_buckets.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_request.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>http_log.h</code></li>
+<li>**APR (Apache Portable Runtime)**: メモリ管理、ネットワーク I/O、スレッド同期、共有メモリ（<code>slotmem</code>）。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code> 等のリクエスト処理基盤。</li>
 </ul>
 <h2>内部構成</h2>
 <ul>
-<li>子モジュール数: 1</li>
+<li>プロキシ基盤（<code>mod_proxy</code>, <code>proxy_util</code>）を核とし、複数のプロトコルハンドラおよび拡張モジュールがプラグインとして接続される構成。</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/proxy/mod_proxy.h</code> 2. <code>modules/proxy/ajp_header.h</code> 3. <code>modules/proxy/ajp.h</code> 4. <code>modules/proxy/mod_proxy_fdpass.h</code> 5. <code>modules/proxy/scgi.h</code> 6. <code>modules/proxy/proxy_util.h</code> 7. <code>modules/proxy/proxy_util.c</code> 8. <code>modules/proxy/mod_proxy.c</code> 9. <code>modules/proxy/mod_proxy_hcheck.c</code> 10. <code>modules/proxy/mod_proxy_balancer.c</code> 11. <code>modules/proxy/mod_proxy_scgi.c</code> 12. <code>modules/proxy/mod_proxy_ftp.c</code> 13. <code>modules/proxy/mod_proxy_http.c</code> 14. <code>modules/proxy/ajp_msg.c</code> 15. <code>modules/proxy/mod_proxy_fcgi.c</code> 16. <code>modules/proxy/ajp_header.c</code> 17. <code>modules/proxy/mod_proxy_wstunnel.c</code> 18. <code>modules/proxy/mod_proxy_connect.c</code> 19. <code>modules/proxy/mod_proxy_express.c</code> 20. <code>modules/proxy/mod_proxy_uwsgi.c</code> 21. <code>modules/proxy/mod_proxy_ajp.c</code> 22. <code>modules/proxy/mod_proxy_fdpass.c</code> 23. <code>modules/proxy/ajp_link.c</code> 24. <code>modules/proxy/ajp_utils.c</code></p>
+<p>1. <code>mod_proxy.h</code> (インターフェース定義) 2. <code>proxy_util.h</code> / <code>proxy_util.c</code> (共通基盤) 3. <code>mod_proxy.c</code> (メインロジック) 4. <code>mod_proxy_http.c</code> (標準的なプロトコルハンドラ) 5. <code>mod_proxy_balancer.c</code> (負荷分散) 6. <code>mod_proxy_hcheck.c</code> (ヘルスチェック) 7. <code>ajp.h</code> / <code>ajp_msg.c</code> (AJP プロトコルスタック)</p>
 <h2>未解決の問い</h2>
 <ul>
 <li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>

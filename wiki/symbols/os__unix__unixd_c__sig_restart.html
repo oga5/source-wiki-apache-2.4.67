@@ -6,22 +6,42 @@
 <li>定義箇所: <code>os/unix/unixd.c:480</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の MPM における再起動シグナルを処理し、サーバーの状態遷移をトリガーする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void sig_restart(int sig)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>int sig</code>（受信したシグナル番号）</li>
+<li>**出力**: なし（void）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained_data</code> が初期化されていること。初期化されていない場合、関数は即座に終了する。</li>
+<li><code>retained_data</code> はサーバーのライフサイクル全体で生存する共有メモリ領域である。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>retained_data</code> が存在しない場合、処理を中断する。 2. <code>retained_data-&gt;mpm_state</code> を <code>AP_MPMQ_STOPPING</code> に設定する。 3. すでに再起動が保留されており、かつ現在のシグナルが <code>AP_SIG_GRACEFUL</code> であるか、すでに非優雅（ungraceful）な再起動が要求されている場合は、重複処理を避けて終了する。 4. <code>retained_data-&gt;restart_pending</code> を <code>1</code> に設定する。 5. 受信したシグナルが <code>AP_SIG_GRACEFUL</code> でない場合、<code>retained_data-&gt;is_ungraceful</code> を <code>1</code> に設定し、強制的な再起動をマークする。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>os/unix/unixd.c:586</code> (シグナルハンドラ設定)</li>
+<li><code>os/unix/unixd.c:615</code> (<code>apr_signal</code> による SIGHUP 登録)</li>
+<li><code>os/unix/unixd.c:618</code> (<code>apr_signal</code> による <code>AP_SIG_GRACEFUL</code> 登録)</li>
+<li><code>server/mpm/mpmt_os2/mpmt_os2.c:391</code> (シグナルハンドラ設定)</li>
+<li>**呼び出し先**:</li>
+<li>直接的な関数呼び出しはなし。<code>retained_data</code> 構造体のメンバ更新を行う。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_unixd_mpm_retained_data</code> (グローバル変数 <code>retained_data</code>): MPM の再起動状態を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained_data</code> が NULL の場合: メインプロセス終了時など、状態保持が不要なタイミングで呼び出された場合は安全に無視される。</li>
+<li>重複シグナル: すでに保留中の再起動がある場合、状態を上書きせずに終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はシグナルハンドラとして動作するため、非同期シグナル安全な操作のみを行う必要がある。</li>
+<li><code>retained_data</code> の更新は、メインループ側で MPM の再起動ロジックを制御するためのフラグとして機能する。</li>
 </ul></body></html>

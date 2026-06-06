@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/md/md_store_fs.c:203</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ファイルシステム上のストアメタデータファイルを読み込み、バージョン検証、暗号化キーの抽出、および必要に応じたデータ構造のマイグレーションを実行します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t read_store_file(md_store_fs_t *s_fs, const char *fname, 
+                             apr_pool_t *p, apr_pool_t *ptemp)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s_fs</code>: ストレージ状態を保持する <code>md_store_fs_t</code> 構造体。</li>
+<li><code>fname</code>: 読み込むファイルのパス。</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li><code>ptemp</code>: 一時的な処理用プール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理成功時は <code>APR_SUCCESS</code>、バージョン不整合やキー欠損等のエラー時は <code>APR_EINVAL</code> 等のステータスコードを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fname</code> で指定されたファイルは有効な JSON 形式である必要があります。</li>
+<li><code>s_fs-&gt;key</code> には、ファイルから抽出された Base64URL デコード済みのデータが格納されます。</li>
+<li>ファイル内のバージョンが <code>MD_STORE_VERSION</code> を超えている場合、読み込みは拒否されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>md_json_readf</code> を使用して JSON ファイルを読み込みます。 2. <code>MD_KEY_STORE</code> および <code>MD_KEY_VERSION</code> からストアバージョンを取得します（未定義の場合は 1.0 とみなします）。 3. バージョンが現在の <code>MD_STORE_VERSION</code> より新しい場合はエラーを返します。 4. JSON 内の <code>MD_KEY_KEY</code> を取得し、Base64URL デコードして <code>s_fs-&gt;key</code> に設定します。キー長が <code>FS_STORE_KLEN</code> と一致しない場合はエラーとなります。 5. バージョンが古い場合、<code>upgrade_from_1_0</code> 等を呼び出してマイグレーションを実行し、更新後の JSON をファイルに書き戻します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/md_store_fs.c:277</code> (関数名等の詳細はソース抜粋外のため不明)</li>
+<li>**呼び出し先**:</li>
+<li><code>md_json_readf</code>, <code>md_json_getn</code>, <code>md_json_dups</code>, <code>md_json_del</code>, <code>md_json_setn</code>, <code>md_json_freplace</code></li>
+<li><code>md_log_perror</code></li>
+<li><code>md_util_base64url_decode</code></li>
+<li><code>upgrade_from_1_0</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_store_fs_t</code>: ストレージのベースパスや暗号化キーを管理するメイン構造体。</li>
+<li><code>md_json_t</code>: JSON データの解析結果を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バージョン不整合**: ファイルのバージョンが現在のシステムより新しい場合、<code>APR_EINVAL</code> を返します。</li>
+<li>**キー欠損または不正**: JSON 内にキーが存在しない、またはデコード後の長さが <code>FS_STORE_KLEN</code> と異なる場合、<code>APR_EINVAL</code> を返します。</li>
+<li>**マイグレーション失敗**: <code>upgrade_from_1_0</code> 等の処理が失敗した場合、そのステータスが返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はストアの初期化および互換性維持の要です。マイグレーションロジックを変更する際は、<code>MD_STORE_VERSION</code> の定義と整合性を取る必要があります。</li>
+<li><code>ptemp</code> はファイル書き戻し時のメモリ管理に使用されます。</li>
 </ul></body></html>

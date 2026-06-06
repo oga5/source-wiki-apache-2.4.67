@@ -6,22 +6,40 @@
 <li>定義箇所: <code>server/mpm/winnt/service.c:164</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>コンソールモードで実行されているApacheプロセスに対し、Windowsのコンソール制御イベント（Ctrl+Cやシャットダウン要求など）を捕捉し、適切なサーバー制御シグナル（再起動またはシャットダウン）へ変換して通知する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static BOOL CALLBACK console_control_handler(DWORD ctrl_type)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ctrl_type</code> (<code>DWORD</code>) - 発生したコンソールイベントの種類（<code>CTRL_C_EVENT</code>, <code>CTRL_BREAK_EVENT</code>, <code>CTRL_CLOSE_EVENT</code> 等）。</li>
+<li>**出力**: <code>BOOL</code> - イベントを処理した場合は <code>TRUE</code>、それ以外は <code>FALSE</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>Windows環境のコンソールアプリケーションとして実行されていること。</li>
+<li><code>SetConsoleCtrlHandler</code> を介して本関数が登録されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>受け取った <code>ctrl_type</code> に応じて以下の処理を行う： 1. **<code>CTRL_BREAK_EVENT</code>**: 再起動シグナル (<code>SIGNAL_PARENT_RESTART</code>) を送信し、<code>TRUE</code> を返す。 2. **<code>CTRL_C_EVENT</code>**: シャットダウンシグナル (<code>SIGNAL_PARENT_SHUTDOWN</code>) を送信し、<code>TRUE</code> を返す。 3. **<code>CTRL_CLOSE_EVENT</code> / <code>CTRL_LOGOFF_EVENT</code> / <code>CTRL_SHUTDOWN_EVENT</code>**: シャットダウンシグナル (<code>SIGNAL_PARENT_SHUTDOWN</code>) を送信し、<code>Sleep(30000)</code> で待機した後、<code>TRUE</code> を返す。 4. **その他**: <code>FALSE</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Windows OSのコンソール制御ディスパッチャ（<code>SetConsoleCtrlHandler</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_signal_parent</code>: 親プロセスへシグナルを送信する。</li>
+<li><code>fprintf</code>: 標準エラー出力へログを出力する。</li>
+<li><code>Sleep</code>: シャットダウン処理の猶予時間を確保する。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>DWORD</code>: Windows APIの型定義。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>CTRL_CLOSE_EVENT</code> 等の終了イベント発生時には、30秒間の待機（<code>Sleep</code>）が発生するため、即時のプロセス終了は行われない。</li>
+<li>予期しないイベントタイプが渡された場合は <code>FALSE</code> を返し、OS側のデフォルト動作に委ねる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SetConsoleCtrlHandler</code> のコールバックとして動作するため、スレッドセーフな実装が求められる。</li>
+<li>シャットダウン時の <code>Sleep(30000)</code> は、システムがプロセスを強制終了する前にApacheがクリーンアップを試みるための猶予期間である。</li>
 </ul></body></html>

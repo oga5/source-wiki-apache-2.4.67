@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/md/md_acme_drive.c:298</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ACME サーバーからの証明書発行レスポンスを処理し、証明書の場所（Location）を記録および永続化します。また、レスポンス内に証明書が含まれている場合はその読み込みとチェーンの更新を試みます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t csr_req(md_acme_t *acme, const md_http_response_t *res, void *baton)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>acme</code>: ACME セッション状態（未使用）。</li>
+<li><code>res</code>: サーバーからの HTTP レスポンス。</li>
+<li><code>baton</code>: <code>md_proto_driver_t</code> へのポインタ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理成功時は <code>APR_SUCCESS</code>。エラー時は <code>md_acme_order_save</code> 等の戻り値。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>baton</code> は <code>md_proto_driver_t</code> 型としてキャスト可能であること。</li>
+<li><code>res-&gt;headers</code> に &quot;location&quot; ヘッダーが存在する場合、その値は証明書の取得先 URL として扱われます。</li>
+<li><code>MD_SG_STAGING</code> グループへの書き込み権限が必要です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **Location の取得**: レスポンスヘッダーから <code>location</code> を取得します。存在しない場合は即座に終了します。 2. **永続化**: <code>location</code> を <code>ad-&gt;order-&gt;certificate</code> に格納し、<code>md_acme_order_save</code> を呼び出してステージング領域に保存します。 3. **証明書の読み込み**: <code>md_cert_read_http</code> を使用してレスポンスから証明書を抽出します。</p>
+<ul>
+<li>成功時: <code>ad-&gt;cred-&gt;chain</code> をクリアし、取得した証明書を格納した後、<code>get_up_link</code> を呼び出してチェーンのリンクを補完します。</li>
+<li><code>ENOENT</code> 時: 証明書がレスポンスに含まれていないと判断し、ポーリングが必要であることをログ出力して正常終了します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/md_acme_drive.c:385</code>（<code>md_acme_POST</code> のコールバックとして指定）。</li>
+<li>**呼び出し先**:</li>
+<li><code>md_acme_order_save</code>: 注文情報の保存。</li>
+<li><code>md_cert_read_http</code>: レスポンスからの証明書抽出。</li>
+<li><code>get_up_link</code>: 証明書チェーンのリンク取得。</li>
+<li><code>md_log_perror</code>: ログ出力。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_acme_t</code>: ACME セッション管理。</li>
+<li><code>md_proto_driver_t</code>: プロトコル駆動のコンテキスト。</li>
+<li><code>md_acme_driver_t</code>: ACME 固有の駆動状態。</li>
+<li><code>md_http_response_t</code>: HTTP レスポンスデータ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>location</code> ヘッダーが欠落している場合、何も行わず <code>APR_SUCCESS</code> を返します。</li>
+<li><code>md_acme_order_save</code> が失敗した場合、エラーコードを返し処理を中断します。</li>
+<li><code>md_cert_read_http</code> が <code>ENOENT</code> 以外のエラーを返した場合、そのエラーが呼び出し元に伝播します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は ACMEv1 スタイルのレスポンス処理を想定したロジックを含んでいます。</li>
+<li><code>ad-&gt;chain_up_link</code> をリセットしてから処理を開始するため、呼び出しごとに状態が初期化される点に注意してください。</li>
 </ul></body></html>

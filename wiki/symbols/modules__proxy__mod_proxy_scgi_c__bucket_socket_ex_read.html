@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_scgi.c:93</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>SOCKET_EX</code> バケットからデータを読み込み、ソケット通信の統計情報を更新しつつ、読み取ったデータをヒープバケットへ変換してバケットチェーンに反映させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t bucket_socket_ex_read(apr_bucket *a, const char **str,
+                                   apr_size_t *len,
+                                   apr_read_type_e block)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>a</code>: 読み込み対象の <code>apr_bucket</code>。</li>
+<li><code>block</code>: 読み込みモード（<code>APR_NONBLOCK_READ</code> 等）。</li>
+<li>**出力**:</li>
+<li><code>str</code>: 読み取ったデータへのポインタ。</li>
+<li><code>len</code>: 読み取ったデータの長さ。</li>
+<li>戻り値: <code>apr_status_t</code>（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>バケット <code>a</code> のデータ領域 (<code>a-&gt;data</code>) は <code>socket_ex_data</code> 構造体であること。</li>
+<li><code>data-&gt;counter</code> は有効な統計カウンタを指していること。</li>
+<li>読み込み成功時、バケット <code>a</code> はヒープバケットに変換され、後続に新しい <code>SOCKET_EX</code> バケットが挿入される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **タイムアウト制御**: <code>APR_NONBLOCK_READ</code> 指定時は、ソケットのタイムアウトを一時的に 0 に設定し、読み込み後に復元する。 2. **データ読み込み**: <code>apr_socket_recv</code> を使用してソケットからデータを取得する。 3. **統計更新**: 読み込みバイト数を <code>data-&gt;counter</code> に加算する。 4. **バケット変換**:</p>
+<ul>
+<li>読み込みデータがある場合: <code>apr_bucket_heap_make</code> で現在のバケットをヒープバケットへ変換し、後続に新しい <code>SOCKET_EX</code> バケットを生成・挿入する。</li>
+<li>読み込みデータがない場合: <code>apr_bucket_immortal_make</code> で空のバケットに変換する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_scgi.c:147</code>（<code>bucket_type_socket_ex</code> 構造体内の関数ポインタとして参照）。</li>
+<li>**呼び出し先**: <code>apr_socket_timeout_get</code>, <code>apr_socket_timeout_set</code>, <code>apr_bucket_alloc</code>, <code>apr_socket_recv</code>, <code>apr_bucket_free</code>, <code>apr_bucket_heap_make</code>, <code>APR_BUCKET_INSERT_AFTER</code>, <code>bucket_socket_ex_create</code>, <code>apr_bucket_immortal_make</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>socket_ex_data</code>: ソケットと統計カウンタを保持する構造体。</li>
+<li><code>apr_bucket</code>: Apache のバケット抽象化構造体。</li>
+<li><code>apr_bucket_heap</code>: ヒープ領域にデータを保持するバケット型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_socket_recv</code> が <code>APR_SUCCESS</code> および <code>APR_EOF</code> 以外のエラーを返した場合、メモリを解放してエラーコードを返す。</li>
+<li>読み込みバイト数が 0 の場合は EOF とみなし、空のイモータルバケットを作成して終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SOCKET_EX</code> バケット型の <code>read</code> メソッドとして機能する。</li>
+<li>統計情報の更新は <code>data-&gt;counter</code> を介して行われるため、このカウンタが正しく初期化されていることを確認すること。</li>
+<li><code>APR_BUCKET_BUFF_SIZE</code> を使用してバッファを確保しているため、読み込みサイズの上限はこの定数に依存する。</li>
 </ul></body></html>

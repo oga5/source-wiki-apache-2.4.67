@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/dav/main/util_lock.c:296</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたリソースに対してロックを追加します。対象がコレクションである場合、深さ（Depth）に応じて子リソースへ再帰的に間接ロックを適用します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>dav_error *dav_add_lock(request_rec *r,
+                        const dav_resource *resource,
+                        dav_lockdb *lockdb, dav_lock *lock,
+                        dav_response **response)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>resource</code>: ロック対象のリソース。</li>
+<li><code>lockdb</code>: ロックデータベースのハンドル。</li>
+<li><code>lock</code>: 追加するロック情報。</li>
+<li><code>response</code>: マルチステータスレスポンスを格納するためのポインタ。</li>
+<li>**出力**:</li>
+<li>成功時は <code>NULL</code> を返します。</li>
+<li>失敗時は <code>dav_error</code> 構造体へのポインタを返します。</li>
+<li><code>response</code> 引数には、再帰的なロック適用時にエラーが発生した場合、<code>dav_response</code> リストが格納されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リソースがコレクションでない場合、RFC 2518 9.2 に従い <code>depth</code> は強制的に 0 として扱われます。</li>
+<li>常にまず対象リソースに対して直接ロック（direct lock）が <code>lockdb</code> に追加されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. リソースがコレクションでない場合、<code>depth</code> を 0 に設定します。 2. <code>lockdb-&gt;hooks-&gt;append_locks</code> を呼び出し、対象リソースに直接ロックを適用します。 3. <code>depth &gt; 0</code> の場合、<code>resource-&gt;hooks-&gt;walk</code> を使用してリソースツリーを走査します。 4. 走査には <code>dav_lock_walker</code> を使用し、各子孫リソースに対して間接ロックを適用します。 5. 走査中にエラーが発生した場合は即座にエラーを返します。 6. 走査の結果、部分的なエラーが発生した場合は <code>HTTP_MULTI_STATUS</code> を含む <code>dav_error</code> を返し、<code>response</code> に詳細を格納します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/main/mod_dav.c</code> 内のロック処理ロジックから呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>lockdb-&gt;hooks-&gt;append_locks</code>: 直接ロックの追加。</li>
+<li><code>resource-&gt;hooks-&gt;walk</code>: 子リソースの走査。</li>
+<li><code>dav_lock_walker</code>: 走査時の各ノードに対するコールバック。</li>
+<li><code>dav_new_error</code>: エラー生成。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_resource</code>: ロック対象のリソース表現。</li>
+<li><code>dav_lock</code>: ロックの属性（深さ等）を保持。</li>
+<li><code>dav_lockdb</code>: ロックデータベースへのフックを保持。</li>
+<li><code>dav_walker_ctx</code>: 走査時のコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>append_locks</code> が失敗した場合、そのエラーがそのまま返されます。</li>
+<li><code>walk</code> 処理中に致命的なエラーが発生した場合、そのエラーが返されます。</li>
+<li><code>walk</code> 処理中に一部のリソースでロック適用に失敗した場合、<code>HTTP_MULTI_STATUS</code> エラーが返され、<code>response</code> に詳細が設定されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はロック・ヌル（lock-null）リソースの処理も包含しています。</li>
+<li><code>depth &gt; 0</code> の再帰処理におけるマルチステータスレスポンスの生成は、エラーハンドリングの改善余地がある箇所として認識されています。</li>
 </ul></body></html>

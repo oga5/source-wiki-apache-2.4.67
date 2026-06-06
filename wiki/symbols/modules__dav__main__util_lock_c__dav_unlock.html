@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/dav/main/util_lock.c:497</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたリソースおよびその配下のロックを、提供されたロックトークンに基づいて解除します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int dav_unlock(request_rec *r, const dav_resource *resource, const dav_locktoken *locktoken)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>resource</code>: 解除対象のリソース。</li>
+<li><code>locktoken</code>: 解除するロックを特定するためのトークン（<code>NULL</code> の場合、リソース以下の全ロックを対象とする）。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 処理結果を示すステータスコード（<code>OK</code> または <code>HTTP_INTERNAL_SERVER_ERROR</code> 等の HTTP ステータス）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hooks</code>（ロックプロバイダー）が <code>NULL</code> の場合、何もせず <code>OK</code> を返します。</li>
+<li><code>locktoken</code> が指定されている場合、<code>dav_get_direct_resource</code> を用いて、そのロックの起点となる「直接ロック」リソースを特定する必要があります。</li>
+<li>処理の開始時に <code>hooks-&gt;open_lockdb</code> を呼び出し、終了時に <code>hooks-&gt;close_lockdb</code> を呼び出す必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. ロックデータベースをオープンします。 2. <code>locktoken</code> が提供されている場合、<code>dav_get_direct_resource</code> を呼び出し、再帰的な解除の起点となる直接ロックのリソースを特定します。 3. <code>dav_walker_ctx</code> を初期化し、<code>dav_unlock_walker</code> をコールバック関数として設定します。 4. <code>repos_hooks-&gt;walk</code> を実行し、<code>DAV_INFINITY</code> の深さでリソースツリーを走査してロックを解除します。 5. 走査結果に基づいてステータスを決定し、ロックデータベースをクローズして結果を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/dav/main/mod_dav.c</code> (複数箇所で呼び出し)</li>
+<li>**呼び出し先**:</li>
+<li><code>hooks-&gt;open_lockdb</code> / <code>hooks-&gt;close_lockdb</code></li>
+<li><code>dav_get_direct_resource</code></li>
+<li><code>repos_hooks-&gt;walk</code> (コールバックとして <code>dav_unlock_walker</code> を使用)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_resource</code>: ロック対象のリソース表現。</li>
+<li><code>dav_locktoken</code>: ロックを識別するトークン。</li>
+<li><code>dav_lockdb</code>: ロックデータベースのハンドル。</li>
+<li><code>dav_walker_ctx</code>: ウォーカー処理用のコンテキスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ロックプロバイダーが未定義の場合、エラーにはならず <code>OK</code> を返します。</li>
+<li>ロックデータベースのオープンに失敗した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返します。</li>
+<li><code>dav_get_direct_resource</code> が失敗した場合、そのエラーコードを返します。</li>
+<li><code>repos_hooks-&gt;walk</code> 実行時のエラーは、<code>err-&gt;status</code> として返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>dav_get_direct_resource</code> および <code>walk</code> 呼び出し時のエラーハンドリングにおいて、より詳細なログ出力や上位レベルの記述追加が推奨されます。</li>
 </ul></body></html>

@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/generators/cgi_common.h:348</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>CGIスクリプトの標準出力（stdout）および標準エラー出力（stderr）を監視し、データを読み取るためのバケット読み取り関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t cgi_bucket_read(apr_bucket *b, const char **str, apr_size_t *len, apr_read_type_e block)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>b</code>: 読み取り対象の <code>apr_bucket</code>。内部データとして <code>cgi_bucket_data</code> を保持。</li>
+<li><code>str</code>: 読み取ったデータを格納するバッファへのポインタ。</li>
+<li><code>len</code>: 読み取ったデータの長さを格納する変数へのポインタ。</li>
+<li><code>block</code>: ブロッキング読み取りを行うかどうかの指定（<code>apr_read_type_e</code>）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>バケット <code>b</code> の <code>data</code> フィールドには、有効な <code>struct cgi_bucket_data</code> が格納されている必要があります。</li>
+<li><code>data-&gt;pollset</code> が初期化済みであり、監視対象のパイプが登録されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>block</code> 指定に基づき、タイムアウト時間を決定します（非ブロッキング時は0、それ以外は設定値またはサーバーのタイムアウト値）。 2. <code>apr_pollset_poll</code> を呼び出し、スクリプトの出力パイプを監視します。</p>
+<ul>
+<li>タイムアウト発生時: 設定に応じて警告ログを出力し <code>rv</code> を返すか、<code>APR_EAGAIN</code> を返します。</li>
+<li>割り込み（<code>EINTR</code>）発生時: 再試行します。</li>
+<li>エラー発生時: エラーログを出力し <code>rv</code> を返します。</li>
+<p>3. ポーリング結果をループで処理します。</p>
+<li><code>stdout</code>（<code>client_data == 1</code>）の場合: <code>cgi_read_stdout</code> を呼び出しデータを取得します。</li>
+<li><code>stderr</code> の場合: <code>log_script_err</code> を呼び出し、エラー出力をログへ転送します。EOFに達した場合は <code>pollset</code> から削除します。</li>
+<p>4. <code>stdout</code> からデータが取得できるまで、上記ポーリングを繰り返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: ソースコード内の直接的な呼び出し元は <code>modules/generators/cgi_common.h:410</code> に存在することが示唆されています。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_pollset_poll</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>cgi_read_stdout</code></li>
+<li><code>log_script_err</code></li>
+<li><code>apr_pollset_remove</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>struct cgi_bucket_data</code>: ポーリング対象の <code>pollset</code>、<code>request_rec</code>、タイムアウト値を含む管理構造体。</li>
+<li><code>apr_bucket</code>: Apache のバケット抽象化構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**タイムアウト**: スクリプトからの応答がない場合、設定されたタイムアウト時間経過後に <code>APR_TIMEUP</code> を返します。</li>
+<li>**ポーリング失敗**: <code>apr_pollset_poll</code> が失敗した場合、エラーログを出力しそのステータスを返します。</li>
+<li>**EOF**: <code>stderr</code> がEOFに達した場合は監視対象から除外されます。<code>stdout</code> がEOFの場合は <code>APR_SUCCESS</code> として処理されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>cgi_bucket_data</code> を介してリクエストコンテキストに依存しています。</li>
+<li><code>poll()</code> のブロック動作はスクリプトの実行時間に直結するため、タイムアウト設定の妥当性に注意してください。</li>
+<li><code>client_data</code> に <code>(void *)1</code> を使用して <code>stdout</code> を識別する実装となっているため、バケット作成時の登録ロジックと整合性を保つ必要があります。</li>
 </ul></body></html>

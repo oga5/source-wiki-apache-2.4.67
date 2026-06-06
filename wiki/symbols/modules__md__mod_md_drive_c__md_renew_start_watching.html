@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/md/mod_md_drive.c:309</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Managed Domain (MD) の証明書更新を監視・実行するためのバックグラウンドタスクを <code>mod_watchdog</code> に登録する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t md_renew_start_watching(md_mod_conf_t *mc, server_rec *s, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>mc</code>: モジュールの設定コンテキスト。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>p</code>: 親プール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_watchdog</code> がロードされている必要がある。</li>
+<li><code>mc-&gt;mds</code> に監視対象の MD が含まれていること。</li>
+<li>サーバー内の単一プロセスでのみ実行されることが <code>mod_watchdog</code> によって保証される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>mod_watchdog</code> の関数ポインタ（<code>get_instance</code>, <code>register_callback</code>, <code>set_interval</code>）を取得する。 2. 監視専用のメモリプールを作成し、コンテキスト <code>md_renew_ctx_t</code> を初期化する。 3. <code>mc-&gt;mds</code> を走査し、<code>watched</code> フラグが有効な MD に対して <code>md_job_t</code> を作成・ロードする。 4. 前回の実行でエラーが記録されている場合、<code>STAGING</code> および <code>CHALLENGES</code> 領域をパージしてジョブをリセットする。 5. 監視対象のジョブが存在しない場合は早期終了する。 6. <code>mod_watchdog</code> のインスタンスを取得し、<code>run_watchdog</code> コールバックを登録して監視を開始する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/mod_md.c:1021</code></li>
+<li>**呼び出し先**:</li>
+<li><code>mod_watchdog</code> API (<code>ap_watchdog_get_instance</code>, <code>ap_watchdog_register_callback</code>)</li>
+<li><code>md_reg_job_make</code>, <code>md_job_load</code></li>
+<li><code>md_store_purge</code></li>
+<li><code>run_watchdog</code> (コールバックとして登録)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_mod_conf_t</code>: モジュール設定全体を保持。</li>
+<li><code>md_renew_ctx_t</code>: 更新監視プロセスの状態コンテキスト。</li>
+<li><code>md_job_t</code>: 個別の MD 更新ジョブの状態。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_watchdog</code> が利用できない場合、<code>APLOG_CRIT</code> レベルでログを出力しエラーを返す。</li>
+<li>メモリプール作成失敗時はエラーを返す。</li>
+<li>監視対象の MD が一つも存在しない場合、プールを破棄して正常終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_watchdog</code> を介して非同期実行されるため、<code>mc</code> 内のデータは読み取り専用として扱うこと。</li>
+<li>更新処理の進捗は <code>STAGING</code> 領域のファイルシステムを通じて永続化される。</li>
+<li>再起動時のリカバリロジック（<code>error_runs</code> のチェック）が含まれているため、ジョブの失敗状態が永続化されている場合は注意が必要。</li>
 </ul></body></html>

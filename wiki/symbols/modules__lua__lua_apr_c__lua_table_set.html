@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/lua/lua_apr.c:38</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Lua スクリプトから Apache Portable Runtime (APR) のテーブル（<code>apr_table_t</code>）に対してキーと値を設定、または削除するためのインターフェースを提供します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int lua_table_set(lua_State *L);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li>スタック第1引数: <code>req_table_t</code> 構造体（<code>ap_lua_check_apr_table</code> で検証済み）。</li>
+<li>スタック第2引数: 設定対象のキー（文字列）。</li>
+<li>スタック第3引数: 設定する値（文字列、または <code>nil</code>）。</li>
+<li>**出力**:</li>
+<li>戻り値: 0（Lua スタックに値を返さない）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>第1引数は <code>ap_lua_check_apr_table</code> が成功する有効な <code>req_table_t</code> である必要があります。</li>
+<li><code>notes</code> 以外のテーブルに対しては、HTTP ヘッダーインジェクションを防ぐため、値に含まれる改行コード（<code>\n</code>）はスペースに置換されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_lua_check_apr_table</code> を呼び出し、Lua スタックから <code>req_table_t</code> を取得します。 2. 第3引数が <code>nil</code> の場合、<code>apr_table_unset</code> を呼び出して指定キーを削除し、終了します。 3. 第3引数が文字列の場合、テーブル名が <code>notes</code> でないか確認します。 4. <code>notes</code> 以外で値に改行が含まれる場合、<code>apr_pstrdup</code> で値を複製し、すべての改行をスペースに置換します。その後、警告ログを出力し、置換後の値を <code>apr_table_set</code> で設定します。 5. 改行が含まれない場合、または <code>notes</code> テーブルの場合は、そのまま <code>apr_table_set</code> で値を設定します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/lua/lua_apr.c:82</code>（<code>lua_table_methods</code> テーブル内での <code>set</code> メソッド登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_lua_check_apr_table</code></li>
+<li><code>luaL_checkstring</code> / <code>luaL_optlstring</code></li>
+<li><code>apr_table_unset</code> / <code>apr_table_set</code></li>
+<li><code>apr_pstrdup</code></li>
+<li><code>ap_strchr</code> / <code>ap_strchr_c</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req_table_t</code>: APR テーブルと関連するリクエスト情報を保持するラッパー構造体。</li>
+<li><code>apr_table_t</code>: APR が提供するキー・値ペアのテーブル構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**値が <code>nil</code>**: 指定されたキーがテーブルから削除されます。</li>
+<li>**改行コードの混入**: <code>notes</code> 以外のテーブルで値に <code>\n</code> が含まれる場合、セキュリティ上の理由からスペースに置換され、警告ログが記録されます。</li>
+<li>**メモリ不足**: <code>apr_pstrdup</code> 実行時にメモリ不足が発生した場合、APR のメモリ管理ポリシーに従い異常終了する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>__newindex</code> メタメソッドとして利用されることを想定しています。</li>
+<li><code>t-&gt;r</code>（リクエスト構造体）は <code>notes</code> テーブル以外では有効である前提で動作しています。<code>notes</code> テーブル操作時は <code>t-&gt;r</code> が NULL になる可能性がありますが、ロジック内で <code>notes</code> のチェックを優先しているため安全です。</li>
 </ul></body></html>

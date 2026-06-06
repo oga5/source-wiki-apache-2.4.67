@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_wstunnel.c:163</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントとバックエンドサーバー間での WebSocket トンネリングを確立し、双方向のデータストリームを中継する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_wstunnel_request(apr_pool_t *p, request_rec *r,
+                                proxy_conn_rec *conn,
+                                proxy_worker *worker,
+                                proxy_server_conf *conf,
+                                apr_uri_t *uri,
+                                char *url, char *server_portstr)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: リクエスト情報 (<code>r</code>)、バックエンド接続情報 (<code>conn</code>)、ワーカー設定 (<code>worker</code>)、URI 情報等。</li>
+<li>**出力**: 処理成功時は <code>OK</code>、バックエンドへの応答がなかった場合は <code>HTTP_BAD_GATEWAY</code>、内部エラー時は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;connection</code> および <code>conn-&gt;connection</code> が有効であること。</li>
+<li><code>ap_proxy_create_hdrbrgd</code> によりヘッダーブリゲードが正常に作成されていること。</li>
+<li>本関数が実行されると、当該接続の <code>keepalive</code> は <code>AP_CONN_CLOSE</code> に設定され、リクエスト処理全体を占有する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ヘッダー転送**: <code>Upgrade</code> および <code>Connection</code> ヘッダーを構築し、バックエンドへ送信する。 2. **ポーリング設定**: <code>apr_pollset</code> を作成し、クライアントソケットとバックエンドソケットを監視対象として登録する。 3. **トンネリングループ**:</p>
+<ul>
+<li><code>apr_pollset_poll</code> を使用してソケットの読み込み可能状態を待機する。</li>
+<li>どちらかのソケットが読み込み可能になった場合、<code>ap_proxy_transfer_between_connections</code> を呼び出し、データを相互に転送する。</li>
+<li>接続が切断されるかエラーが発生するまでループを継続する。</li>
+<p>4. **終了処理**: ループ終了後、バックエンドからの応答有無を確認し、適切なステータスコードを返して終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_wstunnel.c:433</code> (<code>proxy_wstunnel_handler</code> 内)</li>
+<li>**呼び出し先**: <code>ap_proxy_create_hdrbrgd</code>, <code>ap_proxy_pass_brigade</code>, <code>apr_pollset_create</code>, <code>ap_proxy_transfer_between_connections</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pollset_t</code>: ソケット監視用。</li>
+<li><code>apr_bucket_brigade</code>: データ転送用バッファ。</li>
+<li><code>proxy_conn_rec</code>: バックエンド接続状態。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pollset_create</code> の失敗: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>バックエンドまたはクライアントのソケットエラー: <code>done</code> フラグを立ててループを終了する。</li>
+<li>応答なし: ループ終了時に <code>replied</code> が偽であれば <code>HTTP_BAD_GATEWAY</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はブロッキングループで接続を占有するため、他のリクエスト処理と並行して動作しない点に注意すること。</li>
+<li><code>apr_brigade</code> はリクエストプール (<code>r-&gt;pool</code>) を使用して管理されている。</li>
+<li><code>Upgrade</code> メソッドの挙動は <code>worker-&gt;s-&gt;upgrade</code> の設定値に依存する。</li>
 </ul></body></html>

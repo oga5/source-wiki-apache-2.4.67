@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/ssl/ssl_util_ssl.c:159</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>X.509 証明書から Basic Constraints 拡張情報を抽出し、CA フラグおよびパス長制限（Path Length Constraint）を取得します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>BOOL modssl_X509_getBC(X509 *cert, int *ca, int *pathlen)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cert</code>: 情報を抽出する対象の <code>X509</code> 証明書構造体。</li>
+<li><code>ca</code>: CA フラグ（<code>bc-&gt;ca</code>）を格納するための整数ポインタ。</li>
+<li><code>pathlen</code>: パス長制限を格納するための整数ポインタ。</li>
+<li>**出力**:</li>
+<li>成功時は <code>TRUE</code> を返し、<code>ca</code> および <code>pathlen</code> に値を設定します。</li>
+<li>失敗時は <code>FALSE</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cert</code> は有効な <code>X509</code> 構造体である必要があります。</li>
+<li><code>ca</code> および <code>pathlen</code> は呼び出し元で確保された有効なメモリ領域を指している必要があります。</li>
+<li><code>pathlen</code> は、拡張が存在しない場合や値が設定されていない場合、<code>-1</code>（無制限）として扱われます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>X509_get_ext_d2i</code> を使用して <code>NID_basic_constraints</code> 拡張を取得します。取得できない場合は <code>FALSE</code> を返します。 2. <code>ca</code> フィールドを <code>bc-&gt;ca</code> からコピーします。 3. <code>pathlen</code> をデフォルト値 <code>-1</code> で初期化します。 4. <code>bc-&gt;pathlen</code> が存在する場合:</p>
+<ul>
+<li><code>ASN1_INTEGER_to_BN</code> で <code>BIGNUM</code> に変換し、さらに <code>BN_bn2dec</code> で 10 進文字列に変換します。</li>
+<li><code>atoi</code> で整数値に変換して <code>pathlen</code> に格納します。</li>
+<li>変換に使用した <code>BIGNUM</code> および一時文字列を解放します。</li>
+<p>5. 最後に <code>BASIC_CONSTRAINTS_free(bc)</code> を呼び出し、拡張構造体を解放して <code>TRUE</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_engine_init.c:1433</code></li>
+<li>**呼び出し先**:</li>
+<li>OpenSSL API: <code>X509_get_ext_d2i</code>, <code>ASN1_INTEGER_to_BN</code>, <code>BN_bn2dec</code>, <code>BN_free</code>, <code>OPENSSL_free</code>, <code>BASIC_CONSTRAINTS_free</code>, <code>atoi</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>X509</code>: OpenSSL の証明書構造体。</li>
+<li><code>BASIC_CONSTRAINTS</code>: X.509 Basic Constraints 拡張を保持する OpenSSL 内部構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>証明書に Basic Constraints 拡張が含まれていない場合、<code>FALSE</code> を返します。</li>
+<li><code>ASN1_INTEGER</code> から <code>BIGNUM</code> への変換、または <code>BIGNUM</code> から文字列への変換に失敗した場合、メモリを適切に解放した上で <code>FALSE</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OpenSSL の <code>BASIC_CONSTRAINTS</code> 構造体を一時的に確保するため、エラー発生時のメモリリークを防ぐための解放処理が各分岐に含まれています。修正時は <code>BASIC_CONSTRAINTS_free</code> の呼び出し漏れに注意してください。</li>
 </ul></body></html>

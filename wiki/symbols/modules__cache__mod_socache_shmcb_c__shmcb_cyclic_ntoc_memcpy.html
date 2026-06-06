@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/cache/mod_socache_shmcb.c:200</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>循環バッファ（Cyclic Buffer）の指定オフセット位置から、データをコピーする。バッファの終端に達した場合は、先頭へ折り返してコピーを行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void shmcb_cyclic_ntoc_memcpy(unsigned int buf_size, unsigned char *data,
+                                     unsigned int dest_offset, const unsigned char *src,
+                                     unsigned int src_len)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buf_size</code>: 循環バッファの総サイズ。</li>
+<li><code>data</code>: コピー先の循環バッファの先頭ポインタ。</li>
+<li><code>dest_offset</code>: コピーを開始するバッファ内のオフセット位置。</li>
+<li><code>src</code>: コピー元のデータソース。</li>
+<li><code>src_len</code>: コピーするデータの長さ。</li>
+<li>出力: なし（<code>data</code> が指すメモリ領域が更新される）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dest_offset</code> は <code>buf_size</code> 未満であること。</li>
+<li><code>dest_offset + src_len</code> が <code>buf_size</code> を超える場合、循環バッファの末尾から先頭へ折り返してコピーされる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>dest_offset + src_len</code> が <code>buf_size</code> 未満の場合：</p>
+<ul>
+<li><code>memcpy</code> を使用して、<code>data + dest_offset</code> から <code>src_len</code> 分のデータを一度にコピーする。</li>
+<p>2. <code>dest_offset + src_len</code> が <code>buf_size</code> 以上の場合（折り返し発生）：</p>
+<li>第1段階として、<code>data + dest_offset</code> からバッファ末尾まで（<code>buf_size - dest_offset</code> 分）をコピーする。</li>
+<li>第2段階として、バッファの先頭（<code>data</code>）から残りのデータ（<code>src_len + dest_offset - buf_size</code> 分）をコピーする。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>modules/cache/mod_socache_shmcb.c:839</code></li>
+<li><code>modules/cache/mod_socache_shmcb.c:846</code></li>
+<li>呼び出し先:</li>
+<li><code>memcpy</code> (標準ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SHMCBSubcache</code>: 循環バッファの管理構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dest_offset</code> や <code>src_len</code> が極端に大きい場合、内部の算術演算でオーバーフローが発生する可能性がある（ソースコード内のコメントによる指摘）。</li>
+<li>呼び出し側で <code>dest_offset</code> が <code>buf_size</code> を超えて渡された場合の動作は定義されていない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>shmcb_cyclic_cton_memcpy</code> と対になる関数である。</li>
+<li>共有メモリの循環バッファ操作において、境界を跨ぐコピーを抽象化するために使用される。</li>
 </ul></body></html>

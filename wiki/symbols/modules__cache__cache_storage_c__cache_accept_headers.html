@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/cache/cache_storage.c:161</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュされたレスポンスヘッダーと現在のリクエストヘッダーをマージし、<code>r-&gt;headers_out</code> を更新して HTTP レスポンスを構築する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void cache_accept_headers(cache_handle_t *h, request_rec *r, apr_table_t *top,
+                          apr_table_t *bottom, int revalidation)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h</code>: キャッシュハンドル。</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>top</code>: マージ対象のヘッダーテーブル（通常はキャッシュされたヘッダー）。</li>
+<li><code>bottom</code>: ベースとなるヘッダーテーブル。</li>
+<li><code>revalidation</code>: 再検証中か否かを示すフラグ。</li>
+<li>出力: <code>r-&gt;headers_out</code> が更新され、<code>Content-Type</code> や <code>Last-Modified</code> がリクエスト構造体に反映される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>すべての操作は <code>r-&gt;pool</code> を使用してメモリ管理される。</li>
+<li><code>revalidation</code> が真の場合、<code>bottom</code> を元に新しいテーブルが作成される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ヘッダーの初期化**: <code>revalidation</code> が真であれば <code>bottom</code> をフィルタリングして <code>r-&gt;headers_out</code> を作成。偽であれば <code>bottom</code> をコピーする。 2. **ヘッダーのマージ**: <code>top</code> に含まれるヘッダーを <code>r-&gt;headers_out</code> から削除（<code>remove_header_do</code>）した後、追加（<code>add_header_do</code>）する。 3. **Content-Type の処理**: <code>r-&gt;headers_out</code> から <code>Content-Type</code> を取得し、<code>ap_set_content_type</code> で設定。その後、重複を避けるため <code>r-&gt;headers_out</code> および <code>r-&gt;err_headers_out</code> から <code>Content-Type</code> を削除する。 4. **Last-Modified の処理**: <code>Last-Modified</code> ヘッダーが存在する場合、<code>ap_update_mtime</code> および <code>ap_set_last_modified</code> を呼び出し、リクエストの最終更新時刻を更新する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>modules/cache/cache_storage.c:400</code></li>
+<li><code>modules/cache/mod_cache.c:1476</code></li>
+<li>呼び出し先:</li>
+<li><code>apr_table_do</code> (ヘルパー関数 <code>filter_header_do</code>, <code>remove_header_do</code>, <code>add_header_do</code> を使用)</li>
+<li><code>ap_set_content_type</code></li>
+<li><code>apr_table_unset</code></li>
+<li><code>ap_update_mtime</code></li>
+<li><code>ap_set_last_modified</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_handle_t</code>: キャッシュエントリへのアクセスハンドル。</li>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+<li><code>apr_table_t</code>: ヘッダーを保持するテーブル構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Content-Type</code> や <code>Last-Modified</code> が存在しない場合、該当する処理はスキップされる。</li>
+<li><code>apr_table_do</code> 等の APR 関数が失敗した場合の挙動は、APR の仕様に依存する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;headers_out</code> を直接操作するため、フィルタチェーン内での呼び出し順序に注意すること。</li>
+<li><code>Content-Type</code> の削除は、HTTP_HEADER フィルタが <code>r-&gt;content_type</code> を優先して上書きする仕様に基づいている。</li>
 </ul></body></html>

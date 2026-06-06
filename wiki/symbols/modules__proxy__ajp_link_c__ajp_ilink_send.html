@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/proxy/ajp_link.c:21</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>ajp_msg_t</code> 構造体に格納された AJP メッセージを、指定されたネットワークソケットを通じてバックエンドへ送信する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ajp_ilink_send(apr_socket_t *sock, ajp_msg_t *msg)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>sock</code>: 送信先となる <code>apr_socket_t</code> へのポインタ。</li>
+<li><code>msg</code>: 送信対象の <code>ajp_msg_t</code> 構造体へのポインタ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 送信が成功した場合は <code>APR_SUCCESS</code> を返し、失敗した場合は <code>apr_socket_send</code> が返したエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>msg</code> は有効な <code>ajp_msg_t</code> 構造体であること。</li>
+<li><code>sock</code> は接続済みの有効なソケットであること。</li>
+<li>関数内で <code>ajp_msg_end(msg)</code> が呼び出され、メッセージの長さが確定される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ajp_msg_end(msg)</code> を呼び出し、メッセージの長さを確定させる。 2. メッセージのバッファ全体が送信されるまで、以下のループを実行する。</p>
+<ul>
+<li><code>apr_socket_send</code> を呼び出し、現在のバッファ位置からデータを送信する。</li>
+<li>送信に失敗した場合は、エラーログを出力して即座にステータスを返す。</li>
+<li>送信成功時は、送信済みバイト数を加算し、残りのデータ長を更新してループを継続する。</li>
+<p>3. 全データの送信が完了した時点で <code>APR_SUCCESS</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/proxy/ajp_header.c</code></li>
+<li><code>modules/proxy/ajp_utils.c</code></li>
+<li><code>modules/proxy/mod_proxy_ajp.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ajp_msg_end</code> (メッセージの終了処理)</li>
+<li><code>apr_socket_send</code> (APR によるソケット送信)</li>
+<li><code>ap_log_error</code> (エラーログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_t</code>: AJP 通信用のメッセージバッファ構造体。</li>
+<li><code>apr_socket_t</code>: APR のソケット抽象化構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**送信エラー**: <code>apr_socket_send</code> が <code>APR_SUCCESS</code> 以外の値を返した場合、エラーログ（<code>APLOGNO(01029)</code>）を出力し、そのステータスを呼び出し元へ伝播させる。</li>
+<li>**部分送信**: <code>apr_socket_send</code> が要求した全バイト数を一度に送信できない場合でも、ループ処理により残りのデータを確実に送信する設計となっている。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はブロッキング送信を行う。ノンブロッキングソケットを使用している場合、<code>apr_socket_send</code> の挙動に注意すること。</li>
+<li>送信失敗時のログ出力には <code>APLOGNO(01029)</code> が固定されているため、デバッグ時にはこの番号を基準に調査が可能である。</li>
 </ul></body></html>

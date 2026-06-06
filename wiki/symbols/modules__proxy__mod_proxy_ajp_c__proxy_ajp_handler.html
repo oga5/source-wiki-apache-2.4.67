@@ -6,22 +6,63 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_ajp.c:771</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>ajp://</code> スキームのリクエストを処理するメインハンドラであり、バックエンドサーバーへの接続確立から AJP プロトコルを用いたリクエスト転送およびレスポンス処理までを統括します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_ajp_handler(request_rec *r, proxy_worker *worker,
+                             proxy_server_conf *conf,
+                             char *url, const char *proxyname,
+                             apr_port_t proxyport)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト情報。</li>
+<li><code>worker</code>: 割り当てられたプロキシワーカー。</li>
+<li><code>conf</code>: プロキシサーバー設定。</li>
+<li><code>url</code>: 処理対象の URL 文字列。</li>
+<li><code>proxyname</code>, <code>proxyport</code>: プロキシ設定値。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code>、失敗時は HTTP エラーコードまたは <code>DECLINED</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力 URL が <code>ajp:</code> で始まる必要があります。</li>
+<li><code>r-&gt;pool</code> を使用してメモリ管理が行われます。</li>
+<li>接続処理中、<code>backend-&gt;close</code> フラグにより接続の再利用可否が制御されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **URL 検証**: <code>ajp:</code> スキーム以外であれば <code>DECLINED</code> を返します。 2. **接続確保**: <code>ap_proxy_acquire_connection</code> を呼び出し、バックエンド接続を確保します。 3. **接続確立ループ**: 最大2回まで試行します。</p>
+<ul>
+<li><code>ap_proxy_determine_connection</code> で接続先を決定します。</li>
+<li><code>ap_proxy_connect_backend</code> でバックエンドへのソケット接続を確立します。</li>
+<li><code>ajp_handle_cping_cpong</code> が設定されている場合、疎通確認を行います。失敗時は接続を閉じ、再試行します。</li>
+<p>4. **リクエスト処理**: <code>ap_proxy_ajp_request</code> を呼び出し、AJP プロトコルによる通信を実行します。 5. **終了処理**: <code>ap_proxy_release_connection</code> を呼び出し、接続を解放（プールへ返却）します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>proxy_hook_scheme_handler</code> に登録され、Apache のリクエスト処理フックから呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_proxy_acquire_connection</code>, <code>ap_proxy_release_connection</code></li>
+<li><code>ap_proxy_determine_connection</code>, <code>ap_proxy_connect_backend</code></li>
+<li><code>ajp_handle_cping_cpong</code></li>
+<li><code>ap_proxy_ajp_request</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストコンテキスト。</li>
+<li><code>proxy_worker</code>: バックエンドワーカー設定。</li>
+<li><code>proxy_conn_rec</code>: バックエンド接続状態。</li>
+<li><code>apr_uri_t</code>: URL 解析結果。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>URL が <code>ajp:</code> でない場合: <code>DECLINED</code> を返します。</li>
+<li>接続確保失敗時: <code>ap_proxy_acquire_connection</code> の戻り値に従いエラー終了します。</li>
+<li>CPING/CPONG 失敗時: 接続をクローズし、最大1回まで再試行します。</li>
+<li>バックエンド接続失敗時: <code>HTTP_SERVICE_UNAVAILABLE</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_proxy</code> のフックシステムのエントリーポイントです。</li>
+<li>エラー発生時は <code>backend-&gt;close = 1</code> を設定することで、不正な接続がプールに再利用されるのを防ぐ設計になっています。</li>
+<li><code>ap_proxy_ajp_request</code> への処理委譲がメインの責務であり、低レベルなプロトコル詳細は <code>ajp_*.c</code> ファイル群に依存しています。</li>
 </ul></body></html>

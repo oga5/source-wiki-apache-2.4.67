@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/http2/h2_c2_filter.c:48</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 セカンダリコネクション（C2）において、レスポンスバケットを走査し、特定の条件に基づいてレスポンスノート（<code>notes</code>）の更新や設定の適用を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_c2_filter_notes_out(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>f</code>: フィルタコンテキスト。<code>f-&gt;r</code>（リクエスト）および <code>f-&gt;c</code>（コネクション）を参照。</li>
+<li><code>bb</code>: 処理対象のバケットブリゲード。</li>
+<li>**出力**:</li>
+<li>戻り値: <code>ap_pass_brigade</code> の結果（<code>apr_status_t</code>）。</li>
+<li>副作用: ブリゲード内の <code>AP_BUCKET_IS_RESPONSE</code> バケットの <code>notes</code> テーブルを更新、または <code>f-&gt;next</code> フィルタへブリゲードを渡す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;r</code> が存在しない場合、ノートの更新処理をスキップし、直ちに <code>pass</code> ラベルへ遷移する。</li>
+<li><code>AP_BUCKET_IS_RESPONSE</code> バケットが見つかった場合のみ、内部の条件分岐が実行される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>f-&gt;r</code> が存在しない場合は、後続のフィルタへブリゲードを渡す。 2. ブリゲード内の各バケットを走査し、<code>AP_BUCKET_IS_RESPONSE</code> バケットを特定する。 3. ステータスコードが 400 以上かつ <code>f-&gt;r-&gt;prev</code> が存在する場合（内部リダイレクト時）、リクエストチェーンを遡り、<code>ssl-renegotiate-forbidden</code> ノートを現在のレスポンスノートにコピーする。 4. 上記以外で、現在のリクエスト設定で PUSH が無効、かつサーバー設定で PUSH が有効な場合、<code>H2_PUSH_MODE_NOTE</code> を &quot;0&quot; に設定する。 5. 最後に <code>ap_pass_brigade</code> を呼び出し、処理済みのブリゲードを後続のフィルタへ渡す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_c2.c:638</code>（<code>ap_register_output_filter</code> による登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_pass_brigade</code>（後続フィルタへの転送）。</li>
+<li><code>h2_config_rgeti</code> / <code>h2_config_sgeti</code>（設定値の取得）。</li>
+<li><code>ap_log_cerror</code>（ログ出力）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_filter_t</code>: フィルタチェーンのノード。</li>
+<li><code>apr_bucket_brigade</code>: バケットのリスト。</li>
+<li><code>ap_bucket_response</code>: レスポンスバケットのデータ構造。</li>
+<li><code>request_rec</code>: リクエスト情報とノート（<code>notes</code>）を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;r</code> が NULL の場合、ノート更新を行わずに正常終了する。</li>
+<li><code>AP_BUCKET_IS_RESPONSE</code> バケットが含まれていない場合、ノートの更新は行われず、ブリゲードはそのまま通過する。</li>
+<li>内部リダイレクトの連鎖において、<code>r_prev</code> が NULL になるまで遡る。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本フィルタは <code>H2_C2_NOTES_OUT</code> として登録されている。</li>
+<li>エラーレスポンス時のノート引き継ぎロジックは、HTTP/2 ストリーム固有のエラーコード設定と密接に関連している。</li>
+<li>PUSH モードの制御は、リクエスト単位の設定とサーバー単位の設定の優先順位を考慮している。</li>
 </ul></body></html>

@@ -2,26 +2,68 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__http2__h2_c2_c__h2_c2_filter_in.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>h2_c2_filter_in</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>function</code></li>
-<li>定義箇所: <code>modules/http2/h2_c2.c:181</code></li>
+<li>**種別**: <code>function</code></li>
+<li>**定義箇所**: <code>modules/http2/h2_c2.c:181</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 セカンダリ接続（c2）におけるネットワーク入力フィルタとして機能し、<code>h2_bucket_beam</code> を介して HTTP/2 セッションから受信したデータを Apache の <code>apr_bucket_brigade</code> に変換して提供します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_c2_filter_in(ap_filter_t* f,
+                             apr_bucket_brigade* bb,
+                             ap_input_mode_t mode,
+                             apr_read_type_e block,
+                             apr_off_t readbytes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキスト。</li>
+<li><code>bb</code>: データを格納するバケットブリゲード。</li>
+<li><code>mode</code>: 読み取りモード（<code>AP_MODE_READBYTES</code>, <code>AP_MODE_GETLINE</code> 等）。</li>
+<li><code>block</code>: ブロック読み取りの可否。</li>
+<li><code>readbytes</code>: 要求するバイト数。</li>
+<li>**出力**: </li>
+<li><code>bb</code>: 読み取られたデータが格納される。</li>
+<li>戻り値: <code>APR_SUCCESS</code>、<code>APR_EOF</code>、<code>APR_EAGAIN</code>、またはエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;c</code> に <code>h2_conn_ctx_t</code> が関連付けられていること。</li>
+<li><code>fctx</code>（フィルタコンテキスト）が未初期化の場合は、初回呼び出し時に <code>f-&gt;c-&gt;pool</code> を使用して初期化される。</li>
+<li>接続がアボートされている場合、即座に <code>APR_ECONNABORTED</code> を返す。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>AP_MODE_INIT</code> の場合は標準のフィルタチェーンへ委譲。 2. **コンテキスト準備**: <code>fctx</code> が存在しない場合、ブリゲードを作成し、<code>beam_in</code> が空であれば EOS バケットを挿入する。 3. **アップグレード処理**: HTTP Upgrade 時、初回読み取りで EOS を挿入し、リクエストボディの終了を通知する。 4. **データ受信**: <code>fctx-&gt;bb</code> が空の場合、<code>h2_beam_receive</code> を呼び出して <code>beam_in</code> からデータを取得する。必要に応じて <code>h2_util_wait_on_pipe</code> で待機する。 5. **モード別処理**:</p>
+<ul>
+<li><code>AP_MODE_EXHAUSTIVE</code>: 全データを連結。</li>
+<li><code>AP_MODE_READBYTES</code> / <code>AP_MODE_SPECULATIVE</code>: 指定長分を連結またはコピー。</li>
+<li><code>AP_MODE_GETLINE</code>: <code>apr_brigade_split_line</code> を使用して行単位で抽出。</li>
+<p>6. **統計**: <code>h2_c_logio_add_bytes_in</code> が定義されていれば、受信バイト数を記録する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache フィルタチェーン（<code>ap_get_brigade</code> 等を介して呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>h2_beam_receive</code> (データ取得)</li>
+<li><code>h2_util_wait_on_pipe</code> (I/O 待機)</li>
+<li><code>h2_brigade_concat_length</code> / <code>h2_brigade_copy_length</code> (データ操作)</li>
+<li><code>ap_get_brigade</code> (初期化時)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとのコンテキスト。</li>
+<li><code>h2_c2_fctx_in_t</code>: フィルタ固有の内部状態（ブリゲードやフラグを保持）。</li>
+<li><code>h2_bucket_beam</code>: ストリーム間のデータ転送用バッファ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>APR_EAGAIN</code>: ノンブロッキング読み取りでデータがない場合に発生。</li>
+<li><code>APR_EOF</code>: ストリームの終了時に発生。</li>
+<li><code>AP_MODE_EATCRLF</code>: 未サポートのため <code>APR_ENOTIMPL</code> を返す。</li>
+<li>接続がアボートされている場合は <code>APR_ECONNABORTED</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>AP_MODE_GETLINE</code> はバケット分割を伴うため注意が必要。</li>
+<li><code>h2_c_logio_add_bytes_in</code> はオプションのフックであり、存在する場合のみ呼び出される。</li>
+<li><code>h2_c2_filter_in</code> は <code>H2_C2_NET_IN</code> として登録されている。</li>
 </ul></body></html>

@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_wstunnel.c:61</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebSocket プロキシリクエストの URL を解析・正規化し、バックエンド接続用の内部形式（<code>proxy:ws://...</code> または <code>proxy:wss://...</code>）へ変換します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_wstunnel_canon(request_rec *r, char *url)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>url</code>: 正規化対象の URL 文字列。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 成功。<code>r-&gt;filename</code> に正規化されたプロキシ URL が格納される。</li>
+<li><code>DECLINED</code>: 処理対象外（スキーム不一致やフォールバック設定時）。</li>
+<li><code>HTTP_BAD_REQUEST</code>: URL 解析失敗。</li>
+<li><code>HTTP_FORBIDDEN</code>: パスまたはクエリ文字列に不正な制御文字が含まれる場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;per_dir_config</code> から <code>proxyws_dir_conf</code> を取得し、フォールバック設定を確認します。</li>
+<li>URL が <code>ws:</code> または <code>wss:</code> で始まる必要があります。</li>
+<li><code>proxy-nocanon</code> または <code>proxy-noencode</code> ノートの設定に基づき、パスのエンコード処理が分岐します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **フォールバック判定**: <code>can_fallback_to_proxy_http</code> が有効かつ設定で許可されている場合、<code>DECLINED</code> を返して <code>mod_proxy_http</code> に委譲します。 2. **スキーム解析**: <code>ws:</code> または <code>wss:</code> を識別し、デフォルトポート（80 または 443）を設定します。 3. **ネットワーク位置の解析**: <code>ap_proxy_canon_netloc</code> を使用してホスト名とポートを抽出します。 4. **パスとクエリの正規化**: <code>ap_proxy_canonenc_ex</code> を用いてパスをエンコードし、クエリ文字列を結合します。 5. **バリデーション**: パスおよびクエリ文字列に制御文字やスペースが含まれていないか検証します。 6. **URL 再構築**: IPv6 アドレスの括弧補完やポート番号の付与を行い、<code>proxy:</code> スキームを付与した文字列を <code>r-&gt;filename</code> に設定します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_proxy</code> のフックシステム（<code>proxy_hook_canon_handler</code> に登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>, <code>ap_log_rerror</code>, <code>ap_proxy_canon_netloc</code>, <code>ap_proxy_canonenc_ex</code>, <code>apr_pstrcat</code> 等の Apache/APR API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報および設定保持。</li>
+<li><code>proxyws_dir_conf</code>: <code>mod_proxy_wstunnel</code> 固有のディレクトリ設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**不正な URL**: <code>ap_proxy_canon_netloc</code> がエラーを返すと <code>HTTP_BAD_REQUEST</code> となります。</li>
+<li>**不正な文字**: パスやクエリに制御文字が含まれる場合、セキュリティ上の理由から <code>HTTP_FORBIDDEN</code> を返します。</li>
+<li>**エンコード失敗**: <code>ap_proxy_canonenc_ex</code> が NULL を返すと <code>HTTP_BAD_REQUEST</code> となります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>proxy_hook_canon_handler</code> を通じて呼び出されるため、他のプロキシモジュールとの優先順位（<code>APR_HOOK_FIRST</code>）に注意してください。</li>
+<li><code>r-&gt;filename</code> を書き換えることで、後続のプロキシハンドラが接続先を特定できるようにしています。</li>
 </ul></body></html>

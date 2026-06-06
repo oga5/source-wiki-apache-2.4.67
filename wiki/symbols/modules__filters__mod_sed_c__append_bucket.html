@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/filters/mod_sed.c:103</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>sed</code> フィルタの処理結果をバケットブリゲードに追加し、必要に応じてブリゲードのフラッシュとメモリの解放を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t append_bucket(sed_filter_ctxt* ctx, char* buf, apr_size_t sz)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: フィルタの実行コンテキスト (<code>sed_filter_ctxt</code>)。</li>
+<li><code>buf</code>: 追加するデータを含むバッファ。</li>
+<li><code>sz</code>: バッファのサイズ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 操作の成功状態 (<code>APR_SUCCESS</code> または <code>ap_pass_brigade</code> の戻り値)。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;bb</code> (バケットブリゲード) が初期化されていること。</li>
+<li><code>ctx-&gt;r-&gt;connection-&gt;bucket_alloc</code> が有効であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バケットの生成**:</p>
+<ul>
+<li><code>ctx-&gt;tpool</code> がリクエストプールと一致する場合、<code>apr_bucket_pool_create</code> を使用してプールバケットを作成する。</li>
+<li>それ以外の場合、<code>apr_bucket_transient_create</code> を使用して一時バケットを作成し、<code>ctx-&gt;numbuckets</code> をインクリメントする。</li>
+<p>2. **ブリゲードへの挿入**: 生成したバケットを <code>ctx-&gt;bb</code> の末尾に挿入する。 3. **フラッシュ判定**: 一時バケット数が <code>MAX_TRANSIENT_BUCKETS</code> に達した場合:</p>
+<li>フラッシュバケットを作成し、ブリゲードの末尾に挿入する。</li>
+<li><code>ap_pass_brigade</code> を呼び出してブリゲードを後続フィルタへ渡す。</li>
+<li><code>apr_brigade_cleanup</code> でブリゲードを空にし、<code>clear_ctxpool(ctx)</code> でコンテキストのプールを解放する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/filters/mod_sed.c:142</code></li>
+<li><code>modules/filters/mod_sed.c:170</code></li>
+<li><code>modules/filters/mod_sed.c:176</code></li>
+<li>※ <code>modules/http2/h2_bucket_beam.c:552</code> に同名の関数呼び出しが見られるが、本モジュール内の関数との直接的な関係は不明。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_bucket_pool_create</code> / <code>apr_bucket_transient_create</code></li>
+<li><code>APR_BRIGADE_INSERT_TAIL</code></li>
+<li><code>ap_pass_brigade</code></li>
+<li><code>apr_brigade_cleanup</code></li>
+<li><code>clear_ctxpool</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sed_filter_ctxt</code>: フィルタの状態管理構造体。</li>
+<li><code>apr_bucket_brigade</code>: バケットの連結リスト。</li>
+<li><code>apr_bucket</code>: Apache のデータ転送単位。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_pass_brigade</code> がエラーを返した場合、そのステータスがそのまま呼び出し元に返される。</li>
+<li><code>MAX_TRANSIENT_BUCKETS</code> を超えた際のフラッシュ処理により、メモリ使用量が抑制される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>sed_filter_ctxt</code> 内のプール管理と密接に関連している。<code>clear_ctxpool</code> を呼び出すタイミングは、メモリリークを防ぐために重要である。</li>
+<li><code>modules/http2/h2_bucket_beam.c</code> に存在する同名の関数は、本モジュールのものとは別個の実装である可能性が高い。</li>
 </ul></body></html>

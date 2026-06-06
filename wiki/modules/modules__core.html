@@ -1,53 +1,40 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__core.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/core</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/core</code> には 5 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/core</code> は、Apache HTTP Server の実行基盤を拡張・制御するためのコア機能群を提供します。このモジュールはディレクトリ境界に基づいて定義されており、サーバーの動的拡張、設定の抽象化、およびバックグラウンドタスク管理という、サーバー運用の根幹を支える機能を集約しています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**動的モジュール管理**: サーバー再起動を伴わない共有オブジェクト（DSO）のロードと統合。</li>
+<li>**設定の再利用**: マクロ機能による設定ファイルの冗長性排除とテンプレート化。</li>
+<li>**バックグラウンド処理**: プロセスライフサイクルに連動した定期的なタスク実行と監視（ウォッチドッグ）の提供。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/core/mod_macro.c</code></li>
-<li><code>modules/core/mod_so.c</code></li>
-<li><code>modules/core/mod_so.h</code></li>
-<li><code>modules/core/mod_watchdog.c</code></li>
-<li><code>modules/core/mod_watchdog.h</code></li>
+<li><code>modules/core/mod_macro.c</code>: 設定ファイル内のマクロ定義・展開機能。</li>
+<li><code>modules/core/mod_so.c</code> / <code>mod_so.h</code>: 動的共有オブジェクト（DSO）のロード機能。</li>
+<li><code>modules/core/mod_watchdog.c</code> / <code>mod_watchdog.h</code>: バックグラウンドタスク監視フレームワーク。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>ap_macro_t</code></li>
-<li><code>array_contents_t</code></li>
-<li><code>so_server_conf</code></li>
-<li><code>watchdog_list_t</code></li>
-<li><code>ap_watchdog_t</code></li>
-<li><code>wd_server_conf_t</code></li>
-<li><code>ap_watchdog_t</code></li>
-<li><code>apr_pool_t</code></li>
+<li>**設定・管理**: <code>so_server_conf</code> (DSO管理用), <code>wd_server_conf_t</code> (ウォッチドッグ設定)</li>
+<li>**マクロ**: <code>ap_macro_t</code> (マクロ定義), <code>array_contents_t</code> (展開後の設定ストリーム)</li>
+<li>**ウォッチドッグ**: <code>ap_watchdog_t</code> (監視インスタンス), <code>watchdog_list_t</code> (コールバックリスト)</li>
+<li>**共通**: <code>apr_pool_t</code> (メモリ管理)</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **DSO ロード**: <code>LoadModule</code> ディレクティブにより <code>mod_so</code> が共有ライブラリをロードし、Apache のモジュールリストへ動的に統合する。 2. **マクロ展開**: 設定解析フェーズで <code>mod_macro</code> が <code>Use</code> ディレクティブを検出し、引数を置換した内容をパーサーへ注入する。 3. **タスク監視**: <code>mod_watchdog</code> が起動時に専用スレッドを生成し、登録されたコールバックを <code>STARTING</code> / <code>RUNNING</code> / <code>STOPPING</code> の状態遷移に合わせて定期実行する。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>httpd.h</code></li>
-<li><code>apr.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>apr_hash.h</code></li>
-<li><code>http_core.h</code></li>
-<li><code>apr_optional.h</code></li>
-<li><code>ap_provider.h</code></li>
-<li><code>apr_dso.h</code></li>
+<li>**Apache Core API**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code></li>
+<li>**APR (Apache Portable Runtime)**: <code>apr.h</code>, <code>apr_dso.h</code>, <code>apr_hash.h</code>, <code>apr_strings.h</code>, <code>apr_optional.h</code></li>
+<li>**その他**: <code>ap_provider.h</code> (プロバイダ機能), <code>util_mutex.h</code> (プロセス間排他制御)</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは、独立した機能を持つ3つのサブコンポーネント（<code>mod_so</code>, <code>mod_macro</code>, <code>mod_watchdog</code>）で構成されています。これらは互いに直接依存するのではなく、Apache のフック機構やオプション関数を通じて疎結合に連携します。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/core/mod_watchdog.h</code> 2. <code>modules/core/mod_so.h</code> 3. <code>modules/core/mod_macro.c</code> 4. <code>modules/core/mod_watchdog.c</code> 5. <code>modules/core/mod_so.c</code></p>
+<p>1. <code>modules/core/mod_watchdog.h</code>（非同期処理の基盤理解） 2. <code>modules/core/mod_so.h</code>（動的拡張のインターフェース理解） 3. <code>modules/core/mod_macro.c</code>（設定解析の拡張ロジック） 4. <code>modules/core/mod_watchdog.c</code>（スレッド管理とコールバック実装） 5. <code>modules/core/mod_so.c</code>（DSO ロードとシンボル解決の実装）</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>各コンポーネントが将来的に独立したモジュールディレクトリへ分離されるべきか、あるいは現在の <code>core</code> への集約が最適か。</li>
+<li><code>mod_macro</code> の再帰的解析や複雑なネスト構造への対応における制限事項の精緻化。</li>
 </ul></body></html>

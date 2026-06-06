@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/lua/mod_lua.c:75</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のフィルタ処理において、Lua コルーチン（<code>lua_State</code>）とバケットブリゲードを保持し、ストリーム処理のコンテキストを管理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct
+{
+    apr_bucket_brigade *tmpBucket;
+    lua_State *L;
+    ap_lua_vm_spec *spec;
+    int broken;
+} lua_filter_ctx;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>lua_setup_filter_ctx</code> 関数内で <code>apr_pcalloc</code> を用いてメモリが割り当てられ、初期化される。</li>
+<li>**出力**: フィルタ処理の各フェーズ（<code>lua_output_filter_handle</code> 等）で、<code>f-&gt;ctx</code> を通じて参照・更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>L</code> は有効な Lua コルーチン状態を指す必要がある。</li>
+<li><code>spec</code> は VM の実行環境仕様を保持する。</li>
+<li><code>broken</code> フラグは、フィルタ処理中に回復不能なエラーが発生した際に非ゼロ値となる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>フィルタ処理中に <code>lua_resume</code> を呼び出し、Lua 側の <code>coroutine.yield()</code> と Apache のフィルタチェーン間でデータを橋渡しする。</li>
+<li><code>tmpBucket</code> を使用して、フィルタ処理中のバケットブリゲードを一時的に保持する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>lua_setup_filter_ctx</code> (初期化)</li>
+<li><code>lua_output_filter_handle</code> (参照)</li>
+<li><code>lua_input_filter_handle</code> (参照)</li>
+<li>**呼び出し先**: </li>
+<li>構造体自体はデータ保持用であり、直接的な関数呼び出しは行わない。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_bucket_brigade</code>: フィルタ処理されるデータストリームの保持に使用。</li>
+<li><code>lua_State</code>: Lua スクリプト実行用のコルーチン状態。</li>
+<li><code>ap_lua_vm_spec</code>: VM の生成およびスコープ管理のための仕様定義。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>broken</code> メンバが非ゼロの場合、フィルタ処理は中断される。</li>
+<li>メモリ割り当て失敗時は <code>apr_pcalloc</code> が例外を発生させる可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>f-&gt;ctx</code> に格納されるため、フィルタのライフサイクルと同期して管理する必要がある。</li>
+<li><code>lua_resume</code> を介したコルーチン制御を行っているため、Lua 側でのエラーハンドリングと <code>broken</code> フラグの整合性に注意すること。</li>
 </ul></body></html>

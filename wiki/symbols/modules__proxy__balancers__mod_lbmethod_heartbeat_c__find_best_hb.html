@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_heartbeat.c:257</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>外部から提供されるハートビート情報（サーバーの負荷状況）に基づき、負荷分散対象となる最適なバックエンドワーカーを選択する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static proxy_worker *find_best_hb(proxy_balancer *balancer, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>balancer</code>: 負荷分散対象のバランサー構造体。</li>
+<li><code>r</code>: 現在のリクエスト情報。</li>
+<li>**出力**:</li>
+<li>選択された <code>proxy_worker</code> へのポインタ。候補が見つからない場合は <code>NULL</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mod_proxy</code> がロードされていること（<code>ap_proxy_retry_worker_fn</code> が取得可能であること）。</li>
+<li><code>read_heartbeats</code> により、指定されたパスから最新のサーバー負荷情報が取得できること。</li>
+<li>選択対象のワーカーは <code>PROXY_WORKER_IS_USABLE</code> マクロで判定可能な状態であること。</li>
+<li>ハートビートの更新時刻（<code>seen</code>）が <code>LBM_HEARTBEAT_MAX_LASTSEEN</code>（10秒）以内であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: リクエスト毎の一時プール（<code>tpool</code>）を作成し、ハートビート情報を格納するハッシュテーブルを初期化する。 2. **データ取得**: <code>read_heartbeats</code> を呼び出し、バックエンドサーバーの最新状態をハッシュに読み込む。 3. **候補選定**:</p>
+<ul>
+<li>バランサー内の全ワーカーを走査し、ハートビート情報が存在し、かつ利用可能なワーカーを特定する。</li>
+<li>利用可能なワーカーの <code>ready</code>（待機中スレッド数）を合計し、<code>openslots</code> に加算する。</li>
+<p>4. **確率的選択**:</p>
+<li><code>ap_random_pick(0, openslots)</code> を使用し、各サーバーの <code>ready</code> 数に応じた重み付けランダム選択を行う。</li>
+<p>5. **終了処理**: 一時プールを破棄し、選択されたワーカーを返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_lbmethod_heartbeat.c</code> 内の <code>heartbeat</code> 構造体（<code>proxy_balancer_method</code>）から参照される。</li>
+<li>**呼び出し先**:</li>
+<li><code>read_heartbeats</code>: ハートビート情報の読み込み。</li>
+<li><code>ap_proxy_retry_worker</code>: 利用不可なワーカーの再試行。</li>
+<li><code>ap_random_pick</code>: 重み付けランダム選択。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lb_hb_ctx_t</code>: モジュール設定（ハートビート情報のパスなど）。</li>
+<li><code>hb_server_t</code>: 各サーバーの負荷状態（<code>ready</code>, <code>seen</code> 等）。</li>
+<li><code>proxy_worker</code>: <code>mod_proxy</code> が管理するバックエンドサーバー情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**読み込み失敗**: <code>read_heartbeats</code> が失敗した場合、エラーログを出力し <code>NULL</code> を返す。</li>
+<li>**候補なし**: 利用可能なサーバーが存在しない場合、または <code>openslots</code> が 0 の場合、<code>NULL</code> を返す。</li>
+<li>**期限切れ**: <code>seen</code> が <code>LBM_HEARTBEAT_MAX_LASTSEEN</code> を超えているサーバーは、生存していないとみなされ選択対象から除外される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>リクエスト毎にメモリプールを生成・破棄しているため、メモリリークの懸念は低い。</li>
+<li><code>ready</code> 値が 0 のサーバーは選択対象から外れる。</li>
+<li>サーバーが起動直後で <code>busy=0</code> かつ <code>ready</code> が大きい場合、過負荷を防ぐヒューリスティックな調整が <code>read_heartbeats</code> 側で行われている可能性があるため、挙動の変更時は注意すること。</li>
 </ul></body></html>

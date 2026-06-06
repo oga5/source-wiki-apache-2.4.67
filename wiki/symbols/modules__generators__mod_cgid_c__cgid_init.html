@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/generators/mod_cgid.c:1035</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_cgid</code> モジュールの初期化を行い、CGI デーモンプロセスを起動する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int cgid_init(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *main_server)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: 設定用メモリプール。</li>
+<li><code>main_server</code>: サーバー設定構造体。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 成功時は <code>OK</code>、失敗時はエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_hook_post_config</code> フックにより呼び出される。</li>
+<li><code>main_server-&gt;process-&gt;pool</code> を使用して、デーモンプロセスの状態（<code>apr_proc_t</code>）をプロセス間で永続化する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>userdata_key</code> (&quot;cgid_init&quot;) を使用し、プロセスプールから既存のデーモンプロセス情報を取得する。 2. データが存在しない場合、<code>apr_proc_t</code> 構造体を初期化してプールに保存し、初期化を終了する。 3. <code>AP_SQ_MS_CREATE_PRE_CONFIG</code> 状態でない場合（設定読み込み後）、以下の処理を行う:</p>
+<ul>
+<li>Unix ドメインソケットのパスを <code>ap_runtime_dir_relative</code> で解決する。</li>
+<li>パス長が <code>sockaddr_un.sun_path</code> の制限を超える場合は切り詰めを行い、警告ログを出力する。</li>
+<li><code>sockaddr_un</code> 構造体を構築し、<code>cgid_start</code> を呼び出してデーモンプロセスを起動する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_post_config</code> フック（<code>modules/generators/mod_cgid.c:1798</code>）。</li>
+<li>**呼び出し先**: <code>cgid_start</code>（デーモンプロセスの起動）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_proc_t</code>: デーモンプロセスの管理構造体。</li>
+<li><code>sockaddr_un</code>: Unix ドメインソケットのアドレス構造体。</li>
+<li><code>server_rec</code>: Apache サーバー設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ScriptSock</code> のパスが <code>sockaddr_un</code> の制限を超える場合、パスが切り詰められる。</li>
+<li><code>cgid_start</code> が失敗した場合、その戻り値がそのまま呼び出し元に返される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は Apache の設定フェーズで二度呼び出される可能性があるため、<code>userdata</code> を用いて二重起動を防止している。</li>
+<li><code>cgid_start</code> への依存が強いため、デーモンプロセスのライフサイクル変更時は本関数と <code>cgid_start</code> の両方を確認すること。</li>
 </ul></body></html>

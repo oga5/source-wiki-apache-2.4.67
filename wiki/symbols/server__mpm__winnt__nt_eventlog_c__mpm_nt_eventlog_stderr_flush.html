@@ -6,22 +6,49 @@
 <li>定義箇所: <code>server/mpm/winnt/nt_eventlog.c:119</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サービス終了時に、標準エラー出力（<code>stderr</code>）のキャプチャ用パイプをクローズし、ログ転送用バックグラウンドスレッドの終了を待機してリソースを解放する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void mpm_nt_eventlog_stderr_flush(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: なし（グローバル変数 <code>stderr_thread</code> を参照）</li>
+<li>出力: なし（副作用としてリソースの解放を行う）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>stderr_thread</code> が有効なハンドルを保持している場合にのみクリーンアップ処理が実行される。</li>
+<li>サービス終了処理の一環として呼び出されることを想定している。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. グローバル変数 <code>stderr_thread</code> をローカル変数 <code>cleanup_thread</code> にコピーする。 2. <code>cleanup_thread</code> が有効な場合：</p>
+<ul>
+<li><code>GetStdHandle(STD_ERROR_HANDLE)</code> を介して標準エラー出力のハンドルを取得する。</li>
+<li><code>fclose(stderr)</code> を実行し、標準エラー出力ストリームを閉じる。</li>
+<li>取得したハンドルを <code>CloseHandle</code> で閉じる。</li>
+<li><code>WaitForSingleObject</code> を使用し、最大30秒間スレッドの終了を待機する。</li>
+<li>最後に <code>cleanup_thread</code> ハンドル自体を <code>CloseHandle</code> で閉じる。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>server/mpm/winnt/service.c:671</code></li>
+<li>呼び出し先:</li>
+<li><code>GetStdHandle</code> (Windows API)</li>
+<li><code>fclose</code> (標準ライブラリ)</li>
+<li><code>CloseHandle</code> (Windows API)</li>
+<li><code>WaitForSingleObject</code> (Windows API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>stderr_thread</code>: ログ転送用バックグラウンドスレッドのハンドルを保持するグローバル変数。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>stderr_thread</code> が <code>NULL</code> の場合、関数は何も行わずに終了する。</li>
+<li>30秒以内にスレッドが終了しない場合、待機はタイムアウトするが、関数はそのまま終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>stderr</code> をパイプへ差し替える実装に依存しているため、他のモジュールが <code>stderr</code> を直接操作する場合に競合が発生する可能性がある。</li>
+<li>サービス終了時のクリーンアップ順序として、他のリソース解放と整合性が取れているか注意が必要である。</li>
 </ul></body></html>

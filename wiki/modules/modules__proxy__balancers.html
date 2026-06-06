@@ -1,44 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__proxy__balancers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/proxy/balancers</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/proxy/balancers</code> には 4 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p>本モジュールは、Apache HTTP Server の <code>mod_proxy</code> におけるロードバランシング機能の拡張メソッド群を提供します。ディレクトリ境界に基づき、リクエストの振り分けアルゴリズムを実装する複数のプラグインモジュールを包含しています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>各種アルゴリズム（リクエスト数、トラフィック量、負荷状況、ハートビート）に基づいた最適なバックエンドワーカーの選定。</li>
+<li><code>mod_proxy</code> の <code>PROXY_LBMETHOD</code> プロバイダーとしてのインターフェース提供。</li>
+<li>ワーカーの負荷状態（<code>lbstatus</code> や <code>busy</code> 数）の管理と統計情報の更新。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/proxy/balancers/mod_lbmethod_bybusyness.c</code></li>
-<li><code>modules/proxy/balancers/mod_lbmethod_byrequests.c</code></li>
-<li><code>modules/proxy/balancers/mod_lbmethod_bytraffic.c</code></li>
-<li><code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code></li>
+<li><code>mod_lbmethod_bybusyness.c</code>: 処理中のリクエスト数（busy数）に基づく負荷分散。</li>
+<li><code>mod_lbmethod_byrequests.c</code>: 設定された重み（<code>lbfactor</code>）とリクエスト数に基づく負荷分散。</li>
+<li><code>mod_lbmethod_bytraffic.c</code>: 転送バイト数に基づく負荷分散。</li>
+<li><code>mod_lbmethod_heartbeat.c</code>: 外部から提供されるハートビート情報に基づく負荷分散。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>lb_hb_ctx_t</code></li>
-<li><code>hb_server_t</code></li>
-<li><code>ctx_servers_t</code></li>
+<li><code>proxy_balancer_method</code>: 各アルゴリズムが実装する共通のメソッド構造体。</li>
+<li><code>lb_hb_ctx_t</code> / <code>hb_server_t</code>: ハートビート用コンテキストおよびサーバー状態。</li>
+<li><code>proxy_worker</code> / <code>proxy_balancer</code>: <code>mod_proxy</code> が定義する共有メモリ上のワーカーおよびバランサー構造体。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **初期化**: <code>post_config</code> フックにて <code>mod_proxy</code> のコア関数（ワーカー走査用など）を取得し、プロバイダーを登録。 2. **選定**: バランサーがリクエストを受け取ると、各モジュールの <code>find_best</code> 関数が呼び出される。 3. **走査**: <code>ap_proxy_balancer_get_best_worker_fn</code> を介して全ワーカーを評価し、アルゴリズム固有の基準で最適なワーカーを特定。 4. **更新**: 選定されたワーカーの統計情報（<code>lbstatus</code> やカウンタ）を更新し、次回の選定に反映。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>mod_proxy.h</code></li>
-<li><code>scoreboard.h</code></li>
-<li><code>ap_mpm.h</code></li>
-<li><code>apr_version.h</code></li>
-<li><code>ap_hooks.h</code></li>
-<li><code>ap_slotmem.h</code></li>
-<li><code>heartbeat.h</code></li>
+<li><code>mod_proxy.h</code>: プロキシ機能の基盤定義。</li>
+<li><code>scoreboard.h</code>: 共有メモリ上のワーカー状態管理。</li>
+<li><code>ap_slotmem.h</code>: 共有メモリへのアクセス。</li>
+<li><code>ap_hooks.h</code> / <code>ap_mpm.h</code>: Apache のフックおよび MPM 制御。</li>
+<li><code>heartbeat.h</code>: ハートビート関連の共通定義。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>各ファイルは独立した <code>PROXY_LBMETHOD</code> プロバイダーとして実装されており、共通の <code>mod_proxy</code> インフラを利用して並列に動作します。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code> 2. <code>modules/proxy/balancers/mod_lbmethod_bybusyness.c</code> 3. <code>modules/proxy/balancers/mod_lbmethod_byrequests.c</code> 4. <code>modules/proxy/balancers/mod_lbmethod_bytraffic.c</code></p>
+<p>1. <code>mod_lbmethod_heartbeat.c</code>: 外部データ連携を含む複雑な実装例。 2. <code>mod_lbmethod_bybusyness.c</code>: 負荷状況に基づく標準的な選定ロジック。 3. <code>mod_lbmethod_byrequests.c</code>: 重み付けラウンドロビンに近い基本的な選定ロジック。 4. <code>mod_lbmethod_bytraffic.c</code>: 統計データを用いた選定ロジック。</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>各アルゴリズム間での統計情報の共有や、将来的な動的アルゴリズム切り替えの可能性。</li>
+<li><code>age</code> 関数など、現在空実装となっているフックの将来的な活用方針。</li>
 </ul></body></html>

@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_pphrase.c:38</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>暗号化された秘密鍵を復号するためのパスフレーズ収集プロセスにおいて、サーバー設定、メモリ管理、および現在の試行状態を保持するコンテキスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    server_rec         *s;                    /* サーバー設定 */
+    apr_pool_t         *p;                    /* メモリプール */
+    apr_array_header_t *aPassPhrase;          /* パスフレーズの配列 */
+    int                 nPassPhraseCur;       /* 現在のパスフレーズインデックス */
+    char               *cpPassPhraseCur;      /* 現在のパスフレーズ文字列 */
+    int                 nPassPhraseDialog;    /* ダイアログの種類 */
+    int                 nPassPhraseDialogCur; /* 現在のダイアログ試行回数 */
+    BOOL                bPassPhraseDialogOnce;/* ダイアログを一度のみ表示するフラグ */
+    const char         *key_id;               /* 鍵の識別子 */
+    const char         *pkey_file;            /* 鍵ファイルのパス */
+} pphrase_cb_arg_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: サーバー設定 (<code>server_rec</code>) およびメモリプール (<code>apr_pool_t</code>) を初期化時に受け取ります。</li>
+<li>**出力**: 収集されたパスフレーズ (<code>cpPassPhraseCur</code>) を OpenSSL の復号処理へ提供します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code> (メモリプール) は、パスフレーズのライフサイクルを管理するために使用されます。</li>
+<li>収集された機密データ（パスフレーズ）は、使用後に <code>OPENSSL_cleanse</code> によってメモリから消去される必要があります。</li>
+<li>構造体内の各フィールドは、<code>ssl_load_encrypted_pkey</code> 等の初期化関数によって適切に設定される必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **状態保持**: サーバー起動時の鍵読み込み処理において、現在の試行回数やダイアログの進捗を追跡します。 2. **コンテキスト提供**: OpenSSL の <code>UI_METHOD</code> コールバック（<code>passphrase_ui_read</code> 等）において、<code>UI_get0_user_data</code> を介して本構造体を取得し、パスフレーズの供給源を特定します。 3. **キャッシュ連携**: サーバー再起動時に、<code>key_id</code> を用いて既存の鍵キャッシュとの照合を行います。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ssl_load_encrypted_pkey</code> および <code>modssl_load_engine_keypair</code> 等の初期化関数。</li>
+<li>**呼び出し先**: OpenSSL の <code>UI_METHOD</code> コールバック関数群（<code>passphrase_ui_open</code>, <code>read</code>, <code>write</code>, <code>close</code>）が、本構造体をユーザーデータとして参照します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: Apache のサーバー設定構造体。</li>
+<li><code>apr_pool_t</code>: Apache Portable Runtime のメモリプール。</li>
+<li><code>apr_array_header_t</code>: パスフレーズのリストを保持する配列構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ不足**: <code>apr_pool_t</code> への割り当て失敗時に処理が中断される可能性があります。</li>
+<li>**入力失敗**: <code>nPassPhraseDialogCur</code> が上限に達した場合、パスフレーズの取得に失敗し、鍵の読み込みが停止します。</li>
+<li>**Win32 の制約**: Windows 環境では <code>builtin</code> ダイアログがサポートされないため、本構造体を用いたパイプ経由の入力が必須となります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体内のパスフレーズ文字列は機密情報です。デバッグ出力等で誤ってログに記録しないよう注意してください。</li>
+<li><code>asn1_table_vhost_key</code> との連携により、再起動時のパスフレーズ入力を省略する設計となっています。変更時はキャッシュの整合性に注意してください。</li>
 </ul></body></html>

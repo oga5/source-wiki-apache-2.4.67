@@ -1,37 +1,39 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/test__modules__proxy.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>test/modules/proxy</h1>
 <h2>システム内での役割</h2>
-<p><code>test/modules/proxy</code> には 5 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p>Apache HTTP Server の <code>mod_proxy</code> モジュールおよび関連機能（<code>proxy_http</code>, <code>proxy_balancer</code> 等）の動作を検証するための統合テストスイートです。ディレクトリ境界に基づき、プロキシ機能のテスト環境構築から実行までをカプセル化しています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**テスト環境の構築**: <code>mod_proxy</code> 関連モジュールをロードした Apache HTTP Server のライフサイクル管理。</li>
+<li>**プロキシ動作の検証**: リバースプロキシ、フォワードプロキシ、ロードバランサ、および Unix Domain Socket (UDS) 経由の通信の整合性確認。</li>
+<li>**セキュリティ制約のテスト**: 不正なパス指定に対するエラーハンドリングの検証。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>test/modules/proxy/__init__.py</code></li>
-<li><code>test/modules/proxy/conftest.py</code></li>
-<li><code>test/modules/proxy/env.py</code></li>
-<li><code>test/modules/proxy/test_01_http.py</code></li>
-<li><code>test/modules/proxy/test_02_unix.py</code></li>
+<li><code>test/modules/proxy/__init__.py</code>: パッケージ定義。</li>
+<li><code>test/modules/proxy/conftest.py</code>: <code>pytest</code> フィクスチャおよび環境のライフサイクル管理。</li>
+<li><code>test/modules/proxy/env.py</code>: テスト環境（<code>ProxyTestEnv</code>）の定義と設定管理。</li>
+<li><code>test/modules/proxy/test_01_http.py</code>: HTTP/HTTPS プロキシおよびロードバランサのテスト。</li>
+<li><code>test/modules/proxy/test_02_unix.py</code>: UDS 経由のプロキシ機能およびセキュリティテスト。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li>まだ明確なデータ構造シンボルは索引化されていません。</li>
+<li><code>ProxyTestEnv</code>: テスト対象の Apache 設定、ドメイン定義、証明書スペックを保持する環境クラス。</li>
+<li><code>UDSFaker</code>: <code>test_02_unix.py</code> で使用される、UDS をリッスンし固定レスポンスを返すスレッドベースのモックサーバー。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **セットアップ**: <code>conftest.py</code> が <code>ProxyTestEnv</code> を初期化し、Apache を起動。<code>env.py</code> が必要なモジュールをロードし、仮想ホスト設定を生成。 2. **テスト実行**: 各テストケースが <code>curl</code> 等を用いてプロキシ経由でリクエストを送信。 3. **検証**: レスポンスのステータスコードや JSON レスポンス内のホスト情報をアサートし、ルーティングの正当性を確認。 4. **クリーンアップ**: 全テスト終了後、<code>conftest.py</code> のフィクスチャが Apache プロセスを停止。</p>
 <h2>外部依存</h2>
 <ul>
-<li>外部のローカル include は検出されませんでした。</li>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>pyhttpd</code>: Apache HTTP Server のテスト用フレームワーク（設定生成 <code>HttpdConf</code> や環境基底クラス <code>HttpdTestEnv</code> を提供）。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは <code>pyhttpd</code> フレームワークを拡張し、プロキシ特有のドメイン管理やモジュールロードを抽象化しています。子モジュールは存在せず、フラットな構成です。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>test/modules/proxy/__init__.py</code> 2. <code>test/modules/proxy/conftest.py</code> 3. <code>test/modules/proxy/env.py</code> 4. <code>test/modules/proxy/test_01_http.py</code> 5. <code>test/modules/proxy/test_02_unix.py</code></p>
+<p>1. <code>test/modules/proxy/env.py</code> (環境定義の理解) 2. <code>test/modules/proxy/conftest.py</code> (フィクスチャとライフサイクルの理解) 3. <code>test/modules/proxy/test_01_http.py</code> (基本機能のテスト) 4. <code>test/modules/proxy/test_02_unix.py</code> (応用機能のテスト) 5. <code>test/modules/proxy/__init__.py</code></p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>現在の <code>UDSFaker</code> は簡易的な実装であるため、より複雑な HTTP プロトコル解析が必要になった場合の拡張性。</li>
+<li>テスト実行時のログ出力が冗長になる傾向があるため、デバッグ効率を考慮したロギング設定の最適化。</li>
 </ul></body></html>

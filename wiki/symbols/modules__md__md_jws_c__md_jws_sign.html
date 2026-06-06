@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/md/md_jws.c:42</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>RSA秘密鍵を使用して、ACMEプロトコル等で利用されるJWS (JSON Web Signature) メッセージを構築する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t md_jws_sign(md_json_t **pmsg, apr_pool_t *p,
+                         md_data_t *payload, md_json_t *prot_fields,
+                         struct md_pkey_t *pkey, const char *key_id)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li><code>payload</code>: 署名対象のデータ。</li>
+<li><code>prot_fields</code>: 保護ヘッダーに追加するJSONフィールド。</li>
+<li><code>pkey</code>: 署名に使用するRSA秘密鍵。</li>
+<li><code>key_id</code>: (オプション) 鍵識別子。指定がない場合は <code>pkey</code> からJWKを生成してヘッダーに埋め込む。</li>
+<li>**出力**:</li>
+<li><code>pmsg</code>: 成功時に構築されたJWSメッセージ（JSONオブジェクト）が格納される。失敗時は <code>NULL</code>。</li>
+<li>戻り値: <code>APR_SUCCESS</code> またはエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>prot_fields</code> には <code>alg</code> フィールドが強制的に <code>RS256</code> として設定される。</li>
+<li>署名対象のヘッダーとペイロードはBase64URLエンコードされる。</li>
+<li>署名処理は <code>md_crypt_sign64</code> を介して行われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>prot_fields</code> を複製し、<code>alg</code> を <code>RS256</code> に設定する。 2. <code>key_id</code> があればヘッダーに <code>kid</code> を追加し、なければ <code>md_jws_get_jwk</code> で公開鍵からJWKを生成してヘッダーに含める。 3. 保護ヘッダーをJSON文字列化し、Base64URLエンコードする。 4. <code>payload</code> をBase64URLエンコードする。 5. <code>protected.payload</code> 形式の文字列を作成し、<code>md_crypt_sign64</code> で署名を生成する。 6. <code>protected</code>、<code>payload</code>、<code>signature</code> を含むJSONオブジェクトを構築して返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/md_acme.c:249</code></li>
+<li>**呼び出し先**:</li>
+<li><code>md_json_create</code>, <code>md_json_clone</code>, <code>md_json_sets</code>, <code>md_json_setj</code>, <code>md_json_writep</code></li>
+<li><code>md_jws_get_jwk</code> (条件付き)</li>
+<li><code>md_data_init</code>, <code>md_util_base64url_encode</code></li>
+<li><code>apr_psprintf</code></li>
+<li><code>md_crypt_sign64</code></li>
+<li><code>md_log_perror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_json_t</code>: JSONオブジェクト構造体。</li>
+<li><code>md_data_t</code>: データバッファ。</li>
+<li><code>md_pkey_t</code>: 秘密鍵構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_jws_get_jwk</code> が失敗した場合、エラーを返して終了する。</li>
+<li>保護ヘッダーのシリアライズに失敗した場合、<code>APR_EINVAL</code> を返す。</li>
+<li>署名生成 (<code>md_crypt_sign64</code>) が失敗した場合、エラーを返して終了する。</li>
+<li>失敗時は <code>*pmsg</code> が <code>NULL</code> に設定される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>RS256</code> アルゴリズムに固定されている。</li>
+<li>戻り値が <code>APR_SUCCESS</code> でない場合、呼び出し側で <code>pmsg</code> が <code>NULL</code> であることを確認する必要がある。</li>
+<li>メモリ管理はすべて <code>p</code> (apr_pool_t) に依存している。</li>
 </ul></body></html>

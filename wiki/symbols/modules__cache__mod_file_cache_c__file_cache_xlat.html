@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/cache/mod_file_cache.c:239</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストされたファイルパスがキャッシュ対象であるかを判定し、キャッシュされている場合はそのメタデータ（<code>a_file</code>）をリクエストコンテキストに注入して、後続の処理（<code>stat</code> 等）をスキップさせるための <code>translate_name</code> フック関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int file_cache_xlat(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報）</li>
+<li>**出力**: <code>int</code></li>
+<li><code>OK</code>: キャッシュヒット時。</li>
+<li><code>DECLINED</code>: キャッシュ対象外、またはハッシュテーブルが空の場合。</li>
+<li><code>ap_core_translate</code> の戻り値: パス解決に失敗した場合など。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sconf-&gt;fileht</code>（キャッシュハッシュテーブル）が初期化されていること。</li>
+<li><code>ap_core_translate(r)</code> が正常に完了し、<code>r-&gt;filename</code> が設定されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. サーバー設定からキャッシュハッシュテーブルを取得し、エントリが存在しない場合は <code>DECLINED</code> を返す。 2. <code>ap_core_translate(r)</code> を呼び出し、リクエストされたパスの物理的な解決を行う。解決に失敗した場合はその結果を返す。 3. 解決された <code>r-&gt;filename</code> をキーとしてハッシュテーブルを検索する。 4. ヒットした場合:</p>
+<ul>
+<li><code>ap_set_module_config</code> を使用して、該当する <code>a_file</code> 構造体を <code>r-&gt;request_config</code> に保存する。</li>
+<li><code>r-&gt;finfo</code> をキャッシュ済みの <code>match-&gt;finfo</code> で上書きし、後続の <code>stat()</code> 呼び出しを回避する。</li>
+<li><code>OK</code> を返す。</li>
+<p>5. ヒットしない場合は <code>DECLINED</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache の <code>translate_name</code> フック（<code>ap_hook_translate_name</code> により登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_module_config</code></li>
+<li><code>apr_hash_count</code></li>
+<li><code>ap_core_translate</code></li>
+<li><code>apr_hash_get</code></li>
+<li><code>ap_set_module_config</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>a_server_config</code>: サーバーごとのキャッシュハッシュテーブルを保持。</li>
+<li><code>a_file</code>: キャッシュされたファイルの属性（<code>finfo</code>）やハンドルを保持。</li>
+<li><code>request_rec</code>: リクエストのコンテキストおよびファイル情報を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キャッシュ未登録**: ハッシュテーブルが空の場合、即座に <code>DECLINED</code> を返し、通常の処理フローに委ねる。</li>
+<li>**パス解決失敗**: <code>ap_core_translate</code> が <code>OK</code> 以外を返した場合、そのエラー状態を伝播させる。</li>
+<li>**キャッシュミス**: ハッシュテーブルに該当キーが存在しない場合、<code>DECLINED</code> を返し、通常のファイルシステムアクセスへ移行する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_core_translate</code> の後に実行されるため、<code>Alias</code> や <code>RewriteRule</code> 等によるパス変換が適用された後のパスに対してキャッシュ検索が行われます。</li>
+<li><code>r-&gt;finfo</code> を上書きするため、キャッシュされたファイルがディスク上で更新された場合、サーバー再起動まで古いメタデータが使用され続ける点に注意してください。</li>
 </ul></body></html>

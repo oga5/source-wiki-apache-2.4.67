@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/proxy/ajp_header.c:540</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バックエンドサーバーから受信した AJP <code>SEND_HEADERS</code> パケットを解析し、その内容を Apache の <code>request_rec</code> 構造体（HTTP ステータス、レスポンスヘッダー、コンテンツタイプ等）へ反映させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t ajp_unmarshal_response(ajp_msg_t *msg,
+                                           request_rec *r,
+                                           proxy_dir_conf *dconf)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>msg</code>: 解析対象の AJP メッセージバッファ。</li>
+<li><code>r</code>: 処理対象の Apache リクエスト構造体。</li>
+<li><code>dconf</code>: プロキシのディレクトリ設定（リバースマップ処理に使用）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>。解析失敗時はエラーコードを返す。</li>
+<li>副作用として <code>r-&gt;status</code>、<code>r-&gt;status_line</code>、<code>r-&gt;headers_out</code> が更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>msg</code> は有効な AJP メッセージバッファであること。</li>
+<li><code>r-&gt;pool</code> を使用してメモリが割り当てられるため、リクエストのライフサイクルに依存する。</li>
+<li>EBCDIC 環境下では、文字列データに対して適切な文字コード変換が行われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ステータス解析**: メッセージから 16 ビットのステータスコードを読み取り <code>r-&gt;status</code> に設定。続いてステータス文字列を読み取り <code>r-&gt;status_line</code> を構築。 2. **ヘッダー数取得**: ヘッダー数を取得し、<code>r-&gt;headers_out</code> を初期化。既存の <code>Set-Cookie</code> ヘッダーを保持する。 3. **ヘッダー解析ループ**: 指定された数だけヘッダーを反復処理。</p>
+<ul>
+<li>ヘッダー名が AJP 内部 ID の場合は <code>long_res_header_for_sc</code> で文字列に変換。</li>
+<li>それ以外は文字列として読み取る。</li>
+<li><code>Set-Cookie</code>、<code>Location</code>、<code>Content-Location</code>、<code>URI</code>、<code>Destination</code> に対しては、<code>dconf</code> を用いたリバースマップ変換を適用。</li>
+<li><code>Content-Type</code> ヘッダーの場合は <code>ap_set_content_type</code> を呼び出す。</li>
+<p>4. **クリーンアップ**: <code>Content-Length</code> および <code>Transfer-Encoding</code> ヘッダーを <code>r-&gt;headers_out</code> から削除し、コアによる適切なフレーム制御を許可する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/ajp_header.c:800</code>（<code>ajp_parse_header</code> 関数内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ajp_msg_get_uint16</code>, <code>ajp_msg_get_string</code>, <code>ajp_msg_peek_uint16</code> (メッセージ操作)</li>
+<li><code>long_res_header_for_sc</code> (ヘッダー名変換)</li>
+<li><code>ap_proxy_cookie_reverse_map</code>, <code>ap_proxy_location_reverse_map</code> (パス変換)</li>
+<li><code>ap_set_content_type</code> (コンテンツタイプ設定)</li>
+<li><code>addit_dammit</code> (ヘッダーコピー用コールバック)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_t</code>: AJP 通信のバイナリパケット構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>proxy_dir_conf</code>: プロキシ設定情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ステータスコードやヘッダー数の読み取りに失敗した場合、エラーログを出力して <code>APR_SUCCESS</code> 以外の値を返す。</li>
+<li>不明な AJP ヘッダー ID が検出された場合、<code>AJP_EBAD_HEADER</code> を返す。</li>
+<li>ヘッダー名や値の読み取りで <code>ajp_msg_get_string</code> が失敗した場合、エラーを伝播させる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>r-&gt;headers_out</code> の再構築時に <code>apr_table_make</code> を使用している。既存のヘッダーを完全に破棄するのではなく、<code>Set-Cookie</code> のような特定のヘッダーを維持するロジックが含まれている点に注意。</li>
+<li><code>Content-Length</code> の削除ロジックは、AJP 独自のフレーム構造と Apache のフィルタチェーンの整合性を保つための重要な処理である。</li>
 </ul></body></html>

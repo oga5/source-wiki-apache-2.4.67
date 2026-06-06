@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/aaa/mod_auth_digest.c:128</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP Digest 認証におけるクライアント状態（<code>client_entry</code>）を管理するためのハッシュテーブル構造体です。共有メモリ（<code>client_shm</code>）上に配置され、クライアントの追跡に使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct hash_table {
+    client_entry  **table;        /* エントリの配列 */
+    unsigned long   tbl_len;      /* テーブルのサイズ */
+    unsigned long   num_entries;  /* 現在の登録数 */
+    unsigned long   num_created;  /* 生成された総数 */
+    unsigned long   num_removed;  /* 削除された総数 */
+    unsigned long   num_renewed;  /* 更新された総数 */
+} *client_list;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: <code>client_list</code> を介して共有メモリ上のクライアントエントリを操作します。</li>
+<li>出力: 認証プロセスにおいて、nonce カウントや opaque 値の検証結果を保持・更新します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリ（<code>client_shm</code>）およびメモリ管理ハンドル（<code>client_rmm</code>）が初期化されている必要があります。</li>
+<li>マルチプロセス環境下では、<code>client_lock</code> を用いたプロセス間同期が必須です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>client_list</code> としてグローバルに保持され、<code>initialize_tables</code> によって初期化されます。</li>
+<li>メモリ不足時には <code>gc()</code> 関数が呼び出され、LRU（Least Recently Used）に近い挙動で古いエントリを削除します。</li>
+<li><code>rmm_malloc</code> および <code>rmm_free</code> を介して、共有メモリ領域の動的な割り当てと解放を行います。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>initialize_tables</code>（初期化時）、<code>gc</code>（メモリ管理時）、および <code>authenticate_digest_user</code> 等の認証ロジックから参照されます。</li>
+<li>呼び出し先: <code>apr_rmm</code> 関連関数を呼び出し、共有メモリ領域を操作します。</li>
+<li>注: 具体的な関数呼び出しの網羅的なトレースは、提供されたソース excerpt の範囲外です。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>client_entry</code>: ハッシュテーブルに格納される個々のクライアント状態。</li>
+<li><code>client_shm</code> / <code>client_rmm</code>: 共有メモリセグメントおよびその管理ハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリが利用できない環境では、nonce カウントチェックなどの機能が制限されます。</li>
+<li>メモリ不足時には <code>gc()</code> によるエントリ削除が発生し、追跡中のクライアント情報が失われる可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_auth_digest</code> の共有メモリ管理の要です。</li>
+<li><code>num_created</code> 等のカウンタは統計情報として利用されます。</li>
+<li>共有メモリの競合を避けるため、必ず <code>client_lock</code> による排他制御を行ってください。</li>
 </ul></body></html>

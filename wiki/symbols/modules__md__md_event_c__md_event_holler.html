@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/md/md_event.c:78</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>登録されたすべてのイベントリスナー（コールバック関数）を順次実行します。各リスナーの戻り値に関わらず、リストの最後まで処理を継続することが目的です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void md_event_holler(const char *event, 
+                     const char *mdomain, 
+                     struct md_job_t *job, 
+                     struct md_result_t *result, 
+                     apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>event</code>: イベント名を示す文字列。</li>
+<li><code>mdomain</code>: 対象となるドメイン名。</li>
+<li><code>job</code>: 関連するジョブ情報（<code>md_job_t</code>）。</li>
+<li><code>result</code>: 処理結果やエラー詳細（<code>md_result_t</code>）。</li>
+<li><code>p</code>: メモリ割り当てに使用する APR プール。</li>
+<li>**出力**: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>EVNT</code> グローバル構造体が初期化されている必要があります。</li>
+<li>本関数はスレッドセーフではありません。マルチスレッド環境下での呼び出しには、呼び出し元での排他制御が必要です。</li>
+<li>購読解除機能は存在しないため、登録されたコールバックはプロセスの生存期間中有効です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 静的変数 <code>EVNT</code> が保持する購読リストの先頭（<code>EVNT.subs</code>）を取得します。 2. リストが空になるまで、各ノードのコールバック関数 <code>sub-&gt;cb</code> を順次呼び出します。 3. コールバックには、引数として受け取った <code>event</code>, <code>mdomain</code>, <code>job</code>, <code>result</code>, <code>p</code> および各購読時に設定された <code>baton</code> を渡します。 4. いずれかのコールバックがエラーを返した場合でも、中断することなく次のリスナーを実行します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/md_ocsp.c</code>: OCSP エラーおよび更新イベントの通知。</li>
+<li><code>modules/md/md_reg.c</code>: 証明書インストールイベントの通知。</li>
+<li><code>modules/md/md_status.c</code>: ステータス更新イベントの通知。</li>
+<li><code>modules/md/mod_md_drive.c</code>: ジョブエラーイベントの通知。</li>
+<li>**呼び出し先**:</li>
+<li>登録された各 <code>md_subscription</code> 内のコールバック関数（<code>sub-&gt;cb</code>）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_subscription</code>: イベント購読情報を保持するリスト構造体。</li>
+<li><code>md_job_t</code>: ジョブの状態を保持する構造体。</li>
+<li><code>md_result_t</code>: 処理結果を保持する構造体。</li>
+<li><code>EVNT</code>: モジュール内で静的に保持されるイベント管理用グローバル構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>購読リストが空の場合、何も実行せずに正常終了します。</li>
+<li>コールバック関数内で発生したエラーは本関数では捕捉されず、通知の継続性に影響を与えません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>md_event_raise</code> と異なり、エラー発生時も処理を中断しないため、通知の確実性が求められる処理に適しています。</li>
+<li>購読リストの走査中にコールバックがリストを変更するような操作を行うと、予期せぬ動作を引き起こす可能性があるため注意してください。</li>
 </ul></body></html>

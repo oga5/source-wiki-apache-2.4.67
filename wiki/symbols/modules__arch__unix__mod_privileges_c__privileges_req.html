@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/arch/unix/mod_privileges.c:173</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト処理時に、設定された仮想ホスト（vhost）またはディレクトリ単位の権限セットに基づき、プロセス権限の降格またはプロセス分離（fork）を実行する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int privileges_req(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: <code>request_rec *r</code>（現在のリクエスト情報）</li>
+<li>出力: <code>int</code>（Apache ステータスコード: <code>OK</code>, <code>DONE</code>, <code>DECLINED</code>, または <code>HTTP_INTERNAL_SERVER_ERROR</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本関数は <code>post_read_request</code> および <code>header_parser</code> フックから呼び出される。</li>
+<li>マルチスレッド MPM との互換性はなく、非スレッド環境での動作を前提とする。</li>
+<li><code>PRIV_SECURE</code> モードで <code>fork</code> された場合、子プロセスはリクエスト処理を完遂し、親プロセスは <code>DONE</code> を返してリクエスト処理から離脱する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **設定取得**: <code>priv_cfg</code> を取得し、<code>request_config</code> 内の <code>breadcrumb</code> を確認して初回呼び出し（vhost）かディレクトリ単位の呼び出しを判定する。 2. **モード判定**: <code>PRIV_SELECTIVE</code> モードの場合、ディレクトリ設定が未確定であれば <code>DECLINED</code> を返し、後続の処理へ委譲する。 3. **プロセス分離**: <code>PRIV_SECURE</code> モードの場合、<code>apr_proc_fork</code> を実行する。</p>
+<ul>
+<li>親プロセス: 子プロセスの終了を待ち、<code>DONE</code> を返して終了する。</li>
+<li>子プロセス: 権限降格処理へ進む。</li>
+<p>4. **権限降格**: <code>privileges_end_req</code> をクリーンアップハンドラとして登録する。 5. **権限適用**: <code>setppriv</code> を使用し、<code>PRIV_EFFECTIVE</code>, <code>PRIV_INHERITABLE</code>, <code>PRIV_LIMIT</code> を設定する。UID/GID が設定されている場合は <code>setuid</code>/<code>setgid</code> を実行する。 6. **追加制限**: <code>PRIV_SECURE</code> モードの子プロセスでは、<code>PRIV_PERMITTED</code> も制限する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>ap_hook_post_read_request</code> (登録箇所: <code>modules/arch/unix/mod_privileges.c:410</code>)</li>
+<li><code>ap_hook_header_parser</code> (登録箇所: <code>modules/arch/unix/mod_privileges.c:412</code>)</li>
+<li>呼び出し先:</li>
+<li><code>apr_proc_fork</code>, <code>apr_proc_wait</code></li>
+<li><code>setppriv</code>, <code>setuid</code>, <code>setgid</code></li>
+<li><code>privileges_end_req</code> (クリーンアップ登録)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>priv_cfg</code>: vhost 単位の権限設定（UID, GID, 特権セット）。</li>
+<li><code>priv_dir_cfg</code>: ディレクトリ単位の動作モード設定。</li>
+<li><code>request_rec</code>: リクエストごとのコンテキスト保持に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fork</code> 失敗時: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li><code>setppriv</code> または <code>setuid</code>/<code>setgid</code> 失敗時: ログを出力し、セキュリティリスクを避けるため <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li><code>PRIV_SECURE</code> モードでの子プロセス生成時、親プロセスは <code>r-&gt;eos_sent = 1</code> を設定し、リクエスト処理を終了させる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>BIG_SECURITY_HOLE</code> マクロで保護された機能はデフォルトで無効であり、取り扱いには注意が必要。</li>
+<li><code>apr_pool_cleanup_register</code> を使用しているため、リクエスト終了時には自動的に <code>privileges_end_req</code> が呼ばれ、権限が復元される設計となっている。</li>
 </ul></body></html>

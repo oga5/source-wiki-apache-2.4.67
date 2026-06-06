@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/http2/h2_c2_filter.c:244</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/1.1 形式のレスポンス情報を HTTP/2 ストリーム用の <code>h2_headers</code> 構造体に変換し、ヘッダーの正規化およびプロトコル適合処理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>h2_headers *create_response(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (処理対象のリクエストレコード)</li>
+<li>**出力**: <code>h2_headers *</code> (HTTP/2 ヘッダーバケットとして送信可能な構造体)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> が有効であり、メモリ割り当てに使用可能であること。</li>
+<li><code>r-&gt;headers_out</code> および <code>r-&gt;err_headers_out</code> が適切に設定されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ヘッダー統合**: <code>err_headers_out</code> を <code>headers_out</code> に統合し、<code>err_headers_out</code> をクリアする。 2. **Vary ヘッダー処理**: <code>force-no-vary</code> が設定されている場合は <code>Vary</code> を削除し、プロトコルを HTTP/1.0 に強制する。それ以外は <code>fix_vary(r)</code> を呼び出す。 3. **ETag 制御**: <code>no-etag</code> ノートが存在する場合、<code>ETag</code> ヘッダーを削除する。 4. **プロトコル設定**: <code>ap_set_keepalive(r)</code> を呼び出し、Keep-Alive 状態を決定する。 5. **コンテンツ制御**:</p>
+<ul>
+<li>ヘッダーのみのレスポンスの場合、<code>Transfer-Encoding</code> や <code>Content-Length</code> をクリアする。</li>
+<li>チャンク化されている場合、<code>Transfer-Encoding: chunked</code> を追加する。</li>
+<p>6. **メタデータ付与**: <code>Content-Type</code>、<code>Content-Encoding</code>、<code>Content-Language</code> をヘッダーテーブルに反映する。 7. **キャッシュ制御**: <code>no_cache</code> が設定されている場合、<code>Expires</code> ヘッダーを生成する。 8. **プロキシ/サーバー情報**: 必要に応じて <code>Date</code> および <code>Server</code> ヘッダーを補完する。 9. **変換**: <code>h2_headers_rcreate</code> を呼び出し、最終的な <code>h2_headers</code> を生成して返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_c2_filter.c:739</code> (直接的な呼び出しを確認)</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_table_overlay</code>, <code>apr_table_clear</code>, <code>apr_table_get</code>, <code>apr_table_unset</code>, <code>apr_table_setn</code>, <code>apr_table_mergen</code>, <code>apr_table_add</code> (APR テーブル操作)</li>
+<li><code>fix_vary</code> (関連関数)</li>
+<li><code>ap_set_keepalive</code>, <code>ap_make_content_type</code>, <code>ap_get_list_item</code>, <code>ap_recent_rfc822_date</code>, <code>ap_get_server_banner</code> (Apache HTTP Server API)</li>
+<li><code>h2_headers_rcreate</code> (HTTP/2 ヘッダー生成)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエストコンテキスト。</li>
+<li><code>h2_headers</code>: HTTP/2 ストリーム用のヘッダー表現。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;header_only</code> かつ <code>Content-Length</code> が &quot;0&quot; の場合、誤ったゼロ長ヘッダーを送信しないよう <code>Content-Length</code> を削除する回避策が含まれる。</li>
+<li><code>Content-Language</code> の重複排除処理において、配列操作を行う。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は HTTP/1.1 のレガシーなヘッダー処理を HTTP/2 に適合させるための翻訳レイヤーとして機能する。</li>
+<li><code>AP_STATUS_IS_HEADER_ONLY</code> や <code>r-&gt;chunked</code> の判定ロジックは、HTTP/2 フィルタスタックにおけるレスポンスの正当性を担保する重要な箇所である。</li>
 </ul></body></html>

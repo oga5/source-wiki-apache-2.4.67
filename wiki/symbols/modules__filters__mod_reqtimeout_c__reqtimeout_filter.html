@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/filters/mod_reqtimeout.c:172</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTPリクエストの各段階（ヘッダー読み取り等）において、動的なタイムアウト制限を適用し、低速なクライアントによるリソース枯渇攻撃を防止する入力フィルタ。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t reqtimeout_filter(ap_filter_t *f,
+                                      apr_bucket_brigade *bb,
+                                      ap_input_mode_t mode,
+                                      apr_read_type_e block,
+                                      apr_off_t readbytes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキスト（<code>reqtimeout_con_cfg</code> を保持）。</li>
+<li><code>bb</code>: 読み取ったデータを格納するバケットブリゲード。</li>
+<li><code>mode</code>, <code>block</code>, <code>readbytes</code>: <code>ap_get_brigade</code> に準ずる読み取りモードとパラメータ。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>、タイムアウト時は <code>APR_TIMEUP</code> 等）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;ctx</code> に <code>reqtimeout_con_cfg</code> が格納されていること。</li>
+<li>接続のソケットが <code>ccfg-&gt;socket</code> に設定されていること。</li>
+<li>タイムアウト発生時、接続は <code>AP_CONN_CLOSE</code> に設定され、<code>short-lingering-close</code> ノートが有効化される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **Keep-Alive処理**: <code>in_keep_alive</code> が設定されている場合、最初のバイトを待機してから通常のタイムアウト監視へ移行。 2. **タイムアウト設定**: <code>cur_stage</code> に基づき、<code>timeout_at</code> および <code>max_timeout_at</code> を更新。 3. **監視**:</p>
+<ul>
+<li><code>AP_MODE_GETLINE</code> の場合、行全体を読み取るために非ブロッキング読み取りと <code>apr_poll</code>（または <code>apr_socket_wait</code>）をループ内で実行し、厳密にタイムアウトを監視。</li>
+<li>読み取り成功時、<code>rate_factor</code> が設定されていれば <code>extend_timeout</code> を呼び出し、データ量に応じて期限を延長。</li>
+<p>4. **終了処理**: タイムアウト発生時、ログ出力を行い、接続を即時切断対象としてマーク。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_get_brigade</code> を経由して呼び出される（フィルタチェーンの一部）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_brigade</code> (後続フィルタ)</li>
+<li><code>check_time_left</code></li>
+<li><code>extend_timeout</code></li>
+<li><code>have_lf_or_eos</code></li>
+<li><code>brigade_append</code></li>
+<li><code>apr_socket_timeout_get</code> / <code>set</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>reqtimeout_con_cfg</code>: 接続ごとの状態（期限、ソケット、一時バッファ <code>tmpbb</code>）を保持。</li>
+<li><code>reqtimeout_stage_t</code>: 現在のステージのタイムアウト設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**タイムアウト**: <code>check_time_left</code> が <code>APR_TIMEUP</code> を返すと、接続を強制終了する。</li>
+<li>**読み取りエラー**: <code>ap_get_brigade</code> がエラーを返した場合、そのステータスを伝播。</li>
+<li>**エッジケース**: <code>AP_MODE_SPECULATIVE</code> モードでは、タイムアウト延長を行わない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>APR_MAJOR_VERSION &lt; 2</code> の環境では <code>apr_poll</code> を使用し、それ以降は <code>apr_socket_wait</code> を使用する抽象化が行われている。</li>
+<li><code>AP_MODE_GETLINE</code> 以外のモードでは、<code>extend_timeout</code> による動的延長が適用されない設計となっている。</li>
 </ul></body></html>

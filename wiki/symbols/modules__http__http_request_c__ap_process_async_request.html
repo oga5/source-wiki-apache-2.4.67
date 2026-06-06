@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/http/http_request.c:407</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>非同期リクエスト処理のコアロジックを実行し、リクエストのライフサイクル（フックの実行、ハンドラの呼び出し、後処理）を統括する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_process_async_request(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （処理対象のリクエスト構造体）</li>
+<li>**出力**: なし（戻り値は <code>void</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r</code> は有効な <code>request_rec</code> 構造体を指している必要がある。</li>
+<li>スレッド環境下では、<code>r-&gt;invoke_mtx</code> を用いて排他制御が行われる。</li>
+<li>処理の開始と終了時に <code>AP_PROCESS_REQUEST_ENTRY</code> および <code>AP_PROCESS_REQUEST_RETURN</code> マクロが呼び出される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 拡張ステータスが有効な場合、処理開始時間を記録する。 2. **ログ出力**: トレースレベルが 4 以上の場合、受信した全ヘッダーをログに記録する。 3. **排他制御**: スレッド環境では <code>r-&gt;invoke_mtx</code> をロックする。 4. **クイックハンドラ**: <code>ap_run_quick_handler</code> を実行し、成功（<code>OK</code>）または処理不要（<code>DECLINED</code>）を判定する。 5. **内部処理**: クイックハンドラが <code>DECLINED</code> の場合、<code>ap_process_request_internal</code> で設定適用とアクセスチェックを行い、成功すれば <code>ap_invoke_handler</code> でコンテンツハンドラを実行する。 6. **中断処理**: ステータスが <code>SUSPENDED</code> の場合、ステータスを更新して早期リターンする。 7. **終了処理**:</p>
+<ul>
+<li><code>ap_die_r</code> を呼び出し、エラー発生時のレスポンス生成を試みる。</li>
+<li><code>ap_process_request_after_handler</code> を呼び出し、EOR バケットの送信やパイプラインの確認を行う。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http/http_core.c:155</code></li>
+<li><code>modules/http/http_request.c:487</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_run_quick_handler</code></li>
+<li><code>ap_process_request_internal</code></li>
+<li><code>ap_invoke_handler</code></li>
+<li><code>ap_die_r</code></li>
+<li><code>ap_process_request_after_handler</code></li>
+<li><code>ap_time_process_request</code> (条件付き)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストのコンテキストを保持する主要構造体。</li>
+<li><code>conn_rec</code>: 接続状態を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_run_quick_handler</code> が <code>SUSPENDED</code> を返した場合、処理は中断され、後続のハンドラ実行や <code>ap_die_r</code> はスキップされる。</li>
+<li><code>ap_process_request_internal</code> や <code>ap_invoke_handler</code> がエラーコードを返した場合、<code>ap_die_r</code> がそのステータスに基づいたエラーレスポンスを処理する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>quick_handler</code> フックは、キャッシュや特定のルーティングに利用される強力なフックであるため、使用には細心の注意が必要である。</li>
+<li><code>SUSPENDED</code> 状態の処理において、<code>AP_PROCESS_REQUEST_ENTRY</code> を再呼び出しする汎用関数へのリファクタリングが検討されている。</li>
 </ul></body></html>

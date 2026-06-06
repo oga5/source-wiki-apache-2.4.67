@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_uwsgi.c:500</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>uwsgi://</code> スキームのリクエストを処理し、Apache HTTP Server と uWSGI バックエンド間のプロキシ通信を統括するメインエントリポイントです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int uwsgi_handler(request_rec *r, proxy_worker *worker,
+                         proxy_server_conf *conf, char *url,
+                         const char *proxyname, apr_port_t proxyport)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>worker</code>: 接続先のバックエンドワーカー情報。</li>
+<li><code>conf</code>: プロキシサーバーの設定。</li>
+<li><code>url</code>: プロキシ対象の URL 文字列。</li>
+<li><code>proxyname</code>, <code>proxyport</code>: プロキシ設定値。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 処理結果ステータス（<code>OK</code>, <code>DECLINED</code>, <code>HTTP_INTERNAL_SERVER_ERROR</code>, <code>HTTP_SERVICE_UNAVAILABLE</code> 等）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>URL が <code>uwsgi://</code> で始まる必要があります。</li>
+<li><code>r-&gt;subprocess_env</code> に <code>PATH_INFO</code> が設定されます。</li>
+<li>処理終了時には必ず <code>ap_proxy_release_connection</code> が呼び出されます。</li>
+<li>現在の実装では、バックエンドとの接続はリクエストごとに切断（<code>backend-&gt;close = 1</code>）されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **URL 検証**: <code>uwsgi://</code> スキームを確認し、一致しない場合は <code>DECLINED</code> を返します。 2. **PATH_INFO 抽出**: URL からパス情報を抽出し、デコードして <code>subprocess_env</code> に追加します。 3. **接続確立**: <code>ap_proxy_acquire_connection</code> で接続を確保し、<code>ap_proxy_determine_connection</code> で接続先を特定後、<code>ap_proxy_connect_backend</code> でソケットを接続します。 4. **リクエスト処理**: 以下の順序で実行し、いずれかが失敗した場合は <code>cleanup</code> へ遷移します。</p>
+<ul>
+<li><code>ap_setup_client_block</code>: クライアントからのデータ受信準備。</li>
+<li><code>uwsgi_send_headers</code>: 環境変数をバイナリ形式に変換して送信。</li>
+<li><code>uwsgi_send_body</code>: リクエストボディをバックエンドへ転送。</li>
+<li><code>uwsgi_response</code>: バックエンドからのレスポンスを受信・解析。</li>
+<p>5. **終了処理**: 接続を閉じ、プールを解放します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_uwsgi.c</code> 内の <code>proxy_hook_scheme_handler</code> に登録されたフック経由で <code>mod_proxy</code> から呼び出されます。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_proxy_acquire_connection</code>, <code>ap_proxy_determine_connection</code>, <code>ap_proxy_connect_backend</code>, <code>ap_proxy_connection_create</code>, <code>ap_proxy_release_connection</code> (mod_proxy API)</li>
+<li><code>uwsgi_send_headers</code>, <code>uwsgi_send_body</code>, <code>uwsgi_response</code> (同ファイル内ユーティリティ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>proxy_worker</code>: バックエンドワーカーの設定。</li>
+<li><code>proxy_conn_rec</code>: バックエンドとの接続状態。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**URL 不正**: <code>uwsgi://</code> で始まらない場合は <code>DECLINED</code>。</li>
+<li>**デコード失敗**: <code>PATH_INFO</code> のデコードに失敗すると <code>HTTP_INTERNAL_SERVER_ERROR</code>。</li>
+<li>**接続失敗**: バックエンドへの接続確立に失敗すると <code>HTTP_SERVICE_UNAVAILABLE</code>。</li>
+<li>**通信エラー**: ヘッダー送信、ボディ転送、レスポンス受信のいずれかでエラーが発生した場合、そのステータスを返して終了します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエストごとにバックエンド接続をクローズします。Keep-Alive を実装する場合は <code>backend-&gt;close</code> の制御を見直す必要があります。</li>
+<li><code>uwsgi_send_headers</code> がパケットサイズ制限（<code>APR_UINT16_MAX</code>）を持つため、大規模な環境変数を扱う際は注意してください。</li>
 </ul></body></html>

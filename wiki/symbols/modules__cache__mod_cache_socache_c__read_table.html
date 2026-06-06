@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/cache/mod_cache_socache.c:195</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>シリアライズされたバッファから HTTP ヘッダーを読み取り、<code>apr_table_t</code> 構造体へ復元します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t read_table(cache_handle_t *handle, request_rec *r,
+                        apr_table_t *table, unsigned char *buffer,
+                        apr_size_t buffer_len, apr_size_t *slider);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>handle</code>: キャッシュハンドル。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>table</code>: ヘッダーを格納する <code>apr_table_t</code>。</li>
+<li><code>buffer</code>: シリアライズされたデータを含むバッファ。</li>
+<li><code>buffer_len</code>: バッファの総サイズ。</li>
+<li><code>slider</code>: バッファ内の現在の読み取り位置（オフセット）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、終端到達時は <code>APR_EOF</code>、エラー時は <code>APR_EGENERAL</code> を返します。</li>
+<li><code>slider</code>: 読み取り後のオフセット位置が更新されます。</li>
+<li><code>table</code>: 読み取られたヘッダーが追加されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buffer</code> は <code>store_table</code> 等で生成された、<code>key:value\r\n</code> 形式のシリアライズ済みデータである必要があります。</li>
+<li><code>slider</code> はバッファ内の有効な開始位置を指している必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>slider</code> を起点にバッファを走査し、<code>:</code> を区切り文字としてキーと値を識別します。 2. <code>\r</code> を行末として検出し、<code>apr_table_addn</code> を用いて <code>table</code> にヘッダーを追加します。 3. <code>\r\n</code> のシーケンスを適切にスキップし、次のヘッダーへ進みます。 4. <code>\0</code>（ヌル文字）を検出した場合は、ヘッダーブロックの終了とみなして <code>APR_SUCCESS</code> を返します。 5. バッファの終端に達した場合は <code>APR_EOF</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/mod_cache_socache.c</code>: <code>read_table</code> がキャッシュエントリの復元時に呼び出されます。</li>
+<li><code>modules/cache/mod_cache_disk.c</code>: <code>read_table</code> がディスクキャッシュのヘッダー読み込み時に呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_addn</code>: ヘッダーの追加に使用。</li>
+<li><code>apr_pstrmemdup</code>: 文字列のメモリコピーに使用。</li>
+<li><code>ap_log_rerror</code>: エラーログ出力に使用。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_table_t</code>: HTTP ヘッダーを保持する標準的なテーブル構造。</li>
+<li><code>cache_handle_t</code>: キャッシュ操作のコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**Premature end of cache headers**: ヘッダーの形式が不正（<code>:</code> が見つからない等）な場合、<code>APR_EGENERAL</code> を返しエラーログを出力します。</li>
+<li>**バッファ終端**: ヌル文字やバッファ長を超えた場合、正常終了または <code>APR_EOF</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>store_table</code> と対になるデシリアライズ処理です。データフォーマットを変更する場合は、両方の関数を同期させる必要があります。</li>
+<li><code>apr_pstrmemdup</code> を使用しているため、リクエストプール <code>r-&gt;pool</code> のライフサイクルに依存します。</li>
 </ul></body></html>

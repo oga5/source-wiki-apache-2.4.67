@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/dav/main/props.c:595</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>PROPFIND</code> リクエストに応答するため、指定されたリソースに関連するすべてのプロパティ（ライブプロパティおよびデッドプロパティ）を収集し、XML 形式の <code>propstat</code> 要素として生成する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>dav_get_props_result dav_get_allprops(dav_propdb *propdb, dav_prop_insert what);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>propdb</code>: プロパティデータベースのコンテキスト。</li>
+<li><code>what</code>: プロパティの挿入モード（値を含めるか、名前のみか、サポート対象のみか）。</li>
+<li>**出力**:</li>
+<li><code>dav_get_props_result</code>: 生成された XML テキストの断片（<code>propstats</code>）と名前空間定義（<code>xmlns</code>）を保持する構造体。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>propdb</code> は有効なポインタであること。</li>
+<li><code>propdb-&gt;deferred</code> が真の場合、内部で <code>dav_really_open_db</code> が呼び出され、データベースが読み取り専用で開かれる。</li>
+<li><code>what</code> が <code>DAV_PROP_INSERT_SUPPORTED</code> 以外の場合、デッドプロパティの走査とライブプロパティの挿入が行われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **デッドプロパティの走査**: <code>what</code> が <code>DAV_PROP_INSERT_SUPPORTED</code> でない場合、データベース内の全プロパティを走査する。</p>
+<ul>
+<li>名前空間を定義し、各プロパティの値を XML 出力バッファに追加する。</li>
+<li><code>DAV:getcontenttype</code> および <code>DAV:getcontentlanguage</code> の存在を確認し、フラグを立てる。</li>
+<p>2. **ライブプロパティの挿入**: <code>dav_run_insert_all_liveprops</code> を呼び出し、登録されているすべてのライブプロパティプロバイダーにプロパティの挿入を依頼する。 3. **コアプロパティの挿入**: <code>supportedlock</code> および <code>lockdiscovery</code> を強制的に挿入する。 4. **不足プロパティの補完**: デッドプロパティとして見つからなかった場合、<code>getcontenttype</code> および <code>getcontentlanguage</code> をコアプロパティとして挿入する。 5. **終了処理**: <code>what</code> が <code>DAV_PROP_INSERT_SUPPORTED</code> でない場合、XML の閉じタグとステータスコード（<code>200 OK</code>）を付与する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/dav/main/mod_dav.c</code>: <code>PROPFIND</code> 処理に関連する箇所で呼び出されている。</li>
+<li>**呼び出し先**:</li>
+<li><code>dav_really_open_db</code>, <code>dav_xmlns_create</code>, <code>dav_xmlns_generate</code>, <code>dav_add_all_liveprop_xmlns</code>, <code>dav_run_insert_all_liveprops</code>, <code>dav_insert_coreprop</code>, <code>dav_output_prop_name</code></li>
+<li><code>db_hooks</code>（<code>define_namespaces</code>, <code>first_name</code>, <code>next_name</code>, <code>output_value</code>）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_propdb</code>: プロパティ操作のコンテキスト。</li>
+<li><code>dav_get_props_result</code>: 結果格納用構造体。</li>
+<li><code>apr_text_header</code>: XML 出力生成用バッファ。</li>
+<li><code>dav_xmlns_info</code>: XML 名前空間管理用構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>データベースのオープン失敗時、エラーハンドリングが不完全である旨のコメントがソース内に存在する。</li>
+<li><code>db_hooks-&gt;output_value</code> がエラーを返した場合、そのキーの処理をスキップする。</li>
+<li><code>dav_insert_coreprop</code> の戻り値（エラー）は無視されている。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>PROPPATCH</code> のエラーハンドリングと同様に、プロパティ取得時のエラー伝播が不完全である。</li>
+<li><code>DAV_PROP_INSERT_SUPPORTED</code> モード時は、XML の開始/終了タグやステータス行が付与されない点に注意すること。</li>
 </ul></body></html>

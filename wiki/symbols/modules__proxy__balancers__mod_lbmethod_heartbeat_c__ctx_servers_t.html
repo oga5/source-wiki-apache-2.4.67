@@ -6,22 +6,45 @@
 <li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_heartbeat.c:59</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ハートビート情報の収集処理において、特定の時点における全バックエンドサーバーの負荷状態を一時的に保持・管理するためのコンテキスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct ctx_servers {
+    apr_time_t now;
+    apr_hash_t *servers;
+} ctx_servers_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>now</code>: 収集処理を実行した時刻（<code>apr_time_t</code>）。</li>
+<li><code>servers</code>: サーバー識別子をキーとし、<code>hb_server_t</code> 構造体を値として格納するハッシュテーブル。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>servers</code> ハッシュテーブルは、使用前に <code>apr_hash_make</code> 等で初期化されている必要があります。</li>
+<li>保持される各サーバー情報は、ハートビートの有効期限内（<code>LBM_HEARTBEAT_MAX_LASTSEEN</code>）であることを前提として処理されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ハートビート情報の読み込み処理（<code>readslot_heartbeats</code> 等）において、共有メモリやファイルから抽出したデータをこの構造体に集約します。</li>
+<li>収集したデータは、リクエストごとの転送先選定ロジック（<code>find_best_hb</code>）において、各バックエンドの稼働状況を評価するための参照元として利用されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元:</li>
+<li><code>readslot_heartbeats</code> (引数として受け取り、データを格納)</li>
+<li><code>find_best_hb</code> (ローカル変数として宣言し、<code>read_heartbeats</code> を通じて初期化)</li>
+<li>呼び出し先:</li>
+<li>本構造体自体はデータ保持用であり、直接的な関数呼び出しは行いません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hb_server_t</code>: <code>servers</code> ハッシュテーブルの各要素として格納される、個別のサーバー負荷状態を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>メモリ不足: <code>apr_hash_t</code> の初期化や要素の追加時にメモリ確保が失敗する可能性があります。</li>
+<li>データ不整合: 読み込み元（共有メモリやファイル）のデータが破損している場合、ハッシュテーブルへの格納時に予期せぬ値が含まれる可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はリクエスト処理のたびに生成・破棄される一時的なコンテキストです。メモリリークを防ぐため、必ず適切なプール（<code>tpool</code>）上で管理されていることを確認してください。</li>
 </ul></body></html>

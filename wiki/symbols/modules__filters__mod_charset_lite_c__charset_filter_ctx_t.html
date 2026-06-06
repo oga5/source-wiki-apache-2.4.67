@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/filters/mod_charset_lite.c:86</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_charset_lite</code> フィルタの各インスタンスにおける実行時状態を保持するためのコンテキスト構造体です。文字セット変換処理の継続性、エラー状態、およびバッファリングを管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct charset_filter_ctx_t {
+    apr_xlate_t *xlate;
+    int is_sb;
+    charset_dir_t *dc;
+    ees_t ees;
+    apr_size_t saved;
+    char buf[FATTEST_CHAR];
+    int ran;
+    int noop;
+    char *tmp;
+    apr_bucket_brigade *bb;
+    apr_bucket_brigade *tmpbb;
+} charset_filter_ctx_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: フィルタチェーンを流れる <code>apr_bucket_brigade</code> を処理対象とします。</li>
+<li>**出力**: 変換済みのデータを含むバケットを <code>tmpbb</code> を介して下流へ渡します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buf</code> は <code>FATTEST_CHAR</code>（8バイト）のサイズを持ち、バケット境界を跨ぐマルチバイト文字を保持するために使用されます。</li>
+<li>フィルタインスタンスごとに個別に割り当てられ、リクエストプール (<code>r-&gt;pool</code>) に紐付けられます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>xlate</code> を用いてバケット単位の文字コード変換を実行します。</li>
+<li>マルチバイト文字がバケット境界で分断された場合、<code>set_aside_partial_char</code> を用いて <code>buf</code> に一時保存し、次回のバケットと結合して変換を試みます。</li>
+<li><code>noop</code> フラグが設定されている場合、変換を行わずにバケットをそのまま通過させます。</li>
+<li><code>ran</code> フラグにより、フィルタが既に実行済みであるかを追跡します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>xlate_out_filter</code> および <code>xlate_in_filter</code> がこの構造体をフィルタコンテキスト (<code>f-&gt;ctx</code>) として参照します。</li>
+<li>**呼び出し先**: <code>set_aside_partial_char</code> および <code>finish_partial_char</code> が本構造体を引数として受け取り、部分的な文字の処理を行います。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_xlate_t</code>: 実際の文字セット変換ハンドル。</li>
+<li><code>charset_dir_t</code>: ディレクトリ単位の設定情報。</li>
+<li><code>ees_t</code>: 拡張エラー状態の保持。</li>
+<li><code>apr_bucket_brigade</code>: フィルタ間でデータを渡すためのバケットリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バッファ制限**: 8バイト (<code>FATTEST_CHAR</code>) を超えるマルチバイト文字がバケットを跨ぐ場合、<code>EES_LIMIT</code> エラーが発生します。</li>
+<li>**バケット境界**: 現在の実装では、マルチバイト文字が2つのバケットを跨ぐケースまでを処理対象としています。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はリクエストごとに生成されます。メモリリークを防ぐため、リクエストプールによる適切な管理が必須です。</li>
+<li><code>Content-Length</code> ヘッダーは変換によってサイズが変化する可能性があるため、本コンテキストを使用するフィルタでは削除される挙動に注意してください。</li>
 </ul></body></html>

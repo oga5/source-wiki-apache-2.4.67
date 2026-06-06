@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/metadata/mod_expires.c:446</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTPレスポンスに対して、設定されたルールに基づき <code>Expires</code> ヘッダーおよび <code>Cache-Control: max-age</code> を付与する出力フィルタ。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t expires_filter(ap_filter_t *f, apr_bucket_brigade *b)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: 現在のフィルタコンテキスト（<code>request_rec</code> を含む）。</li>
+<li><code>b</code>: 処理対象のバケットブリゲード。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code> 等）。</li>
+<li>フィルタチェーンの次段へブリゲードを渡す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Expires</code> ヘッダーが既に存在する場合、本関数はヘッダーの追加・上書きを行わない。</li>
+<li>HTTPエラーレスポンス（<code>ap_is_HTTP_ERROR</code> が真）の場合、本フィルタは即座に自身を削除し、処理をスキップする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **エラーチェック**: ステータスコードがエラーであれば、フィルタを解除してブリゲードを次段へ渡す。 2. **ヘッダー確認**: <code>r-&gt;err_headers_out</code> または <code>r-&gt;headers_out</code> に既存の <code>Expires</code> があるか確認。存在すれば何もしない。 3. **有効期限の決定**:</p>
+<ul>
+<li><code>r-&gt;content_type</code> に基づき <code>expiresbytype</code> テーブルを検索。</li>
+<li>一致しない場合、<code>wildcards</code> 設定が有効であればワイルドカード（<code>type/*</code>）による検索を試みる。</li>
+<li>それでも見つからない場合、<code>expiresdefault</code> を使用する。</li>
+<p>4. **ヘッダー注入**: 有効期限が決定した場合、<code>set_expiration_fields</code> を呼び出してヘッダーをセットする。 5. **終了処理**: フィルタを解除し、ブリゲードを次段へ渡す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apacheの出力フィルタチェーン（<code>ap_register_output_filter</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_remove_output_filter</code></li>
+<li><code>ap_pass_brigade</code></li>
+<li><code>ap_field_noparam</code></li>
+<li><code>apr_table_get</code></li>
+<li><code>set_expiration_fields</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>expires_dir_config</code>: ディレクトリごとの設定（<code>expiresbytype</code> テーブル、<code>expiresdefault</code>、<code>wildcards</code> フラグを保持）。</li>
+<li><code>request_rec</code>: リクエスト情報（ヘッダーテーブル、コンテンツタイプ等）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>content_type</code> が設定されていない場合、<code>expiresbytype</code> の検索は失敗し、デフォルト値が適用される。</li>
+<li><code>Expires</code> ヘッダーが既に存在する場合、本フィルタは介入せず、既存の値を優先する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_remove_output_filter</code> を呼び出し、一度実行されるとフィルタチェーンから自身を削除する設計となっている。</li>
+<li><code>check_code</code> 関数と同様に、設定値の解析には注意が必要。</li>
+<li><code>r-&gt;err_headers_out</code> と <code>r-&gt;headers_out</code> の両方を走査することで、CGI等の他モジュールが生成したヘッダーとの競合を回避している。</li>
 </ul></body></html>

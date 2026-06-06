@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/lua/lua_vmprep.c:274</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Lua の <code>package.path</code> または <code>package.cpath</code> を、Apache の設定に基づいたディレクトリパスおよび指定された追加パスで更新し、Lua スクリプトの検索環境を調整する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void munge_path(lua_State *L,
+                       const char *field,
+                       const char *sub_pat,
+                       const char *rep_pat,
+                       apr_pool_t *pool,
+                       apr_array_header_t *paths,
+                       const char *file)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>L</code>: Lua 状態。</li>
+<li><code>field</code>: 操作対象のフィールド名（<code>path</code> または <code>cpath</code>）。</li>
+<li><code>sub_pat</code>, <code>rep_pat</code>: パス置換のためのパターン文字列。</li>
+<li><code>pool</code>: メモリ割り当て用プール。</li>
+<li><code>paths</code>: 追加するパスの配列。</li>
+<li><code>file</code>: ベースとなるファイルパス。</li>
+<li>**出力**: なし（副作用として Lua 状態内の <code>package</code> テーブルを更新）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>L</code> は有効な <code>lua_State</code> であること。</li>
+<li><code>package</code> テーブルが Lua のグローバル環境に存在すること。</li>
+<li>指定された <code>field</code> が <code>package</code> テーブル内に存在すること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. Lua の <code>package</code> テーブルから指定された <code>field</code>（パス文字列）を取得する。 2. <code>ap_make_dirstr_parent</code> を使用して <code>file</code> の親ディレクトリを取得する。 3. <code>sub_pat</code> を結合して置換用パターンを生成し、<code>luaL_gsub</code> で既存のパス文字列を置換する。 4. 置換後のパス文字列に対し、<code>paths</code> 配列に含まれるパスをセミコロン（<code>;</code>）区切りで連結する。 5. 最終的な文字列を Lua の <code>package[field]</code> に再設定する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/lua/lua_vmprep.c</code> 内の <code>vm_construct</code> 関数（258行目、345行目、352行目付近）。</li>
+<li>**呼び出し先**:</li>
+<li><code>lua_getglobal</code>, <code>lua_getfield</code>, <code>lua_setfield</code>, <code>lua_tostring</code>, <code>lua_pushstring</code>, <code>lua_pop</code>, <code>luaL_gsub</code> (Lua C API)</li>
+<li><code>ap_make_dirstr_parent</code> (Apache API)</li>
+<li><code>apr_pstrcat</code>, <code>apr_array_pstrcat</code> (APR API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lua_State</code>: Lua 仮想マシン状態。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+<li><code>apr_array_header_t</code>: 追加パスを保持する配列。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>package</code> テーブルや対象フィールドが存在しない場合、Lua スタックの不整合やエラーが発生する可能性がある。</li>
+<li><code>apr_pstrcat</code> 等のメモリ割り当てが失敗した場合、APR の規約に従いプロセスが終了する可能性がある。</li>
+<li>パスの形式が期待と異なる場合、Lua のモジュールロード失敗を招く。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は文字列操作を多用するため、パスの連結時にセミコロンの重複や欠落がないか注意が必要。</li>
+<li><code>lua_pop</code> によるスタック操作が厳密に行われているため、変更を加える際はスタックバランスを維持すること。</li>
 </ul></body></html>

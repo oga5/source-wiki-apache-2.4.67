@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_uwsgi.c:238</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントから送信されたリクエストボディを読み取り、uWSGI バックエンドサーバーへ転送する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int uwsgi_send_body(request_rec *r, proxy_conn_rec *conn)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストを保持する <code>request_rec</code> 構造体。</li>
+<li><code>conn</code>: バックエンドへの接続状態を保持する <code>proxy_conn_rec</code> 構造体。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 正常終了。</li>
+<li><code>HTTP_SERVICE_UNAVAILABLE</code>: バックエンドへのデータ送信失敗。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: クライアントからのボディ読み取り失敗。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> が有効であり、バッファ割り当てに使用可能であること。</li>
+<li><code>conn</code> がバックエンドへの有効な接続を保持していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_should_client_block(r)</code> を呼び出し、転送すべきボディが存在するか確認する。 2. 存在する場合、<code>AP_IOBUFSIZE</code> サイズのバッファをリクエストプールから確保する。 3. <code>ap_get_client_block</code> を使用して、ボディをループで読み取る。 4. 読み取ったデータを <code>uwsgi_send</code> を介してバックエンドへ送信する。 5. 送信中に <code>uwsgi_send</code> が <code>OK</code> 以外を返した場合、直ちに <code>HTTP_SERVICE_UNAVAILABLE</code> を返す。 6. 読み取り中にエラー（<code>readlen == -1</code>）が発生した場合は、ログを出力し <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。 7. ボディの読み取りが完了した時点で <code>OK</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_uwsgi.c:572</code> (uwsgi_handler 内)</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_should_client_block</code></li>
+<li><code>apr_palloc</code></li>
+<li><code>ap_get_client_block</code></li>
+<li><code>uwsgi_send</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>proxy_conn_rec</code>: プロキシ接続情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**送信失敗**: <code>uwsgi_send</code> がエラーを返すと、処理を中断し <code>HTTP_SERVICE_UNAVAILABLE</code> を返す。</li>
+<li>**読み取り失敗**: <code>ap_get_client_block</code> が <code>-1</code> を返した場合、内部エラーとして処理される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>AP_IOBUFSIZE</code> 単位でストリーミングを行うため、メモリ消費量は一定に保たれる。</li>
+<li><code>uwsgi_send</code> の戻り値チェックは厳密に行われており、通信エラー時は即座にリクエスト処理を終了させる設計となっている。</li>
 </ul></body></html>

@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/dav/lock/locks.c:118</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebDAV リソースに対する「直接ロック（Direct Lock）」の情報をメモリ上で保持するためのリスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct dav_lock_discovery
+{
+    struct dav_lock_discovery_fixed f;
+    dav_locktoken *locktoken;
+    const char *owner;
+    const char *auth_user;
+    struct dav_lock_discovery *next;
+} dav_lock_discovery;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>dav_generic_load_lock_record</code> 関数により、DBM から読み込まれたバイナリデータが本構造体にデシリアライズされます。</li>
+<li>**出力**: <code>dav_generic_save_lock_record</code> 関数により、本構造体のリストがバイナリ形式にシリアライズされ、DBM へ永続化されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>すべてのインスタンスは、関連する <code>request_rec</code> のメモリプールから割り当てられます。</li>
+<li><code>next</code> ポインタにより、単方向リストを形成します。</li>
+<li>構造体内の各フィールドは、DBM への書き込み時に <code>dav_size_direct</code> 等の計算ロジックと整合している必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**読み込み時**: <code>dav_generic_load_lock_record</code> が DBM からレコードを読み込む際、現在時刻と比較して期限切れのロックを排除し、有効なロックのみを本構造体のリストとして構築します。</li>
+<li>**書き込み時**: <code>dav_generic_save_lock_record</code> がリストを走査し、各要素をバイナリバッファにシリアライズして DBM に保存します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/fs/lock.c</code> 内の複数の関数（<code>dav_fs_get_locks</code> 等）から、ロック情報の保持や操作のために参照されています。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、関数を直接呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_lock_discovery_fixed</code>: 本構造体の先頭に埋め込まれる固定長データ構造。</li>
+<li><code>dav_locktoken</code>: ロックを一意に識別するための UUID ラッパー。</li>
+<li><code>dav_lock_indirect</code>: 間接ロック（継承ロック）を管理する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ不足**: リクエストプールからの割り当て失敗時に処理が中断されます。</li>
+<li>**シリアライズ不整合**: <code>locks.c</code> 内のオフセット計算と構造体の定義が一致しない場合、DBM からの読み込み時にデータ破損が発生する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>modules/dav/fs/lock.c</code> と密接に関連しています。変更を行う際は、<code>locks.c</code> 内のシリアライズロジックと <code>fs/lock.c</code> 側の参照ロジックの両方に影響がないか確認してください。</li>
+<li>将来的なデータ構造の拡張時には、バイナリ形式の後方互換性に注意が必要です。</li>
 </ul></body></html>

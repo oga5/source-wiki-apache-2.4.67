@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/mappers/mod_userdir.c:198</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>~username</code> 形式の URI を、設定されたユーザーのホームディレクトリまたは特定のディレクトリパスへマッピングし、必要に応じてリダイレクトまたはファイルパスの解決を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int translate_userdir(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: <code>int</code> (Apache のステータスコード: <code>OK</code>, <code>DECLINED</code>, または <code>HTTP_MOVED_TEMPORARILY</code>)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>URI が <code>/~</code> で始まる必要がある。</li>
+<li><code>UserDir</code> ディレクティブが設定されている必要がある。</li>
+<li>ユーザー名が空、または <code>.</code> や <code>..</code> ではないこと。</li>
+<li>ユーザーが <code>disabled_users</code> リストに含まれていないこと。</li>
+<li><code>globally_disabled</code> が有効な場合、<code>enabled_users</code> リストに含まれていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **URI 解析**: URI が <code>/~</code> で始まるか確認し、ユーザー名を抽出する。 2. **アクセス制御**: 設定に基づき、ユーザーの有効/無効を判定する。 3. **パス変換**: <code>UserDir</code> 設定に従い、以下のいずれかの処理を行う。</p>
+<ul>
+<li>**リダイレクト**: パスが URL 形式（<code>:</code> を含む）の場合、<code>Location</code> ヘッダーを設定し <code>HTTP_MOVED_TEMPORARILY</code> を返す。</li>
+<li>**パス解決**: <code>apr_uid_homepath_get</code> を使用してホームディレクトリを取得し、物理パスを構築する。</li>
+<p>4. **検証と適用**: 構築したパスが存在するか（または設定の最後か）を確認し、<code>r-&gt;filename</code> を更新して <code>OK</code> を返す。 5. **終了**: 条件に合致しない場合は <code>DECLINED</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache の <code>translate_name</code> フック (<code>modules/mappers/mod_userdir.c:376</code> にて登録)。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>, <code>ap_getword</code>, <code>ap_getword_conf</code>, <code>ap_os_is_path_absolute</code>, <code>ap_set_context_info</code>, <code>ap_set_module_config</code> (Apache API)</li>
+<li><code>apr_table_get</code>, <code>apr_pstrcat</code>, <code>apr_stat</code>, <code>apr_uid_homepath_get</code> (APR API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報を保持するコア構造体。</li>
+<li><code>userdir_config</code>: モジュールの設定（<code>UserDir</code> パターン、有効/無効ユーザーリスト）を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>URI が <code>/~</code> で始まらない場合: <code>DECLINED</code> を返す。</li>
+<li>ユーザー名が解決できない場合: <code>DECLINED</code> を返す。</li>
+<li><code>UserDir</code> 設定が空の場合: <code>DECLINED</code> を返す。</li>
+<li>ユーザーがアクセス禁止リストにある場合: <code>DECLINED</code> を返す。</li>
+<li>ファイルが存在しない場合: 最後の設定項目であれば処理を継続し、そうでなければ次の設定項目へ進む。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>dname</code> のポインタ操作は、<code>/~user</code> 後のパス部分を正しく保持するための特殊な処理である。</li>
+<li><code>HAVE_DRIVE_LETTERS</code> 定義時とそれ以外で、リダイレクト判定のロジックが分岐する。</li>
+<li><code>apr_uid_homepath_get</code> は OS 依存の関数であるため、プラットフォームごとの挙動に注意すること。</li>
+<li><code>r-&gt;finfo</code> への代入は、システムコールを削減するための最適化として行われている。</li>
 </ul></body></html>

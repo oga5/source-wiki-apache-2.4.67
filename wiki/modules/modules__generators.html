@@ -1,61 +1,47 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__generators.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/generators</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/generators</code> には 11 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/generators</code> は、Apache HTTP Server においてリクエストに対するレスポンスを生成（生成・出力）する主要なハンドラ群をまとめたディレクトリです。CGI スクリプトの実行、ディレクトリ索引の生成、サーバー状態の可視化など、クライアントへ返すコンテンツを動的に構築するモジュールが配置されています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**コンテンツ生成**: リクエストに応じて動的なレスポンスを生成・送信する。</li>
+<li>**実行環境の提供**: CGI や SSI 実行のためのプロセス管理および環境構築。</li>
+<li>**診断・監視**: サーバーの稼働状況や設定情報の可視化。</li>
+<li>**共通ロジックの集約**: CGI 実行系モジュール間での共通処理（バケット管理、ヘッダー解析等）の共有。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/generators/cgi_common.h</code></li>
-<li><code>modules/generators/mod_asis.c</code></li>
-<li><code>modules/generators/mod_autoindex.c</code></li>
-<li><code>modules/generators/mod_cgi.c</code></li>
-<li><code>modules/generators/mod_cgi.h</code></li>
-<li><code>modules/generators/mod_cgid.c</code></li>
-<li><code>modules/generators/mod_info.c</code></li>
-<li><code>modules/generators/mod_status.c</code></li>
-<li><code>modules/generators/mod_status.h</code></li>
-<li><code>modules/generators/mod_suexec.c</code></li>
-<li><code>modules/generators/mod_suexec.h</code></li>
+<li>**CGI 実行系**: <code>mod_cgi.c</code>, <code>mod_cgid.c</code>, <code>mod_cgi.h</code>, <code>cgi_common.h</code>, <code>mod_suexec.c</code>, <code>mod_suexec.h</code></li>
+<li>**索引生成**: <code>mod_autoindex.c</code></li>
+<li>**診断・監視**: <code>mod_status.c</code>, <code>mod_status.h</code>, <code>mod_info.c</code></li>
+<li>**その他**: <code>mod_asis.c</code></li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>cgi_bucket_data</code></li>
-<li><code>item</code></li>
-<li><code>ai_desc_t</code></li>
-<li><code>autoindex_config_rec</code></li>
-<li><code>ent</code></li>
-<li><code>cgi_server_conf</code></li>
-<li><code>cgi_dirconf</code></li>
-<li><code>prog_types</code></li>
-<li><code>cgi_exec_info_t</code></li>
-<li><code>cgid_dirconf</code></li>
+<li>**CGI 関連**: <code>cgi_exec_info_t</code> (プロセス生成情報), <code>cgi_bucket_data</code> (非同期 I/O 用), <code>suexec_config_t</code> (権限設定)</li>
+<li>**索引関連**: <code>autoindex_config_rec</code> (ディレクトリ設定), <code>ent</code> (ファイルメタデータ)</li>
+<li>**診断関連**: <code>info_svr_conf</code> (設定情報), <code>status_hook</code> (拡張用フック)</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **リクエスト受信**: 各モジュールのハンドラがリクエストをフック。 2. **設定・権限確認**: <code>mod_suexec</code> 等が実行権限を解決し、ディレクトリごとの設定を適用。 3. **コンテンツ生成**:</p>
+<ul>
+<li>CGI: <code>mod_cgi</code>/<code>mod_cgid</code> がプロセスを起動し、<code>cgi_common.h</code> のロジックで入出力をパイプ処理。</li>
+<li>索引: <code>mod_autoindex</code> がディレクトリを走査し、HTML を動的生成。</li>
+<li>診断: <code>mod_status</code>/<code>mod_info</code> がサーバー内部状態を走査し、レポートを出力。</li>
+<p>4. **レスポンス送信**: フィルタチェーンを通じてクライアントへデータをストリーム。</p>
+</ul>
 <h2>外部依存</h2>
 <ul>
-<li><code>apr_strings.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>http_main.h</code></li>
-<li><code>http_request.h</code></li>
-<li><code>http_core.h</code></li>
-<li><code>apr_lib.h</code></li>
+<li>**APR**: <code>apr_proc_t</code>, <code>apr_pollset_t</code>, <code>apr_bucket_brigade</code> 等によるプロセス・I/O 管理。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code> 等のサーバー基盤 API。</li>
+<li>**OS 依存**: Unix ドメインソケット (<code>mod_cgid</code>) や権限管理 (<code>mod_suexec</code>)。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは、特定の階層構造を持たないフラットな構成です。CGI 実行系は <code>cgi_common.h</code> を中心にロジックを共有し、診断系は <code>scoreboard.h</code> や <code>ap_conftree</code> といったコアのデータ構造を読み取ることで機能を実現しています。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/generators/cgi_common.h</code> 2. <code>modules/generators/mod_status.h</code> 3. <code>modules/generators/mod_cgi.h</code> 4. <code>modules/generators/mod_suexec.h</code> 5. <code>modules/generators/mod_autoindex.c</code> 6. <code>modules/generators/mod_cgid.c</code> 7. <code>modules/generators/mod_info.c</code> 8. <code>modules/generators/mod_cgi.c</code> 9. <code>modules/generators/mod_status.c</code> 10. <code>modules/generators/mod_suexec.c</code> 11. <code>modules/generators/mod_asis.c</code></p>
+<p>1. <code>modules/generators/cgi_common.h</code> (CGI 実行の基盤) 2. <code>modules/generators/mod_cgi.h</code> / <code>mod_suexec.h</code> (インターフェース定義) 3. <code>modules/generators/mod_cgi.c</code> (標準的な CGI 実装) 4. <code>modules/generators/mod_cgid.c</code> (デーモン型 CGI 実装) 5. <code>modules/generators/mod_autoindex.c</code> (索引生成ロジック) 6. <code>modules/generators/mod_status.c</code> / <code>mod_info.c</code> (診断機能) 7. <code>modules/generators/mod_asis.c</code> (特殊なレスポンス生成)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>各モジュール間の依存関係が複雑化しているため、将来的に <code>cgi_common.h</code> 以外の共通ロジックを分離すべきか。</li>
+<li><code>mod_cgid</code> のデーモンプロセス管理における異常系フローの精緻化。</li>
 </ul></body></html>

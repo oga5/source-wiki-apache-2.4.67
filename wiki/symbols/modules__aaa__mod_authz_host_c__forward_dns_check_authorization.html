@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_host.c:227</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントの IP アドレスが、指定されたホスト名の正引き結果（IP アドレスリスト）のいずれかと一致するかを検証し、アクセス許可（<code>AUTHZ_GRANTED</code>）または拒否（<code>AUTHZ_DENIED</code>）を判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static authz_status forward_dns_check_authorization(request_rec *r, const char *require_line, const void *parsed_require_line)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>require_line</code>: 設定ファイル上の <code>Require</code> ディレクティブの引数文字列。</li>
+<li><code>parsed_require_line</code>: コンパイル済みの <code>ap_expr_info_t</code> 構造体。</li>
+<li>**出力**:</li>
+<li><code>AUTHZ_GRANTED</code>: クライアント IP が指定ホスト名のいずれかの IP と一致した場合。</li>
+<li><code>AUTHZ_DENIED</code>: 一致しない場合、または評価エラーが発生した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>parsed_require_line</code> は <code>ap_expr_info_t</code> 型としてキャスト可能であること。</li>
+<li>リクエストの <code>r-&gt;useragent_addr</code> が有効なソケットアドレスとして保持されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_expr_str_exec</code> を呼び出し、<code>parsed_require_line</code> を評価してホスト名のリストを取得する。 2. 取得したリストを <code>ap_getword_conf</code> でトークン化し、各ホスト名を順次処理する。 3. <code>apr_sockaddr_info_get</code> を使用して、各ホスト名を IP アドレスに正引きする。 4. 正引きで得られたアドレスリスト（<code>sa</code>）を走査し、<code>apr_sockaddr_equal</code> を用いて <code>r-&gt;useragent_addr</code> と比較する。 5. 一致するものが見つかった時点で <code>AUTHZ_GRANTED</code> を返し、リストの最後まで一致がなければ <code>AUTHZ_DENIED</code> を返す。 6. 設定行内の <code>#</code> 以降はコメントとして扱い、処理を中断する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_authz_core</code> が提供する認可プロバイダーインターフェース経由で呼び出される（ソースコード内では <code>authz_forward_dns_provider</code> 構造体で参照）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_expr_str_exec</code>: 式の評価。</li>
+<li><code>ap_getword_conf</code>: トークンの切り出し。</li>
+<li><code>apr_sockaddr_info_get</code>: ホスト名の正引き。</li>
+<li><code>apr_sockaddr_equal</code>: IP アドレスの比較。</li>
+<li><code>ap_log_rerror</code>: ログ出力。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびクライアント IP (<code>r-&gt;useragent_addr</code>) を保持。</li>
+<li><code>ap_expr_info_t</code>: <code>Require</code> ディレクティブの評価式。</li>
+<li><code>apr_sockaddr_t</code>: 正引きされた IP アドレスのリスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**式評価失敗**: <code>ap_expr_str_exec</code> がエラーを返した場合、ログを出力し <code>AUTHZ_DENIED</code> を返す。</li>
+<li>**DNS 解決失敗**: <code>apr_sockaddr_info_get</code> が失敗した場合、警告ログを出力し、そのホスト名についてはスキップして次のトークンへ進む。</li>
+<li>**コメント処理**: <code>#</code> がトークンの先頭にある場合は即座に処理を終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は DNS 正引きに依存するため、DNS サーバーの応答速度がリクエスト処理時間に直接影響する。</li>
+<li><code>forward-dns</code> は正引き結果のリストを走査するため、マルチホーム環境やラウンドロビン DNS 等で複数の IP が返される場合、そのすべてが検証対象となる。</li>
 </ul></body></html>

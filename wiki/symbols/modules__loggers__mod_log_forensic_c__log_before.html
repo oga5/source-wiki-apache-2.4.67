@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/loggers/mod_log_forensic.c:182</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト開始時に、リクエストラインやヘッダーを含む詳細情報を一意の ID と共にフォレンジックログへ記録する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int log_before(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: <code>int</code> (Apache のステータスコード: <code>OK</code> または <code>DECLINED</code>)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ログ出力先（<code>cfg-&gt;fd</code>）が設定されていること。</li>
+<li>内部リダイレクト等による重複記録を防ぐため、<code>r-&gt;prev</code> が存在しないこと。</li>
+<li>ログ出力には <code>r-&gt;pool</code> を使用し、リクエスト終了時に自動的にメモリが解放される。</li>
+<li><code>log_escape</code> は <code>ap_assert</code> を用いてバッファオーバーフローを厳格に防止する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期チェック**: 設定が存在しない、またはサブクエスト（<code>r-&gt;prev</code>）の場合は <code>DECLINED</code> を返す。 2. **ID 取得/生成**: <code>subprocess_env</code> から <code>UNIQUE_ID</code> を取得。存在しない場合は PID、時刻、アトミックカウンタを用いて生成し、<code>request_config</code> に保存する。 3. **バッファ準備**: <code>count_headers</code> を用いて必要なメモリ量を算出し、<code>apr_palloc</code> で確保する。 4. **ログ構築**: <code>+&lt;id&gt;|</code> の形式で開始し、リクエストラインをエスケープして書き込む。続いて <code>log_headers</code> を用いて全ヘッダーをシリアライズする。 5. **書き込み**: 構築したバッファをファイルディスクリプタへ書き込み、<code>r-&gt;notes</code> に <code>forensic-id</code> を設定する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_post_read_request</code> に登録されており、リクエスト読み取り直後に呼び出される。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>, <code>ap_set_module_config</code></li>
+<li><code>apr_table_get</code>, <code>apr_table_do</code>, <code>apr_table_setn</code></li>
+<li><code>apr_psprintf</code>, <code>apr_atomic_inc32</code></li>
+<li><code>count_headers</code>, <code>count_string</code>, <code>log_escape</code>, <code>log_headers</code></li>
+<li><code>apr_file_write</code>, <code>ap_assert</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fcfg</code>: サーバーごとの設定（ログファイルディスクリプタ等）を保持。</li>
+<li><code>hlog</code>: ログ構築用の一時的な構造体（バッファ位置やサイズを管理）。</li>
+<li><code>request_rec</code>: リクエストのコンテキスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cfg-&gt;fd</code> が無効な場合、ログ出力はスキップされる。</li>
+<li><code>r-&gt;prev</code> が存在する場合、同一リクエストの重複記録を避けるため処理を中断する。</li>
+<li><code>apr_file_write</code> が失敗した場合、<code>ap_assert</code> により異常終了する。</li>
+<li>高負荷環境では、ヘッダー走査とメモリ確保によるパフォーマンス低下の可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;prev</code> をチェックすることで、内部リダイレクト時の二重ログ出力を抑制している。</li>
+<li>ID 生成時のアトミックカウンタ <code>next_id</code> はマルチスレッド環境での一意性を保証する。</li>
+<li>ログフォーマットの変更時は <code>count_headers</code> と <code>log_headers</code> の整合性に注意すること。</li>
 </ul></body></html>

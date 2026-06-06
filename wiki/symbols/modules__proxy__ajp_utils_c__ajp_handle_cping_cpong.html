@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/proxy/ajp_utils.c:24</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バックエンドサーバーとのAJP接続の生存確認（ヘルスチェック）を行います。CPINGメッセージを送信し、CPONG応答を受信することで接続の有効性を検証します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ajp_handle_cping_cpong(apr_socket_t *sock,
+                                    request_rec *r,
+                                    apr_interval_time_t timeout)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>sock</code>: 通信に使用するソケット。</li>
+<li><code>r</code>: 現在のリクエスト情報（ログ出力およびメモリプール用）。</li>
+<li><code>timeout</code>: Ping/Pong 処理に適用する一時的なタイムアウト値。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>。失敗時はエラーコード（ソケット操作失敗、タイムアウト設定失敗、またはCPONG以外の応答受信時など）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>呼び出し時にソケット <code>sock</code> は接続済みである必要があります。</li>
+<li>処理終了時には、ソケットのタイムアウト設定が呼び出し前の状態に復元されることが保証されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>ajp_msg_create</code> でメッセージバッファを作成し、<code>ajp_msg_serialize_cping</code> でCPINGメッセージをシリアライズします。 2. **送信**: <code>ajp_ilink_send</code> を使用してバックエンドへCPINGを送信します。 3. **タイムアウト変更**: 現在のソケットタイムアウト値を <code>apr_socket_timeout_get</code> で保存し、引数 <code>timeout</code> を <code>apr_socket_timeout_set</code> で適用します。 4. **受信と検証**: <code>ajp_ilink_receive</code> で応答を待ち、<code>ajp_msg_get_uint8</code> で受信したコマンドが <code>CMD_AJP13_CPONG</code> であるかを確認します。 5. **クリーンアップ**: 成功・失敗に関わらず、<code>cleanup</code> ラベルを経由して元のソケットタイムアウト値を復元します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: ソースコード内に直接的な呼び出し元の記述はありません。</li>
+<li>**呼び出し先**:</li>
+<li><code>ajp_msg_create</code>, <code>ajp_msg_serialize_cping</code>, <code>ajp_msg_reuse</code>, <code>ajp_msg_get_uint8</code>, <code>ajp_msg_log</code></li>
+<li><code>ajp_ilink_send</code>, <code>ajp_ilink_receive</code></li>
+<li><code>apr_socket_timeout_get</code>, <code>apr_socket_timeout_set</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ajp_msg_t</code>: AJP通信用メッセージバッファ。</li>
+<li><code>apr_socket_t</code>: APRソケット構造体。</li>
+<li><code>request_rec</code>: Apacheリクエスト構造体。</li>
+<li><code>CMD_AJP13_CPONG</code>: AJPプロトコルで定義されたCPONGコマンド定数。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メッセージ作成失敗**: <code>ajp_msg_create</code> が失敗した場合、即座にエラーを返します。</li>
+<li>**通信エラー**: 送信または受信時にエラーが発生した場合、タイムアウトを復元した上でエラーを返します。</li>
+<li>**プロトコル違反**: 受信したメッセージが <code>CMD_AJP13_CPONG</code> ではない場合、<code>APR_EGENERAL</code> を返し、接続が期待通りでないことを示します。</li>
+<li>**タイムアウト設定失敗**: <code>apr_socket_timeout_set</code> が失敗した場合、処理を中断してエラーを返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はソケットのタイムアウトを一時的に変更します。エラー発生時も確実に元の設定に戻るよう <code>cleanup</code> ラベルによる制御フローが実装されています。</li>
+<li>ログ出力には <code>APLOG_TRACE8</code> が使用されており、詳細なデバッグが可能です。</li>
 </ul></body></html>

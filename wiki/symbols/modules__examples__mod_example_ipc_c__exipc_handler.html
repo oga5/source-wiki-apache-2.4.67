@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/examples/mod_example_ipc.c:221</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエスト（<code>example_ipc</code> ハンドラ）に応答して共有カウンタをインクリメントし、現在のカウンタ値とプロセス ID を含む HTML レスポンスを生成する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int exipc_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（Apache リクエスト構造体）。</li>
+<li>**出力**: <code>int</code>（Apache のステータスコード <code>OK</code> または <code>DECLINED</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;handler</code> が <code>&quot;example_ipc&quot;</code> である必要がある。</li>
+<li>共有メモリ <code>exipc_shm</code> およびグローバルミューテックス <code>exipc_mutex</code> が初期化済みであること。</li>
+<li>ロック取得の成否に関わらず、最終的に <code>OK</code> を返してリクエスト処理を終了する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ハンドラ確認**: <code>r-&gt;handler</code> が <code>&quot;example_ipc&quot;</code> でない場合は <code>DECLINED</code> を返す。 2. **ロック取得**: <code>apr_global_mutex_trylock</code> を最大 <code>MAXCAMP</code> 回試行する。</p>
+<ul>
+<li><code>EBUSY</code> の場合は <code>CAMPOUT</code> 時間待機して再試行。</li>
+<li><code>ENOTIMPL</code> の場合は <code>apr_global_mutex_lock</code> を使用してブロックする。</li>
+<p>3. **カウンタ更新**: ロック取得に成功した場合、共有メモリ <code>exipc_shm</code> から <code>exipc_data</code> を取得し、カウンタをインクリメントする。 4. **レスポンス生成**: <code>r-&gt;header_only</code> が偽の場合、カウンタ値、プロセス ID、ロック待機時間を含む HTML を出力する。 5. **ロック解放**: ロックを取得していた場合は <code>apr_global_mutex_unlock</code> を実行する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のハンドラフック（<code>ap_hook_handler</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_global_mutex_trylock</code>, <code>apr_global_mutex_lock</code>, <code>apr_global_mutex_unlock</code></li>
+<li><code>apr_shm_baseaddr_get</code></li>
+<li><code>ap_rputs</code>, <code>ap_rprintf</code></li>
+<li><code>apr_sleep</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>exipc_data</code>: 共有メモリ内に配置されるカウンタ保持用構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ロック取得失敗**: <code>MAXCAMP</code> 回試行してもロックが取得できない場合、カウンタを更新せずにその旨をレスポンスに含める。</li>
+<li>**エラーログ**: ロック取得時のエラーは <code>ap_log_error</code> を通じて記録される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は教育用であり、高負荷環境でのパフォーマンス最適化は考慮されていない。</li>
+<li>ロック取得の試行ロジックは、<code>trylock</code> がサポートされていないプラットフォームへの互換性を維持するために意図的に冗長に記述されている。</li>
 </ul></body></html>

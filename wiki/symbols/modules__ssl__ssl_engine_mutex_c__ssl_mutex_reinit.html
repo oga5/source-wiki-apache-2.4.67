@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_mutex.c:59</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>マルチプロセス環境において、子プロセス生成後にセッションキャッシュ保護用のグローバル Mutex を再初期化（再接続）する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_mutex_reinit(server_rec *s, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバー設定構造体（<code>server_rec</code>）。</li>
+<li><code>p</code>: 再初期化に使用するメモリプール（<code>apr_pool_t</code>）。</li>
+<li>**出力**:</li>
+<li><code>TRUE</code> (1): 再初期化が不要、または成功した場合。</li>
+<li><code>FALSE</code> (0): 再初期化に失敗した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>myModConfig(s)</code> を通じて取得した <code>SSLModConfigRec</code> が有効であること。</li>
+<li>セッションキャッシュプロバイダが <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> フラグを保持しており、かつ Mutex が設定されている場合にのみ実行される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期チェック**: Mutex (<code>mc-&gt;pMutex</code>) が未設定、セッションキャッシュが未定義、またはキャッシュプロバイダがスレッドセーフ（<code>AP_SOCACHE_FLAG_NOTMPSAFE</code> が未設定）である場合は、何もせず <code>TRUE</code> を返す。 2. **ロックファイル取得**: <code>apr_global_mutex_lockfile</code> を呼び出し、現在の Mutex に関連付けられたロックファイルパスを取得する。 3. **再初期化**: <code>apr_global_mutex_child_init</code> を呼び出し、子プロセス内での Mutex を再初期化する。 4. **エラー処理**: 再初期化に失敗した場合、<code>ap_log_error</code> を使用してエラーまたは警告ログを出力し、<code>FALSE</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_engine_init.c:2469</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_global_mutex_lockfile</code> (APR)</li>
+<li><code>apr_global_mutex_child_init</code> (APR)</li>
+<li><code>ap_log_error</code> (Apache Core)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLModConfigRec</code>: モジュールの設定情報を保持する構造体。<code>pMutex</code>（Mutex オブジェクト）および <code>sesscache</code>（キャッシュプロバイダ）への参照を含む。</li>
+<li><code>server_rec</code>: Apache HTTP Server のサーバー設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**失敗モード**:</li>
+<li><code>apr_global_mutex_child_init</code> が <code>APR_SUCCESS</code> 以外の値を返した場合、Mutex の再初期化に失敗し、ログ出力後に <code>FALSE</code> を返す。</li>
+<li>**境界条件**:</li>
+<li>キャッシュプロバイダがスレッドセーフである場合、この関数は実質的に何もしない（早期リターンする）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は子プロセス生成後の初期化フェーズで呼び出されることを前提としている。</li>
+<li><code>SSL_CACHE_MUTEX_TYPE</code> 定義に基づきログ出力が行われるため、Mutex 関連のトラブルシューティング時にはこの定数とログメッセージを確認すること。</li>
 </ul></body></html>

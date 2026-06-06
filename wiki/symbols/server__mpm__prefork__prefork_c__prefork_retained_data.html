@@ -6,22 +6,49 @@
 <li>定義箇所: <code>server/mpm/prefork/prefork.c:101</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の再起動（<code>AP_SIG_GRACEFUL</code> 等）を跨いで、Prefork MPM のプロセス管理状態やスケーリング情報を保持するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct prefork_retained_data {
+    ap_unixd_mpm_retained_data *mpm;
+    int first_server_limit;
+    int maxclients_reported;
+    int max_daemons_limit;
+    int idle_spawn_rate;
+    int hold_off_on_exponential_spawning;
+} prefork_retained_data;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体はデータ保持用であり、関数ではないため直接的な入力・出力はありません。</li>
+<li>内部メンバは、プロセス生成数やスケーリングの調整ロジック（<code>perform_idle_server_maintenance</code> 等）によって読み書きされます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>max_daemons_limit</code> は、<code>MaxRequestWorkers</code> の変更を伴う再起動時においても、スコアボード全体をスキャンするルーチンの最適化のために保持されます。</li>
+<li><code>idle_spawn_rate</code> は、アイドルサーバーが不足している際の次回のメンテナンスサイクルで生成する子プロセス数を示します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**指数的生成制御**: <code>idle_spawn_rate</code> は、必要に応じて最大 <code>MAX_SPAWN_RATE</code>（デフォルト 32）まで倍増します。生成の必要がないサイクルが経過した際にリセットされます。</li>
+<li>**世代管理**: 再起動を跨いで情報を保持することで、設定変更に対する一貫したプロセス管理を実現します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>prefork_pre_config</code> フックにて初期化されます。</li>
+<li>呼び出し先: モジュール内のプロセス管理関数（<code>perform_idle_server_maintenance</code> 等）が、この構造体のインスタンスである <code>retained</code> を参照します。</li>
+<li>注: 具体的な関数呼び出しの網羅的なリストは、提供されたソース excerpt には含まれていません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_unixd_mpm_retained_data</code>: Unix 固有の MPM 保持データ。</li>
+<li><code>retained</code>: <code>prefork.c</code> 内で定義される <code>prefork_retained_data</code> 型の静的インスタンス。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>MAX_SPAWN_RATE</code> が定義されていない場合、デフォルトで 32 が使用されます。</li>
+<li><code>ServerLimit</code> の変更は再起動を跨いで反映されない制約があり、本構造体はその制限下での整合性を維持する役割を担います。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は再起動を跨ぐため、メンバの追加や変更を行う際は、共有メモリレイアウトや再起動時の互換性に注意してください。</li>
+<li><code>idle_spawn_rate</code> の指数的増加ロジックは、急激な負荷変動に対する応答性とシステム負荷のバランスを制御しています。</li>
 </ul></body></html>

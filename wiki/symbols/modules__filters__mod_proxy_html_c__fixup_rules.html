@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/filters/mod_proxy_html.c:772</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストごとに設定された置換ルール（<code>urlmap</code>）を評価し、現在のリクエストコンテキストに対して有効なルールのみを抽出・複製して適用可能な状態にする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void fixup_rules(saxctxt *ctx)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>saxctxt *ctx</code>（フィルタ実行時の状態保持構造体。<code>ctx-&gt;cfg-&gt;map</code> に全ルールが格納されている）</li>
+<li>**出力**: なし（副作用として <code>ctx-&gt;map</code> を更新し、リクエストプール上に複製された有効なルールリストを構築する）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;f-&gt;r</code>（リクエストレコード）が有効であること。</li>
+<li><code>ctx-&gt;cfg-&gt;map</code> にルールリストが定義されていること。</li>
+<li>ルールの条件式（<code>p-&gt;cond</code>）が <code>ap_expr</code> で評価可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ctx-&gt;cfg-&gt;map</code> に格納された全ルールを順次走査する。 2. 各ルールに条件式（<code>cond</code>）がある場合、<code>ap_expr_exec</code> を実行する。評価結果が偽（0）の場合はそのルールをスキップする。 3. 条件を満たすルールを <code>apr_pmemdup</code> を用いてリクエストプール上に複製する。 4. 複製したルールに対し、<code>M_INTERPOLATE_FROM</code> または <code>M_INTERPOLATE_TO</code> フラグが立っている場合、<code>interpolate_vars</code> を呼び出して変数展開を行う。</p>
+<ul>
+<li><code>from</code> パターンが空になった場合はそのルールを破棄する。</li>
+<li><code>M_REGEX</code> フラグがある場合、展開後のパターンを <code>ap_pregcomp</code> で正規表現としてコンパイルする。</li>
+<p>5. 処理したルールを <code>ctx-&gt;map</code> リストに連結する。 6. 最後にリストの末尾を <code>NULL</code> で終端する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/filters/mod_proxy_html.c:865</code>（<code>check_filter_init</code> 内から呼び出される）</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_expr_exec</code>（条件式評価）</li>
+<li><code>apr_pmemdup</code>（メモリ複製）</li>
+<li><code>interpolate_vars</code>（変数展開）</li>
+<li><code>ap_pregcomp</code>（正規表現コンパイル）</li>
+<li><code>ap_log_rerror</code>（エラーログ出力）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>saxctxt</code>: フィルタの実行コンテキスト。</li>
+<li><code>urlmap</code>: 置換ルールの定義構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**条件式評価エラー**: <code>ap_expr_exec</code> がエラーを返した場合、ログに記録されるが処理は継続される。</li>
+<li>**変数展開後の空パターン**: <code>interpolate_vars</code> の結果が空文字列となった場合、そのルールは無視される。</li>
+<li>**メモリ不足**: <code>apr_pmemdup</code> 等のメモリ割り当て失敗時は、Apache のメモリ管理ポリシーに従い例外が発生する可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエストごとにルールを再構築するため、ルール数が多い場合はパフォーマンスに影響を与える可能性がある。</li>
+<li><code>ctx-&gt;map</code> はリクエストプールに紐付いているため、リクエスト終了時に自動的に解放される。</li>
 </ul></body></html>

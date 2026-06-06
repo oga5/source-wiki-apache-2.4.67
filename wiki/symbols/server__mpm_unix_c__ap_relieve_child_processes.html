@@ -6,22 +6,46 @@
 <li>定義箇所: <code>server/mpm_unix.c:286</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>終了処理中の子プロセスを非同期に回収し、各プロセスの終了状態をコールバック関数を通じて通知します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_relieve_child_processes(ap_reclaim_callback_fn_t *mpm_callback)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>mpm_callback</code> - プロセス回収時に呼び出されるコールバック関数へのポインタ。</li>
+<li>**出力**: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_mpm_query(AP_MPMQ_MAX_DAEMON_USED, ...)</code> により取得された最大プロセス数に基づき動作します。</li>
+<li>スコアボード上のプロセスおよび <code>extras</code> リストに登録されたプロセスを対象とします。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>AP_MPMQ_MAX_DAEMON_USED</code> を取得し、スコアボード内の全プロセスを走査します。 2. <code>reclaim_one_pid(pid, DO_NOTHING)</code> を呼び出し、プロセスが終了していれば <code>mpm_callback</code> を実行します。 3. 続いて <code>extras</code> リストを走査し、同様に <code>reclaim_one_pid</code> で終了を確認します。 4. <code>extras</code> 内のプロセスが終了している場合、<code>ap_unregister_extra_mpm_process</code> を呼び出してリストから削除し、コールバックを実行します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/prefork/prefork.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_mpm_query</code></li>
+<li><code>ap_get_scoreboard_process</code></li>
+<li><code>reclaim_one_pid</code></li>
+<li><code>ap_unregister_extra_mpm_process</code></li>
+<li>引数として渡された <code>mpm_callback</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process_score</code>: スコアボード内のプロセス状態管理構造体。</li>
+<li><code>extra_process_t</code>: 追加のMPMプロセスを管理するリンクリスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid == 0</code> のスコアボードエントリはスキップされます。</li>
+<li><code>ap_unregister_extra_mpm_process</code> が失敗した場合（戻り値が1以外）、<code>AP_DEBUG_ASSERT(1 == 0)</code> によりアサーションエラーが発生します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は非同期回収を行うため、呼び出し側はプロセスが完全に終了するまで複数回呼び出す必要があります。</li>
+<li><code>extras</code> リストの走査中に <code>ap_unregister_extra_mpm_process</code> を呼び出すと、現在の <code>cur_extra</code> ポインタが指すメモリ領域が無効になる可能性があるため、ループ内でのポインタ管理に注意してください。</li>
 </ul></body></html>

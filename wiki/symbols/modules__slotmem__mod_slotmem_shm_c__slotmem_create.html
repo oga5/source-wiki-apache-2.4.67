@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/slotmem/mod_slotmem_shm.c:338</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>共有メモリ（SHM）上に固定長スロットを管理するためのインスタンスを生成または取得する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t slotmem_create(ap_slotmem_instance_t **new,
+                            const char *name, apr_size_t item_size,
+                            unsigned int item_num,
+                            ap_slotmem_type_t type, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>name</code>: インスタンスを識別する名前。</li>
+<li><code>item_size</code>: 各スロットのサイズ。</li>
+<li><code>item_num</code>: スロットの総数。</li>
+<li><code>type</code>: <code>AP_SLOTMEM_TYPE_PERSIST</code> を含むフラグ。</li>
+<li><code>pool</code>: インスタンス生成に使用するメモリプール。</li>
+<li>**出力**:</li>
+<li><code>new</code>: 生成または取得された <code>ap_slotmem_instance_t</code> へのポインタ。</li>
+<li>戻り値: <code>APR_SUCCESS</code> またはエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>グローバルプール <code>gpool</code> が初期化されている必要がある。</li>
+<li>共有メモリのレイアウトは <code>[desc] [num_free] [data_slots] [inuse_array]</code> の順で構成される。</li>
+<li><code>AP_SLOTMEM_OFFSET</code> および <code>AP_UNSIGNEDINT_OFFSET</code> により、メタデータとデータ領域のオフセットが厳密に管理される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>slotmem_filenames</code> を使用して、指定された名前から共有メモリのファイルパスを決定する。 2. 既に同名のインスタンスがグローバルリストに存在する場合は、それを再利用する。 3. 存在しない場合、<code>apr_shm_create</code>（または子プロセスであれば <code>apr_shm_attach</code>）を実行して共有メモリを確保する。 4. 確保したメモリの先頭に <code>sharedslotdesc_t</code> を配置し、サイズや個数等のメタデータを初期化する。 5. <code>persist</code> フラグが有効な場合、<code>restore_slotmem</code> を呼び出し、既存の永続化ファイルから状態を復元する。復元失敗時はメモリをゼロクリアする。 6. <code>ap_slotmem_instance_t</code> 構造体を割り当て、共有メモリへのポインタやオフセット計算値を設定する。 7. 成功時、インスタンスをグローバルリストに追加し、<code>new</code> に格納して終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cluster/mod_heartmonitor.c</code></li>
+<li><code>modules/proxy/mod_proxy_balancer.c</code></li>
+<li><code>modules/slotmem/mod_slotmem_plain.c</code> (プロバイダー登録用)</li>
+<li><code>modules/slotmem/mod_slotmem_shm.c</code> (プロバイダー登録用)</li>
+<li>**呼び出し先**:</li>
+<li><code>slotmem_filenames</code>, <code>apr_shm_create</code>, <code>apr_shm_attach</code>, <code>apr_shm_remove</code>, <code>apr_shm_baseaddr_get</code>, <code>restore_slotmem</code>, <code>is_child_process</code>, <code>apr_pcalloc</code>, <code>apr_pstrdup</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_slotmem_instance_t</code>: インスタンス管理構造体。</li>
+<li><code>sharedslotdesc_t</code>: スロット構成情報ヘッダー。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>gpool</code> が未初期化の場合、<code>APR_ENOSHMAVAIL</code> を返す。</li>
+<li><code>apr_shm_create</code> または <code>apr_shm_attach</code> が失敗した場合、そのエラーコードを返す。</li>
+<li>永続化ファイルの復元に失敗した場合、ログを出力し、メモリを初期化した上で処理を続行する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_slotmem_shm</code> のプロバイダーインターフェースの一部であり、<code>ap_slotmem_provider_t</code> を介して利用される。</li>
+<li>MPMの世代管理（<code>is_child_process</code>）による共有メモリの継承処理が含まれているため、MPM固有の挙動に注意すること。</li>
 </ul></body></html>

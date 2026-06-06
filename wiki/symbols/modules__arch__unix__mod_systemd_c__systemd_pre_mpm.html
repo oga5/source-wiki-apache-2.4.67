@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/arch/unix/mod_systemd.c:88</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の MPM（Multi-Processing Module）起動直前に、サーバーの準備完了状態とメインプロセス ID を systemd サービスマネージャへ通知します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int systemd_pre_mpm(apr_pool_t *p, ap_scoreboard_e sb_type)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当て用のプール（未使用）。</li>
+<li><code>sb_type</code>: スコアボードの型（未使用）。</li>
+<li>**出力**:</li>
+<li>常に <code>OK</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sd_notifyf</code> を介して systemd と通信するため、実行環境で <code>libsystemd</code> が利用可能である必要があります。</li>
+<li>本関数は MPM の起動フェーズで実行されることを前提としています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>sd_notifyf</code> を呼び出し、以下の情報を systemd に送信します。</p>
+<ul>
+<li><code>READY=1</code>: サービスが準備完了状態であることを通知。</li>
+<li><code>STATUS=Processing requests...</code>: サービスのステータス文字列を設定。</li>
+<li><code>MAINPID=...</code>: 現在のプロセス ID (<code>getpid()</code>) を通知。</li>
+<p>2. 処理完了後、<code>OK</code> を返して終了します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/arch/unix/mod_systemd.c:166</code> にて <code>ap_hook_pre_mpm</code> を通じて登録されており、MPM 起動時にフックされます。</li>
+<li>**呼び出し先**: </li>
+<li><code>sd_notifyf</code> (systemd ライブラリ関数)</li>
+<li><code>getpid</code> (システムコール)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: Apache のメモリ管理プール。</li>
+<li><code>ap_scoreboard_e</code>: スコアボードの列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sd_notifyf</code> の実行結果については本関数内でチェックを行わず、常に <code>OK</code> を返します。通信失敗時のエラーハンドリングは実装されていません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_hook_pre_mpm</code> の <code>APR_HOOK_LAST</code> として登録されています。</li>
+<li><code>READY=1</code> の通知は、リスニングソケットの準備が整った段階で行われる設計となっています。</li>
 </ul></body></html>

@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/cache/mod_cache_socache.c:357</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュ対象のレスポンスが設定された制限内に収まるかを検証し、共有オブジェクトキャッシュ（<code>socache</code>）用のキャッシュオブジェクト構造体を初期化する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int create_entity(cache_handle_t *h, request_rec *r, const char *key, apr_off_t len, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>h</code>: キャッシュハンドル。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>key</code>: キャッシュの一意なキー。</li>
+<li><code>len</code>: レスポンスボディのサイズ。</li>
+<li><code>bb</code>: レスポンスデータのブリゲード。</li>
+<li>**出力**:</li>
+<li>成功時: <code>OK</code> を返し、<code>h-&gt;cache_obj</code> を初期化する。</li>
+<li>失敗時: <code>DECLINED</code> を返し、キャッシュ処理を中断する。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conf-&gt;provider</code> が設定されていること。</li>
+<li>部分コンテンツ（<code>HTTP_PARTIAL_CONTENT</code>）はキャッシュ対象外とする。</li>
+<li><code>len</code> が負の値である場合、サイズ不明としてキャッシュを拒否する。</li>
+<li>ボディサイズおよびヘッダーサイズの合計が、ディレクトリ設定 <code>dconf-&gt;max</code> を超えないこと。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **プロバイダー確認**: <code>socache</code> プロバイダーが未設定であれば <code>DECLINED</code> を返す。 2. **バリデーション**:</p>
+<ul>
+<li>部分コンテンツリクエストを拒否。</li>
+<li>ボディサイズ <code>len</code> が <code>dconf-&gt;max</code> を超える場合は拒否。</li>
+<li><code>store_table</code> を用いて、ヘッダー（<code>headers_out</code>, <code>headers_in</code>）のサイズを推定し、ボディサイズと合計して <code>dconf-&gt;max</code> を超えるか検証。</li>
+<p>3. **初期化**:</p>
+<li><code>r-&gt;pool</code> を使用して <code>cache_object_t</code> および <code>cache_socache_object_t</code> を割り当てる。</li>
+<li>キャッシュキーを <code>obj-&gt;key</code> および <code>sobj-&gt;key</code> に複製して格納する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/cache_storage.c:97</code>（<code>cache_storage</code> インターフェース経由）。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>, <code>ap_log_rerror</code>, <code>store_table</code>, <code>apr_pcalloc</code>, <code>apr_pstrdup</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_handle_t</code>: キャッシュエントリのハンドル。</li>
+<li><code>cache_socache_dir_conf</code>: ディレクトリ単位のキャッシュ設定（<code>max</code> 等）。</li>
+<li><code>cache_object_t</code>: キャッシュエントリの汎用構造体。</li>
+<li><code>cache_socache_object_t</code>: <code>socache</code> 固有のキャッシュオブジェクト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>len</code> が <code>dconf-&gt;max</code> を超える場合、ログを出力して <code>DECLINED</code> を返す。</li>
+<li>ヘッダーのシリアライズサイズが制限を超える場合、<code>store_table</code> が失敗し <code>DECLINED</code> を返す。</li>
+<li>メモリ割り当て失敗時は <code>apr_pcalloc</code> が例外を発生させる可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はキャッシュの「計画段階」で呼ばれるため、実際のデータサイズが確定する前に判断を行う必要がある。</li>
+<li><code>store_table</code> を使用したサイズ推定は、キャッシュのオーバーヘッドを考慮した保守的な計算となっている。</li>
 </ul></body></html>

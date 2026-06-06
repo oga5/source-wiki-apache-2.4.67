@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/core/mod_so.c:182</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の実行時に、共有オブジェクト（DSO）を動的にロードし、Apache のモジュール構造として統合する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static const char *load_module(cmd_parms *cmd, void *dummy, const char *modname, const char *filename)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cmd</code>: 設定コマンドのパラメータ構造体。</li>
+<li><code>dummy</code>: 使用されないポインタ（内部で <code>NULL</code> に初期化される）。</li>
+<li><code>modname</code>: ロードするモジュール名。</li>
+<li><code>filename</code>: ロードする共有オブジェクトのファイルパス。</li>
+<li>**出力**:</li>
+<li>成功時は <code>NULL</code> を返す。</li>
+<li>失敗時はエラーメッセージを示す文字列（<code>const char *</code>）を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ロード対象のモジュールが既にロードされていないこと。</li>
+<li>ロード対象のモジュールが静的リンクされたモジュールと重複していないこと。</li>
+<li>ロードされた DSO が <code>MODULE_MAGIC_COOKIE</code> を保持する有効な Apache モジュール構造体であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **重複チェック**: 既にロード済みのモジュールリストおよび静的リンク済みモジュールリストを走査し、名前の衝突を確認する。 2. **DSO ロード**: <code>dso_load</code> を呼び出し、指定されたファイルをプロセス空間にマッピングする。 3. **シンボル解決**: <code>apr_dso_sym</code> を使用して、共有オブジェクトからモジュール構造体（<code>module</code>）を取得する。 4. **検証**: モジュールの <code>magic</code> フィールドが <code>MODULE_MAGIC_COOKIE</code> と一致するか確認する。 5. **統合**: <code>ap_add_loaded_module</code> を呼び出し、Apache のグローバルモジュールリストへ追加する。 6. **クリーンアップ登録**: <code>apr_pool_cleanup_register</code> を使用し、サーバー終了時に <code>unload_module</code> が実行されるよう予約する。 7. **設定適用**: <code>ap_single_module_configure</code> を呼び出し、モジュールの設定を初期化する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>AP_INIT_TAKE2</code> マクロにより <code>LoadModule</code> ディレクティブのハンドラとして登録されている。</li>
+<li>**呼び出し先**: <code>dso_load</code>, <code>ap_add_loaded_module</code>, <code>apr_pool_cleanup_register</code>, <code>ap_single_module_configure</code>, <code>apr_dso_sym</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>so_server_conf</code>: ロードされたモジュールを追跡する設定構造体。</li>
+<li><code>ap_module_symbol_t</code>: ロードされたモジュールの名前と構造体ポインタを保持する。</li>
+<li><code>module</code>: Apache モジュールの基本構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**重複エラー**: 同名のモジュールが既に存在する場合、警告を出力して終了する。</li>
+<li>**組み込みエラー**: 静的リンク済みのモジュールと名前が衝突する場合、エラーを返す。</li>
+<li>**ロード失敗**: <code>dso_load</code> が失敗した場合、そのエラーを返す。</li>
+<li>**シンボル解決失敗**: 指定されたモジュール名に対応するシンボルが見つからない場合、エラーを返す。</li>
+<li>**互換性エラー**: <code>magic</code> 番号が一致しない場合、バージョン不整合としてエラーを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>cmd-&gt;pool</code>（通常は <code>pconf</code>）を使用してメモリを管理しており、サーバーの再起動時に自動的にクリーンアップされる。</li>
+<li><code>dummy</code> 引数は <code>execute_now</code> への戻り値として利用されるため、関数冒頭で <code>NULL</code> に設定する必要がある。</li>
+<li><code>apr_dso_error</code> を通じてプラットフォーム固有のエラーメッセージを取得している。</li>
 </ul></body></html>

@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/filters/mod_filter.c:274</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のフィルタチェーンにおいて、実行時に適切なフィルタプロバイダを動的に選択・実行するディスパッチャ（ハーネス）として機能します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t filter_harness(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: 現在のフィルタコンテキスト (<code>ap_filter_t</code>)。</li>
+<li><code>bb</code>: 処理対象のバケットブリゲード (<code>apr_bucket_brigade</code>)。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: フィルタ処理の結果（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;ctx</code> は <code>harness_ctx</code> 型である必要があります。</li>
+<li>フィルタが一度選択された後は、<code>ctx-&gt;func</code> に関数ポインタが保持されます。</li>
+<li><code>f-&gt;r-&gt;status</code> が 200 以外の場合、<code>filter-errordocs</code> 環境変数が設定されていない限り、本フィルタはスタックから削除されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **エラー処理**: ステータスコードが 200 以外の場合、フィルタを削除して後続へブリゲードを渡します。 2. **トレース**: <code>filter_trace</code> を呼び出し、デバッグ情報を記録します。 3. **プロバイダ選択**: <code>ctx-&gt;func</code> が未設定の場合、プロトコル制約（プロキシ要求や <code>no-transform</code> ヘッダの確認）をチェックし、<code>filter_lookup</code> を実行して適切なプロバイダを特定します。 4. **実行**:</p>
+<ul>
+<li>現在のフィルタコンテキストをプロバイダ用の <code>ctx-&gt;fctx</code> に切り替えます。</li>
+<li><code>ctx-&gt;func</code> を実行します。</li>
+<li>実行後、コンテキストをハーネスの状態に復元します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/filters/mod_filter.c:413</code> にて <code>filter-&gt;filter_func.out_func</code> に割り当てられています。</li>
+<li>**呼び出し先**: </li>
+<li><code>filter_trace</code>: デバッグログ出力。</li>
+<li><code>filter_lookup</code>: プロバイダの検索と選択。</li>
+<li><code>ap_remove_output_filter</code>: フィルタの削除。</li>
+<li><code>ap_pass_brigade</code>: 後続フィルタへのデータ転送。</li>
+<li><code>ctx-&gt;func</code>: 選択された実際のフィルタプロバイダ関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>harness_ctx</code>: 実行時のコンテキストを保持し、選択されたプロバイダ関数 (<code>func</code>) とそのコンテキスト (<code>fctx</code>) を管理します。</li>
+<li><code>ap_filter_rec_t</code>: フィルタの定義情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**プロバイダ未検出**: <code>filter_lookup</code> が失敗した場合、フィルタを削除し、処理を後続へパスします。</li>
+<li>**プロトコル制約**: プロキシ環境下で <code>AP_FILTER_PROTO_NO_PROXY</code> が設定されている場合、または <code>Cache-Control: no-transform</code> が存在する場合、フィルタは適用されません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_filter</code> の中核であり、フィルタの動的切り替えとコンテキストのスイッチングを担います。</li>
+<li><code>ctx-&gt;func</code> の呼び出し前後で <code>f-&gt;ctx</code> を入れ替えることで、ハーネス自身のコンテキストと個別のプロバイダコンテキストを分離しています。</li>
+<li><code>NO_PROTOCOL</code> マクロが定義されていない場合、プロトコル整合性のためのヘッダチェックが有効になります。</li>
 </ul></body></html>

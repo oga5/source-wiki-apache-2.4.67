@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/http2/h2_workers.c:204</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ワーカープール内のスロットに対して、アクティブな接続プロデューサーから処理すべき次の接続（<code>conn_rec</code>）を取得します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static conn_rec *get_next(h2_slot *slot)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>slot</code> (<code>h2_slot *</code>) - 現在のワーカーの実行スロット。</li>
+<li>**出力**: <code>conn_rec *</code> - 処理対象の接続。取得できない場合は <code>NULL</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>workers-&gt;lock</code> による排他制御下で呼び出されることを想定しています。</li>
+<li><code>slot-&gt;prod</code> は呼び出し時にリセットされます。</li>
+<li>プロデューサーがアクティブな場合、<code>prod-&gt;state</code> は <code>PROD_ACTIVE</code> である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>workers-&gt;prod_active</code> リングが空でないか確認します。 2. リングの先頭からプロデューサーを取り出し、<code>slot-&gt;prod</code> に割り当てます。 3. プロデューサーの <code>fn_next</code> コールバックを呼び出し、接続 <code>c</code> を取得します。 4. 取得した接続にまだ続きがある場合（<code>has_more</code> が真）:</p>
+<ul>
+<li>プロデューサーを <code>prod_active</code> リングの末尾に再挿入します。</li>
+<li><code>wake_idle_worker</code> を呼び出し、他のアイドルワーカーを起床させます。</li>
+<p>5. 続きがない場合:</p>
+<li>プロデューサーの状態を <code>PROD_IDLE</code> に変更し、<code>prod_idle</code> リングへ移動させます。</li>
+<p>6. 接続が取得できた場合、<code>prod-&gt;conns_active</code> をインクリメントします。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>slot_run</code> (<code>modules/http2/h2_workers.c:256</code>)</li>
+<li>**呼び出し先**: </li>
+<li><code>prod-&gt;fn_next</code> (プロデューサーのコールバック関数)</li>
+<li><code>wake_idle_worker</code> (アイドルワーカーの起床)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_workers</code>: ワーカープール全体を管理する構造体。</li>
+<li><code>h2_slot</code>: ワーカーの状態とプロデューサーへの参照を保持。</li>
+<li><code>ap_conn_producer_t</code>: 接続の供給元。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>prod_active</code> リングが空の場合、何も取得せず <code>NULL</code> を返します。</li>
+<li><code>fn_next</code> が <code>NULL</code> を返した場合、接続処理は行われません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>h2_workers</code> のリング操作を直接行うため、ロックの整合性に注意してください。</li>
+<li><code>prod-&gt;conns_active</code> のインクリメントは、接続が正常に取得された場合にのみ行われます。</li>
 </ul></body></html>

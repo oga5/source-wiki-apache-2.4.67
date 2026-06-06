@@ -6,22 +6,61 @@
 <li>定義箇所: <code>modules/dav/main/util_lock.c:170</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントから送信された <code>LOCK</code> リクエストの XML ボディを解析し、<code>dav_lock</code> 構造体を生成・初期化します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>dav_error *dav_lock_parse_lockinfo(request_rec *r,
+                                   const dav_resource *resource,
+                                   dav_lockdb *lockdb,
+                                   const apr_xml_doc *doc,
+                                   dav_lock **lock_request)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>resource</code>: ロック対象のリソース。</li>
+<li><code>lockdb</code>: ロックデータベースのハンドル。</li>
+<li><code>doc</code>: 解析済みの XML ドキュメント。</li>
+<li>**出力**:</li>
+<li><code>lock_request</code>: 生成された <code>dav_lock</code> 構造体へのポインタ。</li>
+<li>戻り値: 成功時は <code>NULL</code>、失敗時はエラー詳細を含む <code>dav_error</code> 構造体。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>doc</code> のルート要素が <code>lockinfo</code> である必要があります。</li>
+<li><code>lockdb-&gt;hooks-&gt;create_lock</code> が正常にロック構造体を割り当て可能である必要があります。</li>
+<li><code>Depth</code> ヘッダーが有効な値（<code>0</code> または <code>infinity</code>）である必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>dav_validate_root</code> を使用して XML ルートが <code>lockinfo</code> であることを確認します。 2. <code>lockdb-&gt;hooks-&gt;create_lock</code> を呼び出し、初期化された <code>dav_lock</code> 構造体を取得します。 3. <code>dav_get_depth</code> および <code>dav_get_timeout</code> を呼び出し、リクエストヘッダーから深さとタイムアウト情報を取得・設定します。 4. XML ボディ内の子要素を走査します:</p>
+<ul>
+<li><code>locktype</code>: <code>write</code> であることを確認し設定します。</li>
+<li><code>lockscope</code>: <code>exclusive</code> または <code>shared</code> を判定し設定します。</li>
+<li><code>owner</code>: XML 要素をテキスト形式に変換して <code>lock-&gt;owner</code> に格納します。</li>
+<p>5. 未知の XML 要素が含まれている場合は <code>HTTP_PRECONDITION_FAILED</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/main/mod_dav.c:3244</code></li>
+<li>**呼び出し先**: </li>
+<li><code>lockdb-&gt;hooks-&gt;create_lock</code> (ロックデータベースプロバイダー)</li>
+<li><code>dav_validate_root</code>, <code>dav_get_depth</code>, <code>dav_get_timeout</code> (DAV ユーティリティ)</li>
+<li><code>apr_xml_quote_elem</code>, <code>apr_xml_to_text</code> (APR XML ユーティリティ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_lock</code>: ロック情報を保持する主要構造体。</li>
+<li><code>dav_lockdb</code>: ロックデータベースへのインターフェース。</li>
+<li><code>apr_xml_doc</code>: 解析された XML ドキュメント構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>XML ルートが <code>lockinfo</code> でない場合: <code>HTTP_BAD_REQUEST</code>。</li>
+<li>ロック構造体の作成失敗: <code>dav_push_error</code> による内部エラー。</li>
+<li><code>Depth</code> ヘッダーが不正な場合: <code>HTTP_BAD_REQUEST</code>。</li>
+<li>未知の XML 要素が含まれる場合: <code>HTTP_PRECONDITION_FAILED</code>。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>owner</code> 要素の解析において <code>APR_XML_X2T_FULL_NS_LANG</code> を使用しており、名前空間定義を保持する設計となっています。</li>
+<li>本関数はリクエストプール (<code>r-&gt;pool</code>) を使用してメモリを割り当てるため、リクエスト終了時に自動的に解放されます。</li>
 </ul></body></html>

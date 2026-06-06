@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/dav/lock/locks.c:134</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リソースに対する間接ロック（継承されたロック）の情報を保持し、ロックの追跡と解決を行うためのリスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct dav_lock_indirect
+{
+    dav_locktoken *locktoken;
+    apr_datum_t key;
+    struct dav_lock_indirect *next;
+    time_t timeout;
+} dav_lock_indirect;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体はメモリ上のリストとして管理されます。</li>
+<li><code>dav_generic_load_lock_record</code> 関数により、DBM から読み込まれたバイナリデータから本構造体が構築されます。</li>
+<li><code>dav_generic_save_lock_record</code> 関数により、本構造体の内容が DBM へ書き込むためのバイナリ形式にシリアライズされます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>next</code> ポインタにより、単方向リストを形成します。</li>
+<li><code>timeout</code> は <code>time_t</code> 型であり、期限切れの判定に使用されます。</li>
+<li>すべてのインスタンスは、リクエスト処理に関連付けられたメモリプールから割り当てられます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>間接ロックの解決時、<code>dav_generic_resolve</code> 関数がこの構造体を参照し、親リソースのロックレコードとトークンの一致を確認します。</li>
+<li>ロックの読み込み処理において、<code>timeout</code> が現在時刻（<code>time(NULL)</code>）と比較され、期限切れの場合はリストから除外されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>modules/dav/fs/lock.c</code> 内の複数の関数（<code>416</code>, <code>524</code>, <code>665</code>, <code>668</code> 行目など）で、間接ロックの操作やリストの走査のために参照されています。</li>
+<li>呼び出し先: 本構造体自体はデータ保持用であり、関数呼び出しは行いません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_locktoken</code>: ロックを一意に識別するために使用されます。</li>
+<li><code>apr_datum_t</code>: DBM 内のキー情報を保持するために使用されます。</li>
+<li><code>dav_lock_discovery</code>: 直接ロックを保持する対となる構造体です。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>構造体のメモリ割り当て失敗時は、リクエスト処理が中断される可能性があります。</li>
+<li>DBM からの読み込み時にデータが破損している場合、シリアライズされたバイナリ列のオフセット計算が不整合を起こす可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>locks.c</code> 内のバイナリシリアライズロジックと密結合しています。構造体のメンバを変更する場合は、<code>dav_generic_save_lock_record</code> および <code>dav_generic_load_lock_record</code> 内のオフセット計算を必ず更新してください。</li>
+<li>将来的な拡張の際は、バイナリ形式の後方互換性に注意が必要です。</li>
 </ul></body></html>

@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_uwsgi.c:120</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>uWSGI バックエンドへのデータ送信をラップし、ソケットへの書き込み処理と統計情報の更新を一元管理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int uwsgi_send(proxy_conn_rec *conn, const char *buf, apr_size_t length, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>conn</code>: バックエンド接続情報 (<code>proxy_conn_rec</code>)。</li>
+<li><code>buf</code>: 送信するデータバッファ。</li>
+<li><code>length</code>: 送信するデータのバイト長。</li>
+<li><code>r</code>: 現在のリクエスト情報 (<code>request_rec</code>)。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返す。</li>
+<li>失敗時は <code>HTTP_SERVICE_UNAVAILABLE</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn-&gt;sock</code> は有効なソケットである必要がある。</li>
+<li><code>length</code> が 0 より大きい間、ループ処理により全データの送信を試みる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>length</code> が 0 になるまでループを実行する。 2. <code>apr_socket_send</code> を呼び出し、ソケットへデータを書き込む。 3. 送信に失敗した場合、エラーログを出力し <code>HTTP_SERVICE_UNAVAILABLE</code> を返して終了する。 4. 送信成功時、<code>conn-&gt;worker-&gt;s-&gt;transferred</code> に送信済みバイト数を加算し、統計情報を更新する。 5. 送信済みバイト数分だけバッファポインタを進め、残りの長さを減算してループを継続する。 6. 全データの送信完了後、<code>OK</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/proxy/mod_proxy_uwsgi.c:234</code></li>
+<li><code>modules/proxy/mod_proxy_uwsgi.c:247</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_socket_send</code> (APR API)</li>
+<li><code>ap_log_rerror</code> (Apache Core API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_conn_rec</code>: バックエンド接続状態を保持。</li>
+<li><code>request_rec</code>: Apache のリクエスト処理コンテキスト。</li>
+<li><code>proxy_worker</code>: バックエンドワーカーの統計情報 (<code>s</code>) を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ソケットエラー**: <code>apr_socket_send</code> が <code>APR_SUCCESS</code> 以外を返した場合、送信を中断しエラーを報告する。</li>
+<li>**部分送信**: <code>apr_socket_send</code> が要求された <code>length</code> より少ないバイト数を書き込んだ場合でも、ループにより残りのデータを送信する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はブロッキング I/O を前提としている。</li>
+<li>統計情報の更新 (<code>transferred</code>) はワーカー単位で行われるため、マルチスレッド環境下での競合については <code>proxy_worker</code> 側の実装に依存する。</li>
 </ul></body></html>

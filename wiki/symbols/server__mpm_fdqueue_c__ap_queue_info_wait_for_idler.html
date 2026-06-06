@@ -6,22 +6,49 @@
 <li>定義箇所: <code>server/mpm_fdqueue.c:148</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ワーカーが利用可能になるまでリスナー・スレッドを待機させ、スレッド間の負荷調整を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_queue_info_wait_for_idler(fd_queue_info_t *queue_info, int *had_to_block)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>queue_info</code>: 管理対象の <code>fd_queue_info_t</code> 構造体へのポインタ。</li>
+<li><code>had_to_block</code>: 待機が発生したかを示すフラグを格納するポインタ（任意）。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: 成功。</li>
+<li><code>APR_EOF</code>: キューが終了状態（<code>terminated</code>）である場合。</li>
+<li>その他 <code>apr_status_t</code> エラーコード（Mutex/CondVar 操作失敗時）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>queue_info-&gt;idlers</code> はアトミックなカウンタであり、<code>zero_pt</code> を基準として負の値は待機中のスレッド数を表す。</li>
+<li>本関数はスレッド環境 (<code>APR_HAS_THREADS</code>) でのみ有効。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_atomic_add32</code> を使用し、<code>idlers</code> カウンタをデクリメントする。 2. カウンタが <code>zero_pt</code> 以下であれば、ワーカーが不足していると判断し、<code>idlers_mutex</code> を取得して条件変数 <code>wait_for_idler</code> で待機する。 3. ミューテックス取得後、競合状態を避けるため <code>idlers</code> の値を再確認する。 4. 待機解除後、または最初からアイドルが存在した場合は、<code>terminated</code> 状態を確認して終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_atomic_add32</code>, <code>apr_atomic_inc32</code></li>
+<li><code>apr_thread_mutex_lock</code>, <code>apr_thread_mutex_unlock</code></li>
+<li><code>apr_thread_cond_wait</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fd_queue_info_t</code>: アイドル状態管理構造体。</li>
+<li><code>apr_thread_mutex_t</code>: 同期用ミューテックス。</li>
+<li><code>apr_thread_cond_t</code>: 待機用条件変数。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_thread_mutex_lock</code> または <code>apr_thread_cond_wait</code> が失敗した場合、エラーコードを返し、必要に応じてアトミックカウンタを復元する。</li>
+<li><code>terminated</code> フラグがセットされている場合、待機せずに <code>APR_EOF</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>idlers</code> カウンタの <code>zero_pt</code> はマジックナンバーであり、アトミック操作による「待機中」と「アイドル中」の区別に不可欠。</li>
+<li><code>had_to_block</code> フラグは、呼び出し側が実際にブロッキングが発生したかを追跡するために使用される。</li>
 </ul></body></html>

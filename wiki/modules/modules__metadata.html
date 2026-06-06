@@ -1,61 +1,49 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__metadata.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/metadata</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/metadata</code> には 11 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/metadata</code> は、HTTP リクエストおよびレスポンスのメタデータ（ヘッダー、環境変数、IP 情報、キャッシュ制御、識別子など）を動的に操作・生成するためのモジュール群を収容するディレクトリです。</p>
+<p>※本モジュールの定義は、ディレクトリ境界に基づき推論されたものです。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**HTTP メッセージの加工**: ヘッダーの追加・削除・置換、および MIME タイプの判定。</li>
+<li>**リクエストコンテキストの拡張**: 環境変数の設定、一意なリクエスト ID の生成、クライアント IP の特定。</li>
+<li>**キャッシュとライフサイクルの制御**: 有効期限（Expires）の管理、Cookie による行動追跡、サーバーバージョンに応じた設定の条件分岐。</li>
+<li>**外部メタデータの統合**: メタファイル（CERN 形式）や IDENT プロトコルによる外部情報の注入。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/metadata/mod_cern_meta.c</code></li>
-<li><code>modules/metadata/mod_env.c</code></li>
-<li><code>modules/metadata/mod_expires.c</code></li>
-<li><code>modules/metadata/mod_headers.c</code></li>
-<li><code>modules/metadata/mod_ident.c</code></li>
-<li><code>modules/metadata/mod_mime_magic.c</code></li>
-<li><code>modules/metadata/mod_remoteip.c</code></li>
-<li><code>modules/metadata/mod_setenvif.c</code></li>
-<li><code>modules/metadata/mod_unique_id.c</code></li>
-<li><code>modules/metadata/mod_usertrack.c</code></li>
-<li><code>modules/metadata/mod_version.c</code></li>
+<li><code>mod_cern_meta.c</code>: メタファイルによるヘッダー注入</li>
+<li><code>mod_env.c</code>: CGI 環境変数の設定</li>
+<li><code>mod_expires.c</code>: キャッシュ有効期限の制御</li>
+<li><code>mod_headers.c</code>: HTTP ヘッダーの動的操作</li>
+<li><code>mod_ident.c</code>: IDENT プロトコルによるユーザー名照会</li>
+<li><code>mod_mime_magic.c</code>: マジックナンバーによる MIME タイプ判定</li>
+<li><code>mod_remoteip.c</code>: プロキシ経由のクライアント IP 特定</li>
+<li><code>mod_setenvif.c</code>: 条件付き環境変数設定</li>
+<li><code>mod_unique_id.c</code>: リクエスト一意 ID の生成</li>
+<li><code>mod_usertrack.c</code>: Cookie による行動追跡</li>
+<li><code>mod_version.c</code>: バージョンベースの設定条件分岐</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>cern_meta_dir_config</code></li>
-<li><code>env_dir_config_rec</code></li>
-<li><code>expires_dir_config</code></li>
-<li><code>hdr_actions</code></li>
-<li><code>request_rec</code></li>
-<li><code>format_tag</code></li>
-<li><code>header_entry</code></li>
-<li><code>echo_do</code></li>
-<li><code>edit_do</code></li>
-<li><code>headers_conf</code></li>
+<li>**設定構造体**: <code>headers_conf</code>, <code>sei_cfg_rec</code>, <code>expires_dir_config</code>, <code>env_dir_config_rec</code> など、各モジュールがディレクトリ単位の設定を保持。</li>
+<li>**リクエスト情報**: <code>request_rec</code> を中心に、<code>subprocess_env</code>（環境変数）や <code>headers_in/out</code>（HTTP ヘッダー）を操作。</li>
+<li>**解析用構造体**: <code>magic</code> (MIME 判定用ルール), <code>header_entry</code> (ヘッダー操作ルール), <code>sei_entry</code> (環境変数設定ルール)。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **設定読み込み**: 各モジュールがディレクティブを解析し、設定構造体にルールを蓄積。 2. **リクエスト初期化**: <code>post_read_request</code> フック等で <code>mod_remoteip</code> や <code>mod_unique_id</code> が接続情報や ID を確定。 3. **環境・ヘッダー処理**: <code>fixups</code> フック等で <code>mod_headers</code>, <code>mod_env</code>, <code>mod_setenvif</code> がリクエストコンテキストを修飾。 4. **レスポンス調整**: 出力フィルタを介して <code>mod_expires</code> や <code>mod_headers</code> が最終的なレスポンスヘッダーを調整。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>apr.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>apr_lib.h</code></li>
-<li><code>ap_config.h</code></li>
-<li><code>http_request.h</code></li>
+<li>**Apache Core API**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>, <code>http_protocol.h</code></li>
+<li>**APR (Apache Portable Runtime)**: <code>apr.h</code>, <code>apr_strings.h</code>, <code>apr_network_io.h</code>, <code>apr_hash.h</code></li>
+<li>**その他**: <code>ap_expr.h</code> (式評価), <code>util_filter.h</code> (フィルタ処理)</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本ディレクトリは個別の機能を持つ独立したモジュールの集合体であり、ディレクトリ自体が共有する内部ライブラリは持ちません。各モジュールは Apache のフック機構を通じて疎結合に連携します。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/metadata/mod_mime_magic.c</code> 2. <code>modules/metadata/mod_headers.c</code> 3. <code>modules/metadata/mod_remoteip.c</code> 4. <code>modules/metadata/mod_setenvif.c</code> 5. <code>modules/metadata/mod_ident.c</code> 6. <code>modules/metadata/mod_usertrack.c</code> 7. <code>modules/metadata/mod_expires.c</code> 8. <code>modules/metadata/mod_cern_meta.c</code> 9. <code>modules/metadata/mod_unique_id.c</code> 10. <code>modules/metadata/mod_env.c</code> 11. <code>modules/metadata/mod_version.c</code></p>
+<p>1. <code>mod_mime_magic.c</code> (判定ロジックの基礎) 2. <code>mod_headers.c</code> (ヘッダー操作の標準) 3. <code>mod_remoteip.c</code> (接続情報の重要性) 4. <code>mod_setenvif.c</code> (条件付き処理の理解) 5. <code>mod_ident.c</code> 6. <code>mod_usertrack.c</code> 7. <code>mod_expires.c</code> 8. <code>mod_cern_meta.c</code> 9. <code>mod_unique_id.c</code> 10. <code>mod_env.c</code> 11. <code>mod_version.c</code></p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>各モジュール間でのフック実行順序（<code>APR_HOOK_FIRST</code> 等）の競合や依存関係の網羅的な可視化。</li>
+<li>高負荷環境における <code>mod_mime_magic</code> や <code>mod_unique_id</code> のパフォーマンス最適化の余地。</li>
 </ul></body></html>

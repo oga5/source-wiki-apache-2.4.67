@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/lua/lua_dbd.c:94</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Lua VM 上のデータベースハンドルオブジェクトがガベージコレクションされる際、関連するデータベース接続を安全にクローズし、リソースを解放する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int lua_db_gc(lua_State *L);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: Lua スタックのインデックス 1 に <code>lua_db_handle</code> 型のユーザーデータを受け取る。</li>
+<li>**出力**: 常に <code>0</code> を返す（Lua のスタックをクリアするため）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力されたユーザーデータが <code>lua_db_handle</code> 構造体へのポインタであること。</li>
+<li><code>db-&gt;alive</code> が真の場合のみ、接続のクローズ処理が実行される。</li>
+<li>処理完了後、<code>db-&gt;alive</code> は <code>0</code> に設定され、二重解放を防止する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. スタックから <code>lua_db_handle</code> を取得する。 2. <code>db-&gt;alive</code> が真であれば以下を実行する:</p>
+<ul>
+<li><code>db-&gt;type</code> が <code>LUA_DBTYPE_APR_DBD</code> の場合: <code>apr_dbd_close</code> で接続を閉じ、<code>apr_pool_destroy</code> でメモリプールを破棄する。</li>
+<li>それ以外の場合: <code>ap_dbd_close</code> (オプション関数) を使用して接続を閉じる。</li>
+<li>接続ハンドル、ドライバ、プールへの参照を <code>NULL</code> にクリアし、<code>alive</code> フラグを <code>0</code> にする。</li>
+<p>3. <code>lua_settop(L, 0)</code> を呼び出し、スタックを空にする。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Lua VM のガベージコレクタ（<code>lua_pushcfunction(L, lua_db_gc)</code> によりメタメソッドとして登録）。</li>
+<li>**呼び出し先**: <code>apr_dbd_close</code>, <code>apr_pool_destroy</code>, <code>ap_dbd_close</code> (オプション関数)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lua_db_handle</code>: データベース接続状態、ドライバ、プール、生存フラグを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>db</code> が <code>NULL</code> の場合、または <code>db-&gt;alive</code> が偽の場合は何も行わず終了する。</li>
+<li><code>APR_RETRIEVE_OPTIONAL_FN(ap_dbd_close)</code> が <code>NULL</code> を返す場合、接続クローズ処理はスキップされる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は Lua の <code>__gc</code> メタメソッドとして機能するため、明示的な <code>lua_db_close</code> との二重呼び出しが発生しても安全な設計となっている。</li>
+<li><code>db-&gt;pool</code> の破棄は、接続に関連付けられたメモリリソースを解放するために不可欠である。</li>
 </ul></body></html>

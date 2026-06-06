@@ -6,22 +6,52 @@
 <li>定義箇所: <code>server/scoreboard.c:304</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の実行時状態を管理するスコアボードの作成および初期化を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_create_scoreboard(apr_pool_t *p, ap_scoreboard_e sb_type)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用する <code>apr_pool_t</code> ポインタ。</li>
+<li><code>sb_type</code>: スコアボードのタイプ（<code>SB_SHARED</code> 等）。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返す。</li>
+<li>失敗時は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_scoreboard_image</code> が既に存在する場合、既存のメモリ領域をゼロクリアし再初期化する。</li>
+<li><code>ap_scoreboard_image</code> が未作成の場合、<code>ap_calc_scoreboard_size()</code> で必要なサイズを算出した上でメモリを確保する。</li>
+<li>共有メモリを使用する場合、<code>open_scoreboard(p)</code> が成功する必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **既存チェック**: <code>ap_scoreboard_image</code> が存在すれば、<code>restart_time</code> を更新し、<code>parent</code> および <code>servers</code> 構造体をゼロクリアして <code>ap_init_scoreboard(NULL)</code> を呼び出す。 2. **新規作成**:</p>
+<ul>
+<li><code>ap_calc_scoreboard_size()</code> でサイズを計算。</li>
+<li><code>sb_type</code> が <code>SB_SHARED</code> の場合、<code>open_scoreboard</code> を経由して共有メモリを確保し、ゼロクリア後に <code>ap_init_scoreboard</code> を実行。</li>
+<li>それ以外の場合は <code>ap_calloc</code> でヒープメモリを確保し、<code>ap_init_scoreboard</code> を実行。</li>
+<p>3. **初期化**: <code>running_generation</code> を 0 に設定し、<code>restart_time</code> を現在時刻に設定。 4. **クリーンアップ登録**: プロセス終了時に <code>ap_cleanup_scoreboard</code> が実行されるよう <code>apr_pool_cleanup_register</code> を登録する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/core.c:5788</code> (<code>ap_hook_pre_mpm</code> を介して登録)</li>
+<li>**呼び出し先**: <code>ap_calc_scoreboard_size</code>, <code>open_scoreboard</code>, <code>ap_init_scoreboard</code>, <code>ap_calloc</code>, <code>apr_pool_cleanup_register</code>, <code>apr_time_now</code>, <code>memset</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_scoreboard_image</code> (グローバル変数)</li>
+<li><code>scoreboard_size</code> (内部変数)</li>
+<li><code>scoreboard_type</code> (内部変数)</li>
+<li><code>apr_shm_t</code> (共有メモリハンドル)</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>open_scoreboard(p)</code> が失敗した場合、または共有メモリのベースアドレス取得に失敗した場合は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li><code>ap_calloc</code> によるメモリ確保失敗時の挙動は、<code>ap_calloc</code> の実装に依存する（通常はアボートまたは NULL 返却）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は MPM の初期化フェーズで呼び出される。</li>
+<li>共有メモリを使用する場合、<code>apr_shm</code> のライフサイクル管理と <code>ap_cleanup_scoreboard</code> の整合性に注意すること。</li>
+<li><code>ap_scoreboard_image</code> が既に存在する場合の再初期化処理は、プロセス再起動時の状態リセットを意図している。</li>
 </ul></body></html>

@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/http2/h2_proxy_session.c:122</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 プロキシセッションにおける PING 状態の遷移を管理し、タイムアウト設定および PING フレームの送信を制御します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void enter_ping_state(h2_proxy_session *session, h2_ping_state_t state)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session</code>: 操作対象の <code>h2_proxy_session</code> 構造体へのポインタ。</li>
+<li><code>state</code>: 遷移先の <code>h2_ping_state_t</code> 型の状態値。</li>
+<li>戻り値: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session-&gt;ping_state</code> が既に <code>state</code> と一致している場合、関数は即座に終了します。</li>
+<li><code>H2_PING_ST_NONE</code> 以外の状態間での直接的な遷移は行われません。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **状態チェック**: 現在の <code>session-&gt;ping_state</code> が <code>state</code> と同じであれば何もせず終了します。 2. **NONE からの遷移**:</p>
+<ul>
+<li>遷移先が <code>H2_PING_ST_AWAIT_PING</code> の場合、既存のタイムアウトを解除し、<code>nghttp2_submit_ping</code> を用いて PING フレームを送信します。</li>
+<li>タイムアウトを設定し、<code>session-&gt;ping_state</code> を更新します。</li>
+<p>3. **NONE への遷移**:</p>
+<li>既存のタイムアウトを解除し、<code>ping_arrived(session)</code> を呼び出して PING 到着処理を実行した後、状態を <code>H2_PING_ST_NONE</code> に更新します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_proxy_session.c</code> 内の各所（<code>H2_PING_ST_AWAIT_ANY</code>、<code>H2_PING_ST_AWAIT_PING</code>、<code>H2_PING_ST_NONE</code> への遷移時）。</li>
+<li>**呼び出し先**:</li>
+<li><code>unset_ping_timeout</code></li>
+<li><code>set_ping_timeout</code></li>
+<li><code>nghttp2_submit_ping</code></li>
+<li><code>ping_arrived</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_proxy_session</code>: セッション状態を保持するメイン構造体。</li>
+<li><code>h2_ping_state_t</code>: PING 状態を定義する列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>H2_PING_ST_NONE</code> 以外の状態から別の非 NONE 状態への遷移は無視されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>nghttp2</code> の PING フレーム送信と Apache 側のタイムアウト管理を同期させる役割を持ちます。</li>
+<li><code>ping_arrived</code> が呼び出されるのは、状態が <code>H2_PING_ST_NONE</code> に戻る際のみです。</li>
 </ul></body></html>

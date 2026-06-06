@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/lua/lua_config.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/lua/lua_config.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_lua</code> における設定管理および Lua スクリプト環境への設定情報の公開を担当します。Apache のディレクトリ設定（<code>ap_lua_dir_cfg</code>）やコマンドパラメータ（<code>cmd_parms</code>）を Lua から操作可能にするためのブリッジ機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> の設定フェーズと実行フェーズを繋ぐ役割を担います。Apache の設定構造体を Lua のユーザーデータ（userdata）としてラップし、Lua スクリプトから Apache の設定やログ出力機能へ安全にアクセスできるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定のバインディング**: <code>ap_lua_dir_cfg</code> および <code>cmd_parms</code> を Lua のメタテーブルとして登録し、メソッドを公開する。</li>
+<li>**ハンドラマッピング**: Lua スクリプト内で定義されたハンドラ設定（ファイル、関数名、スコープ、正規表現パターン）を解析し、Apache 内部の構造体に格納する。</li>
+<li>**ログ出力の統合**: Lua スクリプトから Apache のログシステム（<code>ap_log_error</code>）を呼び出すためのインターフェースを提供し、トレースレベルから緊急レベルまでのログ出力をサポートする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定バインディング・登録</h3>
+<ul>
+<li><code>ap_lua_load_config_lmodule</code>: Lua VM 起動時に呼び出され、<code>Apache2.DirConfig</code> および <code>Apache2.CommandParameters</code> メタテーブルを登録する。</li>
+<li><code>cfg_methods</code>: <code>match_handler</code> や <code>directory</code> を含む <code>DirConfig</code> 用のメソッドテーブル。</li>
+<li><code>cmd_methods</code>: ログ出力用メソッド（<code>debug</code>, <code>err</code>, <code>trace1</code> 等）を網羅した <code>CommandParameters</code> 用のメソッドテーブル。</li>
+</ul>
+<h3>ハンドラ管理</h3>
+<ul>
+<li><code>ap_lua_map_handler</code>: C 言語側からハンドラを登録するための汎用関数。</li>
+<li><code>cfg_lua_map_handler</code>: Lua スクリプトから呼び出されるハンドラ登録用関数。テーブル引数を解析して <code>ap_lua_mapped_handler_spec</code> を構築する。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>check_dir_config</code> / <code>check_cmd_parms</code>: Lua のスタックから userdata を取り出し、型チェックを行う。</li>
+<li><code>apl_toscope</code>: 文字列（&quot;request&quot;, &quot;once&quot; 等）を内部のスコープ定数に変換する。</li>
+<li><code>cmd_log_at</code>: ログレベルを引数に取り、Lua のスタック情報からソースファイル名と行番号を取得して Apache ログへ出力する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_lua_load_config_lmodule</code> が呼ばれ、Lua VM に Apache 固有の型を認識させる。 2. **設定登録**: Lua スクリプトが <code>match_handler</code> を呼び出すと、<code>cfg_lua_map_handler</code> が実行される。 3. **データ変換**: Lua のテーブル引数が解析され、<code>apr_pcalloc</code> で確保された <code>ap_lua_mapped_handler_spec</code> に値がコピーされる。 4. **永続化**: 生成された仕様は <code>cfg-&gt;mapped_handlers</code> 配列にプッシュされ、Apache のプール（<code>cfg-&gt;pool</code>）の寿命に従って管理される。 5. **ログ出力**: <code>cmd_log_at</code> が呼ばれると、<code>lua_getinfo</code> で現在の実行コンテキストを特定し、<code>ap_log_error</code> を通じて Apache のログパイプラインへ流し込む。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>lua_config.h</code>: 公開インターフェース定義。</li>
+<li><code>lua_vmprep.h</code>: Lua VM 構築および互換性レイヤー。</li>
+<li><code>mod_lua.h</code>: <code>mod_lua</code> の主要な構造体定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_lua.c</code>: モジュールのエントリポイント。ここで <code>ap_lua_load_config_lmodule</code> が呼び出される。</li>
+<li><code>lua_vmprep.c</code>: Lua VM のライフサイクル管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的確保（<code>apr_pcalloc</code>, <code>apr_pstrdup</code>）は <code>cfg-&gt;pool</code> を使用しており、Apache のリクエストまたは設定ライフサイクルに紐付いています。明示的な <code>free</code> は不要です。</li>
+<li>**エラーハンドリング**: <code>luaL_error</code> を使用して Lua 側へ例外を伝播させます。正規表現のコンパイル失敗などはここで捕捉されます。</li>
+<li>**省略された詳細**: <code>cfg_root</code> など一部の関数はコメントアウトされており、現時点では使用されていません。</li>
+<li>**注意点**: <code>cmd_log_at</code> 内の <code>APLOGNO</code> マクロは意図的に省略されています。これは動的なログ出力を行うための設計上の判断です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_config_c__check_dir_config.html" target="wiki-view">`check_dir_config`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__check_cmd_parms.html" target="wiki-view">`check_cmd_parms`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__apl_toscope.html" target="wiki-view">`apl_toscope`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__ap_lua_map_handler.html" target="wiki-view">`ap_lua_map_handler`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cfg_lua_map_handler.html" target="wiki-view">`cfg_lua_map_handler`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cfg_directory.html" target="wiki-view">`cfg_directory`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cmd_log_at.html" target="wiki-view">`cmd_log_at`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cmd_emerg.html" target="wiki-view">`cmd_emerg`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cmd_alert.html" target="wiki-view">`cmd_alert`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cmd_crit.html" target="wiki-view">`cmd_crit`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cmd_err.html" target="wiki-view">`cmd_err`</a></li>
+<li><a href="../../symbols/modules__lua__lua_config_c__cmd_warn.html" target="wiki-view">`cmd_warn`</a></li>
+</ul></body></html>

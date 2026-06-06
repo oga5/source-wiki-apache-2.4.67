@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/generators/cgi_common.h:229</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>CGI スクリプトの入出力パイプを監視するためのカスタムバケット（<code>CGI</code> 型）に関連付けられた、非同期 I/O 処理用の状態データを保持します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct cgi_bucket_data {
+    apr_pollset_t *pollset;
+    request_rec *r;
+    apr_interval_time_t timeout;
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec</code> を介してリクエストのコンテキストを保持し、<code>apr_pollset_t</code> を介して監視対象のパイプ状態を管理します。</li>
+<li>**出力**: 本構造体自体はデータ保持用であり、バケット読み取り処理（<code>cgi_bucket_read</code>）において、スクリプトの stdout/stderr を取得するための制御情報として機能します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code> のメモリプール（<code>r-&gt;pool</code>）を使用して割り当てられます。</li>
+<li>バケットの生存期間は、関連付けられたリクエストの生存期間に依存します。</li>
+<li><code>WANT_CGI_BUCKET</code> マクロが定義されている環境でのみ有効です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cgi_bucket_read</code> において、<code>poll()</code> を実行し、スクリプトの出力が完了するまで監視を行うための基盤となります。</li>
+<li><code>pollset</code> を用いて stdout と stderr を非同期的に監視し、stderr にデータがある場合は <code>log_script_err</code> を通じてエラーログへ転送します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>cgi_bucket_create</code>（構造体の初期化）、<code>cgi_bucket_dup</code>（複製）、<code>cgi_bucket_read</code>（データ読み取り）から参照されます。</li>
+<li>**呼び出し先**: 本構造体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pollset_t</code>: I/O 監視用。</li>
+<li><code>request_rec</code>: リクエストコンテキスト。</li>
+<li><code>apr_bucket</code>: 本構造体を内部データとして保持するバケット。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>poll()</code> 実行時のタイムアウト設定が重要であり、スクリプトの出力が完了しない場合にブロックする可能性があります。</li>
+<li>メモリ割り当て失敗時は、<code>apr_palloc</code> の挙動に従いリクエストのプールからエラーが伝播します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>cgi_bucket_read</code> 内での <code>poll()</code> はブロッキングの可能性があるため、高負荷時の挙動に注意してください。</li>
+<li><code>log_scripterror</code> での <code>apr_stat</code> 呼び出しはパフォーマンスコストとなる場合があります。</li>
 </ul></body></html>

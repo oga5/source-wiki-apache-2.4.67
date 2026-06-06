@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_uwsgi.c:148</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache の <code>subprocess_env</code> に格納された環境変数を uWSGI プロトコル仕様のバイナリ形式に変換し、バックエンドへ送信します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int uwsgi_send_headers(request_rec *r, proxy_conn_rec *conn)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト情報（<code>subprocess_env</code> を含む）。</li>
+<li><code>conn</code>: バックエンドへの接続情報。</li>
+<li>**出力**:</li>
+<li>成功時: <code>uwsgi_send</code> の戻り値（通常は <code>OK</code>）。</li>
+<li>失敗時: <code>HTTP_INTERNAL_SERVER_ERROR</code>（パケットサイズ超過時）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;subprocess_env</code> に必要な CGI 環境変数が設定されていること。</li>
+<li><code>conn</code> は有効な接続状態であること。</li>
+<li>送信されるヘッダーの総サイズ（<code>pktsize</code>）は <code>APR_UINT16_MAX</code> 以下であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **環境変数の準備**: <code>ap_add_common_vars</code> および <code>ap_add_cgi_vars</code> を呼び出し、<code>Authorization</code> ヘッダーを <code>HTTP_AUTHORIZATION</code> として環境変数に追加します。 2. **パス調整**: <code>SCRIPT_NAME</code> と <code>PATH_INFO</code> が存在する場合、<code>SCRIPT_NAME</code> を適切に調整します。 3. **サイズ計算**: 全ての環境変数のキーと値の長さを合計し、uWSGI ヘッダーに必要なバッファサイズを算出します。 4. **バリデーション**: 合計サイズが <code>APR_UINT16_MAX</code> を超える場合はエラーを返します。 5. **シリアライズ**: メモリを確保し、各キーと値を <code>[2バイト長][データ]</code> の形式でバイナリバッファに書き込みます。 6. **ヘッダー構築**: バッファの先頭4バイトに uWSGI プロトコル固有のヘッダー（パケットサイズ等）を書き込みます。 7. **送信**: <code>uwsgi_send</code> を呼び出し、構築したバッファをバックエンドへ送信します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_uwsgi.c:571</code>（<code>uwsgi_handler</code> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_add_common_vars</code>, <code>ap_add_cgi_vars</code></li>
+<li><code>apr_table_get</code>, <code>apr_table_set</code>, <code>apr_table_setn</code>, <code>apr_table_elts</code></li>
+<li><code>apr_palloc</code>, <code>apr_pstrndup</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>uwsgi_send</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト処理のコンテキスト。</li>
+<li><code>proxy_conn_rec</code>: バックエンド接続の管理構造体。</li>
+<li><code>apr_table_entry_t</code>: 環境変数のキーと値を保持するテーブルエントリ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**パケットサイズ超過**: <code>pktsize &gt; APR_UINT16_MAX</code> の場合、ログを出力して <code>HTTP_INTERNAL_SERVER_ERROR</code> を返します。</li>
+<li>**メモリ不足**: <code>apr_palloc</code> が失敗した場合の挙動は APR のメモリ管理ポリシーに従います。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は uWSGI プロトコルのバイナリ仕様に直接依存しています。仕様変更時には、ヘッダーのシリアライズ部分（特にビット操作）を慎重に確認してください。</li>
+<li><code>SCRIPT_NAME</code> の調整ロジックは、Apache の環境変数と uWSGI 側の期待値の差異を埋めるためのものです。</li>
+<li>接続の再利用（Keep-Alive）は行われない設計であるため、本関数はリクエストごとに一度だけ実行されます。</li>
 </ul></body></html>

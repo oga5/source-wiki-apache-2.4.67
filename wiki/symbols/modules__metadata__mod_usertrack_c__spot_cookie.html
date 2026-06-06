@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/metadata/mod_usertrack.c:222</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストから追跡用 Cookie を検索し、存在しない場合に新規 Cookie を生成してクライアントに付与する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int spot_cookie(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: <code>int</code> (Apache フックの戻り値: <code>OK</code>, <code>DECLINED</code>, または <code>HTTP_INTERNAL_SERVER_ERROR</code>)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dcfg-&gt;enabled</code> が真であること。</li>
+<li>サブリクエスト（<code>r-&gt;main</code>）ではないこと。</li>
+<li><code>NUM_SUBS</code> (3) は、正規表現内のキャプチャグループ数と一致していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 設定構造体 <code>dcfg</code> を取得し、無効な場合やサブリクエストの場合は <code>DECLINED</code> を返す。 2. <code>r-&gt;headers_in</code> から &quot;Cookie&quot; ヘッダーを取得する。 3. 取得したヘッダーに対し、<code>dcfg-&gt;regexp</code> を用いて正規表現マッチングを行う。 4. マッチした場合:</p>
+<ul>
+<li>キャプチャグループ <code>$1</code> または <code>$2</code> から Cookie 値を抽出する。</li>
+<li>抽出した値を <code>r-&gt;notes</code> に &quot;cookie&quot; というキーで格納し、<code>DECLINED</code> を返す。</li>
+<p>5. マッチしない場合:</p>
+<li><code>make_cookie(r)</code> を呼び出し、新規 Cookie を生成・付与して <code>OK</code> を返す。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_fixups</code> により <code>fixups</code> フックとして登録されている (<code>modules/metadata/mod_usertrack.c:493</code>)。</li>
+<li>**呼び出し先**: <code>make_cookie</code> (新規 Cookie 生成時)、<code>ap_pregsub</code> (値抽出時)、<code>ap_log_rerror</code> (エラー時)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cookie_dir_rec</code>: ディレクトリごとの設定（正規表現や有効状態を保持）。</li>
+<li><code>request_rec</code>: リクエストのコンテキストおよびヘッダー情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ不足**: <code>ap_pregsub</code> が失敗した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返し、エラーログを出力する。</li>
+<li>**サブリクエスト**: <code>r-&gt;main</code> が存在する場合、処理を行わず <code>DECLINED</code> を返す。</li>
+<li>**Cookie 未設定**: ヘッダーが存在しない、または正規表現にマッチしない場合は <code>make_cookie</code> へ遷移する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>APR_HOOK_REALLY_FIRST</code> で登録されており、リクエスト処理の初期段階で実行される。</li>
+<li>正規表現のキャプチャグループ（<code>$1</code>, <code>$2</code>）の扱いは、<code>set_cookie_name</code> での整合性チェックに依存している。</li>
+<li>抽出した Cookie 値は <code>r-&gt;pool</code> に割り当てられるため、リクエスト終了時に自動的に解放される。</li>
 </ul></body></html>

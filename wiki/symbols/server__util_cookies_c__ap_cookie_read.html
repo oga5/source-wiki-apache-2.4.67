@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/util_cookies.c:245</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTPリクエストヘッダー（<code>Cookie</code> および <code>Cookie2</code>）から特定のクッキー値を検索・抽出し、必要に応じて元のヘッダーから該当クッキーを削除します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_cookie_read(request_rec *r, const char *name, const char **val, int remove);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: リクエスト状態を保持する <code>request_rec</code> 構造体。</li>
+<li><code>name</code>: 検索対象のクッキー名。</li>
+<li><code>remove</code>: 真の場合、抽出したクッキーをリクエストヘッダーから削除します。</li>
+<li>**出力**:</li>
+<li><code>val</code>: 抽出されたクッキー値が格納されるポインタ（見つからない場合は <code>NULL</code>）。</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>、重複検出時は <code>APR_EGENERAL</code>、その他エラー時は <code>apr_status_t</code> 型のステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>すべてのメモリ操作は <code>r-&gt;pool</code> を使用するため、呼び出し側での明示的な解放は不要です。</li>
+<li>クッキー名に不正な文字が含まれていないことが期待されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 内部構造体 <code>ap_cookie_do</code> を初期化し、検索対象のクッキー名と一時的なテーブルを準備します。 2. <code>apr_table_do</code> を介して <code>extract_cookie_line</code> コールバックを呼び出し、<code>headers_in</code> 内の <code>Cookie</code> および <code>Cookie2</code> ヘッダーを走査します。 3. クッキーの重複が検出された場合、エラーログを出力し <code>APR_EGENERAL</code> を返します。 4. <code>remove</code> が真の場合、元のヘッダーから <code>Cookie</code>/<code>Cookie2</code> を削除し、抽出済みのクッキーを除外した新しいテーブルでヘッダーを再構築します。 5. 抽出した値を <code>val</code> に格納して終了します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/lua/lua_request.c</code></li>
+<li><code>modules/session/mod_session_cookie.c</code></li>
+<li><code>modules/session/mod_session_dbd.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>extract_cookie_line</code> (コールバック)</li>
+<li><code>apr_table_do</code>, <code>apr_table_make</code>, <code>apr_table_unset</code>, <code>apr_table_overlay</code> (APRライブラリ)</li>
+<li><code>ap_log_rerror</code> (Apacheログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストの全状態を保持。</li>
+<li><code>ap_cookie_do</code>: 抽出処理中の状態（クッキー名、値、重複フラグ、一時テーブル）を保持する内部構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**重複クッキー**: 同一のクッキー名が複数回出現した場合、セキュリティ上の曖昧さを避けるため <code>APR_EGENERAL</code> を返します。</li>
+<li>**メモリ不足**: APRのテーブル操作関数がメモリ不足に陥った場合、APRの規約に従ったエラーが返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>Cookie</code> および <code>Cookie2</code> ヘッダーを対象とします。</li>
+<li>重複クッキーの検出はセキュリティ要件に基づく設計であるため、変更時は注意してください。</li>
+<li><code>remove</code> オプション使用時は、ヘッダーテーブルの再構築が行われるため、後続のフィルタやモジュールが参照するヘッダー内容が変化することに留意してください。</li>
 </ul></body></html>

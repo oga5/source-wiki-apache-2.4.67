@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_vars.c:346</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>SSLConnRec</code> 構造体から SSL 接続に関連する情報を抽出し、指定された変数名に対応する値を文字列として返します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static char *ssl_var_lookup_ssl(apr_pool_t *p, SSLConnRec *sslconn, 
+                                request_rec *r, char *var)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li><code>sslconn</code>: SSL 接続状態を保持する <code>SSLConnRec</code> 構造体。</li>
+<li><code>r</code>: 現在のリクエスト情報（証明書抽出時に使用）。</li>
+<li><code>var</code>: 取得対象の変数名（例: <code>PROTOCOL</code>, <code>SESSION_ID</code>, <code>CLIENT_CERT_CHAIN_...</code> 等）。</li>
+<li>**出力**:</li>
+<li>成功時: 解決された値を含む文字列（<code>apr_pool_t</code> 上に確保）。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sslconn</code> が <code>NULL</code> の場合、<code>VERSION_</code> で始まる変数以外は解決されません。</li>
+<li>戻り値はすべて <code>apr_pool_t</code> 上に確保されるため、呼び出し元がプールを管理する必要があります。</li>
+<li><code>SSL_get_peer_certificate</code> を呼び出した場合は、必ず <code>X509_free</code> を実行して参照カウントを解放します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>var</code> のプレフィックスや名称に基づき、条件分岐で適切な抽出処理を選択します。 2. <code>VERSION_</code> 系は <code>ssl_var_lookup_ssl_version</code> を呼び出します。 3. <code>PROTOCOL</code>, <code>SESSION_ID</code>, <code>SESSION_RESUMED</code> などの基本情報は <code>SSL</code> オブジェクトから直接取得します。 4. <code>CIPHER</code>, <code>CLIENT_CERT_CHAIN_</code>, <code>CLIENT_VERIFY</code> などの複雑な情報は、専用のヘルパー関数（<code>ssl_var_lookup_ssl_cipher</code> 等）へ委譲します。 5. <code>CLIENT_</code> または <code>SERVER_</code> で始まる変数の場合、証明書（<code>X509</code>）を取得し、<code>ssl_var_lookup_ssl_cert</code> を介して属性を抽出します。 6. <code>TLS_SNI</code>, <code>SECURE_RENEG</code>, <code>SRP_</code> 関連は、コンパイルオプション（<code>HAVE_TLSEXT</code>, <code>HAVE_SRP</code>）に応じて処理します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_engine_vars.c</code> 内の <code>ssl_var_lookup</code> および他の内部関数。</li>
+<li><code>modules/arch/netware/mod_nw_ssl.c</code>（直接の呼び出しを確認）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ssl_var_lookup_ssl_version</code>, <code>ssl_var_lookup_ssl_cipher</code>, <code>ssl_var_lookup_ssl_cert_chain</code>, <code>ssl_var_lookup_ssl_cert_rfc4523_cea</code>, <code>ssl_var_lookup_ssl_cert_verify</code>, <code>ssl_var_lookup_ssl_cert</code>, <code>ssl_var_lookup_ssl_compress_meth</code> 等のヘルパー関数。</li>
+<li>OpenSSL API (<code>SSL_get_version</code>, <code>SSL_get_session</code>, <code>SSL_get_peer_certificate</code> 等)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLConnRec</code>: SSL 接続のコンテキスト。</li>
+<li><code>SSL</code>: OpenSSL の接続オブジェクト。</li>
+<li><code>X509</code>: OpenSSL の証明書構造体。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sslconn-&gt;ssl</code> が <code>NULL</code> の場合、多くの変数は解決できず <code>NULL</code> を返します。</li>
+<li><code>SSL_get_peer_certificate</code> が <code>NULL</code> を返す場合（クライアント証明書がない場合など）、<code>CLIENT_</code> 系の変数は解決されません。</li>
+<li><code>var</code> が未知の文字列である場合、何も処理されず <code>NULL</code> が返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>SSL_get_certificate</code> と <code>SSL_get_peer_certificate</code> では参照カウントの扱いが異なるため、<code>X509_free</code> の有無に注意してください。</li>
+<li>OpenSSL のバージョン依存処理（<code>OPENSSL_NO_SSL_INTERN</code> 等）が含まれているため、OpenSSL アップグレード時には挙動の確認が必要です。</li>
 </ul></body></html>

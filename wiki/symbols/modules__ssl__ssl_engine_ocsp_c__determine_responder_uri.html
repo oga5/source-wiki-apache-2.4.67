@@ -6,22 +6,62 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_ocsp.c:54</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OCSP 検証に使用するレスポンダの URI を、サーバー設定または証明書の AIA (Authority Information Access) 拡張から特定し、解析済みの <code>apr_uri_t</code> 構造体として返します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_uri_t *determine_responder_uri(SSLSrvConfigRec *sc, X509 *cert,
+                                          conn_rec *c, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>sc</code>: サーバー設定構造体。</li>
+<li><code>cert</code>: 対象の X.509 証明書。</li>
+<li><code>c</code>: 現在の接続情報。</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li>**出力**:</li>
+<li>成功時: 解析済みの <code>apr_uri_t</code> 構造体へのポインタ。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code> は有効な <code>apr_pool_t</code> であること。</li>
+<li><code>sc</code> および <code>c</code> は <code>NULL</code> でないこと。</li>
+<li>返される URI は <code>http</code> スキームである必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **URI の優先順位決定**:</p>
+<ul>
+<li>設定で <code>ocsp_force_default</code> が有効な場合、設定値の <code>ocsp_responder</code> を使用。</li>
+<li>それ以外の場合、<code>extract_responder_uri</code> を呼び出し証明書から取得を試みる。取得できない場合は設定値の <code>ocsp_responder</code> にフォールバックする。</li>
+<p>2. **検証と解析**:</p>
+<li>URI が特定できない場合はログを出力し <code>NULL</code> を返す。</li>
+<li><code>apr_uri_parse</code> を使用して文字列を解析。解析失敗またはホスト名が欠落している場合は <code>NULL</code> を返す。</li>
+<li>スキームが <code>http</code> 以外の場合はエラーとして <code>NULL</code> を返す。</li>
+<p>3. **ポート補完**:</p>
+<li>ポート番号が指定されていない場合、<code>apr_uri_port_of_scheme</code> を使用して <code>http</code> のデフォルトポート（80）を補完する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_ocsp.c:140</code> (<code>verify_ocsp_status</code> 内)</li>
+<li>**呼び出し先**:</li>
+<li><code>extract_responder_uri</code> (証明書からの URI 抽出)</li>
+<li><code>apr_uri_parse</code> (URI 文字列の解析)</li>
+<li><code>ap_log_cerror</code> (エラーログ出力)</li>
+<li><code>apr_uri_port_of_scheme</code> (デフォルトポートの取得)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLSrvConfigRec</code>: サーバーの OCSP 設定を保持。</li>
+<li><code>apr_uri_t</code>: 解析された URI 情報を格納。</li>
+<li><code>X509</code>: OpenSSL の証明書オブジェクト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**URI 抽出失敗**: 証明書に AIA 拡張がなく、かつデフォルトの設定値も存在しない場合は <code>NULL</code> を返す。</li>
+<li>**解析失敗**: <code>apr_uri_parse</code> が失敗、またはホスト名が含まれない場合は <code>NULL</code> を返す。</li>
+<li>**スキーム不一致**: <code>http</code> 以外のスキーム（<code>https</code> 等）が指定された場合はエラーとして <code>NULL</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は同期的に動作するため、ネットワーク I/O を伴う後続処理の前に URI の妥当性を検証する役割を担います。</li>
+<li><code>apr_palloc</code> を使用しているため、呼び出し元で提供されるプール <code>p</code> のライフサイクルに依存します。</li>
 </ul></body></html>

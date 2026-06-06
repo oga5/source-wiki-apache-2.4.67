@@ -1,68 +1,45 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__cache.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/cache</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/cache</code> には 18 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/cache</code> は、Apache HTTP Server における透過的なキャッシュサブシステムを構成するディレクトリです。HTTP リクエストのキャッシュ可能性の判定、ストレージへの保存、およびキャッシュからのレスポンス提供を担うポリシーエンジンと、それらを支える多様なストレージプロバイダー（ディスク、共有メモリ、Redis 等）で構成されています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**キャッシュポリシーの制御**: RFC 2616 等の HTTP 仕様に基づき、キャッシュの鮮度判定、<code>Cache-Control</code> の解釈、および条件付きリクエストの処理を行う。</li>
+<li>**ストレージの抽象化**: <code>cache_storage</code> インターフェースを通じて、物理的な保存先（ディスクやメモリ）を意識せずにキャッシュ操作を行う仕組みの提供。</li>
+<li>**リクエストパイプラインの統合**: クイックハンドラやフィルタチェーン（<code>CACHE_SAVE</code>, <code>CACHE_OUT</code> 等）を介した、透過的なキャッシュの挿入と管理。</li>
+<li>**並行制御**: 「サンダリング・ハード（Thundering Herd）」問題を防ぐためのロック機構の提供。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/cache/cache_common.h</code></li>
-<li><code>modules/cache/cache_disk_common.h</code></li>
-<li><code>modules/cache/cache_socache_common.h</code></li>
-<li><code>modules/cache/cache_storage.c</code></li>
-<li><code>modules/cache/cache_storage.h</code></li>
-<li><code>modules/cache/cache_util.c</code></li>
-<li><code>modules/cache/cache_util.h</code></li>
-<li><code>modules/cache/mod_cache.c</code></li>
-<li><code>modules/cache/mod_cache.h</code></li>
-<li><code>modules/cache/mod_cache_disk.c</code></li>
-<li><code>modules/cache/mod_cache_disk.h</code></li>
-<li><code>modules/cache/mod_cache_socache.c</code></li>
-<li><code>modules/cache/mod_file_cache.c</code></li>
-<li><code>modules/cache/mod_socache_dbm.c</code></li>
-<li><code>modules/cache/mod_socache_dc.c</code></li>
-<li><code>modules/cache/mod_socache_memcache.c</code></li>
-<li><code>modules/cache/mod_socache_redis.c</code></li>
-<li><code>modules/cache/mod_socache_shmcb.c</code></li>
+<li>**コアロジック**: <code>mod_cache.c</code>, <code>cache_storage.c</code>, <code>cache_util.c</code></li>
+<li>**ヘッダー定義**: <code>mod_cache.h</code>, <code>cache_storage.h</code>, <code>cache_util.h</code>, <code>cache_common.h</code></li>
+<li>**ディスクキャッシュ**: <code>mod_cache_disk.c</code>, <code>mod_cache_disk.h</code>, <code>cache_disk_common.h</code></li>
+<li>**共有オブジェクトキャッシュ**: <code>mod_cache_socache.c</code>, <code>cache_socache_common.h</code></li>
+<li>**socache バックエンド**: <code>mod_socache_dbm.c</code>, <code>mod_socache_dc.c</code>, <code>mod_socache_memcache.c</code>, <code>mod_socache_redis.c</code>, <code>mod_socache_shmcb.c</code></li>
+<li>**その他**: <code>mod_file_cache.c</code></li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>cache_control_t</code></li>
-<li><code>disk_cache_info_t</code></li>
-<li><code>cache_socache_info_t</code></li>
-<li><code>cache_table_getm_t</code></li>
-<li><code>cache_enable</code></li>
-<li><code>cache_disable</code></li>
-<li><code>cache_server_conf</code></li>
-<li><code>cache_dir_conf</code></li>
-<li><code>cache_provider_list</code></li>
-<li><code>cache_request_rec</code></li>
+<li><code>cache_request_rec</code>: リクエストごとのキャッシュコンテキスト。</li>
+<li><code>cache_provider</code>: ストレージバックエンドが実装すべき API 定義。</li>
+<li><code>cache_control_t</code>: <code>Cache-Control</code> ヘッダーの解析結果。</li>
+<li><code>disk_cache_info_t</code> / <code>cache_socache_info_t</code>: 各ストレージ固有のメタデータ構造。</li>
+<li><code>cache_handle_t</code>: キャッシュエントリへのアクセスハンドル。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **判定**: <code>cache_quick_handler</code> がリクエストをインターセプトし、キャッシュ可能か判定。 2. **検索**: <code>cache_select</code> を通じて各プロバイダーを走査し、既存のキャッシュエントリを検索。 3. **提供/保存**: ヒット時は <code>CACHE_OUT</code> フィルタでレスポンスを構築し、ミス時は <code>CACHE_SAVE</code> フィルタでバックエンドからのレスポンスをストレージへ永続化。 4. **無効化**: PUT/POST/DELETE メソッド時に <code>cache_invalidate_filter</code> が関連キャッシュを削除。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>apr_strings.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>mod_cache.h</code></li>
-<li><code>apr.h</code></li>
-<li><code>ap_socache.h</code></li>
-<li><code>mod_status.h</code></li>
-<li><code>http_request.h</code></li>
+<li><code>APR (Apache Portable Runtime)</code>: メモリ管理、ファイル I/O、共有メモリ、アトミック操作、文字列操作。</li>
+<li><code>httpd.h</code> 系: Apache のリクエスト処理、設定フレームワーク、フィルタチェーン。</li>
+<li><code>ap_socache.h</code>: 共有オブジェクトキャッシュの抽象インターフェース。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは、コアとなるポリシーエンジン（<code>mod_cache</code>）と、それを利用する複数のストレージプロバイダー（<code>mod_cache_disk</code>, <code>mod_cache_socache</code> 等）というプラグイン構成をとっています。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/cache/cache_util.h</code> 2. <code>modules/cache/mod_cache.h</code> 3. <code>modules/cache/cache_disk_common.h</code> 4. <code>modules/cache/mod_cache_disk.h</code> 5. <code>modules/cache/cache_socache_common.h</code> 6. <code>modules/cache/cache_common.h</code> 7. <code>modules/cache/cache_storage.h</code> 8. <code>modules/cache/mod_cache_socache.c</code> 9. <code>modules/cache/mod_cache.c</code> 10. <code>modules/cache/mod_cache_disk.c</code> 11. <code>modules/cache/mod_socache_shmcb.c</code> 12. <code>modules/cache/cache_util.c</code> 13. <code>modules/cache/mod_socache_redis.c</code> 14. <code>modules/cache/mod_socache_memcache.c</code> 15. <code>modules/cache/mod_socache_dbm.c</code> 16. <code>modules/cache/mod_file_cache.c</code> 17. <code>modules/cache/mod_socache_dc.c</code> 18. <code>modules/cache/cache_storage.c</code></p>
+<p>1. <code>modules/cache/cache_util.h</code> (共通定義とユーティリティ) 2. <code>modules/cache/mod_cache.h</code> (キャッシュの主要インターフェース) 3. <code>modules/cache/cache_storage.h</code> (ストレージ抽象化層) 4. <code>modules/cache/mod_cache.c</code> (メインのポリシーエンジン) 5. <code>modules/cache/cache_storage.c</code> (ストレージ操作の実装) 6. <code>modules/cache/mod_cache_disk.c</code> (ディスクキャッシュの実装例) 7. <code>modules/cache/mod_cache_socache.c</code> (共有オブジェクトキャッシュの統合)</p>
 <h2>未解決の問い</h2>
 <ul>
 <li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>各プロバイダー（Redis, Memcache 等）の具体的な排他制御の差異についての詳細な比較。</li>
 </ul></body></html>

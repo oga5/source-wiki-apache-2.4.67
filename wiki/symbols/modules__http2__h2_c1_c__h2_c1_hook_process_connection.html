@@ -2,26 +2,50 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__http2__h2_c1_c__h2_c1_hook_process_connection.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>h2_c1_hook_process_connection</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>function</code></li>
-<li>定義箇所: <code>modules/http2/h2_c1.c:241</code></li>
+<li>**種別**: <code>function</code></li>
+<li>**定義箇所**: <code>modules/http2/h2_c1.c:241</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>process_connection</code> フックとして、クライアント接続が HTTP/2 プロトコルを使用すべきかを判定し、セッションの初期化および実行をトリガーします。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int h2_c1_hook_process_connection(conn_rec* c)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>conn_rec* c</code>（処理対象の接続レコード）</li>
+<li>**出力**: <code>int</code>（Apache のフック戻り値。<code>OK</code>、<code>DECLINED</code>、またはエラーを示す値）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c-&gt;master</code> が設定されている場合（サブ接続である場合）、本関数は直ちに <code>DECLINED</code> を返します。</li>
+<li>HTTP/2 セッションが確立されていない場合、<code>AP_MODE_SPECULATIVE</code> を用いて入力ストリームから 24 バイトを先読みし、HTTP/2 マジックトークンとの照合を行います。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期チェック**: 接続がマスター接続でないことを確認し、既存の HTTP/2 接続コンテキスト（<code>h2_conn_ctx_t</code>）を取得します。 2. **プロトコル検出**: コンテキストが存在せず、かつ <code>keepalives</code> が 0 の場合、現在のプロトコルが <code>http/1.1</code> であり、かつ <code>H2Direct</code> が有効であれば、入力フィルタから 24 バイトを先読みします。 3. **マジックトークン検証**: 先読みしたデータが <code>H2_MAGIC_TOKEN</code> と一致する場合、HTTP/2 セッション用のコンテキストを生成します。 4. **セッションセットアップ**: コンテキスト内の <code>session</code> が未初期化であれば、<code>h2_c1_setup</code> を呼び出してセッションを構築します。 5. **実行**: <code>h2_c1_run</code> を呼び出し、HTTP/2 セッションのメインループを開始します。 6. **終了**: 検出やセットアップが不要、あるいは失敗した場合は <code>DECLINED</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache HTTP Server の <code>process_connection</code> フックチェーン（<code>ap_hook_process_connection</code> により登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>h2_conn_ctx_get</code> / <code>h2_conn_ctx_create_for_c1</code> / <code>h2_conn_ctx_detach</code></li>
+<li><code>h2_c1_allows_direct</code> / <code>h2_protocol_is_acceptable_c1</code></li>
+<li><code>h2_c1_setup</code></li>
+<li><code>h2_c1_run</code></li>
+<li><code>ap_get_brigade</code> / <code>apr_brigade_create</code> / <code>apr_brigade_destroy</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: Apache の接続状態を保持する構造体。</li>
+<li><code>h2_conn_ctx_t</code>: HTTP/2 接続固有のコンテキスト情報。</li>
+<li><code>apr_bucket_brigade</code>: プロトコル検出のためのデータ読み込みに使用されるバケットブリゲード。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**読み込み失敗**: <code>ap_get_brigade</code> が <code>APR_SUCCESS</code> 以外を返した場合、エラーをログ出力し <code>DECLINED</code> を返します。</li>
+<li>**セットアップ失敗**: <code>h2_c1_setup</code> が失敗した場合、コンテキストをデタッチし、<code>!OK</code>（エラー）を返します。</li>
+<li>**非対応プロトコル**: <code>H2Direct</code> が無効、またはマジックトークンが一致しない場合、HTTP/2 処理をスキップして <code>DECLINED</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は HTTP/2 へのアップグレードパスと直接検出パスの両方を制御します。</li>
+<li><code>AP_MODE_SPECULATIVE</code> を使用した先読みは、後続のフィルタチェーンに影響を与えないよう適切にブリゲードを破棄する必要があります。</li>
+<li>接続コンテキストのライフサイクル管理（<code>h2_conn_ctx</code>）と <code>h2_session</code> の生成タイミングに依存関係があるため、変更時は <code>h2_c1_setup</code> の仕様を併せて確認してください。</li>
 </ul></body></html>

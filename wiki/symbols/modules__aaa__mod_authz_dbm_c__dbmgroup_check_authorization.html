@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_dbm.c:158</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server において、<code>require dbm-group</code> ディレクティブに基づき、DBM ファイルから取得したユーザーの所属グループ情報と、要求されたグループを照合して認可判断を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static authz_status dbmgroup_check_authorization(request_rec *r,
+                                                 const char *require_args,
+                                                 const void *parsed_require_args)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>require_args</code>: 未パースの引数文字列。</li>
+<li><code>parsed_require_args</code>: パース済みの式情報 (<code>ap_expr_info_t</code>)。</li>
+<li>**出力**:</li>
+<li><code>AUTHZ_GRANTED</code>: 認可成功。</li>
+<li><code>AUTHZ_DENIED</code>: 認可失敗（グループ不一致、ファイル未指定、ユーザー不在など）。</li>
+<li><code>AUTHZ_DENIED_NO_USER</code>: ユーザー名がリクエストに存在しない場合。</li>
+<li><code>AUTHZ_GENERAL_ERROR</code>: DBM ファイルの読み取りエラー。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;user</code> が設定されていること。</li>
+<li><code>authz_dbm_config_rec</code> 設定構造体において <code>grpfile</code> が定義されていること。</li>
+<li>メモリ割り当てはすべて <code>r-&gt;pool</code> を使用し、リクエスト終了時に解放される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>r-&gt;user</code> の存在を確認し、なければ <code>AUTHZ_DENIED_NO_USER</code> を返す。 2. 設定から DBM ファイルパスを取得し、未定義の場合はエラーログを出力して <code>AUTHZ_DENIED</code> を返す。 3. <code>get_dbm_grp</code> を呼び出し、<code>user:realm</code> をキーとして DBM ファイルからカンマ区切りのグループ文字列を取得する。 4. 取得失敗時は <code>AUTHZ_GENERAL_ERROR</code> を、グループ情報が空の場合は <code>AUTHZ_DENIED</code> を返す。 5. <code>ap_expr_str_exec</code> を使用して <code>parsed_require_args</code> を評価し、要求されたグループ名を取得する。 6. 取得したグループ文字列をカンマでパースし、要求されたグループ名と一致するものがあるか順次比較する。 7. 一致すれば <code>AUTHZ_GRANTED</code> を返し、最後まで一致しなければ <code>AUTHZ_DENIED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/aaa/mod_authz_dbm.c:319</code> にて <code>authz_dbmgroup_provider</code> 構造体を通じて登録されている（直接の呼び出し元は <code>mod_authz_core</code>）。</li>
+<li>**呼び出し先**:</li>
+<li><code>get_dbm_grp</code>: DBM ファイルからのグループ情報取得。</li>
+<li><code>ap_expr_str_exec</code>: <code>require</code> 式の評価。</li>
+<li><code>ap_getword_white</code> / <code>ap_getword</code>: 文字列のパース。</li>
+<li><code>ap_log_rerror</code>: エラーログ出力。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>authz_dbm_config_rec</code>: DBM ファイルパスやタイプを保持するディレクトリ設定構造体。</li>
+<li><code>request_rec</code>: リクエスト情報およびメモリプール (<code>r-&gt;pool</code>) を保持。</li>
+<li><code>ap_expr_info_t</code>: <code>require</code> ディレクティブの式評価情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ユーザー不在**: <code>r-&gt;user</code> が NULL の場合、<code>AUTHZ_DENIED_NO_USER</code> を返す。</li>
+<li>**設定不備**: <code>grpfile</code> が未設定の場合、エラーログを出力し <code>AUTHZ_DENIED</code> を返す。</li>
+<li>**DBM 読み取り失敗**: <code>get_dbm_grp</code> が <code>APR_SUCCESS</code> 以外を返した場合、<code>AUTHZ_GENERAL_ERROR</code> を返す。</li>
+<li>**グループ不一致**: ユーザーが DBM に存在しない、または要求されたグループに所属していない場合、<code>AUTHZ_DENIED</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>DBM ファイルはリクエストごとに開閉されるため、高負荷時にはパフォーマンスへの影響を考慮すること。</li>
+<li>DBM ファイル内の値に <code>:</code> が含まれる場合、<code>password:groupname</code> の形式を想定したパースが行われる点に注意。</li>
 </ul></body></html>

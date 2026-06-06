@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/http/http_request.c:358</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストのハンドラ実行後の後処理を実行します。EOR (End of Request) バケットの送信によるリクエスト終了処理、パイプライン化されたリクエストの確認、および接続状態の更新を行います。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_process_request_after_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (処理対象のリクエスト構造体)</li>
+<li>**出力**: なし（戻り値なし）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r</code> は有効なリクエスト構造体である必要があります。</li>
+<li>EOR バケットがフィルタチェーンに投入された後は、<code>r</code> および <code>r-&gt;pool</code> への参照は安全ではありません（EOR バケットのクリーンアップ関数によってプールが解放される可能性があるため）。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **EOR バケットの生成と送信**: <code>ap_bucket_eor_create</code> を使用して EOR バケットを作成し、出力フィルタチェーン (<code>c-&gt;output_filters</code>) に流します。これにより、リクエストのログ記録やプール解放がトリガーされます。 2. **クリーンアップ**: 使用したブリゲード (<code>bb</code>) を <code>apr_brigade_cleanup</code> で初期化します。 3. **パイプライン確認**: <code>ap_check_pipeline</code> を呼び出し、接続上の空行を消費してパイプライン化されたリクエストの有無を確認します。 4. **接続状態の更新**: 接続が中断されている場合は <code>CONN_STATE_LINGER</code>、それ以外は <code>CONN_STATE_WRITE_COMPLETION</code> に状態を遷移させます。 5. **統計更新**: <code>ap_extended_status</code> が有効な場合、<code>ap_time_process_request</code> を呼び出してリクエスト処理時間を記録します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http/http_request.c:477</code></li>
+<li><code>modules/test/mod_dialup.c:119</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_bucket_eor_create</code></li>
+<li><code>ap_pass_brigade</code></li>
+<li><code>apr_brigade_cleanup</code></li>
+<li><code>ap_check_pipeline</code></li>
+<li><code>ap_time_process_request</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストのコンテキストを保持。</li>
+<li><code>conn_rec</code>: 接続状態を保持。</li>
+<li><code>apr_bucket_brigade</code>: フィルタチェーンを流れるデータバケットのコンテナ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c-&gt;aborted</code> が真の場合、接続は <code>CONN_STATE_LINGER</code> 状態へ移行します。</li>
+<li><code>ap_check_pipeline</code> の結果に基づき、<code>c-&gt;data_in_input_filters</code> が更新されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数実行後の <code>r</code> へのアクセスは、メモリ破壊を引き起こす可能性があるため厳禁です。</li>
+<li><code>ap_process_request_after_handler</code> は <code>mod_serf</code> 等の外部モジュールからも利用される公開インターフェースです。</li>
 </ul></body></html>

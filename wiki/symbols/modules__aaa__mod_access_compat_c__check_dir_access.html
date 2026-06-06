@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/aaa/mod_access_compat.c:315</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のリクエスト処理において、レガシーなアクセス制御ディレクティブ（<code>Order</code>, <code>Allow</code>, <code>Deny</code>）に基づき、リクエストのアクセス可否を判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int check_dir_access(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報）</li>
+<li>**出力**: <code>int</code>（判定結果。許可の場合は <code>OK</code>、拒否の場合は <code>HTTP_FORBIDDEN</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;per_dir_config</code> から <code>access_compat_dir_conf</code> 構造体が取得可能であること。</li>
+<li><code>r-&gt;method_number</code> が <code>access_compat_dir_conf</code> の <code>order</code> 配列のインデックスとして有効であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. リクエストのメソッド番号に基づき、設定された <code>order</code>（<code>ALLOW_THEN_DENY</code>, <code>DENY_THEN_ALLOW</code>, またはデフォルト）を取得する。 2. <code>order</code> に応じて <code>find_allowdeny</code> を呼び出し、<code>allows</code> および <code>denys</code> 配列を走査してアクセス可否を評価する。</p>
+<ul>
+<li><code>ALLOW_THEN_DENY</code>: <code>allow</code> に一致すれば <code>OK</code>、その後 <code>deny</code> に一致すれば <code>HTTP_FORBIDDEN</code> で上書きする。</li>
+<li><code>DENY_THEN_ALLOW</code>: <code>deny</code> に一致すれば <code>HTTP_FORBIDDEN</code>、その後 <code>allow</code> に一致すれば <code>OK</code> で上書きする。</li>
+<li>デフォルト: <code>allow</code> に一致し、かつ <code>deny</code> に一致しない場合にのみ <code>OK</code> とする。</li>
+<p>3. 最終的な判定結果が <code>HTTP_FORBIDDEN</code> の場合、<code>ap_log_rerror</code> を使用してエラーログを出力する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_check_access</code> に登録されており、Apache のリクエスト処理フックから呼び出される。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>: 設定構造体の取得。</li>
+<li><code>find_allowdeny</code>: ルールの評価。</li>
+<li><code>ap_log_rerror</code>: 拒否時のログ出力。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>access_compat_dir_conf</code>: ディレクトリごとのアクセス制御設定を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ret</code> の初期値は <code>OK</code> である。</li>
+<li><code>find_allowdeny</code> が一致しない場合、<code>order</code> の設定に応じたデフォルトの挙動（許可または拒否）が適用される。</li>
+<li><code>r-&gt;filename</code> が存在しない場合は URI をログに出力する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_access_compat</code> のメインエントリポイントである。</li>
+<li><code>find_allowdeny</code> の戻り値は真偽値として扱われるため、評価順序がアクセス制御のロジックに直結する。</li>
+<li>ログ出力には <code>APLOGNO(01797)</code> が割り当てられている。</li>
 </ul></body></html>

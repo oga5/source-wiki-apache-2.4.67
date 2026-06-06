@@ -6,22 +6,47 @@
 <li>定義箇所: <code>server/mpm/prefork/prefork.c:163</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>gprof によるプロファイリング出力ファイルを保存するためのディレクトリへ、カレントワーキングディレクトリを変更します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<p><code>static void chdir_for_gprof(void)</code></p>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 引数はなし。<code>ap_server_conf</code> から取得される <code>core_server_config</code> 内の <code>gprof_dir</code> 設定値を使用します。</li>
+<li>**出力**: なし（副作用としてプロセスのカレントディレクトリを変更）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pconf</code>（設定用メモリプール）が有効であること。</li>
+<li><code>ap_server_conf</code> が初期化済みであること。</li>
+<li><code>gprof_dir</code> が設定されている場合、そのディレクトリを作成する権限が必要。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_get_core_module_config</code> を介して <code>gprof_dir</code> 設定を取得します。 2. <code>gprof_dir</code> が指定されている場合:</p>
+<ul>
+<li>パス末尾が <code>%</code> で終わる場合、<code>ap_append_pid</code> を使用してプロセスIDを付与したディレクトリ名を生成します。</li>
+<li><code>ap_server_root_relative</code> で絶対パスを解決します。</li>
+<li><code>apr_dir_make</code> を呼び出し、適切なパーミッション（読み書き実行権限）でディレクトリを作成します。作成失敗時はエラーログを出力します（既存ディレクトリの場合は無視）。</li>
+<p>3. <code>gprof_dir</code> が指定されていない場合:</p>
+<li><code>ap_runtime_dir_relative</code> を使用してランタイムディレクトリを対象とします。</li>
+<p>4. 最後に <code>chdir()</code> を実行し、対象ディレクトリへ移動します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/prefork/prefork.c:239</code>（<code>child_main</code> 内から呼び出される）。</li>
+<li>**呼び出し先**: <code>ap_get_core_module_config</code>, <code>ap_append_pid</code>, <code>ap_server_root_relative</code>, <code>apr_dir_make</code>, <code>ap_log_error</code>, <code>ap_runtime_dir_relative</code>, <code>chdir</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>core_server_config</code>: <code>gprof_dir</code> を保持する設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_dir_make</code> が失敗し、かつその理由が「ディレクトリが既に存在する (<code>APR_STATUS_IS_EEXIST</code>)」以外である場合、エラーログが出力されます。</li>
+<li><code>gprof_dir</code> が未設定の場合、ランタイムディレクトリへの移動が試行されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はプロファイリング用であり、通常の運用環境では使用されません。</li>
+<li><code>pconf</code> を使用しているため、設定フェーズでの利用を前提としています。</li>
+<li><code>chdir</code> はプロセス全体の状態を変更するため、マルチスレッド環境では注意が必要ですが、本 MPM は非スレッド型であるため、この実装が許容されています。</li>
 </ul></body></html>

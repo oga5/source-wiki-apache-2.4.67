@@ -1,49 +1,39 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__database.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/database</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/database</code> には 2 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/database</code> は、Apache HTTP Server におけるデータベース接続管理の基盤を提供するモジュール群です。主に <code>mod_dbd</code> を含み、APR (Apache Portable Runtime) の <code>apr_dbd</code> フレームワークをラップすることで、他のモジュールがデータベースへ安全かつ効率的にアクセスするための共通インターフェースを提供します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**接続プーリング**: スレッド環境下での <code>apr_reslist</code> を活用した接続の再利用と管理。</li>
+<li>**ライフサイクル管理**: リクエストまたはコネクションのライフサイクルに紐付いたデータベース接続の自動取得・解放。</li>
+<li>**設定管理**: <code>DBDriver</code> や <code>DBDParams</code> 等のディレクティブを通じたデータベース接続設定の解析と保持。</li>
+<li>**SQL 準備**: サーバー起動時の SQL ステートメントの事前準備（プリペア）とキャッシュ。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/database/mod_dbd.c</code></li>
-<li><code>modules/database/mod_dbd.h</code></li>
+<li><code>modules/database/mod_dbd.c</code>: 接続管理、プーリング、設定解析の実装。</li>
+<li><code>modules/database/mod_dbd.h</code>: 他モジュール向けのパブリック API 定義。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>dbd_group_t</code></li>
-<li><code>svr_cfg</code></li>
-<li><code>cmd_parts</code></li>
-<li><code>dbd_query_t</code></li>
-<li><code>dbd_acquire_t</code></li>
-<li><code>dbd_cfg_t</code></li>
-<li><code>ap_dbd_t</code></li>
+<li><code>dbd_cfg_t</code>: サーバー単位のデータベース設定（ドライバ名、接続パラメータ等）。</li>
+<li><code>ap_dbd_t</code>: データベース接続ハンドル。ドライバ、接続状態、プリペア済みステートメントを保持。</li>
+<li><code>dbd_group_t</code>: 接続プール（<code>apr_reslist</code>）または単一接続を管理するグループ構造体。</li>
+<li><code>svr_cfg</code>: サーバーごとの設定コンテナ。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **設定フェーズ**: <code>dbd_cmds</code> がディレクティブを読み込み、<code>dbd_post_config</code> で接続グループを初期化。 2. **接続取得**: <code>ap_dbd_acquire</code> 等が呼ばれると、リクエストのプールから既存の接続を再利用するか、新規に接続を確立（<code>dbd_construct</code>）する。 3. **SQL 実行**: 事前準備されたステートメントを用いてクエリを実行。 4. **解放**: リクエスト終了時に <code>dbd_release</code> が自動的に呼び出され、接続がプールへ返却される。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>apr_reslist.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>apr_hash.h</code></li>
-<li><code>apr_tables.h</code></li>
-<li><code>apr_lib.h</code></li>
-<li><code>apr_dbd.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
+<li>**APR**: <code>apr_dbd.h</code> (DB抽象化), <code>apr_reslist.h</code> (プーリング), <code>apr_hash.h</code>, <code>apr_tables.h</code> 等。</li>
+<li>**Apache Core**: <code>http_config.h</code>, <code>http_protocol.h</code>, <code>http_log.h</code> 等。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは単一の機能単位（<code>mod_dbd</code>）で構成されており、サブモジュールは持ちません。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/database/mod_dbd.h</code> 2. <code>modules/database/mod_dbd.c</code></p>
+<p>1. <code>modules/database/mod_dbd.h</code>: 公開 API と提供機能の概要を把握する。 2. <code>modules/database/mod_dbd.c</code>: 接続プーリングやライフサイクル管理の実装詳細を確認する。</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>現在の設計は <code>apr_dbd</code> に強く依存しているが、将来的なドライバ拡張や非同期 I/O 対応における制約の精査。</li>
+<li>LLM ベースのモジュール合成を追加した後で、責務とフローをさらに精緻化する。</li>
 </ul></body></html>

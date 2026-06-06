@@ -6,22 +6,70 @@
 <li>定義箇所: <code>modules/cache/cache_util.h:210</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエスト処理中におけるキャッシュの状態管理およびコンテキスト保持を行うための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    cache_provider_list *providers;
+    const cache_provider *provider;
+    const char *provider_name;
+    int fresh;
+    cache_handle_t *handle;
+    cache_handle_t *stale_handle;
+    apr_table_t *stale_headers;
+    int in_checked;
+    int block_response;
+    apr_bucket_brigade *saved_brigade;
+    apr_off_t saved_size;
+    apr_time_t exp;
+    apr_time_t lastmod;
+    cache_info *info;
+    ap_filter_t *save_filter;
+    ap_filter_t *remove_url_filter;
+    const char *key;
+    apr_off_t size;
+    apr_bucket_brigade *out;
+    cache_control_t control_in;
+} cache_request_rec;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体はリクエスト処理の各段階で参照・更新されます。</li>
+<li>入力: リクエストごとの設定やヘッダー情報。</li>
+<li>出力: キャッシュの鮮度判定結果（<code>fresh</code>）、キャッシュキー（<code>key</code>）、および保存対象のレスポンスデータ（<code>saved_brigade</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体はリクエストプール（<code>apr_pool_t</code>）に紐付いており、リクエストの終了とともに自動的に解放されます。</li>
+<li>キャッシュの物理的な保存ロジックは各ストレージプロバイダに依存します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>キャッシュの検索、鮮度判定、および保存処理のコンテキストを保持します。</li>
+<li><code>CACHE_SAVE</code> フィルタや <code>CACHE_OUT</code> フィルタにおいて、レスポンスのフィルタリングやキャッシュの更新制御に使用されます。</li>
+<li><code>cache_try_lock</code> 等の排他制御関数において、キャッシュ更新権の管理に利用されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元（参照・操作）:</li>
+<li><code>modules/cache/cache_storage.c</code>: <code>cache_remove_url</code>, <code>cache_create_entity</code>, <code>cache_select</code>, <code>cache_invalidate</code></li>
+<li><code>modules/cache/cache_util.c</code>: <code>cache_try_lock</code></li>
+<li>呼び出し先:</li>
+<li>構造体内部で <code>cache_provider</code> や <code>cache_handle_t</code> などの関連型を保持しており、これらを通じてストレージプロバイダの関数を呼び出します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_provider_list</code>: 利用可能なキャッシュプロバイダのリスト。</li>
+<li><code>cache_handle_t</code>: キャッシュエントリへのアクセスハンドル。</li>
+<li><code>cache_control_t</code>: <code>Cache-Control</code> ヘッダーの解析結果。</li>
+<li><code>apr_bucket_brigade</code>: レスポンスデータのバッファリングに使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>キャッシュのロック取得失敗時や、無効なキャッシュエントリへのアクセス時に、適切なフラグ（<code>fresh</code> 等）やフィルタの制御を通じてエラーハンドリングが行われます。</li>
+<li><code>size</code> フィールドが <code>-1</code> の場合、コンテンツ長が不明であることを示します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_cache</code> のコアロジックと各ストレージプロバイダ間の橋渡しを行います。</li>
+<li>メモリ管理はリクエストプールに依存するため、手動での解放は不要です。</li>
+<li>構造体の各フィールドは、キャッシュのライフサイクル（検索、判定、保存、無効化）の各フェーズで適切に更新される必要があります。</li>
 </ul></body></html>

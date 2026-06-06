@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/metadata/mod_remoteip.c:130</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>remoteip_input_filter</code> における PROXY プロトコル（v1/v2）の解析状態および受信バッファを保持するためのコンテキスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    char header[sizeof(proxy_header)];
+    apr_size_t rcvd;
+    apr_size_t need;
+    int version;
+    ap_input_mode_t mode;
+    apr_bucket_brigade *bb;
+    int done;
+} remoteip_filter_context;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>remoteip_input_filter</code> が読み取ったストリームデータ（<code>header</code> バッファへ格納）。</li>
+<li>**出力**: 解析完了後の接続情報（<code>conn_config</code> への反映）およびフィルタの完了状態（<code>done</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>remoteip_input_filter</code> の実行中、<code>f-&gt;ctx</code> に本構造体のインスタンスが保持されている必要があります。</li>
+<li><code>rcvd</code> は現在までに受信したバイト数、<code>need</code> は解析に必要な合計バイト数を表します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バッファリング**: ストリームからデータを読み取り、<code>header</code> に蓄積します。 2. **バージョン判定**: <code>remoteip_determine_version</code> を通じて PROXY プロトコルのバージョンを特定します。 3. **状態管理**: <code>rcvd</code> が <code>need</code> に達するまでデータを読み込み続け、完了時に <code>done</code> を設定してフィルタ処理を終了します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/metadata/mod_remoteip.c</code> 内の <code>remoteip_input_filter</code> 関数が <code>f-&gt;ctx</code> として本構造体を参照しています。</li>
+<li>**呼び出し先**: 直接的な関数呼び出しは含まれませんが、本構造体の各フィールドは <code>remoteip_input_filter</code> 内のロジックによって操作されます。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_header</code>: <code>header</code> フィールドのサイズ定義に使用される共用体。</li>
+<li><code>apr_bucket_brigade</code>: フィルタ処理中にデータを一時保持するために使用されます。</li>
+<li><code>remoteip_conn_config_t</code>: 本構造体で解析された結果が最終的に格納される接続単位のコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**データ不足**: ヘッダー全体が一度に届かない場合、<code>rcvd &lt; need</code> となり、フィルタは <code>APR_SUCCESS</code> を返しつつ後続の呼び出しを待ちます。</li>
+<li>**解析エラー**: 不正な PROXY プロトコルヘッダーが受信された場合、フィルタはエラーを返し処理を中断します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はリクエスト単位ではなく、接続単位のフィルタコンテキストとして管理されます。</li>
+<li><code>header</code> フィールドは <code>proxy_header</code> 共用体のサイズに依存しているため、プロトコル仕様の変更時には注意が必要です。</li>
 </ul></body></html>

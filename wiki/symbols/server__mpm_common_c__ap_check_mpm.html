@@ -6,22 +6,47 @@
 <li>定義箇所: <code>server/mpm_common.c:559</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>現在ロードされているマルチプロセッシングモジュール（MPM）の整合性を検証し、サーバーの再起動時にMPMが変更されていないことを確認します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>const char *ap_check_mpm(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: なし（内部のフック状態および <code>ap_show_mpm()</code> の結果を参照）。</li>
+<li>**出力**: </li>
+<li>正常時: <code>NULL</code></li>
+<li>エラー時: エラー内容を示す文字列（<code>const char *</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバーの起動および再起動プロセス中に呼び出されることを想定しています。</li>
+<li><code>_hooks.link_mpm</code> が初期化されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **MPMロード確認**: <code>_hooks.link_mpm</code> を参照し、MPMがロードされていない場合、または複数のMPMがロードされている場合はエラーメッセージを返します。 2. **MPM変更チェック**:</p>
+<ul>
+<li>初回呼び出し時: 現在のMPM名を <code>last_mpm_name</code> として静的変数に保存します。</li>
+<li>2回目以降: <code>ap_show_mpm()</code> が返す現在のMPM名と <code>last_mpm_name</code> を比較します。名前が異なる場合、再起動によるMPM変更は許可されないため、エラーメッセージを返します。</li>
+<p>3. **正常終了**: 整合性が確認できれば <code>NULL</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/config.c:2348</code> にて呼び出されています。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_show_mpm()</code>（MPM名取得）</li>
+<li><code>apr_pstrdup()</code>（メモリ確保）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>_hooks.link_mpm</code>: ロードされたMPMを保持するフック構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**MPM未ロード**: <code>_hooks.link_mpm</code> が空の場合、「No MPM loaded.」を返します。</li>
+<li>**MPM重複ロード**: <code>_hooks.link_mpm-&gt;nelts &gt; 1</code> の場合、「More than one MPM loaded.」を返します。</li>
+<li>**再起動時のMPM変更**: 実行中にMPMが切り替わった場合、「The MPM cannot be changed during restart.」を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は静的変数 <code>last_mpm_name</code> を使用して状態を保持しているため、プロセス生存期間中を通じてMPMの変更を禁止する不変条件を維持します。</li>
+<li><code>ap_show_mpm()</code> の戻り値に依存しているため、MPM側の実装が正しく名前を返していることが前提となります。</li>
 </ul></body></html>

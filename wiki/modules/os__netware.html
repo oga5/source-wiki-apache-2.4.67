@@ -1,40 +1,43 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/os__netware.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>os/netware</h1>
 <h2>システム内での役割</h2>
-<p><code>os/netware</code> には 5 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>os/netware</code> は、Apache HTTP Server を NetWare プラットフォーム上で動作させるための OS 抽象化レイヤーおよびビルド構成を提供します。このモジュールはディレクトリ境界に基づいて定義されており、NetWare 特有の環境差異を吸収し、コア機能がプラットフォームを意識せずに動作できるよう支援します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プラットフォーム適応**: NetWare 環境特有のコンパイラ挙動、型定義、およびシステムコールのマッピング。</li>
+<li>**ビルド構成**: NetWare 向けビルドに必要なディレクトリレイアウトやプリプロセッサ定義の提供。</li>
+<li>**ライフサイクル管理**: NLM (NetWare Loadable Module) としての起動・終了処理および OS イベント通知のハンドリング。</li>
+<li>**静的モジュール管理**: NetWare 環境でサーバーバイナリに組み込むべき静的モジュールリストの定義。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>os/netware/modules.c</code></li>
-<li><code>os/netware/netware_config_layout.h</code></li>
-<li><code>os/netware/os.h</code></li>
-<li><code>os/netware/pre_nw.h</code></li>
-<li><code>os/netware/util_nw.c</code></li>
+<li><code>os/netware/pre_nw.h</code>: コンパイル初期化、プラットフォーム識別、型定義の調整。</li>
+<li><code>os/netware/os.h</code>: OS 固有の機能抽象化、マクロ定義（<code>getpid</code> 等）。</li>
+<li><code>os/netware/netware_config_layout.h</code>: ビルド時のディレクトリレイアウト定義。</li>
+<li><code>os/netware/modules.c</code>: 静的リンクされるモジュールの登録管理。</li>
+<li><code>os/netware/util_nw.c</code>: NLM ライフサイクル管理およびプロセス制御ユーティリティ。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li>まだ明確なデータ構造シンボルは索引化されていません。</li>
+<li><code>ap_prelinked_modules</code>: サーバー起動時にロードされる静的モジュールのポインタ配列。</li>
+<li><code>ap_prelinked_module_symbols</code>: モジュール名と構造体を対応付ける検索用配列。</li>
+<li><code>ap_module_symbol_t</code>: モジュール名と構造体アドレスを保持する型。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **ビルド時**: <code>pre_nw.h</code> が環境を整え、<code>netware_config_layout.h</code> がパス構成を確定させる。 2. **起動時**: <code>_NonAppStart</code> が呼び出され、イベント通知の登録や終了ハンドラのセットアップを行う。 3. **実行中**: <code>http_config</code> サブシステムが <code>modules.c</code> で定義された配列を走査し、各モジュールのフックを初期化する。 4. **終了時**: <code>EVENT_DOWN_SERVER</code> イベントを捕捉し、<code>ap_cb_destroy</code> を通じてリソースの解放とクリーンアップを実行する。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>ap_mpm.h</code></li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code>, <code>ap_mpm.h</code> (Apache コア)</li>
+<li><code>nks/netware.h</code>, <code>nks/vm.h</code> (NetWare Kernel Services)</li>
 </ul>
 <h2>内部構成</h2>
 <ul>
 <li>子モジュール数: 0</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>os/netware/pre_nw.h</code> 2. <code>os/netware/os.h</code> 3. <code>os/netware/netware_config_layout.h</code> 4. <code>os/netware/modules.c</code> 5. <code>os/netware/util_nw.c</code></p>
+<p>1. <code>os/netware/pre_nw.h</code> (環境設定の基礎) 2. <code>os/netware/os.h</code> (OS 抽象化レイヤー) 3. <code>os/netware/netware_config_layout.h</code> (ビルド構成) 4. <code>os/netware/modules.c</code> (静的モジュール構成) 5. <code>os/netware/util_nw.c</code> (ライフサイクル管理)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>今後の MPM 拡張に伴う <code>AP_PLATFORM_REWRITE_ARGS_HOOK</code> の再評価が必要か。</li>
+<li>LLM ベースのモジュール合成を追加した後で、責務とフローをさらに精緻化する。</li>
 </ul></body></html>

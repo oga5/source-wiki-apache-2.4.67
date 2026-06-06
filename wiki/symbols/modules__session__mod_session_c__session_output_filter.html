@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/session/mod_session.c:447</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>レスポンス送信直前にセッションデータを永続化し、フィルタチェーンから自身を削除する出力フィルタとして機能します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t session_output_filter(ap_filter_t *f, apr_bucket_brigade *in);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: 現在のフィルタコンテキスト。</li>
+<li><code>in</code>: 送信されるバケットブリゲード。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>ap_pass_brigade</code> の戻り値を返却）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_rec</code> はリクエストプール（<code>r-&gt;pool</code>）に関連付けられており、明示的な解放は不要です。</li>
+<li>内部リダイレクトが発生した場合、<code>r-&gt;main</code> を起点に <code>r-&gt;next</code> を辿り、連鎖するすべてのリクエストに対してセッション保存を試みます。</li>
+<li><code>dirty</code> フラグが立っていないセッションは保存処理をスキップします。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. リクエストチェーン（<code>r</code> から <code>r-&gt;next</code>）を順次走査します。 2. 各リクエストに対して <code>ap_session_load</code> を呼び出し、セッションを取得します。 3. 設定（<code>session_dir_conf</code>）で指定されたヘッダーが存在する場合、その値をセッションに反映し、<code>dirty</code> フラグを立てて <code>session_identity_decode</code> を実行します。 4. <code>ap_session_save</code> を呼び出し、セッションをバックエンドへ書き出します。 5. 処理完了後、<code>ap_remove_output_filter(f)</code> によりフィルタチェーンから自身を削除します。 6. 最後に <code>ap_pass_brigade</code> を呼び出し、データを後続のフィルタへ渡します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_register_output_filter</code> を通じて登録され、Apache の出力フィルタチェーンから呼び出されます。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_session_load</code></li>
+<li><code>ap_session_save</code></li>
+<li><code>session_identity_decode</code></li>
+<li><code>ap_remove_output_filter</code></li>
+<li><code>ap_pass_brigade</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_rec</code>: セッション状態を保持する構造体。</li>
+<li><code>session_dir_conf</code>: ディレクトリ単位のセッション設定。</li>
+<li><code>ap_filter_t</code>: フィルタチェーンの管理構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_session_load</code> が失敗または未設定の場合、そのリクエストの保存処理はスキップされます。</li>
+<li><code>z-&gt;written</code> が真の場合、既に書き込み済みと判断しスキップします。</li>
+<li>ヘッダーによる上書き処理において、指定されたヘッダーが見つからない場合はスキップされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエストのライフサイクル終了時に実行されるため、セッションの最終的な永続化ポイントとなります。</li>
+<li>内部リダイレクト時の挙動（<code>r-&gt;next</code> の走査）が実装に含まれているため、リダイレクトを伴う複雑なリクエスト処理のデバッグ時にはこのループ構造を考慮してください。</li>
 </ul></body></html>

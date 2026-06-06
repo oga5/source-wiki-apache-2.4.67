@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/filters/mod_charset_lite.c:193</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストの <code>fixup</code> フックとして動作し、設定に基づいた文字セット変換が必要かどうかを判定し、必要な場合に変換用コンテキスト（<code>charset_req_t</code> および <code>charset_filter_ctx_t</code>）を初期化します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int find_code_page(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報）</li>
+<li>**出力**: <code>int</code>（Apache のステータスコード。成功または変換不要時は <code>DECLINED</code>、変換設定エラー時は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;per_dir_config</code> から取得した <code>charset_dir_t</code> 設定が存在すること。</li>
+<li>プロキシリクエスト、または特定の <code>mod_rewrite</code> 指標（<code>redirect:</code>, <code>gone:</code> 等）が含まれるリクエストは変換対象外とする。</li>
+<li>ソース文字セットとデフォルト文字セットが同一の場合は変換を行わない。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **設定確認**: ディレクトリ設定に <code>charset_source</code> と <code>charset_default</code> が存在するか確認し、欠落していれば <code>DECLINED</code> を返す。 2. **除外判定**: プロキシリクエストや特定のファイル名プレフィックスを持つリクエストをスキップ。 3. **変換不要判定**: ソースとデフォルトの文字セットが一致する場合は <code>DECLINED</code> を返す。 4. **コンテキスト初期化**:</p>
+<ul>
+<li><code>charset_req_t</code> と出力用コンテキストをリクエストプールから確保し、<code>request_config</code> に格納。</li>
+<li>出力用ブリゲード (<code>tmpbb</code>) を作成。</li>
+<p>5. **入力変換のセットアップ**: メソッドが <code>M_PUT</code> または <code>M_POST</code> の場合、入力用コンテキストを確保し、<code>apr_xlate_open</code> で変換ハンドルを初期化。エラー時は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache の <code>fixup</code> フックとして登録されている（<code>modules/filters/mod_charset_lite.c:1124</code>）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>, <code>ap_set_module_config</code></li>
+<li><code>apr_pcalloc</code>, <code>apr_palloc</code></li>
+<li><code>apr_brigade_create</code></li>
+<li><code>apr_xlate_open</code>, <code>apr_xlate_sb_get</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>charset_dir_t</code>: ディレクトリごとの設定。</li>
+<li><code>charset_req_t</code>: リクエストごとの変換管理情報。</li>
+<li><code>charset_filter_ctx_t</code>: フィルタごとの変換コンテキスト（<code>apr_xlate_t</code> ハンドルやバッファを含む）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**設定不備**: ソースまたはデフォルト文字セットが未設定の場合、変換をスキップ。</li>
+<li>**変換初期化失敗**: <code>apr_xlate_open</code> が失敗した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返し、リクエスト処理を中断する。</li>
+<li>**メソッド制限**: <code>OPTIONS</code> メソッドにリクエストボディが含まれる場合、本関数では変換設定を行わない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエストごとに実行されるため、メモリ確保には <code>r-&gt;pool</code> を使用しています。</li>
+<li>入力フィルタのコンテキストは <code>M_PUT</code>/<code>M_POST</code> 時のみ生成されるため、他のメソッドでは <code>reqinfo-&gt;input_ctx</code> が <code>NULL</code> であることを前提としています。</li>
 </ul></body></html>

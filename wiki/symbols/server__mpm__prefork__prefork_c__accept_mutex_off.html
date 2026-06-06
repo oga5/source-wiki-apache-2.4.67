@@ -6,22 +6,44 @@
 <li>定義箇所: <code>server/mpm/prefork/prefork.c:262</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>accept()</code> 呼び出し時に使用したプロセス間ミューテックスを解放し、他の子プロセスが接続を受け入れられる状態にする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t accept_mutex_off(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: なし（グローバルな <code>my_bucket</code> を参照）</li>
+<li>出力: <code>apr_status_t</code> 型。成功時は <code>APR_SUCCESS</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>my_bucket</code> が初期化されており、有効なミューテックスを保持していること。</li>
+<li>本関数は <code>accept()</code> 処理の直後に呼び出されることを想定している。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>my_bucket-&gt;mutex</code> に対して <code>apr_proc_mutex_unlock</code> を実行する。 2. 解放に失敗した場合:</p>
+<ul>
+<li>現在のプロセス世代（<code>retained-&gt;mpm-&gt;my_generation</code>）とスコアボード上の実行世代が異なる場合は、デバッグログを出力して処理を継続する（接続処理後に終了するため）。</li>
+<li>世代が一致している場合は、緊急ログを出力し、<code>APEXIT_CHILDFATAL</code> でプロセスを強制終了する。</li>
+<p>3. 成功時は <code>APR_SUCCESS</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>server/mpm/prefork/prefork.c</code> 内の <code>SAFE_ACCEPT</code> マクロ経由で呼び出される（591行目、613行目、647行目）。</li>
+<li>呼び出し先: <code>apr_proc_mutex_unlock</code> (APRライブラリ関数)。</li>
+<li>注記: <code>test/time-sem.c</code> に同名の関数が存在するが、これはテスト用であり本シンボルとは別物である。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>prefork_child_bucket</code>: ミューテックスを保持する構造体。</li>
+<li><code>prefork_retained_data</code>: プロセスの世代管理に使用されるデータ構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_proc_mutex_unlock</code> が <code>APR_SUCCESS</code> 以外を返した場合、プロセスが致命的エラーとして終了する可能性がある。</li>
+<li>世代交代が発生している最中の呼び出しでは、エラーログの出力レベルが <code>DEBUG</code> に抑制される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SAFE_ACCEPT</code> マクロを通じて呼び出されるため、直接呼び出し箇所を検索する際はマクロの展開に注意すること。</li>
+<li>世代管理の不一致による終了回避ロジックは、グレースフル再起動時の挙動に依存している。</li>
 </ul></body></html>

@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/http2/h2_request.c:137</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 ヘッダーフレームの各行を解析し、擬似ヘッダーを <code>h2_request</code> 構造体のフィールドへ格納、または標準ヘッダーを <code>req-&gt;headers</code> テーブルへ追加します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_request_add_header(h2_request *req, apr_pool_t *pool,
+                                   const char *name, size_t nlen,
+                                   const char *value, size_t vlen,
+                                   struct h2_hd_scratch *scratch,
+                                   int *pwas_added)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>req</code>: 操作対象の <code>h2_request</code> オブジェクト。</li>
+<li><code>pool</code>: メモリ割り当て用プール。</li>
+<li><code>name</code>, <code>value</code>: ヘッダー名および値の文字列（長さ <code>nlen</code>, <code>vlen</code>）。</li>
+<li><code>scratch</code>: ヘッダー処理用スクラッチ領域。</li>
+<li>**出力**:</li>
+<li><code>pwas_added</code>: ヘッダーがテーブルに追加された場合に 1 が設定される（擬似ヘッダーの場合は 0）。</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>、エラー時は <code>APR_EGENERAL</code> 等のステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>擬似ヘッダー（<code>:</code> で始まる名前）は、リクエストのヘッダー処理の先頭で受信される必要があります。</li>
+<li><code>req-&gt;headers</code> が空でない状態で擬似ヘッダーが受信された場合、不正な順序としてエラーを返します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>nlen</code> が 0 以下であれば即座に終了します。 2. <code>name[0] == &#x27;:&#x27;</code> の場合、擬似ヘッダーとして以下のいずれかにマッピングします。</p>
+<ul>
+<li><code>:method</code>, <code>:scheme</code>, <code>:path</code>, <code>:authority</code>, <code>:protocol</code></li>
+<li>一致するものは <code>req</code> の各フィールドに <code>apr_pstrndup</code> でコピーされます。</li>
+<li>未知の擬似ヘッダーは警告ログを出力し無視します。</li>
+<p>3. 擬似ヘッダー以外の場合、<code>h2_req_add_header</code> を呼び出し、<code>req-&gt;headers</code> テーブルへ追加します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_stream.c:787</code></li>
+<li>**呼び出し先**: <code>h2_req_add_header</code>（内部ヘルパー関数）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_request</code>: HTTP/2 リクエスト表現。</li>
+<li><code>apr_table_t</code>: <code>req-&gt;headers</code> として保持されるヘッダーテーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**境界条件**: 未知の擬似ヘッダーを受信した場合、先頭 31 文字をログに記録し、処理を継続します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>h2_request.h</code> で宣言されています。</li>
+<li>擬似ヘッダーの順序制約は RFC 7540 8.1.2.3 に準拠しています。</li>
+<li>メモリ管理は <code>apr_pool_t</code> に依存しているため、呼び出し側で適切なライフサイクルのプールを渡す必要があります。</li>
 </ul></body></html>

@@ -3,25 +3,53 @@
 <h2>定義</h2>
 <ul>
 <li>種別: <code>struct</code></li>
-<li>定義箇所: <code>server/log.c:186</code></li>
+<li>定義箇所: <code>server/log.c:186</code> (および <code>http_log.h:776</code>)</li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバーと外部ログ処理プロセス間のパイプ通信を管理し、ログの転送および子プロセスのライフサイクルを保持するための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct piped_log {
+    apr_pool_t *p;
+    apr_file_t *read_fd, *write_fd;
+#ifdef AP_HAVE_RELIABLE_PIPED_LOGS
+    char *program;
+    apr_proc_t *pid;
+    apr_cmdtype_e cmdtype;
+#endif
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ap_open_piped_log</code> 等の関数を通じて、メモリプール (<code>apr_pool_t</code>) および実行プログラム名が提供されます。</li>
+<li>**出力**: ログ書き込み用のファイル記述子 (<code>write_fd</code>) および読み取り用記述子 (<code>read_fd</code>) を提供します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code> は、この構造体の生存期間を管理する有効な <code>apr_pool_t</code> である必要があります。</li>
+<li><code>AP_HAVE_RELIABLE_PIPED_LOGS</code> が定義されている環境では、子プロセスの異常終了時に再起動を行うためのプロセス情報 (<code>pid</code>) が保持されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバーからログをパイプ経由で外部プロセスへ転送します。</li>
+<li><code>AP_HAVE_RELIABLE_PIPED_LOGS</code> が有効な場合、<code>piped_log_maintenance</code> 関数が <code>apr_proc_other_child_register</code> を介して子プロセスの死活監視を行い、必要に応じて再起動を試みます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_log_config.c</code> や <code>mod_log_forensic.c</code> 等のログ関連モジュールがこの構造体を利用します。</li>
+<li>**呼び出し先**: <code>ap_piped_log_read_fd</code> および <code>ap_piped_log_write_fd</code> が、構造体内のファイル記述子を返すために使用されます。また、<code>piped_log_spawn</code> が内部的にこの構造体を参照してプロセスを生成します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: メモリ管理に使用。</li>
+<li><code>apr_file_t</code>: パイプの読み書き用ファイル記述子。</li>
+<li><code>apr_proc_t</code>: (条件付き) 外部ログプロセスのプロセス情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>パイプの作成失敗や、外部プログラムの起動失敗が発生する可能性があります。</li>
+<li><code>AP_HAVE_RELIABLE_PIPED_LOGS</code> が未定義の環境では、子プロセスの自動再起動機能は提供されません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>server/log.c</code> と <code>include/http_log.h</code> の両方で定義されています。変更時は両方の整合性に注意してください。</li>
+<li>ログ出力は I/O ボトルネックになり得るため、高負荷環境でのパイプ処理の挙動には留意が必要です。</li>
 </ul></body></html>

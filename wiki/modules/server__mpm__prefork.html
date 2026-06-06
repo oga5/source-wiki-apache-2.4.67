@@ -1,44 +1,39 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/server__mpm__prefork.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/prefork</h1>
 <h2>システム内での役割</h2>
-<p><code>server/mpm/prefork</code> には 2 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>server/mpm/prefork</code> は、Apache HTTP Server における Prefork MPM（Multi-Processing Module）の実装ディレクトリです。各リクエストを単一のプロセスで処理する非スレッド型のモデルを提供し、スレッドセーフではないライブラリとの互換性を維持しつつ、あらかじめ子プロセスを生成（プリフォーク）することでリクエストに対する応答性を高めます。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**プロセス管理**: 子プロセスの生成 (<code>fork</code>)、死活監視、およびシグナルによるライフサイクル制御。</li>
+<li>**動的スケーリング**: <code>MinSpareServers</code> / <code>MaxSpareServers</code> に基づくアイドルプロセスの監視と調整。</li>
+<li>**接続処理**: <code>accept()</code> ミューテックスによる排他制御と、リスニングソケットのポーリング。</li>
+<li>**設定管理**: プロセス数上限（<code>ServerLimit</code> 等）の検証と適用。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>server/mpm/prefork/mpm_default.h</code></li>
-<li><code>server/mpm/prefork/prefork.c</code></li>
+<li><code>server/mpm/prefork/mpm_default.h</code>: プロセス管理に関するデフォルトの閾値定義。</li>
+<li><code>server/mpm/prefork/prefork.c</code>: プロセス管理ロジックおよび MPM のメイン実装。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>prefork_retained_data</code></li>
-<li><code>prefork_child_bucket</code></li>
+<li><code>prefork_retained_data</code>: 再起動を跨いで保持される、世代管理やスケーリング状態を格納する構造体。</li>
+<li><code>prefork_child_bucket</code>: リスナー、パイプ（POD: Pipe of Death）、ミューテックスを保持する管理構造体。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **初期化**: <code>prefork_pre_config</code> にて設定の初期化と <code>retained</code> データの確保を行う。 2. **起動**: <code>prefork_run</code> がメインループを開始し、<code>startup_children</code> で初期プロセスを生成。 3. **監視**: 親プロセスが <code>perform_idle_server_maintenance</code> を通じて負荷に応じたプロセス増減を定期的に実行。 4. **接続処理**: 子プロセスが <code>child_main</code> 内で <code>accept()</code> を実行し、リクエストを処理。 5. **終了**: シグナル（<code>SIGTERM</code> 等）を受け取ると、POD を通じて子プロセスへ通知し、クリーンアップを行う。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>apr.h</code></li>
-<li><code>apr_portable.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>apr_thread_proc.h</code></li>
-<li><code>apr_signal.h</code></li>
-<li><code>apr_want.h</code></li>
-<li><code>ap_config.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>mpm_default.h</code></li>
-<li><code>http_main.h</code></li>
+<li>**APR (Apache Portable Runtime)**: <code>apr.h</code>, <code>apr_thread_proc.h</code>, <code>apr_signal.h</code> 等によるポータブルなプロセス・メモリ管理。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>ap_config.h</code>, <code>scoreboard.h</code> 等による MPM 共通インターフェースおよび共有メモリ管理。</li>
+<li>**Unix 固有**: <code>unixd.h</code> による権限管理やシグナル処理。</li>
 </ul>
 <h2>内部構成</h2>
 <ul>
-<li>子モジュール数: 0</li>
+<li>子モジュール数: 0（ディレクトリ境界に基づき、単一の MPM 実装として構成）。</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>server/mpm/prefork/mpm_default.h</code> 2. <code>server/mpm/prefork/prefork.c</code></p>
+<p>1. <code>server/mpm/prefork/mpm_default.h</code>: プロセス管理の定数定義を把握。 2. <code>server/mpm/prefork/prefork.c</code>: プロセス管理のメインループとライフサイクル管理の実装を精読。</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>本モジュールはディレクトリ境界から推論された構成であるため、将来的なリファクタリングやサブモジュール化の可能性について継続的な評価が必要。</li>
 </ul></body></html>

@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_wstunnel.c:29</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebSocket プロトコル（<code>ws:</code> / <code>wss:</code>）のリクエストをインターセプトし、<code>Upgrade</code> ヘッダーの有無に基づいて、本モジュールで処理するか、他のハンドラ（<code>mod_proxy_http</code> 等）へ委譲するかを判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_wstunnel_check_trans(request_rec *r, const char *url)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>url</code>: 処理対象の URL 文字列。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: WebSocket リクエストとして処理を続行する場合。</li>
+<li><code>DECLINED</code>: 本モジュールでの処理を辞退し、他のハンドラに委譲する場合。</li>
+<li><code>HTTP_UPGRADE_REQUIRED</code>: <code>Upgrade</code> ヘッダーが存在せず、WebSocket トンネリングが不可能な場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;per_dir_config</code> から <code>proxyws_dir_conf</code> を取得し、設定されたフォールバック条件を確認する。</li>
+<li>URL が <code>ws:</code> または <code>wss:</code> で始まらない場合、即座に <code>DECLINED</code> を返す。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **フォールバック判定**: 設定により <code>mod_proxy_http</code> へのフォールバックが有効かつ条件を満たす場合、<code>DECLINED</code> を返す。 2. **スキーム検証**: URL が <code>ws:</code> または <code>wss:</code> で開始されない場合、<code>DECLINED</code> を返す。 3. **ヘッダー検証**: <code>r-&gt;headers_in</code> 内に <code>Upgrade</code> ヘッダーが存在するか確認する。</p>
+<ul>
+<li>存在しない場合: <code>HTTP_UPGRADE_REQUIRED</code> を返し、処理を中断する。</li>
+<li>存在する場合: <code>OK</code> を返し、後続のプロキシ処理へ進む。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache の <code>check_trans</code> フック（<code>modules/proxy/mod_proxy_wstunnel.c:501</code> にて <code>proxy_hook_check_trans</code> に登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>: 設定構造体の取得。</li>
+<li><code>ap_log_rerror</code>: ログ出力。</li>
+<li><code>apr_table_get</code>: ヘッダーの確認。</li>
+<li><code>ap_cstr_casecmpn</code>: URL スキームの比較。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxyws_dir_conf</code>: ディレクトリ単位の設定（フォールバック設定を保持）。</li>
+<li><code>request_rec</code>: リクエスト情報およびヘッダーテーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Upgrade</code> ヘッダーが欠落している場合、<code>HTTP_UPGRADE_REQUIRED</code> を返して処理を終了する。</li>
+<li><code>ws:</code> / <code>wss:</code> 以外のスキームが渡された場合、<code>DECLINED</code> を返して他のモジュールに処理を委ねる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>proxy_hook_check_trans</code> フックの一部として実行される。</li>
+<li><code>HTTP_UPGRADE_REQUIRED</code> を返すことで、WebSocket 以外のリクエストが誤ってトンネル処理されることを防いでいる。</li>
+<li>フォールバックロジックは <code>dconf-&gt;fallback_to_proxy_http</code> に依存しているため、設定変更時にはこのフラグの挙動に注意すること。</li>
 </ul></body></html>

@@ -6,22 +6,40 @@
 <li>定義箇所: <code>modules/slotmem/mod_slotmem_shm.c:153</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>共有メモリ上のスロット管理インスタンスの内容を、整合性検証用のMD5ハッシュと共にファイルへ永続化する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void store_slotmem(ap_slotmem_instance_t *slotmem)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ap_slotmem_instance_t *slotmem</code>（永続化対象の共有メモリインスタンス）。</li>
+<li>**出力**: なし（ファイルシステムへの書き込みによる副作用）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>slotmem-&gt;pname</code> に有効なファイルパスが設定されていること。</li>
+<li>共有メモリ領域が初期化済みであること。</li>
+<li><code>AP_SLOTMEM_IS_CLEARINUSE(slotmem)</code> が真の場合、書き出し前に <code>slotmem_clearinuse</code> が実行される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>slotmem-&gt;pname</code> で指定されたパスにファイルを開く（存在する場合は削除して再作成）。 2. 必要に応じて <code>slotmem_clearinuse</code> を呼び出し、利用状況フラグをクリアする。 3. データ領域（<code>persist</code>）のサイズを計算し、<code>apr_md5</code> を用いてハッシュ値を算出する。 4. ファイルへ順に「データ領域」「MD5ハッシュ」「記述子（<code>desc</code>）」を書き込む。 5. 書き込み失敗時は、作成したファイルを削除する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/slotmem/mod_slotmem_shm.c:301</code>（<code>cleanup_slotmem</code> 内のループ処理から参照）。</li>
+<li>**呼び出し先**: <code>apr_file_open</code>, <code>apr_file_remove</code>, <code>slotmem_clearinuse</code>, <code>apr_md5</code>, <code>apr_file_write_full</code>, <code>apr_file_close</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_slotmem_instance_t</code>: インスタンスの管理構造体。</li>
+<li><code>sharedslotdesc_t</code>: スロットの構成情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ファイルオープン失敗時や書き込み失敗時は、処理を中断する。</li>
+<li>ファイルが既に存在する場合、一度削除してから再作成を試みる。</li>
+<li><code>storename</code> が NULL の場合は何も行わない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はサーバー終了時のクリーンアップ処理の一部として呼び出される。</li>
+<li>書き込み順序（データ→ハッシュ→記述子）は <code>restore_slotmem</code> と対になっているため、変更時は整合性に注意すること。</li>
 </ul></body></html>

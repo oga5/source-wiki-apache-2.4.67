@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/filters/mod_filter.c:135</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストのコンテキスト（<code>Content-Type</code> または <code>ap_expr</code> 式）に基づき、登録されたフィルタプロバイダの中から適切なものを選択し、実行関数を特定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int filter_lookup(ap_filter_t *f, ap_filter_rec_t *filter)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>f</code>: 現在のフィルタコンテキストを含む <code>ap_filter_t</code> 構造体。</li>
+<li><code>filter</code>: 検索対象となるフィルタ定義 (<code>ap_filter_rec_t</code>)。</li>
+<li>**出力**:</li>
+<li><code>int</code>: プロバイダが見つかり、適用準備が整った場合は <code>1</code>、それ以外は <code>0</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;r</code>（リクエストレコード）が有効であること。</li>
+<li><code>filter-&gt;providers</code> にプロバイダのリストが登録されていること。</li>
+<li>プロバイダの条件判定には <code>ap_expr</code> または <code>Content-Type</code> が使用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 登録されたプロバイダを順次走査する。 2. <code>provider-&gt;expr</code> が定義されている場合、<code>ap_expr_exec</code> で評価を行う。 3. <code>expr</code> がない場合、<code>r-&gt;content_type</code> と <code>provider-&gt;types</code> を比較し、一致を確認する。 4. 条件が一致した場合、プロトコルフラグ (<code>proto_flags</code>) に基づき、必要に応じて <code>Cache-Control</code> や <code>Content-Length</code> などの HTTP ヘッダを調整する。 5. 選択されたプロバイダの実行関数を <code>ctx-&gt;func</code> にセットし、<code>1</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>filter_harness</code> (<code>modules/filters/mod_filter.c:312</code>)</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_expr_exec</code> (条件式評価)</li>
+<li><code>ap_log_rerror</code> (ログ出力)</li>
+<li><code>apr_table_unset</code> / <code>apr_table_addn</code> / <code>apr_table_setn</code> (HTTP ヘッダ操作)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_filter_provider_t</code>: 評価条件とプロバイダのペアを保持する連結リスト。</li>
+<li><code>harness_ctx</code>: 実行時のコンテキスト。選択された関数ポインタを保持。</li>
+<li><code>mod_filter_ctx</code>: リクエストごとの設定コンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**条件不一致**: どのプロバイダも条件に合致しない場合、<code>0</code> を返す。</li>
+<li>**式評価エラー**: <code>ap_expr_exec</code> がエラーを返した場合、ログを出力し、そのプロバイダはスキップされる。</li>
+<li>**プロキシ環境**: <code>r-&gt;proxyreq</code> が真の場合、<code>AP_FILTER_PROTO_NO_PROXY</code> フラグを持つプロバイダは無視される。</li>
+<li>**Content-Type 不在**: リクエストに <code>Content-Type</code> がない場合、そのプロバイダはマッチしない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>プロトコルヘッダの調整ロジックは「ハック」であり、フィルタ実装者がヘッダ修正の負担を負わないようにするための暫定的な措置である。</li>
+<li><code>filter_lookup</code> 内でのヘッダ操作は、フィルタ適用による副作用（<code>Content-Length</code> の不整合など）を補正するために行われる。</li>
 </ul></body></html>

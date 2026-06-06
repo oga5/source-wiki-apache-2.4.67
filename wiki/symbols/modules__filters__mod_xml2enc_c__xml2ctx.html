@@ -2,26 +2,66 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__filters__mod_xml2enc_c__xml2ctx.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>xml2ctx</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>struct</code></li>
-<li>定義箇所: <code>modules/filters/mod_xml2enc.c:77</code></li>
+<li>**種別**: <code>struct</code></li>
+<li>**定義箇所**: <code>modules/filters/mod_xml2enc.c:77</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の出力フィルタ <code>mod_xml2enc</code> において、リクエストごとのフィルタ実行状態（文字コード変換器、バッファ、フラグ等）を保持するために使用される構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    xmlCharEncoding xml2enc;        /* libxml2 のエンコーディング識別子 */
+    char* buf;                      /* 処理用バッファ */
+    apr_size_t bytes;               /* バッファ内のデータサイズ */
+    apr_xlate_t* convset;           /* 文字コード変換ハンドル */
+    unsigned int flags;             /* フィルタの状態フラグ */
+    apr_off_t bblen;                /* バケットブリゲードの長さ */
+    apr_bucket_brigade* bbnext;     /* 次のフィルタへ渡すバケットブリゲード */
+    apr_bucket_brigade* bbsave;     /* 処理待ちのバケットブリゲード */
+    const char* encoding;           /* 検出されたエンコーディング名 */
+} xml2ctx;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は関数引数として渡され、フィルタの実行状態を維持します。</p>
+<ul>
+<li>**入力**: <code>apr_pcalloc</code> 等によりリクエストプールからメモリが割り当てられ、<code>sniff_encoding</code> や <code>fix_skipto</code> などの関数で状態が更新されます。</li>
+<li>**出力**: 変換後のデータが <code>bbnext</code> を通じて後続フィルタへ渡されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストのライフサイクルに紐付いており、<code>request_rec</code> のプールを使用して確保されます。</li>
+<li><code>libxml2</code> の検出ロジックおよび <code>apr_xlate</code> の変換機能に依存しています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バッファリング**: <code>xml2enc_ffunc</code> 内で、エンコーディング特定に必要なデータ量（<code>BUF_MIN</code>）が溜まるまでデータを保持します。</li>
+<li>**変換**: <code>apr_xlate_conv_buffer</code> を用いて、バッファ内のデータを UTF-8 へ変換します。</li>
+<li>**エラー処理**: 不正なバイト列に対しては <code>APR_EINVAL</code> を返し、該当バイトをスキップして処理を継続します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>xml2enc_ffunc</code> (フィルタのメインループ)</li>
+<li><code>fix_skipto</code> (補助関数)</li>
+<li><code>sniff_encoding</code> (エンコーディング特定関数)</li>
+<li><code>xml2enc_filter_init</code> (初期化関数)</li>
+<li>**呼び出し先**: </li>
+<li>本構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報を保持する Apache の構造体。</li>
+<li><code>apr_bucket_brigade</code>: ストリーム処理に使用されるバケットの連結リスト。</li>
+<li><code>apr_xlate_t</code>: <code>apr_xlate</code> による文字コード変換ハンドル。</li>
+<li><code>xmlCharEncoding</code>: <code>libxml2</code> で定義されるエンコーディング型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**エンコーディング未検出**: 設定されたデフォルト値にフォールバックします。</li>
+<li>**不完全なデータ**: <code>APR_EINCOMPLETE</code> が発生した場合、バッファを保持して次回の <code>ffunc</code> 呼び出しを待ちます。</li>
+<li>**変換失敗**: <code>apr_xlate</code> での変換が失敗した場合、デフォルト値へのフォールバックを試みます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>メモリ管理は <code>request_rec</code> のプールに依存しており、リクエスト終了時に自動解放されます。</li>
+<li><code>libxml2</code> の内部テーブルに依存しているため、サポート外のエンコーディングについては <code>apr_xlate</code> の挙動に左右されます。</li>
+<li><code>ap_assert</code> の使用箇所は、将来的にエラーハンドリングへの置き換えが推奨されています。</li>
 </ul></body></html>

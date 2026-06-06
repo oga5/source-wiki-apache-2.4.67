@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/cluster/mod_heartmonitor.c:195</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>共有メモリ（<code>slotmem</code>）上のサーバー統計情報を、指定された <code>hm_server_t</code> の内容で更新または新規作成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t hm_slotmem_update_stat(hm_server_t *s, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: 更新対象のサーバー状態を保持する <code>hm_server_t</code> 構造体へのポインタ。</li>
+<li><code>pool</code>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li>**出力**:</li>
+<li>戻り値: 常に <code>APR_SUCCESS</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>storage</code> および <code>slotmem</code> が初期化済みであること。</li>
+<li><code>s</code> が指す構造体には、有効な IP アドレス、busy 数、ready 数、および最終確認時刻（<code>seen</code>）が格納されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>storage-&gt;doall</code> を呼び出し、既存の共有メモリ領域を <code>hm_update</code> 関数で走査して、一致するサーバーエントリの更新を試みます。 2. <code>ctx.found</code> が真であれば、更新完了として終了します。 3. 一致するエントリが見つからなかった場合（新規サーバーの場合）:</p>
+<ul>
+<li><code>hm_slot_server_t</code> 構造体をゼロ初期化し、<code>s</code> の情報をコピーします。</li>
+<li><code>storage-&gt;grab</code> を呼び出して、共有メモリ内の空きスロットインデックス <code>i</code> を取得します。</li>
+<li><code>storage-&gt;put</code> を呼び出し、取得したインデックス <code>i</code> にサーバー情報を書き込みます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cluster/mod_heartmonitor.c:401</code></li>
+<li><code>modules/cluster/mod_heartmonitor.c:495</code></li>
+<li>**呼び出し先**:</li>
+<li><code>storage-&gt;doall</code></li>
+<li><code>storage-&gt;grab</code></li>
+<li><code>storage-&gt;put</code></li>
+<li><code>hm_update</code> (コールバックとして渡される)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>hm_server_t</code>: 内部的なサーバー状態管理構造体。</li>
+<li><code>hm_slot_server_ctx_t</code>: 共有メモリ操作時のコンテキスト保持用構造体。</li>
+<li><code>hm_slot_server_t</code>: 共有メモリ上に保存されるサーバー情報の形式。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>共有メモリが満杯の場合、<code>storage-&gt;grab</code> の挙動に依存します。</li>
+<li>本関数自体はエラー発生時も <code>APR_SUCCESS</code> を返す設計となっています。</li>
+<li>排他制御については、ソース内に「<code>grab()</code> / <code>put()</code> 時のロックが必要」との注釈があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>storage-&gt;grab</code> および <code>storage-&gt;put</code> の呼び出し時に、明示的なロック機構が実装されていない点に注意してください。</li>
+<li><code>hm_update</code> コールバック関数との連携により、既存エントリの検索と更新が抽象化されています。</li>
 </ul></body></html>

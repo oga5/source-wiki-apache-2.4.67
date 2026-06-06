@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/mappers/mod_dir.c:171</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>FallbackResource</code> ディレクティブで指定されたリソースへの内部転送を処理します。ファイルが存在しないリクエストに対して、設定されたフォールバック先を解決し、成功した場合は内部リダイレクトを行います。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int fixup_dflt(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （現在のリクエスト情報）</li>
+<li>**出力**: </li>
+<li><code>OK</code>: 内部リダイレクトが成功した場合。</li>
+<li><code>DECLINED</code>: フォールバック設定がない、または無効な場合。</li>
+<li><code>HTTPステータスコード</code>: サブリクエストでエラーが発生した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dir_config_rec</code> から取得した <code>dflt</code> 設定が <code>NULL</code> または <code>&quot;disabled&quot;</code> の場合は即座に <code>DECLINED</code> を返します。</li>
+<li>サブリクエストの生成には <code>r-&gt;pool</code> を使用し、処理終了後に <code>ap_destroy_sub_req</code> で解放する必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 現在のリクエスト設定から <code>dflt</code>（フォールバック先）を取得します。 2. リクエストにクエリ文字列（<code>r-&gt;args</code>）がある場合、フォールバック先に付与します。 3. <code>ap_sub_req_lookup_uri</code> を使用して、フォールバック先リソースのサブリクエストを生成します。 4. サブリクエストの結果が <code>HTTP_OK</code> であり、かつハンドラが <code>proxy-server</code> であるか、ファイルタイプが <code>APR_REG</code>（通常ファイル）である場合、<code>ap_internal_fast_redirect</code> を実行してリクエストを転送します。 5. サブリクエストがリダイレクト（3xx）を返す場合、ヘッダーやノートを親リクエストにマージし、ステータスを保持します。 6. 最後にサブリクエストを破棄し、エラーがあればそれを返し、なければ <code>DECLINED</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/mappers/mod_dir.c:399</code> （<code>dir_fixups</code> 関数内から呼び出されます）</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code></li>
+<li><code>apr_pstrcat</code></li>
+<li><code>ap_sub_req_lookup_uri</code></li>
+<li><code>ap_internal_fast_redirect</code></li>
+<li><code>ap_is_HTTP_REDIRECT</code></li>
+<li><code>apr_pool_join</code>, <code>apr_table_overlay</code></li>
+<li><code>ap_destroy_sub_req</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+<li><code>dir_config_rec</code>: <code>mod_dir</code> のディレクトリ設定構造体。<code>dflt</code> フィールドにフォールバック先パスを保持します。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**無限再帰**: <code>FallbackResource</code> に指定されたリソース自体が存在しない場合、内部リダイレクトの制限回数に達するまで再帰する可能性があります。</li>
+<li>**サブリクエストエラー**: サブリクエストが <code>HTTP_OK</code> 以外を返した場合、そのステータスコードが呼び出し元に伝播されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>fixup_dir</code> のロジックを簡略化したものです。修正を行う際は <code>fixup_dir</code> のコメントも併せて参照してください。</li>
+<li><code>FallbackResource</code> の解決先が動的コンテンツである場合、<code>proxy-server</code> ハンドラ等の判定が適切に行われることを確認してください。</li>
 </ul></body></html>

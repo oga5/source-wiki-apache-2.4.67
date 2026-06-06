@@ -6,22 +6,61 @@
 <li>定義箇所: <code>modules/cache/cache_storage.c:72</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>新しいキャッシュエンティティの作成を、登録されているキャッシュストレージプロバイダーに対して試行します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int cache_create_entity(cache_request_rec *cache, request_rec *r,
+                        apr_off_t size, apr_bucket_brigade *in);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>cache</code>: リクエストに関連付けられたキャッシュコンテキスト。</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>size</code>: 作成するエンティティのサイズ（<code>apr_off_t</code>）。</li>
+<li><code>in</code>: エンティティの初期データを含むバケットブリゲード。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: エンティティの作成に成功。</li>
+<li><code>DECLINED</code>: 適切なプロバイダーが見つからなかった、または作成を拒否された。</li>
+<li><code>APR_EGENERAL</code>: キャッシュコンテキストが不正。</li>
+<li>その他: プロバイダーが返したエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache</code> が NULL の場合、エラーとして <code>APR_EGENERAL</code> を返します。</li>
+<li><code>cache-&gt;key</code> が未設定の場合、内部で <code>cache_generate_key</code> を呼び出し、キーの生成を試みます。</li>
+<li>すべてのメモリ割り当ては <code>r-&gt;pool</code> を使用します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>cache_handle_t</code> 構造体を <code>r-&gt;pool</code> 上に確保します。 2. <code>cache-&gt;key</code> が存在しない場合、<code>cache_generate_key</code> を実行して生成します。 3. <code>cache-&gt;providers</code> リストを順次走査します。 4. 各プロバイダーの <code>create_entity</code> 関数を呼び出します。</p>
+<ul>
+<li><code>OK</code> が返された場合、<code>cache-&gt;handle</code>、<code>cache-&gt;provider</code>、<code>cache-&gt;provider_name</code> を更新して終了します。</li>
+<li><code>DECLINED</code> が返された場合、次のプロバイダーへ移行します。</li>
+<li>それ以外の値が返された場合、その値を即座に返します。</li>
+<p>5. すべてのプロバイダーで作成できなかった場合、<code>DECLINED</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/mod_cache.c:801</code></li>
+<li><code>modules/cache/mod_cache.c:1332</code></li>
+<li>**呼び出し先**:</li>
+<li><code>cache_generate_key</code> (内部関数)</li>
+<li><code>list-&gt;provider-&gt;create_entity</code> (各ストレージプロバイダーの実装)</li>
+<li><code>ap_log_rerror</code> (エラーログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_request_rec</code>: キャッシュの要求状態を保持。</li>
+<li><code>cache_handle_t</code>: 作成されたキャッシュエントリへのハンドル。</li>
+<li><code>cache_provider_list</code>: 利用可能なストレージプロバイダーのリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache</code> 引数が NULL の場合、ログを出力して <code>APR_EGENERAL</code> を返します。</li>
+<li>キー生成に失敗した場合、そのエラーコードを返します。</li>
+<li>登録されたすべてのプロバイダーが <code>DECLINED</code> を返した場合、関数全体としても <code>DECLINED</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はストレージの抽象化レイヤーであり、実際の I/O は各プロバイダー（<code>mod_cache_disk</code> 等）に委譲されます。</li>
+<li><code>cache-&gt;handle</code> の更新は、プロバイダーによる作成成功時にのみ行われます。</li>
 </ul></body></html>

@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/arch/unix/mod_systemd.c:97</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の稼働統計（リクエスト数、負荷状況、稼働時間など）を定期的に取得し、<code>sd_notifyf</code> を介して systemd にステータス文字列として送信する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int systemd_monitor(apr_pool_t *p, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当て用のプール。</li>
+<li><code>s</code>: サーバーレコード（未使用）。</li>
+<li>**出力**:</li>
+<li>常に <code>DECLINED</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_extended_status</code> が有効であること。無効な場合、本関数は何も行わず即座に終了する。</li>
+<li>スコアボード（<code>ap_scoreboard_image</code>）が初期化済みであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_extended_status</code> を確認し、無効であれば <code>DECLINED</code> を返して終了する。 2. <code>ap_get_sload</code> を呼び出し、現在のサーバー負荷統計（<code>ap_sload_t</code>）を取得する。 3. サーバーの再起動時刻から現在までの稼働時間（秒）を算出する。 4. 稼働時間と総バイト数から、1秒あたりの転送量（バイト/秒）を計算し、<code>apr_strfsize</code> で人間が読みやすい形式に変換する。 5. <code>sd_notifyf</code> を使用し、以下の情報を含むステータス文字列を systemd に送信する:</p>
+<ul>
+<li><code>READY=1</code>（サービス稼働中）</li>
+<li>総リクエスト数</li>
+<li>アイドル/ビジー状態のワーカー数</li>
+<li>1秒あたりのリクエスト数</li>
+<li>1秒あたりの転送バイト数</li>
+<p>6. <code>DECLINED</code> を返して終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/arch/unix/mod_systemd.c:168</code> にて <code>ap_hook_monitor</code> に登録されており、サーバーの監視フェーズで定期的に呼び出される。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_sload</code>: 統計情報の取得。</li>
+<li><code>apr_time_now</code>, <code>apr_time_sec</code>: 稼働時間の計算。</li>
+<li><code>apr_strfsize</code>: 転送量のフォーマット変換。</li>
+<li><code>sd_notifyf</code>: systemd への通知。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_sload_t</code>: サーバー負荷統計を保持する構造体。</li>
+<li><code>ap_scoreboard_image</code>: サーバー全体の稼働状況を保持する共有メモリ構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**稼働時間が0秒の場合**: ゼロ除算が発生する可能性がある（<code>up_time</code> が 0 の場合）。</li>
+<li>**ExtendedStatus 無効時**: 処理をスキップし、systemd への通知は行われない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_hook_monitor</code> を通じて実行されるため、高頻度での呼び出しは避ける設計が望ましい。</li>
+<li><code>sd_notifyf</code> に渡される文字列のフォーマットは systemd のプロトコル仕様に依存している。</li>
+<li>統計情報の取得には <code>ap_scoreboard_image</code> を直接参照しているため、スコアボードの構造変更時には注意が必要である。</li>
 </ul></body></html>

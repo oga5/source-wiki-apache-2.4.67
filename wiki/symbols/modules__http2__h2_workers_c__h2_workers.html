@@ -6,22 +6,65 @@
 <li>定義箇所: <code>modules/http2/h2_workers.c:75</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 サブシステムにおいて、セカンダリ接続（C2）を処理する専用スレッドプールを管理するための構造体です。動的なスレッド生成、アイドルスレッドの管理、および接続プロデューサーを介したタスクの割り当てを担います。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct h2_workers {
+    server_rec *s;
+    apr_pool_t *pool;
+    apr_uint32_t max_slots;
+    apr_uint32_t min_active;
+    volatile apr_time_t idle_limit;
+    volatile int aborted;
+    volatile int shutdown;
+    int dynamic;
+    volatile apr_uint32_t active_slots;
+    volatile apr_uint32_t idle_slots;
+    apr_threadattr_t *thread_attr;
+    h2_slot *slots;
+    APR_RING_HEAD(h2_slots_free, h2_slot) free;
+    APR_RING_HEAD(h2_slots_idle, h2_slot) idle;
+    APR_RING_HEAD(h2_slots_busy, h2_slot) busy;
+    APR_RING_HEAD(h2_slots_zombie, h2_slot) zombie;
+    APR_RING_HEAD(ap_conn_producer_active, ap_conn_producer_t) prod_active;
+    APR_RING_HEAD(ap_conn_producer_idle, ap_conn_producer_t) prod_idle;
+    struct apr_thread_mutex_t *lock;
+    struct apr_thread_cond_t *prod_done;
+    struct apr_thread_cond_t *all_done;
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>h2_workers_create</code> 等の初期化関数を通じて <code>server_rec</code> や設定値が入力されます。</li>
+<li>**出力**: 内部で管理される <code>h2_slot</code>（ワーカー）が、<code>ap_conn_producer_t</code> から接続を取得し処理を実行します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>すべてのリング操作および状態遷移は、<code>lock</code> メンバー（<code>apr_thread_mutex_t</code>）によって保護されています。</li>
+<li><code>h2_workers</code> は独自の <code>apr_pool_t</code> を所有し、スレッド生成時に各スロットへサブプールを割り当てます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**スレッド管理**: <code>min_active</code> から <code>max_slots</code> の範囲でワーカーを動的に増減させます。</li>
+<li>**タスクキューイング**: <code>apr_ring</code> を使用して、状態別（free, idle, busy, zombie）にスロットを管理します。</li>
+<li>**同期**: <code>prod_done</code> や <code>all_done</code> などの条件変数を用いて、スレッドのウェイクアップやシャットダウン時の完了待ちを行います。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>h2_mplx.c</code> や <code>h2_session.c</code> が本構造体を参照し、HTTP/2 ストリームの多重化処理に利用しています。</li>
+<li>**呼び出し先**: <code>h2_slot</code> 構造体、<code>ap_conn_producer_t</code> 構造体、および <code>apr_thread_*</code> 関連の同期プリミティブを操作します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_slot</code>: 個々のワーカーの状態（スレッドハンドル、条件変数等）を保持。</li>
+<li><code>ap_conn_producer_t</code>: 接続の供給元。<code>fn_next</code> や <code>fn_done</code> コールバックを保持。</li>
+<li><code>apr_ring</code>: スロットおよびプロデューサーの管理用リスト構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>aborted</code> フラグが設定された場合、処理は中断されます。</li>
+<li><code>slot_run</code> 内の接続 ID 生成ロジックにおいて、非常に高い並列度では ID 衝突の可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>workers_pool_cleanup</code> は MPM シャットダウン時に呼ばれ、全スレッドの終了を待機します。</li>
+<li><code>h2_workers</code> はプロセス全体で共有されるインスタンスとして設計されています。</li>
 </ul></body></html>

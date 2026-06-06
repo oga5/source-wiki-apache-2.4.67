@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/core_filters.c:557</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>出力フィルタにおいて、処理されなかったバケットブリゲードを永続的なバッファへ退避させ、後続の処理に備える。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void setaside_remaining_output(ap_filter_t *f,
+                                      core_output_filter_ctx_t *ctx,
+                                      apr_bucket_brigade *bb,
+                                      conn_rec *c)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f</code>: フィルタインスタンス。</li>
+<li><code>ctx</code>: 出力フィルタのコンテキスト（バッファやプールを保持）。</li>
+<li><code>bb</code>: 退避対象のバケットブリゲード。</li>
+<li><code>c</code>: 接続レコード。</li>
+<li>出力: なし。副作用として <code>ctx-&gt;buffered_bb</code> へのデータ格納、または <code>ctx-&gt;deferred_write_pool</code> のクリアを行う。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>bb</code> 内の先頭にあるメタデータバケットまたは長さ 0 のバケットは、既に消費済みとみなされ削除される。</li>
+<li><code>ctx-&gt;deferred_write_pool</code> が存在しない場合、必要に応じて <code>c-&gt;pool</code> を親として作成される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **不要バケットの削除**: <code>bb</code> の先頭から、メタデータまたは長さ 0 のバケットを走査し、<code>apr_bucket_delete</code> で削除する。 2. **状態更新**: <code>c-&gt;data_in_output_filters</code> を 0 にリセットする。 3. **ブリゲードの退避**: <code>bb</code> が空でない場合:</p>
+<ul>
+<li><code>c-&gt;data_in_output_filters</code> を 1 に設定する。</li>
+<li><code>bb</code> が <code>ctx-&gt;buffered_bb</code> と異なる場合、<code>ap_save_brigade</code> を使用して <code>bb</code> の内容を <code>ctx-&gt;buffered_bb</code> にコピー（退避）する。この際、<code>ctx-&gt;deferred_write_pool</code> を使用する。</li>
+<p>4. **クリーンアップ**: <code>bb</code> が空で、かつ <code>ctx-&gt;deferred_write_pool</code> が存在する場合は、<code>apr_pool_clear</code> を呼び出してプールを解放する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>server/core_filters.c</code> 内の <code>ap_core_output_filter</code> (行 549)。</li>
+<li>呼び出し先: <code>apr_bucket_delete</code>, <code>apr_pool_create</code>, <code>apr_pool_tag</code>, <code>ap_save_brigade</code>, <code>apr_pool_clear</code> (すべて APR/Apache API)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>core_output_filter_ctx_t</code>: フィルタの永続状態を保持する構造体。</li>
+<li><code>apr_bucket_brigade</code>: バケットのリスト構造。</li>
+<li><code>conn_rec</code>: 接続ごとの状態を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>bb</code> が空の場合、プール内のデータがクリアされる。</li>
+<li><code>ap_save_brigade</code> が失敗した場合の戻り値は本関数では無視される（戻り値がないため）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はパイプライン化されたリクエストのバッファリングを管理する。</li>
+<li><code>deferred_write_pool</code> はリクエスト終了時にクリアされるため、バッファの生存期間管理に注意すること。</li>
 </ul></body></html>

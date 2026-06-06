@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_log.c:94</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OpenSSL のエラーキューを走査し、Apache のログシステムを通じて診断情報を出力する。エラー内容に応じたアノテーション（補足説明）を自動的に付与することで、SSL/TLS 関連の問題解決を支援する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ssl_log_ssl_error(const char *file, int line, int level, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>file</code>: ログ出力元ファイル名（<code>SSLLOG_MARK</code> 等で指定）。</li>
+<li><code>line</code>: ログ出力元行番号。</li>
+<li><code>level</code>: Apache ログレベル（<code>APLOG_ERR</code>, <code>APLOG_EMERG</code> 等）。</li>
+<li><code>s</code>: エラーに関連する <code>server_rec</code> 構造体。</li>
+<li>**出力**: なし（戻り値なし）。副作用として Apache のエラーログへメッセージを書き出す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>OpenSSL のエラーキューにエラーが蓄積されていることを前提とする。</li>
+<li><code>modssl_ERR_peek_error_data</code> が OpenSSL バージョン間の差異を吸収し、エラーデータとフラグを正しく取得できること。</li>
+<li><code>ssl_log_annotation</code> がエラー文字列に対応するヒントを返せること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>modssl_ERR_peek_error_data</code> をループ内で呼び出し、エラーキューが空になるまで以下の処理を繰り返す。 2. <code>ERR_error_string_n</code> を使用してエラーコードを文字列に変換する。 3. <code>ssl_log_annotation</code> を呼び出し、変換されたエラー文字列に基づいた補足説明を取得する。 4. <code>ap_log_error</code> を使用し、エラー文字列、付随するデータ（存在する場合）、およびアノテーションを整形してログに出力する。 5. <code>ERR_get_error</code> を呼び出し、処理したエラーをキューから削除する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/mod_ssl.c</code></li>
+<li><code>modules/ssl/ssl_engine_init.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>modssl_ERR_peek_error_data</code></li>
+<li><code>ERR_error_string_n</code></li>
+<li><code>ssl_log_annotation</code></li>
+<li><code>ap_log_error</code></li>
+<li><code>ERR_get_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: Apache のサーバー設定構造体。</li>
+<li><code>ERR_TXT_STRING</code>: OpenSSL のエラーデータフラグ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>エラーデータが存在しない場合、ループは即座に終了する。</li>
+<li><code>flags</code> に <code>ERR_TXT_STRING</code> が含まれていない場合、<code>data</code> は <code>NULL</code> として扱われ、ログ出力時にデータ部分は省略される。</li>
+<li>アノテーションが見つからない場合、ログ出力にはアノテーション部分は含まれない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OpenSSL 3.0 以降の API 変更を考慮した <code>modssl_ERR_peek_error_data</code> に依存しているため、OpenSSL のバージョンアップ時にはこの互換レイヤーの挙動を確認すること。</li>
+<li>ログ出力のパフォーマンスを考慮し、呼び出し側で <code>APLOG_IS_LEVEL</code> 等による事前チェックを行うことが推奨される。</li>
 </ul></body></html>

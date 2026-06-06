@@ -1,70 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__ssl.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/ssl</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/ssl</code> には 20 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p><code>modules/ssl</code> は、Apache HTTP Server における SSL/TLS 通信を司る中核モジュールです。OpenSSL ライブラリをラップし、HTTPD のフィルタチェーンと統合することで、セキュアなデータ転送、証明書管理、セッションキャッシュ、および OCSP ステープリング等の高度な TLS 拡張機能を提供します。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**SSL/TLS ライフサイクル管理**: サーバー起動時のコンテキスト構築から、接続ごとのハンドシェイク、終了処理までを管理。</li>
+<li>**OpenSSL 抽象化**: OpenSSL の複雑な API を HTTPD のメモリ管理（<code>apr_pool_t</code>）やフィルタシステムと適合させる。</li>
+<li>**設定管理**: サーバー、仮想ホスト、ディレクトリ単位での SSL 設定ディレクティブの解析と適用。</li>
+<li>**セキュリティ機能の提供**: クライアント認証、OCSP 検証、セッションキャッシュ、SNI 等のポリシー適用。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/ssl/mod_ssl.c</code></li>
-<li><code>modules/ssl/mod_ssl.h</code></li>
-<li><code>modules/ssl/mod_ssl_openssl.h</code></li>
-<li><code>modules/ssl/ssl_engine_config.c</code></li>
-<li><code>modules/ssl/ssl_engine_init.c</code></li>
-<li><code>modules/ssl/ssl_engine_io.c</code></li>
-<li><code>modules/ssl/ssl_engine_kernel.c</code></li>
-<li><code>modules/ssl/ssl_engine_log.c</code></li>
-<li><code>modules/ssl/ssl_engine_mutex.c</code></li>
-<li><code>modules/ssl/ssl_engine_ocsp.c</code></li>
-<li><code>modules/ssl/ssl_engine_pphrase.c</code></li>
-<li><code>modules/ssl/ssl_engine_rand.c</code></li>
-<li><code>modules/ssl/ssl_engine_vars.c</code></li>
-<li><code>modules/ssl/ssl_private.h</code></li>
-<li><code>modules/ssl/ssl_scache.c</code></li>
-<li><code>modules/ssl/ssl_util.c</code></li>
-<li><code>modules/ssl/ssl_util_ocsp.c</code></li>
-<li><code>modules/ssl/ssl_util_ssl.c</code></li>
-<li><code>modules/ssl/ssl_util_ssl.h</code></li>
-<li><code>modules/ssl/ssl_util_stapling.c</code></li>
+<li>**エントリポイント**: <code>mod_ssl.c</code>, <code>mod_ssl.h</code></li>
+<li>**エンジン層**: <code>ssl_engine_init.c</code> (初期化), <code>ssl_engine_io.c</code> (I/O フィルタ), <code>ssl_engine_kernel.c</code> (リクエスト処理), <code>ssl_engine_config.c</code> (設定), <code>ssl_engine_vars.c</code> (変数解決)</li>
+<li>**ユーティリティ/補助**: <code>ssl_util_ssl.c</code>, <code>ssl_util_ocsp.c</code>, <code>ssl_util_stapling.c</code>, <code>ssl_scache.c</code>, <code>ssl_engine_log.c</code>, <code>ssl_engine_mutex.c</code>, <code>ssl_engine_pphrase.c</code>, <code>ssl_engine_rand.c</code></li>
+<li>**内部定義**: <code>ssl_private.h</code>, <code>mod_ssl_openssl.h</code></li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>dhparam</code></li>
-<li><code>ssl_filter_ctx_t</code></li>
-<li><code>bio_filter_out_ctx_t</code></li>
-<li><code>char_buffer_t</code></li>
-<li><code>bio_filter_in_ctx_t</code></li>
-<li><code>coalesce_ctx</code></li>
-<li><code>modssl_buffer_ctx</code></li>
-<li><code>pphrase_cb_arg_t</code></li>
-<li><code>X509</code></li>
-<li><code>time_t</code></li>
+<li><code>SSLModConfigRec</code> / <code>SSLSrvConfigRec</code> / <code>SSLDirConfigRec</code>: サーバー・仮想ホスト・ディレクトリごとの設定構造体。</li>
+<li><code>SSLConnRec</code>: 接続ごとの SSL 状態を保持する構造体。</li>
+<li><code>ssl_filter_ctx_t</code>: SSL フィルタのコンテキスト。</li>
+<li><code>X509</code>: OpenSSL の証明書構造体。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **初期化**: <code>ssl_init_Module</code> が <code>SSL_CTX</code> を構築し、証明書と鍵を読み込む。 2. **接続**: <code>ssl_hook_pre_connection</code> が接続を検出し、<code>SSL</code> オブジェクトを生成してフィルタを挿入。 3. **ハンドシェイク**: <code>ssl_io_filter_input</code> が入力を読み込む際に OpenSSL のハンドシェイクをトリガー。 4. **リクエスト処理**: <code>ssl_hook_Access</code> 等がリクエストフェーズごとに SSL 状態を検証し、環境変数を設定。 5. **終了**: <code>ssl_io_filter_output</code> を通じて安全なシャットダウンを実行。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>ssl_private.h</code></li>
-<li><code>util_mutex.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>mod_ssl.h</code></li>
-<li><code>util_md5.h</code></li>
-<li><code>ap_provider.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>apr_optional.h</code></li>
-<li><code>apr_tables.h</code></li>
-<li><code>ap_expr.h</code></li>
+<li>**OpenSSL**: 暗号化、証明書処理、TLS プロトコル実装の基盤。</li>
+<li>**APR (Apache Portable Runtime)**: メモリ管理、スレッド同期、ファイル I/O、ネットワーク通信。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code> 等のサーバーコア API。</li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは、設定管理、I/O フィルタ、リクエスト処理の各層が密接に連携するモノリシックな構成です。ディレクトリ境界に基づき、機能ごとに <code>ssl_engine_*.c</code> および <code>ssl_util_*.c</code> に分割されています。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/ssl/ssl_private.h</code> 2. <code>modules/ssl/ssl_util_ssl.h</code> 3. <code>modules/ssl/mod_ssl.h</code> 4. <code>modules/ssl/mod_ssl_openssl.h</code> 5. <code>modules/ssl/ssl_engine_config.c</code> 6. <code>modules/ssl/ssl_engine_io.c</code> 7. <code>modules/ssl/ssl_engine_init.c</code> 8. <code>modules/ssl/ssl_engine_kernel.c</code> 9. <code>modules/ssl/ssl_engine_vars.c</code> 10. <code>modules/ssl/ssl_util_stapling.c</code> 11. <code>modules/ssl/ssl_engine_pphrase.c</code> 12. <code>modules/ssl/ssl_util_ssl.c</code> 13. <code>modules/ssl/ssl_util.c</code> 14. <code>modules/ssl/mod_ssl.c</code> 15. <code>modules/ssl/ssl_engine_log.c</code> 16. <code>modules/ssl/ssl_util_ocsp.c</code> 17. <code>modules/ssl/ssl_scache.c</code> 18. <code>modules/ssl/ssl_engine_ocsp.c</code> 19. <code>modules/ssl/ssl_engine_rand.c</code> 20. <code>modules/ssl/ssl_engine_mutex.c</code></p>
+<p>1. <code>modules/ssl/ssl_private.h</code> (内部構造の理解) 2. <code>modules/ssl/mod_ssl.h</code> (公開 API の確認) 3. <code>modules/ssl/mod_ssl.c</code> (モジュールの全体像とフック) 4. <code>modules/ssl/ssl_engine_init.c</code> (初期化フロー) 5. <code>modules/ssl/ssl_engine_io.c</code> (I/O フィルタリング) 6. <code>modules/ssl/ssl_engine_kernel.c</code> (リクエスト処理のロジック)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li>TLS 1.3 への完全移行に伴う再ネゴシエーション廃止の影響範囲の精緻化。</li>
+<li>OpenSSL 3.0 以降の API 変更に伴う、将来的な互換性レイヤーの整理方針。</li>
 </ul></body></html>

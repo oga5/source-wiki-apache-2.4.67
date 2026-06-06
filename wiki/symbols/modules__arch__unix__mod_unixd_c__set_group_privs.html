@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/arch/unix/mod_unixd.c:87</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>プロセス実行時のグループ権限を確定させ、補助グループを初期化することで、サーバーの特権降格プロセスを完遂させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int set_group_privs(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: グローバル変数 <code>ap_unixd_config</code>（ユーザー名、グループID、ユーザーIDを含む）。</li>
+<li>**出力**: 成功時は <code>0</code>、失敗時は <code>-1</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>呼び出し元プロセスが root 権限（実効 UID が 0）で実行されている必要がある。</li>
+<li><code>OS2</code> 環境ではグループ設定はサポートされていないため、本関数は何も行わない。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ユーザー名の解決**: <code>ap_unixd_config.user_name</code> が <code>#</code> で始まる場合、文字列を UID として解釈し、<code>getpwuid</code> を用いてユーザー名を取得する。解決できない場合はエラーを返す。 2. **グループ ID の設定**: <code>setgid</code> を呼び出し、プロセスグループ ID を <code>ap_unixd_config.group_id</code> に設定する。 3. **補助グループの初期化**: <code>initgroups</code> を呼び出し、指定されたユーザー名とグループ ID に基づいて補助グループリストを更新する。 4. **エラーハンドリング**: <code>setgid</code> または <code>initgroups</code> が失敗した場合、<code>APLOG_ALERT</code> レベルでログを出力し、<code>-1</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/arch/unix/mod_unixd.c:141</code></li>
+<li><code>modules/arch/unix/mod_unixd.c:331</code></li>
+<li>**呼び出し先**:</li>
+<li><code>getpwuid</code> (libc)</li>
+<li><code>setgid</code> (libc)</li>
+<li><code>initgroups</code> (libc)</li>
+<li><code>ap_log_error</code> (Apache API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_unixd_config</code>: ユーザー名やグループ ID を保持するグローバルな設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**UID 解決失敗**: <code>#</code> 指定された UID がシステムに存在しない場合、エラーログを出力して終了する。</li>
+<li>**権限不足**: root 権限以外で実行された場合、<code>geteuid()</code> チェックにより処理がスキップされる。</li>
+<li>**システムコール失敗**: <code>setgid</code> や <code>initgroups</code> が OS 側で拒否された場合、プロセスは特権降格に失敗し、エラーを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>setgid</code> は <code>initgroups</code> の前に実行する必要がある（一部プラットフォームで <code>initgroups</code> がグループリストを上書きする挙動を回避するため）。</li>
+<li><code>#uid</code> 形式のサポートは、設定ファイルとの互換性維持のために不可欠である。</li>
 </ul></body></html>

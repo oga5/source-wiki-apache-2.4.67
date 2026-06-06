@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/lua/lua_request.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/lua/lua_request.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_lua</code> において、Lua スクリプトから Apache の内部構造（<code>request_rec</code>, <code>conn_rec</code>, <code>server_rec</code>）へアクセスするためのブリッジ機能を提供します。Lua の userdata を介して、HTTP リクエストの属性取得、ヘッダー操作、ボディの読み書き、および各種ユーティリティ関数を公開します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> の中核となる API 提供レイヤーです。Lua VM がリクエスト処理中に呼び出すメソッドのディスパッチテーブルを構築し、Apache の C 言語ベースのデータ構造を Lua のテーブルや型に変換する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト・メタデータ公開**: <code>request_rec</code> のフィールド（URI, メソッド, ステータス等）を Lua から読み書き可能にする。</li>
+<li>**データ変換**: <code>apr_table_t</code> を Lua のテーブルへ変換し、ヘッダーや環境変数の操作を可能にする。</li>
+<li>**I/O 制御**: リクエストボディの読み込み、レスポンスの書き込み、フィルタ操作、WebSocket 通信のサポート。</li>
+<li>**ユーティリティ提供**: 暗号化（MD5/SHA1）、パス操作、ログ出力、設定ツリーの走査などの補助機能。</li>
+<li>**IVM（Inter-VM）共有**: <code>apr_shm</code> を用いたプロセス間でのデータ共有機能の提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト・ディスパッチ</h3>
+<ul>
+<li><code>ap_lua_load_request_lmodule</code>: Lua VM 初期化時に呼び出され、<code>Apache2.Request</code> メタテーブルとディスパッチハッシュを登録する。</li>
+<li><code>req_dispatch</code>: Lua の <code>__index</code> メタメソッド。Lua から <code>r:field</code> が呼ばれた際に、ハッシュから対応する C 関数を検索・実行する。</li>
+<li><code>req_newindex</code>: Lua の <code>__newindex</code> メタメソッド。リクエストフィールドへの書き込みを制御する。</li>
+</ul>
+<h3>データ変換・ヘルパー</h3>
+<ul>
+<li><code>req_aprtable2luatable</code>: <code>apr_table_t</code> を Lua のテーブル（キー・値ペアおよび配列）に変換する。</li>
+<li><code>ap_lua_check_request_rec</code>: Lua スタック上の userdata が <code>Apache2.Request</code> であることを検証し、<code>request_rec</code> ポインタを抽出する。</li>
+</ul>
+<h3>WebSocket 関連</h3>
+<ul>
+<li><code>lua_websocket_greet</code>: WebSocket ハンドシェイク（Sec-WebSocket-Key の検証とレスポンス生成）。</li>
+<li><code>lua_websocket_read</code> / <code>lua_websocket_write</code>: フレームの解析と構築、マスク処理を含む WebSocket I/O。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_lua_load_request_lmodule</code> が <code>Apache2.Request</code> メタテーブルを生成し、<code>Apache2.Request.dispatch</code> レジストリに各メソッドを登録する。 2. **アクセス**: Lua スクリプトが <code>r:method()</code> を呼び出すと、<code>req_dispatch</code> が実行される。 3. **ディスパッチ**: <code>req_dispatch</code> は <code>req_fun_t</code> 構造体（関数ポインタと型情報）をハッシュから取得し、型に応じて C 関数を呼び出し、結果を Lua スタックにプッシュする。 4. **データフロー**: <code>apr_table_t</code> などの Apache 内部データは、コールバック関数（<code>req_aprtable2luatable_cb</code> 等）を通じて Lua テーブルへ逐次コピーされる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_lua.h</code>, <code>lua_apr.h</code>, <code>lua_dbd.h</code>, <code>lua_passwd.h</code>: モジュール内の共通定義。</li>
+<li><code>apr_pools.h</code>, <code>apr_tables.h</code>: メモリ管理とテーブル操作。</li>
+<li><code>util_varbuf.h</code>, <code>util_script.h</code>: バッファ操作とスクリプトユーティリティ。</li>
+<li><code>scoreboard.h</code>: プロセス・スレッド情報の取得。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/lua/mod_lua.c</code>: モジュールのエントリポイント。</li>
+<li><code>modules/lua/lua_request.h</code>: 公開ヘッダー。</li>
+<li><code>modules/lua/lua_apr.c</code>: APR 関連の補助関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのメモリ割り当ては <code>request_rec</code> のプール（<code>r-&gt;pool</code>）を使用しており、リクエスト終了時に自動的に解放されます。</li>
+<li>**スレッド安全性**: <code>lua_ivm_set/get</code> は <code>lua_ivm_mutex</code> を使用して共有メモリへのアクセスを保護しています。</li>
+<li>**制約**: <code>req_newindex</code> で設定可能なフィールドは限定されています。また、<code>MODLUA_MAX_REG_MATCH</code> により正規表現のキャプチャ数に制限があります。</li>
+<li>**省略**: WebSocket のフレーム解析ロジックは非常に詳細ですが、本ファイルでは基本的な HTTP リクエスト処理と混在しています。エラーハンドリングは <code>lua_error</code> を介して Lua 側に伝播されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_request_c__request_rec.html" target="wiki-view">`request_rec`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__ap_lua_rstack_dump.html" target="wiki-view">`ap_lua_rstack_dump`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__ap_lua_check_request_rec.html" target="wiki-view">`ap_lua_check_request_rec`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_aprtable2luatable_cb.html" target="wiki-view">`req_aprtable2luatable_cb`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_aprtable2luatable_cb_len.html" target="wiki-view">`req_aprtable2luatable_cb_len`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__lua_read_body.html" target="wiki-view">`lua_read_body`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__lua_write_body.html" target="wiki-view">`lua_write_body`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_aprtable2luatable.html" target="wiki-view">`req_aprtable2luatable`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_headers_in_table.html" target="wiki-view">`req_headers_in_table`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_headers_out_table.html" target="wiki-view">`req_headers_out_table`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_err_headers_out_table.html" target="wiki-view">`req_err_headers_out_table`</a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__lua_get_cookie.html" target="wiki-view">`lua_get_cookie`</a></li>
+</ul></body></html>

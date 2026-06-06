@@ -6,22 +6,45 @@
 <li>定義箇所: <code>modules/http2/h2_workers.c:181</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 ワーカープールにおいて、アイドル状態のスレッドを検索してタスクを割り当てるか、必要に応じて新規スレッドを生成して処理を継続させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void wake_idle_worker(h2_workers *workers, ap_conn_producer_t *prod)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>workers</code>: ワーカープール全体を管理する <code>h2_workers</code> 構造体へのポインタ。</li>
+<li><code>prod</code>: 処理対象となる接続プロデューサー（<code>ap_conn_producer_t</code>）。</li>
+<li>**出力**: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>workers-&gt;lock</code> による排他制御下で呼び出されることが想定されている（リング操作およびスロット状態変更のため）。</li>
+<li><code>workers</code> および <code>prod</code> は有効なポインタであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **アイドルワーカーの検索**: <code>workers-&gt;idle</code> リングを走査し、<code>is_idle</code> が真かつ <code>should_shutdown</code> が偽である最初の <code>h2_slot</code> を探す。 2. **ウェイクアップ**: 対象スロットが見つかった場合、その条件変数 <code>more_work</code> に対して <code>apr_thread_cond_signal</code> を発行し、<code>is_idle</code> を 0 にリセットして終了する。 3. **動的スレッド生成**: アイドルワーカーが見つからず、かつ <code>workers-&gt;dynamic</code> が有効で、現在の <code>active_slots</code> が <code>max_slots</code> 未満である場合、<code>activate_slot(workers)</code> を呼び出して新規スレッドを生成する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_workers.c:220</code></li>
+<li><code>modules/http2/h2_workers.c:624</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_thread_cond_signal</code> (APR)</li>
+<li><code>activate_slot</code> (同ファイル内)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_workers</code>: プール管理構造体。</li>
+<li><code>h2_slot</code>: 個別のワーカー状態（<code>is_idle</code>, <code>more_work</code> 等を保持）。</li>
+<li><code>ap_conn_producer_t</code>: 接続供給元。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>アイドルワーカーが存在せず、かつ <code>active_slots</code> が <code>max_slots</code> に達している場合、新規スレッドは生成されず、本関数は何も行わずに終了する。</li>
+<li><code>workers-&gt;shutdown</code> が真の場合、新規スレッドの生成は抑制される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はスレッドのウェイクアップと生成の判断を行うクリティカルなパスである。</li>
+<li><code>slot-&gt;is_idle</code> のリセットは、呼び出し側がタスクをキューに投入した直後に行われる必要があるため、ロックの範囲に注意すること。</li>
 </ul></body></html>

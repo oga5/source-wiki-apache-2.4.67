@@ -6,22 +6,43 @@
 <li>定義箇所: <code>os/unix/unixd.c:293</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Unix系プラットフォームにおいて、リスナーソケットに対する接続要求（<code>accept</code>）を処理し、新規接続ソケットを取得する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_unixd_accept(void **accepted, ap_listen_rec *lr, apr_pool_t *ptrans)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>lr</code>: 接続を待機するリスナーレコード（<code>ap_listen_rec</code>）。</li>
+<li><code>ptrans</code>: 接続用ソケットを割り当てるためのメモリプール。</li>
+<li>**出力**:</li>
+<li><code>accepted</code>: 成功時に新規接続ソケット（<code>apr_socket_t</code>）が格納されるポインタ。</li>
+<li>戻り値: <code>APR_SUCCESS</code>（成功）、またはエラーを示す <code>apr_status_t</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>lr</code> は有効なリスナーレコードであること。</li>
+<li><code>_OSD_POSIX</code> 環境下では、取得したファイルディスクリプタが <code>FD_SETSIZE</code> を超えないことが要求される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_socket_accept</code> を呼び出し、接続を試みる。 2. 成功時、<code>_OSD_POSIX</code> 環境であればファイルディスクリプタのサイズを検証し、超過していれば警告を出して <code>APR_EINTR</code> を返す。 3. 失敗時、<code>EINTR</code>（割り込み）はそのまま透過的に返す。 4. その他のエラー発生時、特定の非致命的エラー（<code>ECONNABORTED</code>, <code>EAGAIN</code> 等）は無視して呼び出し元へ制御を戻す。 5. <code>ENETDOWN</code> のような致命的なネットワークエラーは <code>APR_EGENERAL</code> を返し、サーバーの停止を促す。 6. リスナーが非アクティブ（<code>lr-&gt;active == 0</code>）な場合は、エラーログを出さずにステータスを返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/event/event.c</code>, <code>server/mpm/prefork/prefork.c</code>, <code>server/mpm/worker/worker.c</code> の各 MPM において、<code>lr-&gt;accept_func</code> に代入される形で利用される。</li>
+<li>**呼び出し先**: <code>apr_socket_accept</code>, <code>apr_os_sock_get</code>, <code>apr_socket_close</code>, <code>ap_log_error</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listen_rec</code>: リスナーソケットの状態を保持する構造体。</li>
+<li><code>apr_socket_t</code>: APR レベルのソケットオブジェクト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ファイルディスクリプタ制限**: <code>_OSD_POSIX</code> 環境で <code>FD_SETSIZE</code> を超過した場合、ソケットを閉じてエラーを返す。</li>
+<li>**ネットワーク停止**: <code>ENETDOWN</code> 発生時は致命的エラーとして処理される。</li>
+<li>**非アクティブなリスナー**: サーバー停止・再起動処理中に <code>EBADF</code> 等が発生した場合、ログ出力を抑制して終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は歴史的な経緯から、プラットフォーム固有の挙動（HPUX の <code>ENOBUFS</code> や Solaris の <code>EPROTO</code> 等）を吸収する複雑な条件分岐を含んでいる。</li>
+<li>致命的なエラーか否かの判定は、サーバーの安定稼働に直結するため、新しいプラットフォーム対応を追加する際は慎重に行うこと。</li>
 </ul></body></html>

@@ -6,22 +6,44 @@
 <li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_byrequests.c:83</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト数ベースのロードバランシングにおいて、各ワーカーの重み（<code>lbfactor</code>）に基づき、次に処理を割り当てるべき最適なワーカーを選出します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static proxy_worker *find_best_byrequests(proxy_balancer *balancer, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>balancer</code>: 対象となるロードバランサー構造体。</li>
+<li><code>r</code>: 現在のリクエスト情報。</li>
+<li>**出力**:</li>
+<li>選出された <code>proxy_worker</code> 構造体へのポインタ。選出可能なワーカーがない場合は <code>NULL</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_proxy_balancer_get_best_worker_fn</code> が初期化済みであること。</li>
+<li><code>is_best_byrequests</code> コールバック関数が、ワーカーの <code>lbstatus</code> を適切に比較・更新できる状態にあること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_proxy_balancer_get_best_worker_fn</code> を呼び出し、<code>is_best_byrequests</code> を用いて全ワーカーを走査します。この過程で、各ワーカーの <code>lbstatus</code> に <code>lbfactor</code> が加算され、最も値が大きいワーカーが選出されます。 2. 選出されたワーカーが存在する場合、そのワーカーの <code>lbstatus</code> から、走査時に計算された全ワーカーの <code>lbfactor</code> 合計値（<code>total_factor</code>）を減算します。 3. 選出されたワーカーを呼び出し元へ返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_proxy</code> のロードバランサー機能（<code>modules/proxy/balancers/mod_lbmethod_byrequests.c:122</code> にて構造体登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_proxy_balancer_get_best_worker_fn</code>（<code>mod_proxy</code> が提供するワーカー走査関数）。</li>
+<li><code>is_best_byrequests</code>（ワーカー比較・状態更新用コールバック）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_balancer</code>: バランサーの状態を保持。</li>
+<li><code>proxy_worker</code>: 各バックエンドサーバーの状態（<code>lbstatus</code>, <code>lbfactor</code> 等）を保持。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>選出可能なワーカーが存在しない場合、<code>ap_proxy_balancer_get_best_worker_fn</code> は <code>NULL</code> を返し、本関数もそのまま <code>NULL</code> を返します。</li>
+<li><code>lbstatus</code> の更新は共有メモリ上で行われるため、競合が発生しないよう <code>mod_proxy</code> 側の排他制御に依存しています。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は「重み付きラウンドロビン」を実装しています。<code>lbstatus</code> の減算処理は、累積された負荷バランスを維持するための重要なステップです。</li>
+<li>統計情報の追跡やデバッグを行う際は、共有メモリ上の <code>lbstatus</code> 値の変化に注意してください。</li>
 </ul></body></html>

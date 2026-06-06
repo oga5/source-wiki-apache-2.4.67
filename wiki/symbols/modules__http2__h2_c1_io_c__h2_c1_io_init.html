@@ -6,22 +6,45 @@
 <li>定義箇所: <code>modules/http2/h2_c1_io.c:141</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 セッションに関連付けられた入出力管理構造体（<code>h2_c1_io</code>）を初期化し、TLS 接続の有無に応じたバッファリング設定および転送サイズパラメータを適用する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t h2_c1_io_init(h2_c1_io *io, h2_session *session)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>io</code>: 初期化対象の <code>h2_c1_io</code> 構造体へのポインタ。</li>
+<li><code>session</code>: 関連付けられる <code>h2_session</code> 構造体へのポインタ。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: 初期化成功時に返される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session-&gt;c1</code> が有効な接続レコード（<code>conn_rec</code>）を保持していること。</li>
+<li><code>io-&gt;output</code> 用のブリゲードが <code>c-&gt;pool</code> および <code>c-&gt;bucket_alloc</code> を使用して生成される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>session-&gt;c1</code> から接続情報を取得し、<code>io-&gt;session</code> に設定する。 2. <code>apr_brigade_create</code> を呼び出し、出力用ブリゲードを生成する。 3. <code>ap_ssl_conn_is_ssl</code> を用いて TLS 接続か判定し、<code>io-&gt;is_tls</code> および <code>io-&gt;buffer_output</code> を設定する。 4. <code>H2_CONF_STREAM_MAX_MEM</code> 設定値に基づき <code>io-&gt;flush_threshold</code> を算出する。 5. TLS 接続の場合、<code>H2_CONF_TLS_WARMUP_SIZE</code> 等の設定値を用いて <code>io-&gt;warmup_size</code> および <code>io-&gt;write_size</code> を初期化する（非 TLS の場合は 0 に設定）。 6. <code>APLOGctrace1</code> が有効な場合、初期化パラメータをログ出力する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_session.c:983</code> (<code>h2_session</code> の初期化プロセス内)</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_brigade_create</code> (APR)</li>
+<li><code>ap_ssl_conn_is_ssl</code> (Apache SSL API)</li>
+<li><code>h2_config_sgeti64</code> / <code>h2_config_sgeti</code> (設定取得)</li>
+<li><code>ap_log_cerror</code> (ログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_c1_io</code>: 入出力状態を保持する構造体。</li>
+<li><code>h2_session</code>: セッション全体を管理する構造体。</li>
+<li><code>apr_bucket_brigade</code>: 出力データを保持するバケットブリゲード。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_brigade_create</code> がメモリ不足等で失敗した場合の戻り値については、本関数内では明示的なエラーハンドリングを行わず、APR の挙動に依存する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>io-&gt;cooldown_usecs</code> は現在 <code>0</code> に固定されている。</li>
+<li>TLS 接続時の <code>write_size</code> は、ウォームアップロジックの要件（Jira TS-2503 参照）に基づき、初期値 <code>WRITE_SIZE_INITIAL</code> または <code>WRITE_SIZE_MAX</code> が選択される。</li>
 </ul></body></html>

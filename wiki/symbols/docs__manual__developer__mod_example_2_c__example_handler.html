@@ -6,22 +6,54 @@
 <li>定義箇所: <code>docs/manual/developer/mod_example_2.c:15</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のリクエスト処理パイプラインにおいて、<code>example-handler</code> として指定されたリクエストを処理し、対象ファイルの MD5 または SHA1 ハッシュ値を計算して HTML 形式で出力する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int example_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（Apache のリクエスト構造体）。クエリパラメータ <code>digest</code>（&quot;md5&quot; または &quot;sha1&quot;）を解析対象とする。</li>
+<li>**出力**: <code>int</code> 型のステータスコード。</li>
+<li><code>OK</code>: 処理成功。</li>
+<li><code>DECLINED</code>: ハンドラ名が一致しない場合。</li>
+<li><code>HTTP_NOT_FOUND</code>: ファイルが存在しない場合。</li>
+<li><code>HTTP_FORBIDDEN</code>: ファイルへのアクセス権限がない場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;handler</code> が <code>&quot;example-handler&quot;</code> であること。</li>
+<li>対象ファイルパスは、リクエストされたファイル名から末尾の <code>.sum</code> を除いたものとして解釈される。</li>
+<li>ファイルはディレクトリではなく、実在するファイルである必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ハンドラ判定**: <code>r-&gt;handler</code> を確認し、一致しなければ <code>DECLINED</code> を返す。 2. **パス解決**: <code>r-&gt;filename</code> から <code>.sum</code> を除外したパスを生成し、<code>apr_stat</code> で存在確認を行う。 3. **フォーム解析**: <code>ap_args_to_table</code> で GET パラメータを解析し、<code>digest</code> の指定を取得する（デフォルトは MD5）。 4. **ハッシュ計算**:</p>
+<ul>
+<li>ファイルを 256 バイト単位で読み込み、指定されたアルゴリズム（MD5 または SHA1）のコンテキストを更新する。</li>
+<li><code>apr_md5_final</code> または <code>apr_sha1_final</code> でダイジェストを確定させる。</li>
+<p>5. **レスポンス生成**: <code>ap_rprintf</code> を使用して、ファイルサイズおよび計算されたハッシュ値を HTML 形式でクライアントへ送信する。 6. **終了**: <code>apr_file_close</code> でファイルを閉じ、<code>OK</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のフックシステム（<code>ap_hook_handler</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li>Apache API: <code>apr_pstrdup</code>, <code>apr_stat</code>, <code>ap_args_to_table</code>, <code>ap_parse_form_data</code>, <code>ap_set_content_type</code>, <code>ap_rprintf</code>, <code>ap_rputs</code>, <code>apr_file_open</code>, <code>apr_file_read</code>, <code>apr_file_close</code></li>
+<li>APR ハッシュ関数: <code>apr_md5_init</code>, <code>apr_md5_update</code>, <code>apr_md5_final</code>, <code>apr_sha1_init</code>, <code>apr_sha1_update</code>, <code>apr_sha1_final</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびメモリプール（<code>r-&gt;pool</code>）の保持。</li>
+<li><code>apr_finfo_t</code>: ファイルメタデータ。</li>
+<li><code>apr_md5_ctx_t</code> / <code>apr_sha1_ctx_t</code>: ハッシュ計算用コンテキスト。</li>
+<li><code>apr_table_t</code>: クエリパラメータ格納用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**404 Not Found**: 対象ファイルが存在しない、またはディレクトリである場合。</li>
+<li>**403 Forbidden**: <code>apr_stat</code> が失敗した場合（アクセス権限不足等）。</li>
+<li>**デフォルト動作**: <code>digest</code> パラメータが指定されていない場合は MD5 を選択する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は学習用サンプルであり、ファイル読み込みバッファサイズ（256バイト）は簡略化されている。</li>
+<li><code>r-&gt;pool</code> を使用してリソースを確保しているため、明示的なメモリ解放は不要（リクエスト終了時に自動解放される）。</li>
+<li><code>mod_example_1.c</code> および <code>mod_example_2.c</code> の両方で <code>ap_hook_handler</code> を介して本関数が登録されている。</li>
 </ul></body></html>

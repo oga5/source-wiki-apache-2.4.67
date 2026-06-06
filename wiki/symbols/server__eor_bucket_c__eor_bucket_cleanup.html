@@ -6,22 +6,47 @@
 <li>定義箇所: <code>server/eor_bucket.c:27</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト終了時（End of Request）に、リクエストに関連する統計情報の更新およびログ記録を実行し、リソースのクリーンアップを完了させるために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t eor_bucket_cleanup(void *data)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>void *data</code>。実際には <code>request_rec **</code> 型のポインタを受け取ります。</li>
+<li>**出力**: <code>apr_status_t</code> 型のステータスコード（常に <code>APR_SUCCESS</code> を返します）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>data</code> は <code>request_rec</code> 構造体へのポインタを保持するポインタである必要があります。</li>
+<li><code>*rp</code> が <code>NULL</code> の場合、本関数は何も行わず即座に終了します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 引数 <code>data</code> を <code>request_rec **rp</code> にキャストします。 2. <code>*rp</code> が有効な場合、以下の処理を実行します：</p>
+<ul>
+<li><code>*rp</code> を <code>NULL</code> に設定し、後続の <code>eor_bucket_destroy</code> による二重のクリーンアップを防止します。</li>
+<li><code>ap_update_child_status</code> を呼び出し、スコアボード上の子プロセスの状態を <code>SERVER_BUSY_LOG</code> に更新します。</li>
+<li><code>ap_run_log_transaction</code> を呼び出し、リクエストのログ記録を実行します。</li>
+<li><code>ap_extended_status</code> が有効な場合、<code>ap_increment_counts</code> を呼び出して統計情報を更新します。</li>
+<p>3. <code>APR_SUCCESS</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>apr_pool_pre_cleanup_register</code> を介して、リクエストプール（<code>r-&gt;pool</code>）の破棄時に自動的に呼び出されます（<code>server/eor_bucket.c:88</code>）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_update_child_status</code></li>
+<li><code>ap_run_log_transaction</code></li>
+<li><code>ap_increment_counts</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストの状態を保持する構造体。</li>
+<li><code>apr_pool_t</code>: リクエストのライフサイクルを管理するメモリプール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>*rp</code> が <code>NULL</code> の場合、処理はスキップされます。これは <code>eor_bucket_destroy</code> が先に実行された場合を想定した安全策です。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_pool_pre_cleanup_register</code> を使用して登録されています。これは、リクエスト終了時にモジュールがサブプールを必要とする可能性があるためです。</li>
+<li><code>*rp = NULL</code> とすることで、バケット破棄とプール破棄の順序が前後しても安全に動作するよう設計されています。</li>
 </ul></body></html>

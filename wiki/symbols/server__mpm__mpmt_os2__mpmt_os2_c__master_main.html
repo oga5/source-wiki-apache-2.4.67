@@ -6,22 +6,51 @@
 <li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2.c:192</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OS/2 MPM における親プロセスのメイン処理を実行し、子プロセスの生成、監視、およびライフサイクル管理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int master_main()</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: グローバル変数 <code>ap_server_conf</code>（サーバー設定）、<code>ap_listeners</code>（リスナーソケットリスト）、<code>ap_scoreboard_image</code>（スコアボード）。</li>
+<li>出力: 終了ステータス（<code>OK</code> または <code>DONE</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_setup_listeners</code> が成功し、リスナーソケットが利用可能であること。</li>
+<li>共有メモリ（<code>parent_info_t</code>）およびスコアボード用の共有メモリが正常に確保されていること。</li>
+<li><code>HARD_SERVER_LIMIT</code>（10）がプロセス数の上限として適用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: シグナルハンドラを設定し、リスナーソケットを準備する。 2. **共有リソース確保**: リスナーソケット情報を格納する共有メモリを <code>DosAllocSharedMem</code> で確保し、OS/2 ミューテックス <code>ap_mpm_accept_mutex</code> を作成する。 3. **スコアボード初期化**: 未初期化であればスコアボード用共有メモリを確保し初期化する。 4. **メインループ**:</p>
+<ul>
+<li>現在の稼働プロセス数をカウントし、<code>ap_daemons_to_start</code> に達するまで <code>spawn_child</code> を呼び出して子プロセスを生成する。</li>
+<li><code>DosWaitChild</code> で子プロセスの終了を非ブロックで監視する。</li>
+<li>子プロセスが終了していればスコアボードを更新し、致命的エラー（<code>APEXIT_CHILDFATAL</code>）であればループを抜ける。</li>
+<li>終了フラグが立つまで <code>apr_sleep</code> で待機する。</li>
+<p>5. **終了処理**: 全子プロセスにシグナル（<code>SIGTERM</code> または <code>SIGHUP</code>）を送信し、共有メモリを解放して終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>mpmt_os2_run</code>（<code>server/mpm/mpmt_os2/mpmt_os2.c:171</code>）。</li>
+<li>呼び出し先: <code>set_signals</code>, <code>ap_setup_listeners</code>, <code>DosAllocSharedMem</code>, <code>apr_psprintf</code>, <code>apr_os_sock_get</code>, <code>DosCreateMutexSem</code>, <code>ap_init_scoreboard</code>, <code>ap_calc_scoreboard_size</code>, <code>ap_mpm_child_main</code>, <code>spawn_child</code>, <code>DosWaitChild</code>, <code>apr_sleep</code>, <code>kill</code>, <code>DosFreeMem</code>。</li>
+<li>注記: <code>server/mpm/winnt/</code> 内のコードにも同名のシンボルへの言及があるが、本ファイル（<code>mpmt_os2.c</code>）の文脈とは異なる。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>parent_info_t</code>: リスナーソケット情報とミューテックスを保持する共有メモリ構造体。</li>
+<li><code>listen_socket_t</code>: 個別のリスナーソケット情報を保持。</li>
+<li><code>scoreboard</code>: プロセス状態を管理する共有メモリ領域。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リスナーソケットのセットアップ失敗時: <code>!OK</code> を返して終了。</li>
+<li>共有メモリ確保失敗時: <code>!OK</code> を返して終了。</li>
+<li>ミューテックス作成失敗時: <code>!OK</code> を返して終了。</li>
+<li>子プロセスが <code>APEXIT_CHILDFATAL</code> で終了した場合: ループを中断しサーバーを停止する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OS/2 の <code>Dos</code> 系 API に強く依存しており、移植性は考慮されていない。</li>
+<li><code>HARD_SERVER_LIMIT</code> によるプロセス数制限（10）がハードコードされている点に注意すること。</li>
+<li>共有メモリの解放（<code>DosFreeMem</code>）はループ終了後のクリーンアップ時にのみ行われる。</li>
 </ul></body></html>

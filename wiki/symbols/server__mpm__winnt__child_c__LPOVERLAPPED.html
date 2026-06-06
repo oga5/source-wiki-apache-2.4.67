@@ -6,22 +6,45 @@
 <li>定義箇所: <code>server/mpm/winnt/child.c:52</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows API の非同期 I/O 操作において、操作の状態を保持する <code>OVERLAPPED</code> 構造体へのポインタ型として使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct _OVERLAPPED *LPOVERLAPPED;</code></pre>
+<p>※Windows SDK の標準定義に準拠。</p>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 非同期 I/O 関数（<code>AcceptEx</code> 等）へ渡すことで、操作の完了通知や結果の追跡に使用されます。</li>
+<li>**出力**: I/O 操作完了後、<code>GetQueuedCompletionStatus</code> 等を通じて、完了した操作に関連付けられた <code>OVERLAPPED</code> 構造体のアドレスが返されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>OVERLAPPED</code> 構造体は、対応する非同期 I/O 操作が完了するまでメモリ上で有効である必要があります。</li>
+<li>I/O 完了ポート（IOCP）を使用する場合、この構造体は <code>winnt_conn_ctx_t</code> などのコンテキスト構造体の一部として埋め込まれ、完了時にコンテキストを特定するために利用されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>非同期 I/O の開始時に、このポインタを介してシステムへ状態を渡します。</li>
+<li>操作が即座に完了しない場合、システムは操作完了時にこの構造体のアドレスを I/O 完了ポートのキューへ投入します。</li>
+<li>ワーカー・スレッドは <code>GetQueuedCompletionStatus</code> を呼び出し、このポインタを介してどの接続に対する操作が完了したかを識別します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/winnt/child.c</code> および <code>server/mpm/winnt/mpm_winnt.c</code> 内の各関数。</li>
+<li>**呼び出し先**: Windows API のソケット拡張関数（<code>AcceptEx</code> 等）および I/O 完了ポート関連関数。</li>
+<li>**補足**: <code>mpm_winnt.c</code> の各箇所（285, 296, 304, 319, 470, 1091行目）で <code>(LPOVERLAPPED) NULL</code> としてキャスト利用されている事例が確認されています。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>winnt_conn_ctx_t</code>: 本モジュールにおいて <code>OVERLAPPED</code> 構造体をメンバとして保持する主要なデータ構造。</li>
+<li><code>OVERLAPPED</code> (Windows SDK): 本型が指し示す実体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ解放**: 非同期操作が保留中に構造体を解放すると、システムによる書き込み時にメモリ破壊が発生します。</li>
+<li>**NULL ポインタ**: ツールによる参照箇所で確認される通り、非同期処理を必要としない同期的な呼び出し時には <code>NULL</code> が渡されることがあります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本シンボルは Windows SDK の標準型へのエイリアスです。</li>
+<li><code>winnt_conn_ctx_t</code> 内の <code>OVERLAPPED</code> メンバと混同しないよう注意してください。</li>
+<li><code>mpm_winnt.c</code> での <code>NULL</code> キャスト利用は、非同期 I/O を行わない（または完了を待機しない）コードパスであることを示唆しています。</li>
 </ul></body></html>

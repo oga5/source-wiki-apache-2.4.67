@@ -6,22 +6,58 @@
 <li>定義箇所: <code>include/ap_expr.h:105</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の式評価エンジンにおいて、評価実行時のコンテキスト（リクエスト情報、メモリプール、正規表現の状態、結果格納先など）を保持・管理するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    request_rec *r;
+    conn_rec *c;
+    server_rec *s;
+    apr_pool_t *p;
+    const char **err;
+    const ap_expr_info_t *info;
+    ap_regmatch_t *re_pmatch;
+    apr_size_t re_nmatch;
+    const char **re_source;
+    const char **vary_this;
+    const char **result_string;
+    void *data;
+    int reclvl;
+} ap_expr_eval_ctx_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 評価対象の式情報 (<code>info</code>)、リクエスト/接続/サーバーの各コンテキスト、および評価に必要なメモリプール (<code>p</code>)。</li>
+<li>**出力**: 評価結果の文字列 (<code>result_string</code>)、エラー発生時のメッセージ (<code>err</code>)、<code>Vary</code> ヘッダーに追加すべきヘッダー名 (<code>vary_this</code>)、および正規表現のマッチ結果 (<code>re_pmatch</code>)。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>評価には <code>apr_pool_t</code> が必須であり、コンテキスト作成時に割り当てられている必要があります。</li>
+<li><code>vary_this</code> が <code>NULL</code> の場合、呼び出し元は <code>Vary</code> ヘッダー情報の収集を要求していないものとみなされます。</li>
+<li><code>reclvl</code> は再帰的な評価の深さを追跡するために使用されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>評価エンジンは本構造体を参照して変数や関数の解決を行います。</li>
+<li>評価中にヘッダー名が <code>vary_this</code> に記録されることで、自動的に <code>Vary</code> ヘッダーの管理が行われます。</li>
+<li>ユーザー定義のカスタム関数に対しては、<code>data</code> メンバーを通じて任意のコンテキストデータを渡すことが可能です。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_expr_exec_ctx()</code> が本構造体を引数として受け取ります。また、<code>mod_include</code> 等のモジュールが内部的にインスタンス化して使用します。</li>
+<li>**呼び出し先**: 評価エンジン内の変数関数 (<code>ap_expr_var_func_t</code>)、文字列関数 (<code>ap_expr_string_func_t</code>)、リスト関数 (<code>ap_expr_list_func_t</code>)、および単項/二項演算子関数が、このコンテキストを引数として受け取ります。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>, <code>conn_rec</code>, <code>server_rec</code>: HTTP 処理の基本構造体。</li>
+<li><code>ap_expr_info_t</code>: 解析済み式ツリーとメタデータ。</li>
+<li><code>ap_regmatch_t</code>: 正規表現のバックリファレンス用マッチング情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>err</code> メンバーが指す先にエラー文字列が格納されるため、呼び出し元は評価後にこの値を確認する必要があります。</li>
+<li><code>re_pmatch</code> のサイズ (<code>re_nmatch</code>) を超える正規表現バックリファレンスへのアクセスは未定義の動作を引き起こす可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>AP_EXPR_FLAG_RESTRICTED</code> を使用する際は、機密情報へのアクセスが制限されるため、本コンテキストの <code>data</code> フィールド等の利用には注意が必要です。</li>
+<li>新しい機能を追加する際は、<code>ap_expr_eval_ctx_t</code> の構造を変更せずに済むよう、可能な限り <code>data</code> ポインタを活用してください。</li>
 </ul></body></html>

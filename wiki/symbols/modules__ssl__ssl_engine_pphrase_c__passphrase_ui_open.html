@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_pphrase.c:620</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OpenSSL の <code>UI_METHOD</code> における「オープン」コールバックとして、暗号化された秘密鍵の復号に必要なパスフレーズを収集するための対話型インターフェースを初期化します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int passphrase_ui_open(UI *ui)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>UI *ui</code> (OpenSSL の UI 構造体)</li>
+<li>**出力**: 成功時に <code>1</code>、失敗時に <code>0</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>UI_get0_user_data(ui)</code> を通じて <code>pphrase_cb_arg_t</code> 型のコンテキストが取得可能であること。</li>
+<li><code>ppcb-&gt;s</code> から取得されるサーバー設定に基づき、パスフレーズの対話方式（<code>SSL_PPTYPE_BUILTIN</code> または <code>SSL_PPTYPE_PIPE</code>）が決定されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **状態更新**: <code>ppcb-&gt;nPassPhraseDialog</code> および <code>ppcb-&gt;nPassPhraseDialogCur</code> をインクリメントします。 2. **方式別処理**:</p>
+<ul>
+<li>**PIPE**: <code>readtty</code> が未初期化の場合、<code>ssl_pipe_child_create</code> を呼び出し、外部プログラムとの通信用パイプを生成します。</li>
+<li>**BUILTIN**: Windows 環境ではエラーとして終了します。それ以外の場合は <code>apr_file_open_stdout</code> を使用して標準出力を <code>writetty</code> に割り当てます。</li>
+<p>3. **ユーザー通知**: 初回呼び出し時（<code>nPassPhraseDialog == 1</code>）に、<code>mod_ssl</code> のパスフレーズダイアログである旨のヘッダーを表示します。 4. **鍵情報表示**: <code>bPassPhraseDialogOnce</code> が真の場合、対象となる鍵の ID とファイルパスを表示し、フラグをリセットします。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_pphrase.c:820</code> において、<code>UI_method_set_opener</code> を介して OpenSSL の UI メソッドに登録されます。</li>
+<li>**呼び出し先**: </li>
+<li><code>ssl_pipe_child_create</code> (パイプ方式時)</li>
+<li><code>apr_file_printf</code> / <code>apr_file_open_stdout</code> (APR ユーティリティ)</li>
+<li><code>ap_log_error</code> (ログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pphrase_cb_arg_t</code>: パスフレーズ収集の状態を保持するコンテキスト。</li>
+<li><code>SSLSrvConfigRec</code>: サーバーごとの SSL 設定。</li>
+<li><code>UI</code>: OpenSSL の対話型 UI 構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**パイプ生成失敗**: <code>ssl_pipe_child_create</code> が <code>APR_SUCCESS</code> 以外を返した場合、エラーログを出力して <code>0</code> を返します。</li>
+<li>**Windows 環境**: <code>SSL_PPTYPE_BUILTIN</code> が指定されている場合、サポート外のためエラーとして <code>0</code> を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OpenSSL の <code>UI_METHOD</code> インターフェースの一部です。</li>
+<li><code>writetty</code> はグローバルまたは静的なファイルハンドルとして扱われており、マルチスレッド環境での競合や初期化順序に注意が必要です。</li>
+<li>パスフレーズの入力自体は、後続の <code>passphrase_ui_read</code> 等で行われます。</li>
 </ul></body></html>

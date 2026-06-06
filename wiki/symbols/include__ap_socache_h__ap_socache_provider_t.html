@@ -6,22 +6,52 @@
 <li>定義箇所: <code>include/ap_socache.h:89</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server における「小規模オブジェクトキャッシュ」の抽象化レイヤーを定義する構造体です。メモリ、共有メモリ、ディスクなど、多様なバックエンド実装を統一的なインターフェースで利用可能にします。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct ap_socache_provider_t {
+    const char *name;
+    unsigned int flags;
+    const char *(*create)(ap_socache_instance_t **instance, const char *arg, apr_pool_t *tmp, apr_pool_t *p);
+    apr_status_t (*init)(ap_socache_instance_t *instance, const char *cname, const struct ap_socache_hints *hints, server_rec *s, apr_pool_t *pool);
+    void (*destroy)(ap_socache_instance_t *instance, server_rec *s);
+    apr_status_t (*store)(ap_socache_instance_t *instance, server_rec *s, const unsigned char *id, unsigned int idlen, apr_time_t expiry, unsigned char *data, unsigned int datalen, apr_pool_t *pool);
+    apr_status_t (*retrieve)(ap_socache_instance_t *instance, server_rec *s, const unsigned char *id, unsigned int idlen, unsigned char *data, unsigned int *datalen, apr_pool_t *pool);
+    apr_status_t (*remove)(ap_socache_instance_t *instance, server_rec *s, const unsigned char *id, unsigned int idlen, apr_pool_t *pool);
+    void (*status)(ap_socache_instance_t *instance, request_rec *r, int flags);
+    apr_status_t (*iterate)(ap_socache_instance_t *instance, server_rec *s, void *userctx, ap_socache_iterator_t *iterator, apr_pool_t *pool);
+} ap_socache_provider_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: キャッシュ操作に必要なインスタンス、サーバー構造体、バイナリデータ（ID/データ本体）、有効期限、メモリプール。</li>
+<li>**出力**: 操作結果を示す <code>apr_status_t</code>（成功時は <code>APR_SUCCESS</code>）、または <code>retrieve</code> におけるデータ本体と書き込みサイズ。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>init</code> に渡す <code>cname</code> は最大16文字で、英数字（<code>[a-z0-9_-]</code>）のみの使用が推奨されます。</li>
+<li><code>retrieve</code> の <code>datalen</code> は入出力両用です。呼び出し時にバッファサイズを渡し、戻り値として実際に書き込まれたサイズを受け取ります。</li>
+<li><code>AP_SOCACHE_FLAG_NOTMPSAFE</code> フラグが設定されている場合、呼び出し側で明示的な排他制御が必要です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **登録**: <code>ap_register_provider</code> を介して <code>AP_SOCACHE_PROVIDER_GROUP</code> に登録されます。 2. **生成**: <code>create</code> でインスタンスを生成し、<code>init</code> で識別名とヒントを適用して運用を開始します。 3. **操作**: <code>store</code>, <code>retrieve</code>, <code>remove</code> によりバイナリデータの読み書きを行います。 4. **走査**: <code>iterate</code> を通じてキャッシュ内の全オブジェクトをコールバック関数で処理します。 5. **破棄**: <code>destroy</code> によりリソースを解放します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_ssl</code>（セッションキャッシュ）、<code>mod_cache_socache</code>、<code>mod_authn_socache</code> など。</li>
+<li>**呼び出し先**: 各キャッシュ実装モジュール（<code>mod_socache_shmcb.c</code>, <code>mod_socache_dbm.c</code>, <code>mod_socache_dc.c</code>, <code>mod_socache_memcache.c</code>, <code>mod_socache_redis.c</code>）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュインスタンスを保持する不透明な型。</li>
+<li><code>ap_socache_hints</code>: キャッシュの期待される利用状況を記述するヒント構造体。</li>
+<li><code>server_rec</code>, <code>request_rec</code>: Apache のサーバーおよびリクエスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>create</code> は失敗時にエラー文字列を返します。</li>
+<li><code>retrieve</code> は対象が見つからない場合に <code>APR_NOTFOUND</code> を返します。</li>
+<li><code>status</code> メソッドは <code>mod_status</code> 向けですが、内部で非推奨の <code>ap_r*</code> インターフェースを使用しています。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はインターフェース定義であり、実装は各 <code>mod_socache_*.c</code> に存在します。</li>
+<li><code>iterate</code> メソッドのシグネチャは <code>include/ap_mmn.h</code> で定義される API バージョン変更の影響を受ける可能性があります。</li>
 </ul></body></html>

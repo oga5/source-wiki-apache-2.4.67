@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/session/mod_session_dbd.c:258</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>セッションデータをデータベースへ永続化します。既存のセッションがあれば更新（UPDATE）を試み、存在しない場合は新規挿入（INSERT）を行います。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t dbd_save(request_rec *r, const char *oldkey, const char *newkey, const char *val, apr_int64_t expiry)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>oldkey</code>: 更新対象の既存セッションキー（新規作成時は <code>NULL</code> 可）。</li>
+<li><code>newkey</code>: 保存するセッションの新しいキー。</li>
+<li><code>val</code>: シリアライズされたセッションデータ。</li>
+<li><code>expiry</code>: セッションの有効期限（UNIXタイムスタンプ）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時は <code>APR_EGENERAL</code> または <code>dbd_init</code> が返すエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;per_dir_config</code> に <code>session_dbd_dir_conf</code> が設定されていること。</li>
+<li><code>mod_dbd</code> がロードされ、データベース接続が確立可能であること。</li>
+<li>設定において <code>SessionDBDupdatelabel</code> および <code>SessionDBDinsertlabel</code> が定義されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>conf-&gt;updatelabel</code> を使用して <code>dbd_init</code> を呼び出し、更新用プリペアドステートメントを取得。 2. <code>oldkey</code> が指定されている場合、<code>apr_dbd_pvbquery</code> で更新を実行。更新行数が 0 でなければ成功として終了。 3. 更新が行われなかった（または <code>oldkey</code> が <code>NULL</code> の）場合、<code>conf-&gt;insertlabel</code> を使用して <code>dbd_init</code> を呼び出し、挿入用プリペアドステートメントを取得。 4. <code>apr_dbd_pvbquery</code> で挿入を実行。挿入行数が 0 でなければ成功として終了。 5. いずれの操作も行われなかった場合はエラーをログ出力し、<code>APR_EGENERAL</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/session/mod_session_dbd.c:432</code></li>
+<li><code>modules/session/mod_session_dbd.c:464</code></li>
+<li>**呼び出し先**:</li>
+<li><code>dbd_init</code> (内部ヘルパー)</li>
+<li><code>ap_get_module_config</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>apr_dbd_pvbquery</code></li>
+<li><code>apr_dbd_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>session_dbd_dir_conf</code>: ディレクトリ単位の設定（SQLラベル等）を保持。</li>
+<li><code>request_rec</code>: リクエストのプール管理および設定取得に使用。</li>
+<li><code>ap_dbd_t</code>: <code>mod_dbd</code> のデータベース接続ハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**設定欠如**: <code>updatelabel</code> や <code>insertlabel</code> が未定義の場合、エラーログを出力して <code>APR_EGENERAL</code> を返す。</li>
+<li>**DBエラー**: <code>dbd_init</code> や <code>apr_dbd_pvbquery</code> が失敗した場合、エラーログを出力してそのステータスを返す。</li>
+<li>**挿入失敗**: 更新も挿入も行われなかった場合、セッションが保存されなかったと判断し <code>APR_EGENERAL</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用してメモリを管理しているため、リクエスト終了時にリソースが解放されます。</li>
+<li><code>oldkey</code> と <code>newkey</code> が同一の場合でも、ロジック上は更新処理が優先されます。</li>
 </ul></body></html>

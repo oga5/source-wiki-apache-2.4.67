@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/database/mod_dbd.h:60</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>mod_dbd</code> モジュールにおいて、サーバー単位のデータベース接続設定を保持するための構造体です。ドライバ名、接続パラメータ、および接続プールの動作設定を管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    server_rec *server;
+    const char *name;
+    const char *params;
+    int persist;
+#if APR_HAS_THREADS
+    int nmin;
+    int nkeep;
+    int nmax;
+    int exptime;
+    int set;
+#endif
+    apr_hash_t *queries;
+    apr_array_header_t *init_queries;
+} dbd_cfg_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は設定コンテナとして機能します。</p>
+<ul>
+<li>**入力**: サーバー設定ディレクティブ（<code>DBDriver</code>, <code>DBDParams</code> 等）を通じて値が設定されます。</li>
+<li>**出力**: <code>mod_dbd</code> の内部ロジック（接続プールの初期化やクエリの準備）において、接続パラメータやプールサイズ等の設定値として参照されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>APR_HAS_THREADS</code> が定義されている環境では、スレッドセーフな接続プール管理のためのパラメータ（<code>nmin</code>, <code>nkeep</code>, <code>nmax</code> 等）が有効になります。</li>
+<li><code>queries</code> および <code>init_queries</code> は、SQL ステートメントを管理するためのハッシュテーブルおよび配列として初期化されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバーの起動および設定読み込みフェーズにおいて、<code>apr_pcalloc</code> 等でメモリが確保され、各フィールドが初期化されます。</li>
+<li>接続取得リクエストが発生した際、本構造体に保持された <code>params</code> やプール設定に基づき、<code>mod_dbd</code> はデータベース接続の確立または再利用を行います。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/database/mod_dbd.c</code> 内の各種設定ハンドラおよび接続管理関数（例: <code>dbd_prepared_init</code> 等）から参照されます。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: Apache のサーバー設定構造体。</li>
+<li><code>apr_hash_t</code>: 準備済みクエリを格納するハッシュテーブル。</li>
+<li><code>apr_array_header_t</code>: 初期化クエリを格納する配列。</li>
+<li><code>ap_dbd_t</code>: 本設定に基づいて管理される実際のデータベース接続ハンドル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>設定値が未定義（<code>set</code> フラグが 0 など）の場合、デフォルトの接続プール動作が適用される可能性があります。</li>
+<li>メモリ不足時には <code>apr_pcalloc</code> による構造体確保が失敗する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_dbd</code> の中核となる設定保持用データ構造です。フィールドの追加や変更を行う際は、<code>mod_dbd.c</code> 内の <code>dbd_post_config</code> や設定マージ処理への影響を考慮してください。</li>
+<li>スレッド環境下での接続プールパラメータ（<code>nmin</code>, <code>nkeep</code>, <code>nmax</code>）の整合性は、<code>mod_dbd.c</code> 側のロジックに依存しています。</li>
 </ul></body></html>

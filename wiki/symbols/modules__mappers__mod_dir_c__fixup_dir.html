@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/mappers/mod_dir.c:224</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ディレクトリに対するリクエストを処理し、末尾スラッシュの補完（リダイレクト）または設定されたインデックスファイル（<code>DirectoryIndex</code>）への内部転送を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int fixup_dir(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （現在のリクエスト情報）</li>
+<li>**出力**: </li>
+<li><code>OK</code>: インデックスファイルへの内部リダイレクトが成功した場合。</li>
+<li><code>HTTP_MOVED_PERMANENTLY</code>: スラッシュ補完のためのリダイレクトが必要な場合。</li>
+<li><code>DECLINED</code>: 処理対象外（<code>path_info</code> がある場合や、他のモジュールがハンドラを占有している場合など）。</li>
+<li><code>HTTP_*</code> (エラーコード): サブリクエストでエラーが発生した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>path_info</code> が存在する場合、本関数は即座に <code>DECLINED</code> を返す。</li>
+<li><code>DirectorySlash</code> が無効な場合、末尾スラッシュなしのディレクトリリクエストに対しては <code>DECLINED</code> を返す。</li>
+<li>インデックス解決の際、サブリクエストの結果が <code>APR_REG</code>（通常ファイル）であるか、プロキシハンドラが指定されていることを必須条件とする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: リクエストハンドラが未設定の場合、<code>DIR_MAGIC_TYPE</code> を割り当てる。 2. **スラッシュ補完**: URI が <code>/</code> で終わらない場合、<code>DirectorySlash</code> 設定に基づき、末尾に <code>/</code> を付加した URL へ <code>301 Moved Permanently</code> を返す。 3. **ハンドラ競合回避**: <code>REWRITE_REDIRECT_HANDLER_NAME</code> や <code>checkhandler</code> が有効な場合、処理を中断して <code>DECLINED</code> を返す。 4. **インデックス探索**: <code>DirectoryIndex</code> で指定されたファイルリストを順次走査する。</p>
+<ul>
+<li><code>ap_sub_req_lookup_uri</code> を使用して各候補の存在を確認。</li>
+<li>候補が見つかった場合、<code>DirectoryIndexRedirect</code> 設定に応じて外部リダイレクトまたは <code>ap_internal_fast_redirect</code> による内部転送を行う。</li>
+<p>5. **エラー伝播**: サブリクエストが 404 以外のエラーを返した場合、そのエラーを保持し、全候補探索後に最終的なエラーとして返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>dir_fixups</code>（<code>modules/mappers/mod_dir.c:395</code>）</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_sub_req_lookup_uri</code></li>
+<li><code>ap_internal_fast_redirect</code></li>
+<li><code>ap_destroy_sub_req</code></li>
+<li><code>ap_construct_url</code></li>
+<li><code>ap_escape_uri</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dir_config_rec</code>: ディレクトリごとの設定（<code>index_names</code>, <code>do_slash</code>, <code>redirect_index</code> 等）を保持。</li>
+<li><code>request_rec</code>: Apache のリクエスト状態を管理。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**サブリクエスト失敗**: 候補ファイルが存在しない場合、<code>error_notfound</code> を記録し、最終的に <code>DECLINED</code> または最後に発生したエラーコードを返す。</li>
+<li>**リダイレクトループ**: <code>FallbackResource</code> 等の設定と組み合わせた際、指定先が存在しない場合に無限ループや予期せぬ挙動を招く可能性がある。</li>
+<li>**非 GET リクエスト**: <code>redirect-carefully</code> 環境変数が設定されている場合、GET 以外のメソッドに対するスラッシュ補完リダイレクトを回避する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>dir_config_rec</code> は Apache の設定プール上で管理される。</li>
+<li>サブリクエスト生成後は <code>ap_destroy_sub_req</code> を呼び出し、メモリリークを防ぐこと。</li>
+<li><code>r-&gt;args</code> はサブリクエストの生成時に適切に引き継ぐ必要がある。</li>
 </ul></body></html>

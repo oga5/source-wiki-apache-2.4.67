@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/generators/mod_asis.c:31</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP レスポンスヘッダーをファイル内に直接記述したファイルを、サーバーによる自動生成ヘッダーをバイパスしてクライアントへそのまま送信（Send-As-Is）する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int asis_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （Apache リクエスト構造体）</li>
+<li>**出力**: <code>int</code> （Apache ステータスコード: <code>OK</code>, <code>DECLINED</code>, <code>HTTP_NOT_FOUND</code>, <code>HTTP_FORBIDDEN</code>, <code>HTTP_INTERNAL_SERVER_ERROR</code>, <code>AP_FILTER_ERROR</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストのハンドラ名が <code>ASIS_MAGIC_TYPE</code> (<code>httpd/send-as-is</code>) または <code>&quot;send-as-is&quot;</code> であること。</li>
+<li>リクエストメソッドが <code>M_GET</code> であること。</li>
+<li>対象ファイルが存在し、サーバーが読み取り権限を持っていること。</li>
+<li>ファイルの先頭が HTTP ヘッダー群、その後に空行という形式であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **検証**: ハンドラ名とメソッドを確認し、不一致の場合は <code>DECLINED</code> を返す。 2. **ファイルオープン**: 対象ファイルを読み込み専用で開く。 3. **ヘッダー解析**: <code>ap_scan_script_header_err_ex</code> を呼び出し、ファイル先頭のヘッダーを解析して <code>r-&gt;headers_out</code> 等に反映させる。 4. **リダイレクト処理**: <code>Location</code> ヘッダーが存在し、かつステータスがリダイレクトまたは <code>HTTP_OK</code> の場合、ファイルを閉じて <code>ap_internal_redirect_handler</code> を実行し、<code>OK</code> を返す。 5. **コンテンツ送信**: <code>header_only</code> リクエストでない場合、ヘッダー終了位置以降のファイル本体をバケットブリゲードに追加し、<code>ap_pass_brigade</code> で出力フィルターチェーンへ送信する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/generators/mod_asis.c:116</code> (<code>ap_hook_handler</code> により登録)</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_log_rerror</code>, <code>apr_file_open</code>, <code>apr_file_close</code>, <code>apr_file_seek</code></li>
+<li><code>ap_scan_script_header_err_ex</code></li>
+<li><code>apr_table_get</code></li>
+<li><code>ap_internal_redirect_handler</code></li>
+<li><code>apr_brigade_create</code>, <code>apr_brigade_insert_file</code>, <code>apr_bucket_eos_create</code>, <code>APR_BRIGADE_INSERT_TAIL</code></li>
+<li><code>ap_pass_brigade</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびレスポンスヘッダーの保持。</li>
+<li><code>apr_file_t</code>: 対象ファイルのファイルハンドル。</li>
+<li><code>apr_bucket_brigade</code>: コンテンツ送信用のバケットブリゲード。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ファイル不在**: <code>APR_NOFILE</code> の場合、<code>HTTP_NOT_FOUND</code> を返す。</li>
+<li>**アクセス権限不足**: <code>apr_file_open</code> 失敗時、<code>HTTP_FORBIDDEN</code> を返す。</li>
+<li>**ヘッダー解析後の位置特定失敗**: <code>apr_file_seek</code> 失敗時、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**送信失敗**: <code>ap_pass_brigade</code> 失敗時、<code>AP_FILTER_ERROR</code> を返す。</li>
+<li>**リダイレクト**: 内部リダイレクト時は元のメソッドに関わらず <code>GET</code> として再処理される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>ファイルの先頭が空行で終わっていない場合、ヘッダー解析が正しく行われない可能性がある。</li>
+<li>内部リダイレクトが発生した場合、元のリクエストメソッドに関わらず <code>GET</code> メソッドとして再処理される点に注意すること。</li>
 </ul></body></html>

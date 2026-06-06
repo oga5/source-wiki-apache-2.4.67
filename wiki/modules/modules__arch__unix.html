@@ -1,48 +1,40 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/modules__arch__unix.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/arch/unix</h1>
 <h2>システム内での役割</h2>
-<p><code>modules/arch/unix</code> には 4 個の索引済みソースファイルがあります。この初期モジュールページはディレクトリ境界に基づいています。</p>
+<p>本モジュールは、Apache HTTP Server が Unix 系 OS 上で動作する際に必要な、プロセス権限管理、環境分離、およびシステムサービス統合のための基盤を提供します。ディレクトリ境界に基づき、Unix 特有のシステムコールや外部サービス（systemd）との連携機能を抽象化・集約しています。</p>
 <h2>責務</h2>
 <ul>
-<li>このディレクトリに属するソースファイルを集約する。</li>
-<li>より深い LLM 合成の前段として、モジュール単位の入口を提供する。</li>
+<li>**権限管理**: プロセス起動時の root 権限から非特権ユーザーへの降格（<code>setuid</code>/<code>setgid</code>）。</li>
+<li>**環境分離**: <code>chroot</code> による実行ディレクトリの制限および suEXEC の検証。</li>
+<li>**特権の動的制御**: Solaris 等の特権機能を用いたリクエスト単位の権限分離。</li>
+<li>**サービス統合**: systemd によるサービス管理（起動通知、ソケット引き継ぎ、稼働状況の報告）のサポート。</li>
 </ul>
 <h2>このモジュールのファイル</h2>
 <ul>
-<li><code>modules/arch/unix/mod_privileges.c</code></li>
-<li><code>modules/arch/unix/mod_systemd.c</code></li>
-<li><code>modules/arch/unix/mod_unixd.c</code></li>
-<li><code>modules/arch/unix/mod_unixd.h</code></li>
+<li><code>mod_unixd.c</code> / <code>mod_unixd.h</code>: 権限管理とプロセス環境設定のコア実装。</li>
+<li><code>mod_privileges.c</code>: OS レベルの特権機能を活用したリクエスト単位の権限分離。</li>
+<li><code>mod_systemd.c</code>: systemd サービスマネージャとの連携インターフェース。</li>
 </ul>
 <h2>主要なデータ構造</h2>
 <ul>
-<li><code>priv_mode</code></li>
-<li><code>priv_cfg</code></li>
-<li><code>priv_dir_cfg</code></li>
-<li><code>unixd_config_t</code></li>
+<li><code>unixd_config_t</code>: ユーザー/グループ ID や <code>chroot</code> 設定を保持する共通設定構造体。</li>
+<li><code>priv_cfg</code> / <code>priv_dir_cfg</code>: <code>mod_privileges</code> における vhost 単位の権限セットおよび動作モード。</li>
+<li><code>ap_scoreboard_image</code>: <code>mod_systemd</code> が稼働統計を取得するために参照する共有メモリ構造。</li>
 </ul>
 <h2>主なフロー</h2>
-<p>初期モジュールページでは、まだエンドツーエンドのフローを推論しません。</p>
+<p>1. **起動時**: <code>mod_unixd</code> が設定を読み込み、<code>mod_systemd</code> が起動完了をサービスマネージャへ通知。 2. **プロセス生成時**: <code>ap_unixd_setup_child()</code> が呼び出され、グループ権限の確定、<code>chroot</code> の実行、最終的な <code>setuid</code> による権限降格が行われる。 3. **リクエスト処理時**: <code>mod_privileges</code> が有効な場合、リクエストごとに権限セットの動的変更やプロセス分離（fork）が実行される。 4. **監視時**: <code>mod_systemd</code> が定期的にスコアボードから統計を読み取り、systemd へステータスを送信。</p>
 <h2>外部依存</h2>
 <ul>
-<li><code>mpm_common.h</code></li>
-<li><code>ap_mpm.h</code></li>
-<li><code>unixd.h</code></li>
-<li><code>httpd.h</code></li>
-<li><code>http_config.h</code></li>
-<li><code>http_log.h</code></li>
-<li><code>apr_strings.h</code></li>
-<li><code>ap_config.h</code></li>
-<li><code>http_protocol.h</code></li>
-<li><code>ap_listen.h</code></li>
+<li>**システム API**: <code>unistd.h</code>, <code>pwd.h</code>, <code>grp.h</code>, <code>sys/prctl.h</code>, <code>priv.h</code> (Solaris)</li>
+<li>**systemd**: <code>libsystemd</code> (<code>sd-daemon.h</code>)</li>
+<li>**Apache 内部**: <code>httpd.h</code>, <code>mpm_common.h</code>, <code>unixd.h</code>, <code>scoreboard.h</code></li>
 </ul>
 <h2>内部構成</h2>
-<ul>
-<li>子モジュール数: 0</li>
-</ul>
+<p>本モジュールは、Unix 系 MPM の動作を支える独立した機能モジュールの集合体です。各モジュールは MPM のフックポイントを利用して連携しますが、モジュール間での直接的な依存は最小限に抑えられています。</p>
 <h2>推奨読書順</h2>
-<p>1. <code>modules/arch/unix/mod_unixd.h</code> 2. <code>modules/arch/unix/mod_privileges.c</code> 3. <code>modules/arch/unix/mod_unixd.c</code> 4. <code>modules/arch/unix/mod_systemd.c</code></p>
+<p>1. <code>mod_unixd.h</code>: 権限管理の基本インターフェースを理解する。 2. <code>mod_unixd.c</code>: プロセス降格の標準的な実装を確認する。 3. <code>mod_privileges.c</code>: OS 特有の高度な権限分離手法を学ぶ。 4. <code>mod_systemd.c</code>: 外部サービスマネージャとの統合ロジックを確認する。</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li><code>unixd.h</code>（<code>include/</code> 配下）と <code>mod_unixd.h</code> の役割分担の整理。</li>
+<li>マルチスレッド MPM（Worker/Event）環境における <code>mod_privileges</code> の互換性向上策。</li>
 </ul></body></html>

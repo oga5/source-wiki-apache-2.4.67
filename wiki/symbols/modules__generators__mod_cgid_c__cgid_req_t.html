@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/generators/mod_cgid.c:195</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_cgid</code> において、メインのサーバープロセスから CGI デーモンプロセスへリクエスト情報を転送するためのヘッダー構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    int req_type;
+    unsigned long conn_id;
+    pid_t ppid;
+    int env_count;
+    ap_unix_identity_t ugid;
+    apr_size_t filename_len;
+    apr_size_t argv0_len;
+    apr_size_t uri_len;
+    apr_size_t args_len;
+    int loglevel;
+#ifdef AP_CGID_USE_RLIMIT
+    cgid_rlimit_t limits;
+#endif
+} cgid_req_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は、<code>send_req()</code> を介して Unix ドメインソケット経由でデーモンプロセスへ送信されます。デーモン側では <code>get_req()</code> を通じてこの情報を受け取り、CGI プロセスの生成や環境設定に使用します。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_id</code> はデーモンプロセス側でハッシュ値として利用され、プロセス終了時のクリーンアップ対象を特定するために使用されます。</li>
+<li><code>ppid</code> は設定不備によるソケットの誤用を検知するためのサニティチェック用として保持されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>cgid_handler</code> 等の呼び出し元で構造体が初期化されます。 2. リクエストに関連するパス長や環境変数数、ユーザー識別情報（<code>ugid</code>）が格納されます。 3. ソケット経由でデーモンへ送信され、デーモン側で <code>apr_proc_create</code> を用いた CGI プロセス生成のパラメータとして利用されます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_cgid.c</code> 内の <code>cgid_handler</code> およびリクエスト処理フロー（行 582, 801, 1425 付近）。</li>
+<li>**呼び出し先**: <code>send_req()</code> および <code>get_req()</code> 関数が本構造体を引数として受け取ります（行 501 付近）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_unix_identity_t</code>: 実行ユーザー/グループ情報の保持に使用。</li>
+<li><code>cgid_rlimit_t</code>: <code>AP_CGID_USE_RLIMIT</code> 定義時にリソース制限情報を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ppid</code> の不一致は、設定誤りによるソケットの不正利用を示唆します。</li>
+<li><code>filename_len</code> 等の各長さフィールドは、ソケット通信時のデータ読み取りサイズを決定するため、不整合がある場合、デーモン側でのデシリアライズ失敗を招きます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_cgid</code> の通信プロトコルの根幹であるため、フィールドの追加や変更を行う際は、デーモン側とサーバー側の両方で <code>send_req</code>/<code>get_req</code> のシリアライズロジックを同期させる必要があります。</li>
 </ul></body></html>

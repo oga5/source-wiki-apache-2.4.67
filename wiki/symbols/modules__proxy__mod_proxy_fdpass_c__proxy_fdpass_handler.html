@@ -2,26 +2,63 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_handler.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>proxy_fdpass_handler</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>function</code></li>
-<li>定義箇所: <code>modules/proxy/mod_proxy_fdpass.c:123</code></li>
+<li>**種別**: 関数</li>
+<li>**定義箇所**: <code>modules/proxy/mod_proxy_fdpass.c:123</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>fd://</code> スキームのリクエストを処理し、クライアントとの接続ソケット（ファイルディスクリプタ）を Unix ドメインソケット経由で外部プロセスへ移譲（FD Passing）する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_fdpass_handler(request_rec *r, proxy_worker *worker,
+                                proxy_server_conf *conf,
+                                char *url, const char *proxyname,
+                                apr_port_t proxyport)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>url</code>: <code>fd://</code> で始まるターゲットパス。</li>
+<li><code>worker</code>: プロキシワーカー設定。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 正常終了。</li>
+<li><code>DECLINED</code>: <code>fd://</code> スキームではない場合。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: 接続失敗、フラッシュ失敗、またはダミーソケット作成失敗時。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>URL が <code>fd://</code> で始まる必要がある。</li>
+<li>ターゲットとなる Unix ドメインソケットへの接続が確立可能であること。</li>
+<li>外部プロセスへ FD を渡す前に、レスポンスのフラッシュが完了していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **スキーム検証**: URL が <code>fd://</code> でない場合は <code>DECLINED</code> を返す。 2. **接続**: <code>get_socket_from_path</code> を呼び出し、ターゲットの Unix ドメインソケットを取得する。 3. **フラッシュ**: 設定された <code>flusher</code> プロバイダを呼び出し、バッファをフラッシュする。 4. **FD 送信**: <code>send_socket</code> を使用し、クライアントソケットの FD をターゲットソケットへ送信する。 5. **接続保護**: Apache コアが終了時にクライアントソケットをクローズしないよう、<code>ap_set_core_module_config</code> を用いてダミーソケットに差し替える。 6. **完了**: <code>OK</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_fdpass.c</code> 内の <code>proxy_hook_scheme_handler</code> に登録されている。</li>
+<li>**呼び出し先**:</li>
+<li><code>get_socket_from_path</code></li>
+<li><code>ap_lookup_provider</code> (フラッシュプロバイダ取得用)</li>
+<li><code>flush-&gt;flusher</code></li>
+<li><code>ap_get_conn_socket</code></li>
+<li><code>send_socket</code></li>
+<li><code>apr_socket_create</code></li>
+<li><code>ap_set_core_module_config</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報。</li>
+<li><code>proxy_worker</code>: プロキシワーカー設定。</li>
+<li><code>proxy_fdpass_flush</code>: レスポンスフラッシュ用プロバイダ構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>fd://</code> 以外のスキーム: <code>DECLINED</code> を返す。</li>
+<li>Unix ドメインソケットへの接続失敗: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>フラッシュプロバイダが見つからない、またはフラッシュ失敗: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li><code>send_socket</code> 失敗: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>ダミーソケット作成失敗: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SCM_RIGHTS</code> を利用した FD 移譲を行うため、ターゲットプロセスが FD を適切に受け取る実装になっていることが前提となる。</li>
+<li>ダミーソケットへの差し替えは、Apache のクリーンアップ処理による誤ったクローズを防ぐための必須ハックである。</li>
 </ul></body></html>

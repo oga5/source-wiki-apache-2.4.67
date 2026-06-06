@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/metadata/mod_expires.c:214</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ユーザーが指定した有効期限設定文字列（例: <code>access plus 1 month</code>）を解析し、内部的に処理可能な形式（<code>[AM]&lt;seconds&gt;</code>）へ変換する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>char *check_code(apr_pool_t *p, const char *code, char **real_code)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当て用のプール。</li>
+<li><code>code</code>: 解析対象の有効期限文字列。</li>
+<li><code>real_code</code>: 変換後の文字列を格納するポインタへのポインタ。</li>
+<li>**出力**:</li>
+<li>成功時: <code>NULL</code> を返し、<code>real_code</code> に変換結果（例: <code>A2592000</code>）を格納。</li>
+<li>失敗時: エラーメッセージ文字列を返し、<code>real_code</code> は変更されない。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>code</code> が <code>A</code> または <code>M</code> で始まる場合、解析を行わずそのまま <code>real_code</code> に代入して終了する（後方互換性維持のため）。</li>
+<li><code>code</code> は <code>ap_getword_conf</code> を用いてトークン単位で解析される。</li>
+<li><code>num</code>（数値）と <code>type</code>（単位）のペアが順次処理される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ベース判定**: 文字列の先頭トークンを解析し、<code>access</code>（または <code>now</code>）なら <code>A</code>、<code>modification</code> なら <code>M</code> を基準時刻として設定する。 2. **オプションのスキップ**: <code>plus</code> という単語があれば読み飛ばす。 3. **数値と単位のループ**:</p>
+<ul>
+<li><code>atoi</code> で数値（<code>num</code>）を取得する。</li>
+<li>続く単位（<code>years</code>, <code>months</code>, <code>weeks</code>, <code>days</code>, <code>hours</code>, <code>minutes</code>, <code>seconds</code>）を判定し、対応する秒数（<code>factor</code>）を乗算する。</li>
+<li>累積値（<code>modifier</code>）に加算する。</li>
+<p>4. **結果生成**: 最終的な <code>base</code> と <code>modifier</code> を <code>apr_psprintf</code> で結合し、<code>real_code</code> に格納する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/metadata/mod_expires.c:327</code> (<code>set_expiresbytype</code> 内)</li>
+<li><code>modules/metadata/mod_expires.c:341</code> (<code>set_expiresdefault</code> 内)</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_getword_conf</code> (Apache API: 設定文字列のトークン分割)</li>
+<li><code>apr_pstrcat</code>, <code>apr_psprintf</code> (APR API: 文字列操作)</li>
+<li><code>strncasecmp</code>, <code>apr_isdigit</code>, <code>atoi</code> (標準 C ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>expires_dir_config</code>: 本関数で生成された <code>real_code</code> が格納される設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**不正なベース**: <code>access</code> や <code>modification</code> 以外の単語が指定された場合、エラーメッセージを返す。</li>
+<li>**数値欠落**: 単位の前に数値がない場合、エラーメッセージを返す。</li>
+<li>**不正な単位**: 未知の単位が指定された場合、エラーメッセージを返す。</li>
+<li>**堅牢性**: <code>atoi</code> を使用しているため、非常に大きな数値や不正なフォーマットに対する入力チェックは限定的である。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は古いコードベースを継承しており、<code>Cache-Control</code> の詳細な制御には対応していない。</li>
+<li><code>ExpiresActive</code> の <code>ACTIVE_DONTCARE</code> 状態は本関数では直接扱わず、呼び出し元で制御される。</li>
 </ul></body></html>

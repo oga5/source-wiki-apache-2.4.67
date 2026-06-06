@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_mutex.c:33</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>セッションキャッシュの保護に必要なグローバル Mutex を初期化します。キャッシュプロバイダがマルチプロセス/マルチスレッド環境で安全でない場合にのみ Mutex を作成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_mutex_init(server_rec *s, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバー設定構造体（<code>server_rec</code>）。</li>
+<li><code>p</code>: 初期化に使用するプール（<code>apr_pool_t</code>）。</li>
+<li>**出力**:</li>
+<li><code>TRUE</code> (1): Mutex が不要、または初期化に成功した場合。</li>
+<li><code>FALSE</code> (0): Mutex の作成に失敗した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>myModConfig(s)</code> を介して取得した <code>SSLModConfigRec</code> が有効であること。</li>
+<li><code>mc-&gt;sesscache</code> が設定されている場合、そのフラグに基づいて Mutex の必要性が判定されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>SSLModConfigRec</code> から設定を取得します。 2. 以下のいずれかの場合、Mutex は不要と判断し <code>TRUE</code> を返します。</p>
+<ul>
+<li>セッションキャッシュが設定されていない。</li>
+<li>キャッシュプロバイダが <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> フラグを持たない（内部的に安全）。</li>
+<p>3. 既に <code>mc-&gt;pMutex</code> が存在する場合は、再作成せず <code>TRUE</code> を返します。 4. <code>ap_global_mutex_create</code> を呼び出し、<code>SSL_CACHE_MUTEX_TYPE</code> 型で Mutex を生成します。 5. 生成結果が <code>APR_SUCCESS</code> であれば <code>TRUE</code> を、それ以外であれば <code>FALSE</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_init.c:478</code></li>
+<li>**呼び出し先**: </li>
+<li><code>ap_global_mutex_create</code> (APR API)</li>
+<li><code>myModConfig</code> (マクロ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLModConfigRec</code>: モジュールの設定情報を保持する構造体。</li>
+<li><code>server_rec</code>: Apache サーバーの構成情報。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_global_mutex_create</code> が <code>APR_SUCCESS</code> 以外を返した場合、関数は <code>FALSE</code> を返し、初期化は失敗します。</li>
+<li>キャッシュプロバイダが <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> を指定しているにもかかわらず Mutex 作成に失敗した場合、セッションキャッシュの排他制御が機能しない状態となります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はサーバー起動時に呼び出されることを想定しています。</li>
+<li><code>SSL_CACHE_MUTEX_TYPE</code> の定義については <code>ssl_private.h</code> を参照してください。</li>
 </ul></body></html>

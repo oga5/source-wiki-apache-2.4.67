@@ -6,22 +6,56 @@
 <li>定義箇所: <code>server/mpm_unix.c:331</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたプロセスID（PID）に対して、プロセスグループの整合性を検証した上で安全にシグナルを送信します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_mpm_safe_kill(pid_t pid, int sig)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pid</code>: 送信対象のプロセスID。</li>
+<li><code>sig</code>: 送信するシグナル番号。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: シグナルの送信に成功。</li>
+<li><code>APR_EINVAL</code>: PIDが不正（1未満）、対象がプロセスグループ外、またはプロセスが既に終了している場合。</li>
+<li><code>errno</code>: <code>getpgid</code> 失敗時のエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid</code> は 1 以上である必要があります。</li>
+<li><code>HAVE_GETPGID</code> が定義されている環境では、対象プロセスが呼び出し元と同じプロセスグループに属している必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **PIDの妥当性検証**: <code>pid &lt; 1</code> の場合は直ちに <code>APR_EINVAL</code> を返します。 2. **環境に応じた検証**:</p>
+<ul>
+<li><code>HAVE_GETPGID</code> が未定義の場合: <code>apr_proc_wait</code> を使用してプロセスの生存を確認します。プロセスが終了済みであればステータスを記録し、エラーを返します。</li>
+<li><code>HAVE_GETPGID</code> が定義されている場合: <code>getpgid(pid)</code> を呼び出し、対象プロセスが現在のプロセスグループ (<code>getpgrp()</code>) と一致するか確認します。一致しない場合はログを出力し <code>APR_EINVAL</code> を返します。</li>
+<p>3. **シグナル送信**: <code>kill(pid, sig)</code> を実行し、成功すれば <code>APR_SUCCESS</code> を、失敗すれば <code>errno</code> を返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/prefork/prefork.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>kill</code> (システムコール)</li>
+<li><code>getpgid</code> / <code>getpgrp</code> (HAVE_GETPGID定義時)</li>
+<li><code>apr_proc_wait</code> / <code>ap_process_child_status</code> (HAVE_GETPGID未定義時)</li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid_t</code> (プロセスID)</li>
+<li><code>apr_status_t</code> (APRステータスコード)</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**PID不正**: <code>pid &lt; 1</code> の場合、処理を行わず <code>APR_EINVAL</code> を返します。</li>
+<li>**プロセスグループ外**: <code>HAVE_GETPGID</code> 環境下で、対象PIDが現在のプロセスグループ外にある場合、セキュリティ保護のためシグナル送信を拒否します。</li>
+<li>**既に終了**: プロセスが既に終了している場合、シグナル送信は行われずエラーが返されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は、誤ったプロセスへのシグナル送信を防ぐための安全装置として機能します。</li>
+<li><code>HAVE_GETPGID</code> の有無により検証ロジックが分岐するため、プラットフォーム固有の挙動に注意してください。</li>
 </ul></body></html>

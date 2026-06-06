@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/generators/mod_cgid.c:178</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>CGI プロセス実行時に適用するリソース制限（RLIMIT）の値を保持するための構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+#ifdef RLIMIT_CPU
+    int    limit_cpu_set;
+    struct rlimit limit_cpu;
+#endif
+#if defined (RLIMIT_DATA) || defined (RLIMIT_VMEM) || defined(RLIMIT_AS)
+    int    limit_mem_set;
+    struct rlimit limit_mem;
+#endif
+#ifdef RLIMIT_NPROC
+    int    limit_nproc_set;
+    struct rlimit limit_nproc;
+#endif
+} cgid_rlimit_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 本構造体は <code>cgid_req_t</code> の一部として、メインサーバーから CGI デーモンプロセスへ Unix ドメインソケット経由で転送されます。</li>
+<li>**出力**: デーモンプロセス側で読み取られ、<code>apr_proc_create</code> を用いた CGI プロセス生成時のリソース制限設定に使用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>各制限項目（CPU, メモリ, プロセス数）は、対応する OS のマクロ（<code>RLIMIT_CPU</code> 等）が定義されている場合にのみ有効となります。</li>
+<li><code>limit_xxx_set</code> フラグは、該当する制限が設定されているかどうかを示すブール値として機能します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **シリアライズ**: メインサーバー側で <code>sock_write</code> を使用し、<code>cgid_rlimit_t</code> 構造体全体をソケットへ書き込みます。 2. **デシリアライズ**: CGI デーモン側で <code>sock_read</code> を使用し、ソケットから構造体データを読み取ります。 3. **適用**: デーモンは読み取ったフラグを確認し、設定されている制限値を CGI プロセスに適用します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/generators/mod_cgid.c</code>: リクエスト送信時 (<code>sock_write</code>) および受信時 (<code>sock_read</code>) に参照されます。</li>
+<li>**呼び出し先**:</li>
+<li>本構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cgid_req_t</code>: 本構造体をメンバとして保持し、デーモンへのリクエスト情報を構成します。</li>
+<li><code>struct rlimit</code>: OS 標準のリソース制限構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**通信エラー**: <code>sock_read</code> または <code>sock_write</code> が <code>APR_SUCCESS</code> を返さない場合、リソース制限情報の転送に失敗し、CGI 実行フローが中断されます。</li>
+<li>**プラットフォーム依存**: コンパイル環境で <code>RLIMIT_*</code> マクロが定義されていない場合、該当するメンバは構造体に含まれず、制限を適用できません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はバイナリ形式でソケット通信されるため、構造体のメンバ変更やパディングの差異がプロセス間通信の互換性に影響を与える可能性があります。変更時は注意してください。</li>
 </ul></body></html>

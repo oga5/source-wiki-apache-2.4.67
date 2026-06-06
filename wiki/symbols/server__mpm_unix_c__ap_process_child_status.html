@@ -6,22 +6,56 @@
 <li>定義箇所: <code>server/mpm_unix.c:386</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>子プロセスの終了ステータスを解析し、致命的なエラーや異常終了の判定、およびログ出力を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_process_child_status(apr_proc_t *pid, apr_exit_why_e why, int status)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pid</code>: 終了したプロセスの <code>apr_proc_t</code> 構造体へのポインタ。</li>
+<li><code>why</code>: プロセス終了の理由を示す <code>apr_exit_why_e</code> 列挙型。</li>
+<li><code>status</code>: 終了ステータスまたはシグナル番号。</li>
+<li>戻り値:</li>
+<li><code>APEXIT_CHILDSICK</code>: 子プロセスがリソース不足等で「病気」状態。</li>
+<li><code>APEXIT_CHILDFATAL</code>: 致命的なエラーが発生し、サーバー終了が必要。</li>
+<li><code>0</code>: 正常終了、またはログ出力済みのシグナル終了。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>why</code> は <code>apr_proc_wait</code> 等から得られる有効な終了理由であること。</li>
+<li><code>status</code> は <code>why</code> に応じて終了コードまたはシグナル番号として解釈される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **終了理由の判定**: <code>APR_PROC_CHECK_EXIT(why)</code> が真の場合、終了コードを評価する。</p>
+<ul>
+<li><code>APEXIT_CHILDSICK</code> の場合はそのまま値を返す。</li>
+<li><code>APEXIT_CHILDFATAL</code> の場合はエラーログを出力し、値を返す。</li>
+<li>それ以外は <code>0</code> を返す。</li>
+<p>2. **シグナル終了の処理**: <code>APR_PROC_CHECK_SIGNALED(why)</code> が真の場合、シグナル番号を解析する。</p>
+<li><code>SIGTERM</code>, <code>SIGHUP</code>, <code>AP_SIG_GRACEFUL</code>, <code>SIGKILL</code> の場合はログを出力せず無視する。</li>
+<li>上記以外のシグナルの場合、コアダンプの有無を確認し、プロセスIDとシグナル名を含む通知ログを出力する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/event/event.c</code></li>
+<li><code>server/mpm/prefork/prefork.c</code></li>
+<li><code>server/mpm/worker/worker.c</code></li>
+<li><code>server/mpm_unix.c</code> (内部のプロセス回収処理)</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_signal_description_get</code> (シグナル名取得)</li>
+<li><code>ap_log_error</code> (ログ出力)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_proc_t</code>: プロセス情報を保持するAPR構造体。</li>
+<li><code>apr_exit_why_e</code>: プロセス終了理由の列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>APEXIT_CHILDFATAL</code> が返された場合、呼び出し側はサーバーのシャットダウン処理を行う必要がある。</li>
+<li>不明なシグナルやコアダンプ発生時は、<code>ap_coredump_dir</code> を参照してログに詳細を出力する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はMPM共通の終了処理ロジックである。特定のMPMで終了時の挙動をカスタマイズしたい場合は、本関数の戻り値に基づいた制御フローを各MPM側で実装すること。</li>
 </ul></body></html>

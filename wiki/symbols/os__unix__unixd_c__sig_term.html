@@ -6,22 +6,42 @@
 <li>定義箇所: <code>os/unix/unixd.c:460</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>MPM（Multi-Processing Module）の停止シグナル（<code>SIGTERM</code> または <code>AP_SIG_GRACEFUL_STOP</code>）を受信した際に、サーバーの停止状態を管理するシグナルハンドラとして機能します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void sig_term(int sig)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>sig</code>: 受信したシグナル番号。</li>
+<li>**出力**: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained_data</code> が初期化されている必要があります。初期化されていない場合、関数は即座に終了します。</li>
+<li><code>retained_data</code> は、サーバーのライフサイクル全体で生存するグローバルな状態保持構造体です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>retained_data</code> が存在しない場合は終了します。 2. <code>retained_data-&gt;mpm_state</code> を <code>AP_MPMQ_STOPPING</code> に設定します。 3. すでに停止処理が保留中であり、かつ今回のシグナルが「強制停止（ungraceful）」または「グレースフル停止（<code>AP_SIG_GRACEFUL_STOP</code>）」の条件を満たす場合は、重複処理を避けて終了します。 4. <code>retained_data-&gt;shutdown_pending</code> を 1 に設定し、停止を要求します。 5. 受信したシグナルが <code>AP_SIG_GRACEFUL_STOP</code> でない場合、<code>retained_data-&gt;is_ungraceful</code> を 1 に設定し、強制停止フラグを立てます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>os/unix/unixd.c</code> 内のシグナル登録処理（<code>apr_signal</code> 等）。</li>
+<li><code>server/mpm/mpmt_os2/mpmt_os2.c</code> および <code>mpmt_os2_child.c</code>。</li>
+<li><code>server/mpm/netware/mpm_netware.c</code>。</li>
+<li>**呼び出し先**:</li>
+<li>直接的な関数呼び出しは行いませんが、<code>retained_data</code> 構造体のメンバ変数を更新します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_unixd_mpm_retained_data</code>（<code>retained_data</code> として参照）: MPM の再起動を跨いで生存する状態保持構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained_data</code> が <code>NULL</code> の場合、何も行わずに正常終了します。</li>
+<li>既に停止処理が進行中の場合、シグナルの種類に応じて処理をスキップまたは継続します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はシグナルハンドラとして呼び出されるため、非同期シグナル安全（async-signal-safe）な操作のみを行う必要があります。</li>
+<li><code>retained_data</code> へのアクセスは、MPM のメインループが停止フラグを監視する際のトリガーとなります。</li>
 </ul></body></html>

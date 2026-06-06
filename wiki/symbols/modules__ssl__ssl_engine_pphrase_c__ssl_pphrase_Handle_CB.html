@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_pphrase.c:453</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>暗号化された秘密鍵を復号するためのパスフレーズを、設定されたダイアログ方式（組み込み、パイプ、または外部フィルタ）に従って収集し、OpenSSL へ提供する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_pphrase_Handle_CB(char *buf, int bufsize, int verify, void *srv)</code></pre>
+<ul>
+<li><code>buf</code>: パスフレーズを格納するバッファ。</li>
+<li><code>bufsize</code>: バッファのサイズ。</li>
+<li><code>verify</code>: 検証フラグ（OpenSSL のコールバック仕様に準拠）。</li>
+<li><code>srv</code>: <code>pphrase_cb_arg_t</code> 構造体へのポインタ。</li>
+</ul>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>srv</code> 引数を通じて渡される <code>pphrase_cb_arg_t</code>（サーバー設定、鍵ID、試行回数など）。</li>
+<li>**出力**: 成功時は取得したパスフレーズの長さ（<code>int</code>）、失敗時は <code>-1</code> を返す。</li>
+<li>**副作用**: <code>buf</code> へのパスフレーズ書き込み、<code>pphrase_cb_arg_t</code> 内のキャッシュ更新、および機密データのメモリ消去（<code>memset</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>srv</code> は <code>pphrase_cb_arg_t</code> 型としてキャスト可能であること。</li>
+<li>成功時には <code>buf</code> に有効なパスフレーズが格納され、その長さは 1 文字以上であること。</li>
+<li>失敗時には <code>buf</code> は <code>memset</code> によりゼロクリアされること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **キャッシュ確認**: <code>pphrase_array_get</code> を使用し、既に保持されているパスフレーズがあればそれを返して終了する。 2. **ダイアログ実行**: <code>sc-&gt;server-&gt;pphrase_dialog_type</code> に基づき分岐する。</p>
+<ul>
+<li><code>SSL_PPTYPE_BUILTIN</code> / <code>SSL_PPTYPE_PIPE</code>: 端末またはパイプ経由で入力を要求。<code>pipe_get_passwd_cb</code> または <code>EVP_read_pw_string</code> を使用。空入力の場合はリトライする。</li>
+<li><code>SSL_PPTYPE_FILTER</code>: 外部プログラムを <code>ssl_util_readfilter</code> で実行し、その出力をパスフレーズとして取得する。</li>
+<p>3. **状態更新**: 取得したパスフレーズを <code>ppcb_arg-&gt;cpPassPhraseCur</code> に保存し、呼び出し元へ長さを返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_pphrase.c</code> 内の初期化処理（詳細はソースコード上の明示的な呼び出し箇所を参照）。</li>
+<li>**呼び出し先**: <code>pphrase_array_get</code>, <code>ssl_pipe_child_create</code>, <code>pipe_get_passwd_cb</code>, <code>EVP_read_pw_string</code>, <code>ssl_util_readfilter</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pphrase_cb_arg_t</code>: パスフレーズ収集のコンテキストを保持。</li>
+<li><code>SSLSrvConfigRec</code>: サーバーごとの SSL 設定（ダイアログタイプやパスを含む）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**パイプ作成失敗**: <code>ssl_pipe_child_create</code> が失敗した場合、エラーログを出力し <code>-1</code> を返す。</li>
+<li>**空パスフレーズ**: 1文字未満の入力はエラーとして扱われ、再入力を促す。</li>
+<li>**Windows 環境**: <code>SSL_PPTYPE_BUILTIN</code> はサポートされておらず、エラーを返す。</li>
+<li>**OpenSSL エラー**: 取得失敗時は <code>PEMerr</code> を呼び出し、バッファをクリアして <code>-1</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は OpenSSL の PEM コールバックインターフェースを実装している。</li>
+<li>パスフレーズは <code>apr_pool_t</code> 上で管理されるため、メモリリークに注意すること。</li>
+<li>機密データは <code>memset</code> で消去しているが、OpenSSL のバージョンや環境によるメモリレイアウトの差異に留意が必要。</li>
 </ul></body></html>

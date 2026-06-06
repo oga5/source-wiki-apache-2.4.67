@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/slotmem/mod_slotmem_plain.c:166</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたスロットメモリインスタンスから、特定のIDに対応するスロットデータを読み込み、呼び出し元が提供したバッファへコピーします。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t slotmem_get(ap_slotmem_instance_t *slot, unsigned int id, unsigned char *dest, apr_size_t dest_len)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>slot</code>: 操作対象の <code>ap_slotmem_instance_t</code> 構造体へのポインタ。</li>
+<li><code>id</code>: 読み込み対象のスロットインデックス。</li>
+<li><code>dest</code>: データを格納する宛先バッファ。</li>
+<li><code>dest_len</code>: コピーするデータのサイズ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>。失敗時はエラーコード（<code>APR_ENOSHMAVAIL</code>, <code>APR_EINVAL</code>, <code>APR_NOTFOUND</code> 等）。</li>
+<li><code>dest</code>: 成功時、対象スロットの内容がコピーされます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>slot</code> が <code>NULL</code> でないこと。</li>
+<li><code>id</code> が <code>slot-&gt;num</code>（スロット総数）未満であること。</li>
+<li><code>dest_len</code> は、対象スロットのサイズを超えないこと（関数内で境界チェックは行われません）。</li>
+<li>マルチスレッド環境で利用する場合、呼び出し側で排他制御を行う必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>slot</code> が有効か確認し、無効なら <code>APR_ENOSHMAVAIL</code> を返します。 2. <code>id</code> が範囲内か確認し、範囲外なら <code>APR_EINVAL</code> を返します。 3. <code>AP_SLOTMEM_TYPE_PREGRAB</code> フラグが設定されている場合、対象スロットの <code>inuse</code> フラグを確認し、未使用であれば <code>APR_NOTFOUND</code> を返します。 4. <code>slotmem_dptr</code> を呼び出し、対象スロットのメモリ位置を取得します。 5. 対象スロットの <code>inuse</code> フラグを <code>1</code> に設定します。 6. <code>memcpy</code> を使用して、スロットの内容を <code>dest</code> へコピーします。 7. <code>APR_SUCCESS</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/slotmem/mod_slotmem_plain.c:309</code> (プロバイダー構造体への登録)</li>
+<li><code>modules/slotmem/mod_slotmem_shm.c:738</code> (プロバイダー構造体への登録)</li>
+<li>**呼び出し先**:</li>
+<li><code>slotmem_dptr</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_slotmem_instance_t</code>: スロットメモリの管理構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>slot</code> が <code>NULL</code>: <code>APR_ENOSHMAVAIL</code> を返します。</li>
+<li><code>id</code> が範囲外: <code>APR_EINVAL</code> を返します。</li>
+<li><code>AP_SLOTMEM_TYPE_PREGRAB</code> が有効かつスロットが未使用: <code>APR_NOTFOUND</code> を返します。</li>
+<li><code>slotmem_dptr</code> の失敗: そのエラーコードを返します。</li>
+<li>バッファオーバーフロー: <code>dest_len</code> がスロットサイズより大きい場合、メモリ破壊が発生する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>memcpy</code> を使用しており、境界チェックを行いません。呼び出し側で <code>dest_len</code> の妥当性を保証してください。</li>
+<li><code>inuse</code> フラグの更新（<code>*inuse=1</code>）は、<code>PREGRAB</code> フラグの有無に関わらず実行されます。</li>
 </ul></body></html>

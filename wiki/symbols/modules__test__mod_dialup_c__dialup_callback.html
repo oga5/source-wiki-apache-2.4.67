@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/test/mod_dialup.c:103</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>非同期リクエスト処理の再開点として機能し、タイマーイベント発生時に帯域制限に基づいたレスポンスデータの送信を継続する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void dialup_callback(void *baton)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>baton</code> (型: <code>void *</code>) - 実際には <code>dialup_baton_t</code> 構造体へのポインタ。リクエスト情報や送信状態を保持する。</li>
+<li>**出力**: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>baton</code> は有効な <code>dialup_baton_t</code> を指している必要がある。</li>
+<li><code>db-&gt;r-&gt;invoke_mtx</code> による排他制御が必須である。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>db-&gt;r-&gt;invoke_mtx</code> をロックし、排他制御を行う。 2. <code>dialup_send_pulse(db)</code> を呼び出し、制限値分のデータを送信する。 3. 送信結果（<code>status</code>）に基づき以下のいずれかの処理を行う：</p>
+<ul>
+<li><code>SUSPENDED</code>: 1秒後に再度 <code>dialup_callback</code> を呼び出すよう <code>ap_mpm_register_timed_callback</code> を登録する。</li>
+<li><code>DONE</code>: リクエストの終了処理（<code>ap_finalize_request_protocol</code> および <code>ap_process_request_after_handler</code>）を実行する。</li>
+<li>その他: エラーログを出力し、<code>ap_die</code> を呼び出してリクエストを終了させる。</li>
+<p>4. 最後に <code>db-&gt;r-&gt;invoke_mtx</code> をアンロックする。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_mpm_register_timed_callback</code> を介して MPM（Multi-Processing Module）から呼び出される。</li>
+<li>**呼び出し先**:</li>
+<li><code>dialup_send_pulse</code></li>
+<li><code>ap_mpm_register_timed_callback</code></li>
+<li><code>ap_finalize_request_protocol</code></li>
+<li><code>ap_process_request_after_handler</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>ap_die</code></li>
+<li><code>apr_thread_mutex_lock</code> / <code>apr_thread_mutex_unlock</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dialup_baton_t</code>: 非同期処理のコンテキストを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dialup_send_pulse</code> が <code>SUSPENDED</code> でも <code>DONE</code> でもない値を返した場合、エラーとして <code>ap_die</code> が呼び出される。</li>
+<li>排他制御（<code>invoke_mtx</code>）の取得に失敗した場合の挙動は、Apache のスレッドモデルに依存する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>SUSPENDED</code> 状態を利用した非同期ループの一部である。</li>
+<li><code>ap_finalize_request_protocol</code> 呼び出し後の <code>ap_process_request_after_handler</code> は、リクエストのライフサイクルを適切に終了させるために重要である。</li>
+<li>エラーハンドリングは最小限であるため、ログ出力の拡充が必要な場合は <code>ap_log_rerror</code> の箇所を修正すること。</li>
 </ul></body></html>

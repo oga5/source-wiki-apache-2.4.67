@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/http/byterange_filter.c:399</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP <code>Range</code> リクエストを処理し、レスポンスボディを要求されたバイト範囲に切り出して送信する出力フィルタです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_byterange_filter(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキスト（<code>request_rec</code> を含む）。</li>
+<li><code>bb</code>: 送信対象のバケットブリゲード。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 処理結果（<code>APR_SUCCESS</code> またはエラーコード）。</li>
+<li>フィルタチェーンの下流へ加工済みのバケットブリゲードを渡す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ブリゲード内に <code>EOS</code>（End of Stream）バケットが存在し、かつ全バケットの長さが確定していること。</li>
+<li>条件を満たさない場合、フィルタは自身を削除し、データを変更せずに下流へ渡す。</li>
+<li>設定値（<code>max_ranges</code> 等）に基づく制限を超えた場合、処理を中断して透過的に振る舞う。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **検証**: ブリゲード内の全バケット長を計算し、<code>EOS</code> の有無と長さを確認。 2. **解析**: <code>ap_set_byterange</code> を呼び出し、<code>Range</code> ヘッダーを解析して範囲リストを取得。 3. **抽出**: <code>copy_brigade_range</code> を使用して、指定範囲のデータを新しいブリゲード <code>tmpbb</code> にコピー。 4. **構築**:</p>
+<ul>
+<li>単一範囲の場合: <code>Content-Range</code> ヘッダーを付与。</li>
+<li>複数範囲の場合: <code>multipart/byteranges</code> 形式に変換し、境界文字列（boundary）とヘッダーを挿入。</li>
+<p>5. **送信**: <code>ap_pass_brigade</code> を通じて下流へ送信。複数範囲の場合は適宜バッファをフラッシュする。 6. **終了**: 最後に <code>EOS</code> バケットを追加し、リソースを解放。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache フィルタチェーン（<code>ap_register_output_filter</code> により <code>BYTERANGE</code> として登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_set_byterange</code></li>
+<li><code>copy_brigade_range</code></li>
+<li><code>send_416</code></li>
+<li><code>ap_pass_brigade</code></li>
+<li><code>ap_remove_output_filter</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>indexes_t</code>: バイト範囲の開始・終了位置を保持。</li>
+<li><code>core_dir_config</code>: 範囲制限（<code>max_ranges</code> 等）の設定値。</li>
+<li><code>apr_bucket_brigade</code>: バケットの管理用コンテナ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**416 Range Not Satisfiable**: 範囲指定が不適切な場合、<code>send_416</code> を呼び出してエラーを返す。</li>
+<li>**制限超過**: <code>max_ranges</code> 等の制限を超えた場合、フィルタを削除して元のデータをそのまま通過させる。</li>
+<li>**メモリ不足**: バケットコピー時にエラーが発生した場合はログを出力し、処理を継続またはスキップする。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本フィルタは <code>r-&gt;pool</code> を使用してメモリを確保するため、リクエスト終了時に自動的に解放されます。</li>
+<li>バケットの長さが不明（<code>-1</code>）なバケットが含まれる場合、安全のためバイトレンジ処理はスキップされます。</li>
+<li>複数範囲の処理では <code>multipart/byteranges</code> 形式の構築に伴うオーバーヘッドが発生するため、<code>AP_DEFAULT_MAX_RANGES</code> 等の制限値が重要です。</li>
 </ul></body></html>

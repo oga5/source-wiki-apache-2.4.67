@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/arch/netware/mod_netware.c:97</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>NetWare 環境において、リクエストされたファイルと設定されたハンドラを組み合わせて、CGI 実行用のコマンドラインを構築します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_cgi_build_command(const char **cmd, const char ***argv,
+                                  request_rec *r, apr_pool_t *p,
+                                  cgi_exec_info_t *e_info)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: リクエストレコード。</li>
+<li><code>p</code>: コマンド構築に使用するメモリプール。</li>
+<li><code>e_info</code>: CGI 実行情報（プロセスフラグ、アドレス空間設定など）。</li>
+<li><code>cmd</code>: 実行対象のコマンドパス（入出力兼用）。</li>
+<li>**出力**:</li>
+<li><code>cmd</code>: 構築された実行コマンド文字列。</li>
+<li><code>argv</code>: トークン化された引数配列。</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>、失敗時は <code>APR_EBADF</code> 等のステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>netware_dir_config</code> がリクエストのディレクトリ設定から取得可能であること。</li>
+<li><code>e_info-&gt;process_cgi</code> が真の場合、<code>r-&gt;filename</code> をベースにコマンドが初期化される。</li>
+<li>拡張子に基づいたハンドラが <code>d-&gt;file_type_handlers</code> に登録されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: リクエスト設定から <code>netware_dir_config</code> を取得。 2. **コマンド解析**: <code>r-&gt;filename</code> からファイル拡張子を抽出。 3. **ハンドラ検索**: 抽出した拡張子をキーとして <code>d-&gt;file_type_handlers</code> から実行コマンド（NLM）を検索。 4. **コマンド構築**:</p>
+<ul>
+<li>ハンドラが見つからない場合はエラーをログ出力し <code>APR_EBADF</code> を返す。</li>
+<li>ハンドラが &quot;OS&quot; 以外の場合、<code>[ハンドラ] [ファイル名]</code> の形式でコマンド文字列を生成。</li>
+<li><code>d-&gt;file_handler_mode</code> に設定があれば <code>e_info-&gt;addrspace</code> を有効化。</li>
+<p>5. **トークン化**: 生成されたコマンド文字列を <code>apr_tokenize_to_argv</code> で引数配列に変換。 6. **パス解決**: <code>ap_server_root_relative</code> を使用して実行ファイルの絶対パスを確定。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/generators/mod_cgi.c</code> が <code>APR_RETRIEVE_OPTIONAL_FN</code> を介して呼び出す。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>, <code>apr_pstrdup</code>, <code>apr_filepath_name_get</code>, <code>apr_table_get</code>, <code>ap_log_rerror</code>, <code>stricmp</code>, <code>apr_pstrcat</code>, <code>apr_tokenize_to_argv</code>, <code>ap_server_root_relative</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>netware_dir_config</code>: 拡張子マッピング (<code>file_type_handlers</code>) および実行モード (<code>file_handler_mode</code>) を保持。</li>
+<li><code>cgi_exec_info_t</code>: CGI 実行時のプロセス制御情報。</li>
+<li><code>request_rec</code>: リクエスト固有情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ハンドラ未登録**: 拡張子に対応するコマンドが <code>file_type_handlers</code> に存在しない場合、<code>APR_EBADF</code> を返し処理を中断する。</li>
+<li>**拡張子なし**: 拡張子がない場合は空文字列として扱い、ハンドラ検索を行う。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>APR_REGISTER_OPTIONAL_FN</code> を介して公開されており、<code>mod_cgi</code> 等の外部モジュールから動的に利用される。</li>
+<li>Windows 版のロジックと類似しているが、NetWare 特有の「アドレス空間の分離」制御（<code>e_info-&gt;addrspace</code>）が含まれている点に留意すること。</li>
 </ul></body></html>

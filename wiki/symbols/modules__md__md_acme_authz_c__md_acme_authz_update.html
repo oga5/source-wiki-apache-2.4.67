@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/md/md_acme_authz.c:114</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ACME サーバーからドメイン認証（Authorization）リソースの最新状態を取得し、<code>md_acme_authz_t</code> 構造体を更新する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t md_acme_authz_update(md_acme_authz_t *authz, md_acme_t *acme, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>authz</code>: 更新対象の認証オブジェクト（<code>url</code> フィールドが必須）。</li>
+<li><code>acme</code>: ACME サーバーとの通信セッション。</li>
+<li><code>p</code>: メモリ割り当て用プール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>）。</li>
+<li><code>authz</code> 構造体の内部状態（<code>state</code>, <code>domain</code>, <code>resource</code>, <code>error_type</code> 等）が更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>acme</code>, <code>acme-&gt;http</code>, <code>authz</code>, <code>authz-&gt;url</code> は <code>NULL</code> であってはならない（<code>assert</code> による検証）。</li>
+<li><code>authz-&gt;resource</code> は、サーバーから取得した JSON オブジェクトへのポインタとして保持される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 認証状態を <code>MD_ACME_AUTHZ_S_UNKNOWN</code> にリセットし、エラー情報をクリアする。 2. <code>md_acme_get_json</code> を呼び出し、<code>authz-&gt;url</code> から最新の JSON リソースを取得する。 3. JSON 内の <code>status</code> フィールドを解析し、状態を更新する：</p>
+<ul>
+<li><code>&quot;pending&quot;</code>: <code>MD_ACME_AUTHZ_S_PENDING</code></li>
+<li><code>&quot;valid&quot;</code>: <code>MD_ACME_AUTHZ_S_VALID</code></li>
+<li><code>&quot;invalid&quot;</code>: <code>MD_ACME_AUTHZ_S_INVALID</code> を設定し、<code>copy_challenge_error</code> を用いてエラー詳細を抽出する。</li>
+<p>4. 取得した JSON を <code>authz-&gt;resource</code> に格納する。 5. 処理結果をログに出力する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/md/md_acme_authz.c:90</code></li>
+<li>**呼び出し先**:</li>
+<li><code>md_acme_get_json</code></li>
+<li><code>md_json_gets</code></li>
+<li><code>md_json_itera</code> (エラー解析時)</li>
+<li><code>copy_challenge_error</code> (エラー解析時)</li>
+<li><code>md_log_perror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_acme_authz_t</code>: 認証状態を保持するメイン構造体。</li>
+<li><code>md_acme_t</code>: 通信セッション。</li>
+<li><code>error_ctx_t</code>: エラー解析時に使用されるコンテキスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サーバーからの応答がパースできない場合、または <code>status</code> フィールドが含まれない場合は <code>APR_EINVAL</code> を返す。</li>
+<li>認証状態が不明なまま処理が終了した場合、エラーとして扱われる。</li>
+<li>サーバー側でエラーが発生している場合、<code>copy_challenge_error</code> を介して詳細なサブ問題が収集される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>authz-&gt;resource</code> に格納される JSON オブジェクトのライフサイクルは、渡された <code>apr_pool_t</code> に依存する。</li>
+<li>状態遷移のロジックは ACME 仕様の <code>status</code> 値に直接依存しているため、プロトコル拡張時にはこの条件分岐の確認が必要。</li>
 </ul></body></html>

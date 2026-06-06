@@ -6,22 +6,38 @@
 <li>定義箇所: <code>server/main.c:257</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバープロセスの終了処理を安全に実行し、リソースの解放とプロセスの終了を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void destroy_and_exit_process(process_rec *process, int process_exit_value)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process</code> (入力): 終了対象のプロセス情報を保持する <code>process_rec</code> 構造体へのポインタ。</li>
+<li><code>process_exit_value</code> (入力): プロセス終了時に OS へ返す終了ステータスコード。</li>
+<li>出力: なし（本関数は <code>exit()</code> を呼び出し、呼び出し元へは戻らない）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process</code> ポインタは有効な <code>process_rec</code> 構造体を指している必要がある。</li>
+<li>本関数はプロセスのライフサイクルの最終段階で呼び出されることを想定している。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>TASK_SWITCH_SLEEP</code> マイクロ秒間待機する。これは、パイプ経由のロガーが入力データを処理するための猶予を与え、ログの欠落を防ぐための措置である。 2. グローバル変数 <code>ap_main_state</code> を <code>AP_SQ_MS_EXITING</code> に更新する。 3. <code>process-&gt;pool</code> を破棄し、関連するすべての子孫メモリプールを解放する。 4. <code>apr_terminate()</code> を呼び出し、APR (Apache Portable Runtime) のリソースを解放する。 5. <code>exit(process_exit_value)</code> を呼び出し、プロセスを終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>server/main.c</code> 内の各所（エラー発生時や正常終了時の分岐）。</li>
+<li>呼び出し先: <code>apr_sleep</code>, <code>apr_pool_destroy</code>, <code>apr_terminate</code>, <code>exit</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process_rec</code>: プロセス全体のメモリプールや設定情報を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>process-&gt;pool</code> が既に破棄されている場合、未定義の動作を引き起こす可能性がある。</li>
+<li><code>TASK_SWITCH_SLEEP</code> 待機中、OS のスケジューリング状況によってはロガーの処理が完了しない可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>main()</code> ループの終了処理を担うため、変更時はサーバーのシャットダウンシーケンス全体に影響を与える点に注意すること。</li>
+<li>ログの欠落を防ぐための待機処理は、将来的な非同期ロギングの実装状況に応じて調整が必要となる可能性がある。</li>
 </ul></body></html>

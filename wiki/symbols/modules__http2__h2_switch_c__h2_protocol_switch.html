@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/http2/h2_switch.c:154</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/1.1 接続を HTTP/2 セッションへ昇格させるための判断と、接続コンテキストの初期化およびフィルターチェーンの再構成を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int h2_protocol_switch(conn_rec *c, request_rec *r, server_rec *s, const char *protocol)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 現在の接続情報 (<code>conn_rec</code>)</li>
+<li><code>r</code>: 現在のリクエスト情報 (<code>request_rec</code>)</li>
+<li><code>s</code>: サーバー設定情報 (<code>server_rec</code>)</li>
+<li><code>protocol</code>: 切り替え対象のプロトコル文字列</li>
+<li>**出力**:</li>
+<li><code>OK</code>: プロトコル切り替えが成功した場合</li>
+<li><code>DECLINED</code>: プロトコルがサポート対象外、または MPM が HTTP/2 をサポートしていない場合</li>
+<li><code>!OK</code>: セッションのセットアップに失敗した場合</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_mpm_supported()</code> が真であること。</li>
+<li>指定された <code>protocol</code> が、SSL/TLS の有無に応じて <code>h2_protocol_ids_tls</code> または <code>h2_protocol_ids_clear</code> に含まれていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **プロトコル検証**: 接続の SSL 状態に基づき、サポートされているプロトコルリストと引数の <code>protocol</code> を照合する。 2. **コンテキスト作成**: <code>h2_conn_ctx_create_for_c1</code> を呼び出し、接続用の HTTP/2 コンテキストを生成する。 3. **フィルター再構成**: リクエスト <code>r</code> が存在する場合、既存の HTTP/1.1 フィルター（<code>http_in</code>, <code>HTTP_HEADER</code> 等）を削除し、HTTP/2 用のスタックへ置き換える。 4. **セッション起動**: <code>h2_c1_setup</code> でセッションを初期化し、成功すれば <code>h2_c1_run</code> を呼び出して HTTP/2 セッションのメインループへ制御を移す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_switch.c:231</code> (Apache フック <code>ap_hook_protocol_switch</code> 経由で登録)</li>
+<li>**呼び出し先**:</li>
+<li><code>h2_mpm_supported()</code></li>
+<li><code>h2_conn_ctx_create_for_c1()</code></li>
+<li><code>remove_input_filters_below()</code> / <code>remove_output_filters_below()</code> (または <code>ap_remove_...</code> 系関数)</li>
+<li><code>h2_c1_setup()</code></li>
+<li><code>h2_c1_run()</code></li>
+<li><code>h2_conn_ctx_detach()</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: Apache の接続状態を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト状態を保持する構造体。</li>
+<li><code>h2_conn_ctx</code>: 接続ごとの HTTP/2 コンテキスト管理用データ構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**MPM 非対応**: <code>h2_mpm_supported()</code> が偽の場合、即座に <code>DECLINED</code> を返す。</li>
+<li>**プロトコル不一致**: サポートリストにないプロトコルが指定された場合、<code>DECLINED</code> を返す。</li>
+<li>**セットアップ失敗**: <code>h2_c1_setup</code> が <code>APR_SUCCESS</code> 以外を返した場合、コンテキストをデタッチし <code>!OK</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は Apache のフィルターシステムを直接操作するため、<code>AP_FTYPE_CONNECTION</code> 以下のフィルター削除処理は非常に繊細です。</li>
+<li><code>AP_HAS_RESPONSE_BUCKETS</code> の定義有無により、フィルター削除のロジックが分岐するため、環境ごとの挙動に注意してください。</li>
+<li>HTTP/2 の詳細なフレーム処理は <code>h2_session.c</code> 等に委譲されており、本関数はあくまで「切り替え」の境界処理を担当します。</li>
 </ul></body></html>

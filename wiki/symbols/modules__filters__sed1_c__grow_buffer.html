@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/filters/sed1.c:95</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バッファの動的拡張を行い、メモリを再確保して既存データをコピーする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t grow_buffer(apr_pool_t *pool, char **buffer, char **spend, apr_size_t *cursize, apr_size_t newsize)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pool</code>: メモリ確保に使用する APR プール。</li>
+<li><code>buffer</code>: 拡張対象のバッファへのポインタ。</li>
+<li><code>spend</code>: バッファ内の現在位置を示すポインタへのポインタ。</li>
+<li><code>cursize</code>: 現在のバッファサイズ（ポインタ経由）。</li>
+<li><code>newsize</code>: 要求された最小サイズ。</li>
+<li>**出力**:</li>
+<li>成功時は <code>APR_SUCCESS</code> を返し、<code>buffer</code>、<code>cursize</code>、および <code>spend</code> を更新する。</li>
+<li>失敗時は <code>APR_ENOMEM</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>newsize</code> が現在の <code>cursize</code> 以下の場合、何もせず <code>APR_SUCCESS</code> を返す。</li>
+<li>拡張後のサイズは 4KB 境界にアライメントされる。</li>
+<li><code>MAX_BUF_SIZE</code>（8MB）を超える拡張は許可されない。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>newsize</code> が現在のサイズの 2 倍未満であれば、効率化のため 2 倍のサイズを確保する。 2. 4KB 境界にアライメント調整を行う。 3. <code>MAX_BUF_SIZE</code> を超える場合は <code>APR_ENOMEM</code> を返す。 4. <code>apr_pcalloc</code> で新しいバッファを確保する。 5. 既存のデータ（<code>*cursize</code> 分）を新しいバッファへコピーする。 6. <code>*buffer</code> を新しいバッファで更新し、<code>*cursize</code> を新しいサイズに更新する。 7. <code>spend</code> が <code>buffer</code> と異なる場合、相対オフセットを維持して <code>*spend</code> を再計算する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/filters/sed1.c</code> 内の <code>grow_line_buffer</code>、<code>grow_hold_buffer</code>、<code>grow_gen_buffer</code> から呼び出される。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_pcalloc</code> (APR ライブラリ)</li>
+<li><code>memcpy</code> (標準 C ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sed_eval_t</code>: 評価コンテキスト内で <code>linebuf</code>、<code>holdbuf</code>、<code>genbuf</code> の管理に使用される。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>newsize &gt; MAX_BUF_SIZE</code>: <code>APR_ENOMEM</code> を返す。</li>
+<li>メモリ確保失敗: <code>apr_pcalloc</code> の挙動に依存（通常はアボートまたはエラー）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>spend</code> ポインタの更新ロジックは、バッファ再確保後のポインタのズレを補正するために必須である。</li>
+<li><code>MAX_BUF_SIZE</code> は <code>libsed</code> の設計上の制約であり、これを超える行データは処理できない。</li>
 </ul></body></html>

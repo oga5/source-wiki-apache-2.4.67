@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/http2/h2_workers.c:234</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 ワーカープールにおける個々のスレッドのメインループを実行し、接続プロデューサーからタスク（<code>conn_rec</code>）を取得して処理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>thread</code>: 実行中のスレッドハンドル。</li>
+<li><code>wctx</code>: <code>h2_slot</code> 構造体へのポインタ（ワーカーのコンテキスト）。</li>
+<li>**出力**: <code>NULL</code>（スレッド終了時に返却）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>workers-&gt;lock</code> ミューテックスにより、リングバッファ操作および状態遷移が保護されている。</li>
+<li><code>slot-&gt;prod</code> が有効であること（<code>AP_DEBUG_ASSERT</code> で検証）。</li>
+<li><code>c-&gt;master</code> が存在する場合、接続 ID は <code>(c-&gt;master-&gt;id &lt;&lt; 8)^slot-&gt;id</code> として計算される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: スロット状態を <code>H2_SLOT_RUN</code> に設定し、ループを開始する。 2. **タスク取得**: <code>get_next(slot)</code> を呼び出し、処理対象の接続を取得する。 3. **接続処理**:</p>
+<ul>
+<li><code>c-&gt;current_thread</code> に現在のスレッドを設定。</li>
+<li><code>ap_process_connection</code> または <code>h2_c2_process</code> を実行して接続を処理。</li>
+<li>完了後、<code>slot-&gt;prod-&gt;fn_done</code> を呼び出し、必要に応じて <code>workers-&gt;prod_done</code> をブロードキャストする。</li>
+<p>4. **アイドル待機**: タスクがない場合、<code>workers-&gt;idle</code> リングに移動し、<code>more_work</code> 条件変数で待機する。</p>
+<li><code>idle_limit</code> が設定されている場合、タイムアウト時にスロットを終了（<code>H2_SLOT_ZOMBIE</code> へ移行）させる。</li>
+<p>5. **終了処理**: ループを抜ける際、スロットを <code>H2_SLOT_ZOMBIE</code> に設定し、<code>workers-&gt;zombie</code> リングへ移動して終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>activate_slot</code>（<code>modules/http2/h2_workers.c</code> 内でスレッド生成時に指定）。</li>
+<li>**呼び出し先**: <code>get_next</code>, <code>join_zombies</code>, <code>ap_process_connection</code> (または <code>h2_c2_process</code>), <code>slot-&gt;prod-&gt;fn_done</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_workers</code>: プール全体の管理構造体。</li>
+<li><code>h2_slot</code>: ワーカーの状態と同期プリミティブを保持。</li>
+<li><code>ap_conn_producer_t</code>: 接続供給元。</li>
+<li><code>conn_rec</code>: 処理対象の接続情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**接続 ID の衝突**: 256個を超えるワーカーや高負荷環境下では、接続 ID 生成ロジックにおいて衝突が発生する可能性がある。</li>
+<li>**タイムアウト**: <code>idle_limit</code> を超えて待機した場合、スレッドは自動的に終了する。</li>
+<li>**シャットダウン**: <code>workers-&gt;aborted</code> または <code>slot-&gt;should_shutdown</code> が真になると、ループを即座に終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>h2_workers</code> のスレッドライフサイクルの中核を担う。</li>
+<li><code>c-&gt;id</code> の計算ロジックは <code>mod_unique_id</code> との互換性を維持するための暫定的な実装であり、変更には注意を要する。</li>
+<li>スレッド終了時の <code>H2_SLOT_ZOMBIE</code> への遷移は、<code>join_zombies</code> によるリソース回収を確実にするために重要である。</li>
 </ul></body></html>

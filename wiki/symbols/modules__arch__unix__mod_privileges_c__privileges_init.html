@@ -6,22 +6,40 @@
 <li>定義箇所: <code>modules/arch/unix/mod_privileges.c:389</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の起動時（<code>pre_config</code> フェーズ）において、現在使用されている MPM（Multi-Processing Module）がスレッドセーフであるかを確認し、本モジュールの動作要件を満たしているかを検証する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int privileges_init(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>pconf</code>, <code>plog</code>, <code>ptemp</code>: Apache のメモリ管理用プール。</li>
+<li>**出力**:</li>
+<li><code>OK</code> (0): MPM が非スレッド環境であり、初期化が正常に完了した場合。</li>
+<li><code>!OK</code> (非ゼロ): MPM がスレッド環境であり、モジュールが使用不可と判断された場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本モジュールは <code>setppriv</code> を使用する性質上、マルチスレッド環境（Worker/Event MPM 等）と互換性がありません。</li>
+<li><code>ap_mpm_query</code> を用いて MPM の特性を照会できる必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_mpm_query</code> を呼び出し、<code>AP_MPMQ_IS_THREADED</code> フラグを通じて MPM がスレッド対応かどうかを確認する。 2. 照会に失敗した場合、エラーログ（<code>APLOG_NOTICE</code>）を出力する。 3. MPM がスレッド対応である場合、致命的エラー（<code>APLOG_CRIT</code>）をログ出力し、<code>!OK</code> を返して起動を中断する。 4. スレッド対応でないことが確認できた場合、<code>OK</code> を返して処理を終了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/arch/unix/mod_privileges.c:416</code> にて <code>ap_hook_pre_config</code> に登録されており、Apache の設定読み込みフェーズで呼び出される。</li>
+<li>**呼び出し先**: <code>ap_mpm_query</code>（Apache MPM API）、<code>ap_log_perror</code>（Apache ロギング API）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: Apache のメモリ管理用プール構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**MPM 照会失敗**: <code>ap_mpm_query</code> が <code>APR_SUCCESS</code> 以外を返した場合、警告ログを出力するが、スレッド状態の判定は継続される。</li>
+<li>**スレッド環境**: MPM がスレッド対応の場合、モジュールは起動を拒否し、サーバーの起動プロセスを停止させる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_privileges</code> の動作における「ガードレール」として機能します。将来的にマルチスレッド対応の権限分離手法が導入されない限り、このチェックは必須です。</li>
+<li>ログ出力には <code>APLOGNO(02153)</code> および <code>APLOGNO(02154)</code> が割り当てられています。ログ解析時にはこれらの ID を参照してください。</li>
 </ul></body></html>

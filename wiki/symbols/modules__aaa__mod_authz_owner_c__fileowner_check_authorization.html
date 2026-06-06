@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_owner.c:40</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>Require file-owner</code> ディレクティブに対する認可判定を行う。リクエストされたファイルの所有者名と、認証済みユーザー名（<code>r-&gt;user</code>）を比較し、アクセス可否を決定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static authz_status fileowner_check_authorization(request_rec *r,
+                                                  const char *require_args,
+                                                  const void *parsed_require_args)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストコンテキスト。</li>
+<li><code>require_args</code>: ディレクティブの引数（本関数では未使用）。</li>
+<li><code>parsed_require_args</code>: 解析済みの引数（本関数では未使用）。</li>
+<li>**出力**:</li>
+<li><code>AUTHZ_GRANTED</code>: 所有者が一致した場合。</li>
+<li><code>AUTHZ_DENIED</code>: 所有者が一致しない、またはファイル情報の取得に失敗した場合。</li>
+<li><code>AUTHZ_DENIED_NO_USER</code>: 認証済みユーザーが存在しない場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>プラットフォームが <code>APR_HAS_USER</code> をサポートしている必要がある。</li>
+<li><code>r-&gt;user</code> が設定されている（認証済みである）こと。</li>
+<li><code>r-&gt;filename</code> が有効なファイルパスを指していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **プラットフォーム確認**: <code>APR_HAS_USER</code> が未定義の場合、エラーをログ出力し <code>AUTHZ_DENIED</code> を返す。 2. **ユーザー確認**: <code>r-&gt;user</code> が空であれば <code>AUTHZ_DENIED_NO_USER</code> を返す。 3. **ファイル情報取得**: <code>apr_stat</code> を使用して対象ファイルの所有者IDを取得する。失敗時は <code>AUTHZ_DENIED</code> を返す。 4. **所有者名解決**: <code>apr_uid_name_get</code> を使用して、取得した所有者IDをユーザー名文字列に変換する。 5. **比較**: 解決された所有者名と <code>r-&gt;user</code> を <code>strcmp</code> で比較する。一致すれば <code>AUTHZ_GRANTED</code> を返し、不一致であれば <code>AUTHZ_DENIED</code> を返す。 6. **ログ出力**: 失敗時はすべて <code>APLOGNO</code> を付与したエラーログを出力する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/aaa/mod_authz_owner.c</code> 内の <code>authz_fileowner_provider</code> 構造体を通じて、<code>mod_authz_core</code> から呼び出される。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_log_rerror</code>: エラーログ出力。</li>
+<li><code>apr_stat</code>: ファイル情報の取得。</li>
+<li><code>apr_uid_name_get</code>: ユーザーIDから名前への解決。</li>
+<li><code>apr_pstrcat</code> / <code>apr_psprintf</code>: エラーメッセージ生成のためのメモリ割り当て。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報を保持する Apache の主要構造体。</li>
+<li><code>apr_finfo_t</code>: ファイル情報を保持する APR 構造体。</li>
+<li><code>authz_status</code>: 認可結果を示す列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**プラットフォーム非対応**: <code>APR_HAS_USER</code> がない環境では常に拒否される。</li>
+<li>**ファイル欠損**: <code>r-&gt;filename</code> が NULL の場合、認可失敗となる。</li>
+<li>**所有者情報取得失敗**: ファイルが存在しない、または権限不足で <code>apr_stat</code> が失敗した場合、認可失敗となる。</li>
+<li>**ユーザー名解決失敗**: <code>apr_uid_name_get</code> が失敗した場合、認可失敗となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は Unix 系プラットフォームでの動作を前提としている。Windows 等の環境では機能しないため注意すること。</li>
+<li>認可失敗時のログには <code>APLOGNO</code> が付与されており、トラブルシューティング時には <code>ErrorLog</code> を参照すること。</li>
 </ul></body></html>

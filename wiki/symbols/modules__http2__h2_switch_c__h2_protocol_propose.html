@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/http2/h2_switch.c:52</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバーがサポートするプロトコルを提案し、HTTP/1.1 から HTTP/2 への切り替えが可能かを判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int h2_protocol_propose(conn_rec *c, request_rec *r,
+                               server_rec *s,
+                               const apr_array_header_t *offers,
+                               apr_array_header_t *proposals)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>c</code>: 現在の接続情報 (<code>conn_rec</code>)</li>
+<li><code>r</code>: リクエスト情報 (<code>request_rec</code>, アップグレード時のみ存在)</li>
+<li><code>s</code>: サーバー情報 (<code>server_rec</code>)</li>
+<li><code>offers</code>: クライアントが提示したプロトコルリスト</li>
+<li><code>proposals</code>: サーバーが提案するプロトコルを格納する配列</li>
+<li>**出力**: </li>
+<li><code>OK</code> (提案が成功した場合) または <code>DECLINED</code> (条件不適合や提案なしの場合)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>現在のプロトコルが <code>http/1.1</code> であること。</li>
+<li><code>h2_mpm_supported()</code> が真であること。</li>
+<li><code>h2_protocol_is_acceptable_c1</code> による接続要件を満たしていること。</li>
+<li>アップグレードリクエストの場合、<code>HTTP2-Settings</code> ヘッダーの存在と、リクエストボディが空（Content-Length: 0）であることが必須。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. SSL/TLS の有無に基づき、対応するプロトコル ID リストを選択する。 2. 接続状態やリクエストヘッダー（Upgrade, HTTP2-Settings 等）を検証し、条件を満たさない場合は <code>DECLINED</code> を返す。 3. <code>offers</code> に含まれるプロトコルと、サーバーがサポートするプロトコルを照合する。 4. 一致するプロトコルを <code>proposals</code> 配列に追加する。 5. 提案が一つでも追加されれば <code>OK</code> を、そうでなければ <code>DECLINED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_protocol_propose</code> により登録され、Apache のプロトコルネゴシエーションフェーズで呼び出される。</li>
+<li>**呼び出し先**: <code>ap_ssl_conn_is_ssl</code>, <code>ap_get_protocol</code>, <code>h2_mpm_supported</code>, <code>h2_protocol_is_acceptable_c1</code>, <code>h2_c1_can_upgrade</code>, <code>ap_table_get</code>, <code>ap_find_token</code>, <code>APR_ARRAY_PUSH</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>, <code>request_rec</code>: Apache HTTP Server のコア構造体。</li>
+<li><code>h2_protocol_ids_tls</code>, <code>h2_protocol_ids_clear</code>: モジュール内で定義されたサポートプロトコル識別子の配列。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>HTTP/1.1 以外のプロトコルからの切り替えは拒否される。</li>
+<li>リクエストボディが存在するアップグレード要求は拒否される。</li>
+<li><code>HTTP2-Settings</code> ヘッダーが欠落しているアップグレード要求は拒否される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はプロトコルの「提案」のみを行い、実際の切り替え処理は <code>h2_protocol_switch</code> が担当する。</li>
+<li>フィルターの操作は行わないため、安全に呼び出し可能。</li>
 </ul></body></html>

@@ -6,22 +6,61 @@
 <li>定義箇所: <code>modules/http/http_protocol.c:488</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストに含まれる <code>If-Range</code> ヘッダーを評価し、リクエストされた範囲（Range）が現在のリソースと一致するかを判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>ap_condition_e ap_condition_if_range(request_rec *r, apr_table_t *headers)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。<code>r-&gt;headers_in</code> から <code>If-Range</code> および <code>Range</code> ヘッダーを取得する。</li>
+<li><code>headers</code>: 比較対象となるレスポンスヘッダー（<code>ETag</code>, <code>Last-Modified</code>, <code>Date</code> を含む）。</li>
+<li>**出力**:</li>
+<li><code>AP_CONDITION_STRONG</code>: 条件が一致した（範囲リクエストを継続可能）。</li>
+<li><code>AP_CONDITION_NOMATCH</code>: 条件が一致しなかった。</li>
+<li><code>AP_CONDITION_NONE</code>: <code>If-Range</code> ヘッダーが存在しない、または <code>Range</code> ヘッダーがないため評価対象外。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>If-Range</code> と <code>Range</code> の両方がリクエストに含まれている場合にのみ評価が行われる。</li>
+<li>HTTP 仕様に基づき、比較は秒単位の解像度で行われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>If-Range</code> ヘッダーが <code>&quot;</code> で始まる場合（ETag 形式）:</p>
+<ul>
+<li><code>headers</code> 内の <code>ETag</code> と比較し、一致すれば <code>AP_CONDITION_STRONG</code> を返す。不一致なら <code>AP_CONDITION_NOMATCH</code> を返す。</li>
+<p>2. <code>If-Range</code> ヘッダーが日付形式の場合:</p>
+<li><code>headers</code> から <code>Last-Modified</code> を取得し、なければ <code>r-&gt;mtime</code> を使用する。</li>
+<li><code>headers</code> から <code>Date</code> を取得し、なければ <code>r-&gt;request_time</code> を使用する。</li>
+<li><code>If-Range</code> の日付と <code>Last-Modified</code> を比較する。</li>
+<li>一致する場合、<code>Date</code> が <code>Last-Modified</code> から 60 秒以内であれば <code>AP_CONDITION_NOMATCH</code>（弱い一致は不可）、それ以外は <code>AP_CONDITION_STRONG</code> を返す。</li>
+<li>日付が一致しない場合は <code>AP_CONDITION_NOMATCH</code> を返す。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/cache_storage.c</code></li>
+<li><code>modules/http/byterange_filter.c</code></li>
+<li><code>modules/http/http_protocol.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_get</code> (APR)</li>
+<li><code>apr_date_parse_http</code> (APR)</li>
+<li><code>apr_time_sec</code> (APR)</li>
+<li><code>strcmp</code> (標準ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報および入力ヘッダーの保持。</li>
+<li><code>apr_table_t</code>: ヘッダー情報の格納に使用。</li>
+<li><code>ap_condition_e</code>: 戻り値の列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>If-Range</code> または <code>Range</code> ヘッダーが欠落している場合は <code>AP_CONDITION_NONE</code> を返す。</li>
+<li><code>Last-Modified</code> が解析不能な場合、<code>r-&gt;mtime</code> または現在時刻で代替する。</li>
+<li><code>Date</code> が解析不能な場合、<code>r-&gt;request_time</code> で代替する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>Range</code> リクエストの妥当性を検証する重要なロジックである。</li>
+<li>比較ロジックは RFC に準拠しているが、時刻の解像度や弱い一致の扱いに依存しているため、仕様変更時には注意が必要である。</li>
 </ul></body></html>

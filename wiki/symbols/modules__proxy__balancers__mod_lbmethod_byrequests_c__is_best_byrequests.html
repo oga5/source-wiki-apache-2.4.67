@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_byrequests.c:28</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト数ベースのロードバランシングにおいて、各ワーカーの累積負荷状況（<code>lbstatus</code>）を更新し、現時点で最も優先すべきワーカーを判定するコールバック関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int is_best_byrequests(proxy_worker *current, proxy_worker *prev_best, void *baton)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>current</code>: 現在評価中の <code>proxy_worker</code> 構造体。</li>
+<li><code>prev_best</code>: これまでに評価された中で最も優先度が高いと判断された <code>proxy_worker</code>（初回は <code>NULL</code>）。</li>
+<li><code>baton</code>: 全ワーカーの <code>lbfactor</code> の合計値を保持する <code>int *</code> 型のポインタ。</li>
+<li>**出力**:</li>
+<li><code>int</code>: <code>current</code> が <code>prev_best</code> よりも優先されるべき場合は非ゼロ（真）、それ以外は 0（偽）を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>current</code> および <code>prev_best</code> の <code>s</code> メンバ（<code>proxy_worker_shared</code>）が有効であること。</li>
+<li><code>baton</code> は <code>int</code> 型の有効なメモリ領域を指していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>current-&gt;s-&gt;lbstatus</code> に <code>current-&gt;s-&gt;lbfactor</code> を加算し、現在のワーカーの負荷状況を更新します。 2. <code>baton</code> が指す <code>total_factor</code> に <code>current-&gt;s-&gt;lbfactor</code> を加算します。 3. 以下のいずれかの場合に真を返します。</p>
+<ul>
+<li><code>prev_best</code> が <code>NULL</code> である（最初のワーカーである）。</li>
+<li><code>current-&gt;s-&gt;lbstatus</code> が <code>prev_best-&gt;s-&gt;lbstatus</code> よりも大きい。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/balancers/mod_lbmethod_byrequests.c:87</code> にて、<code>ap_proxy_balancer_get_best_worker_fn</code> の引数として渡されます。</li>
+<li>**呼び出し先**: 直接的な関数呼び出しはありませんが、<code>proxy_worker</code> 構造体のメンバへアクセスします。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_worker</code>: ロードバランサーのバックエンドサーバーを表す構造体。</li>
+<li><code>proxy_worker_shared</code>: 共有メモリ上に保持されるワーカーの状態（<code>lbstatus</code>, <code>lbfactor</code> を含む）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>prev_best</code> が <code>NULL</code> の場合、最初のワーカーが自動的に選出されます。</li>
+<li><code>lbstatus</code> の加算により整数オーバーフローが発生する可能性については、本関数単体では制御していません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ap_proxy_balancer_get_best_worker_fn</code> によってワーカーリストを走査する際に呼び出されます。</li>
+<li><code>lbstatus</code> は共有メモリ上に保持されるため、この更新はプロセス間で永続化されます。</li>
+<li><code>total_factor</code> の計算は、選出後の <code>lbstatus</code> 調整（全ワーカーの合計値減算）のために使用されます。</li>
 </ul></body></html>

@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/md/mod_md_drive.c:72</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>特定のマネージドドメイン（MD）に対する証明書更新ジョブの判定および実行を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void process_drive_job(md_renew_ctx_t *dctx, md_job_t *job, apr_pool_t *ptemp)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>dctx</code>: 更新プロセスのコンテキスト（設定やレジストリ情報を含む）。</li>
+<li><code>job</code>: 実行対象のジョブ状態。</li>
+<li><code>ptemp</code>: 一時的なメモリ割り当て用プール。</li>
+<li>**出力**: なし（副作用としてジョブ状態の更新、証明書の更新処理、ログ出力を行う）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>job</code> は <code>md_job_load(job)</code> によりロード済みであること。</li>
+<li><code>dctx</code> および <code>job</code> が指すデータ構造は有効であること。</li>
+<li><code>md_get_by_name</code> により取得される <code>md</code> は <code>AP_DEBUG_ASSERT</code> により存在が保証される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **実行判定**: 現在時刻が <code>job-&gt;next_run</code> を過ぎていない場合、処理を中断する。 2. **状態確認**: ジョブが完了済みかつ通知済みであれば終了する。 3. **更新判定**: <code>md_will_renew_cert(md)</code> を呼び出し、期限切れ、OCSP 破棄、または ARI（ACME Renewal Information）に基づく更新の必要性を評価する。 4. **イベント処理**: <code>md_event_raise</code> を呼び出し、外部ハンドラによる更新の拒否がないか確認する。 5. **更新実行**: <code>md_reg_renew</code> を実行し、成功した場合は <code>md_job_notify</code> で通知を行う。失敗した場合はエラーログを記録し、イベントハンドラへ通知する。 6. **期限警告**: 更新不要な場合でも、期限が迫っていれば <code>md_job_notify</code> で警告を行う。 7. **永続化**: ジョブの状態が変更（dirty）されている場合、<code>md_job_save</code> を呼び出し結果を保存する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/mod_md_drive.c:284</code>（<code>run_watchdog</code> 内のループから呼び出される）。</li>
+<li>**呼び出し先**: <code>md_job_load</code>, <code>md_get_by_name</code>, <code>md_result_md_make</code>, <code>md_will_renew_cert</code>, <code>md_reg_renew_at</code>, <code>md_reg_has_revoked_certs</code>, <code>md_reg_ari_renew_at</code>, <code>md_event_raise</code>, <code>md_job_start_run</code>, <code>md_reg_renew</code>, <code>md_job_end_run</code>, <code>md_job_retry_at</code>, <code>md_job_save</code>, <code>md_job_notify</code>, <code>md_job_log_append</code>, <code>md_event_holler</code>, <code>md_reg_should_warn</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_renew_ctx_t</code>: 更新プロセスの全体状態。</li>
+<li><code>md_job_t</code>: 個別ジョブの実行状態と履歴。</li>
+<li><code>md_t</code>: 管理対象ドメインの定義。</li>
+<li><code>md_result_t</code>: 処理結果およびエラー詳細。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**設定欠落**: <code>md-&gt;state == MD_S_MISSING_INFORMATION</code> の場合、致命的エラーとしてジョブを停止する。</li>
+<li>**更新拒否**: イベントハンドラが <code>APR_SUCCESS</code> 以外を返した場合、更新をスキップする。</li>
+<li>**ARI 判定**: CA からの推奨更新タイミング（ARI）が将来の日付である場合、<code>job-&gt;next_run</code> を更新して処理を終了する。</li>
+<li>**更新失敗**: <code>md_reg_renew</code> が失敗した場合、エラー詳細をログに記録し、再試行のための状態を保持する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_watchdog</code> のコンテキストで実行されるため、スレッドセーフな操作が求められる。</li>
+<li><code>STAGING</code> 領域への書き込みは <code>md_reg_renew</code> 内で行われるため、本関数は更新のライフサイクル管理に集中している。</li>
 </ul></body></html>

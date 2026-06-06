@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/cache/mod_socache_dbm.c:392</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>DBM ファイルから特定のキーに対応するキャッシュエントリを削除します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t socache_dbm_remove(ap_socache_instance_t *ctx,
+                                       server_rec *s, const unsigned char *id,
+                                       unsigned int idlen, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: キャッシュインスタンスのコンテキスト（DBM ファイルパス等を含む）。</li>
+<li><code>s</code>: サーバーレコード（エラーログ出力用）。</li>
+<li><code>id</code>: 削除対象のキーデータ。</li>
+<li><code>idlen</code>: キーデータの長さ。</li>
+<li><code>p</code>: メモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 操作の成功（<code>APR_SUCCESS</code>）または失敗時のエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;pool</code> は、操作のたびに <code>apr_pool_clear</code> によってリセットされます。</li>
+<li>DBM ファイルは <code>APR_DBM_RWCREATE</code> モードでオープン可能である必要があります。</li>
+<li>呼び出し側で適切な排他制御が行われていることが前提です（本モジュールはスレッドセーフではありません）。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 指定された <code>id</code> と <code>idlen</code> を <code>apr_datum_t</code> 構造体に格納し、DBM キーを作成します。 2. <code>ctx-&gt;pool</code> をクリアします。 3. APR のバージョンに応じて <code>apr_dbm_get_driver</code> または <code>apr_dbm_open</code> を使用し、対象の DBM ファイルを書き込みモードで開きます。 4. <code>apr_dbm_delete</code> を呼び出し、該当するキーを削除します。 5. <code>apr_dbm_close</code> で DBM ファイルを閉じ、結果を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li>同一ファイル内の <code>socache_dbm_retrieve</code>（期限切れエントリの削除時）。</li>
+<li>同一ファイル内の <code>socache_dbm_expire</code>（期限切れエントリの削除時）。</li>
+<li><code>ap_socache_provider_t</code> 構造体を通じて、<code>mod_cache_socache</code> 等の外部モジュールから参照される可能性があります。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_dbm_get_driver</code> / <code>apr_dbm_open</code> / <code>apr_dbm_open2</code></li>
+<li><code>apr_dbm_delete</code></li>
+<li><code>apr_dbm_close</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュインスタンスの管理構造体。</li>
+<li><code>apr_dbm_t</code>: DBM ファイルのハンドル。</li>
+<li><code>apr_datum_t</code>: DBM のキーおよび値を保持するデータ構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ファイルオープン失敗**: DBM ファイルが開けない場合、エラーログを出力し、その時点でのエラーコードを返します。</li>
+<li>**キー不在**: <code>apr_dbm_delete</code> はキーが存在しない場合でもエラーを返さない仕様（APR の DBM 実装に依存）ですが、関数全体としては成功を返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> を指定しているモジュールの一部であるため、呼び出し側での排他制御が必須です。</li>
+<li>APR 1.7 以上の環境では <code>apr_dbm_get_driver</code> を使用するパスが優先されます。</li>
 </ul></body></html>

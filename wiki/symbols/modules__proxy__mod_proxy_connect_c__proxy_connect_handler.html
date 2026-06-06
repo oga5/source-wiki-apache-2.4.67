@@ -6,22 +6,62 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_connect.c:147</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP <code>CONNECT</code> メソッドを処理し、クライアントとリモートサーバー間のSSL/TLSトンネリングを確立・仲介する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_connect_handler(request_rec *r, proxy_worker *worker,
+                                 proxy_server_conf *conf,
+                                 char *url, const char *proxyname,
+                                 apr_port_t proxyport)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: リクエストレコード。</li>
+<li><code>worker</code>: プロキシワーカー設定。</li>
+<li><code>conf</code>: プロキシサーバー設定。</li>
+<li><code>url</code>: 接続先URL。</li>
+<li><code>proxyname</code>, <code>proxyport</code>: 上位プロキシを使用する場合の接続先情報。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 処理結果ステータス（<code>OK</code>, <code>DECLINED</code>, <code>HTTP_BAD_REQUEST</code>, <code>HTTP_FORBIDDEN</code>, <code>HTTP_SERVICE_UNAVAILABLE</code>, <code>HTTP_INTERNAL_SERVER_ERROR</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストメソッドが <code>M_CONNECT</code> であること。</li>
+<li><code>AllowCONNECT</code> ディレクティブにより、対象ポートが許可されていること。</li>
+<li><code>ap_proxy_checkproxyblock2</code> によるアクセス制限チェックを通過すること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **検証**: リクエストメソッドが <code>CONNECT</code> か確認し、それ以外は <code>DECLINED</code> を返す。 2. **宛先解決**: URLを解析し、DNSルックアップを実行して接続先アドレスを取得。 3. **接続**: <code>ap_proxy_connect_to_backend</code> を呼び出し、バックエンドへのソケット接続を確立。 4. **接続設定**: <code>ap_run_create_connection</code> でバックエンド接続を生成し、SSLエンジン等の初期化を行う。 5. **応答**:</p>
+<ul>
+<li>上位プロキシ経由の場合: <code>CONNECT</code> リクエストを転送。</li>
+<li>直接接続の場合: クライアントへ <code>200 Connection Established</code> を送信。</li>
+<p>6. **トンネル**: <code>ap_proxy_tunnel_create</code> および <code>ap_proxy_tunnel_run</code> を使用し、ソケット間の双方向データ転送を実行。 7. **終了**: <code>ap_lingering_close</code> を用いて接続を適切にクローズ。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>proxy_hook_scheme_handler</code> に登録され、プロキシサブシステムから呼び出される。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_uri_parse_hostinfo</code>, <code>apr_sockaddr_info_get</code> (URL/DNS処理)</li>
+<li><code>ap_proxy_checkproxyblock2</code>, <code>allowed_port</code> (検証)</li>
+<li><code>ap_proxy_connect_to_backend</code> (接続)</li>
+<li><code>ap_run_create_connection</code>, <code>ap_run_pre_connection</code> (接続生成)</li>
+<li><code>ap_proxy_tunnel_create</code>, <code>ap_proxy_tunnel_run</code> (トンネル処理)</li>
+<li><code>ap_lingering_close</code> (終了)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>connect_conf</code>: 許可ポート範囲を管理する設定構造体。</li>
+<li><code>proxy_tunnel_rec</code>: トンネル状態を保持する構造体。</li>
+<li><code>request_rec</code>, <code>conn_rec</code>: Apache HTTP Server のリクエストおよび接続管理構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**DNS解決失敗**: <code>HTTP_BAD_GATEWAY</code> を返す。</li>
+<li>**アクセス拒否**: <code>AllowCONNECT</code> 違反や <code>ProxyBlock</code> 制限により <code>HTTP_FORBIDDEN</code> を返す。</li>
+<li>**接続失敗**: バックエンドへの接続が確立できない場合、<code>HTTP_SERVICE_UNAVAILABLE</code> または <code>DECLINED</code> を返す。</li>
+<li>**トンネルエラー**: <code>ap_proxy_tunnel_run</code> がエラーを返した場合、状況に応じてエラーコードを伝播する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は透過的なトンネルを目的としており、HTTPヘッダー解析やログ出力は最小限に留められている。</li>
+<li>トンネル作成時に割り当てられるリソースは <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動的に解放される。</li>
 </ul></body></html>

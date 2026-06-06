@@ -6,22 +6,40 @@
 <li>定義箇所: <code>modules/arch/unix/mod_privileges.c:131</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエスト処理終了時に、プロセスに適用されていた特権およびユーザー/グループ権限を、サーバーのデフォルト状態へ復元するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t privileges_end_req(void *data)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>data</code> (リクエスト構造体 <code>request_rec *</code> へのポインタ)</li>
+<li>**出力**: <code>APR_SUCCESS</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>data</code> は有効な <code>request_rec</code> 構造体である必要があります。</li>
+<li>本関数は <code>apr_pool_cleanup_register</code> を通じてリクエストのクリーンアップ処理として登録されることを前提としています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_get_module_config</code> を使用して、現在のサーバーおよびディレクトリ設定（<code>priv_cfg</code>, <code>priv_dir_cfg</code>）を取得します。 2. 動作モードが <code>PRIV_SECURE</code>（または <code>PRIV_SELECTIVE</code> かつディレクトリ設定が <code>PRIV_SECURE</code>）である場合、リクエスト処理のために生成された子プロセスであると判断し、<code>exit(0)</code> を実行してプロセスを終了します。 3. 上記以外の場合、設定された UID または GID がデフォルトと異なる場合は、<code>setppriv</code> で特権を一時的に有効化し、<code>setuid</code>/<code>setgid</code> を用いてデフォルトのユーザー/グループ権限へ戻します。 4. 最後に、<code>setppriv</code> を呼び出し、プロセス全体の特権セットを <code>priv_default</code>（システム起動時のデフォルト）へ復元します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/arch/unix/mod_privileges.c:254</code> において、<code>apr_pool_cleanup_register</code> の引数として登録されています。</li>
+<li>**呼び出し先**: <code>ap_get_module_config</code>, <code>exit</code>, <code>setppriv</code>, <code>setuid</code>, <code>setgid</code>, <code>ap_log_rerror</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報を保持する Apache 内部構造体。</li>
+<li><code>priv_cfg</code>: vhost 単位の特権設定構造体。</li>
+<li><code>priv_dir_cfg</code>: ディレクトリ単位の特権設定構造体。</li>
+<li><code>unixd_config_rec</code>: サーバー全体のデフォルト UID/GID を保持する構造体（<code>ap_unixd_config</code>）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>setppriv</code>, <code>setuid</code>, <code>setgid</code> が失敗した場合、<code>ap_log_rerror</code> を通じてエラーログが出力されますが、関数自体は <code>APR_SUCCESS</code> を返します。</li>
+<li><code>PRIV_SECURE</code> モードで実行されている場合、本関数はプロセスを終了させるため、呼び出し元へは戻りません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_pool_cleanup_register</code> を介して呼び出されるため、リクエスト終了時のメモリ解放や権限復元を確実に行う必要があります。</li>
+<li><code>ap_unixd_config</code> を外部参照しているため、<code>mod_unixd</code> の設定変更が本関数の動作に影響を与える可能性があります。</li>
 </ul></body></html>

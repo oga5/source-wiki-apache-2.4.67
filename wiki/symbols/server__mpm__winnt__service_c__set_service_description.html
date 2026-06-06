@@ -6,22 +6,53 @@
 <li>定義箇所: <code>server/mpm/winnt/service.c:268</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windowsサービスとして実行されているApache HTTP Serverのサービス説明文（Description）を、サーバーの現在の記述内容（<code>ap_get_server_description()</code>）で更新する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void set_service_description(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: グローバル変数 <code>mpm_service_name</code>（サービス名）、<code>mpm_service_name_w</code>（Unicode版サービス名）、および <code>ap_get_server_description()</code> が返すサーバー記述文字列。</li>
+<li>**出力**: なし（副作用としてWindowsサービスコントロールマネージャ経由でレジストリ設定を更新）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>実行環境がWindowsであること。</li>
+<li><code>mpm_service_name</code> が設定されていること（コンソールモード時は何もしない）。</li>
+<li><code>ChangeServiceConfig2</code> APIが利用可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. サービス名が未定義（コンソール実行）であれば即座に終了する。 2. <code>OpenSCManager</code> を使用してサービスコントロールマネージャへの接続を試みる。 3. <code>OpenService</code>（または <code>OpenServiceW</code>）で対象サービスを <code>SERVICE_CHANGE_CONFIG</code> 権限で開く。 4. OSの文字コード設定（Unicode/ANSI）に応じて、<code>ChangeServiceConfig2</code>（または <code>ChangeServiceConfig2W</code>）を呼び出し、サービスの説明文を更新する。</p>
+<ul>
+<li>Unicode環境では、<code>apr_conv_utf8_to_ucs2</code> を用いて文字列を変換してから設定する。</li>
+<p>5. 開いたサービスハンドルおよびSCMハンドルを <code>CloseServiceHandle</code> で解放する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/mpm/winnt/service.c:732</code></li>
+<li><code>server/mpm/winnt/service.c:923</code></li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_server_description</code></li>
+<li><code>OpenSCManager</code></li>
+<li><code>OpenService</code> / <code>OpenServiceW</code></li>
+<li><code>ChangeServiceConfig2</code> / <code>ChangeServiceConfig2W</code></li>
+<li><code>CloseServiceHandle</code></li>
+<li><code>apr_palloc</code>, <code>apr_conv_utf8_to_ucs2</code> (Unicode時)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SC_HANDLE</code>: Windowsサービスハンドル。</li>
+<li><code>mpm_service_name</code> / <code>mpm_service_name_w</code>: サービス名を保持するグローバル変数。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>SCMへの接続失敗やサービスオープン失敗時は、何も更新せず静かに終了する。</li>
+<li><code>ChangeServiceConfig2</code> が利用できない環境では更新処理をスキップする。</li>
+<li>Unicode変換エラーが発生した場合、更新は行われない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>ChangeServiceConfig2</code> の利用はWindows 2000以降を前提としている。</li>
+<li>Unicode変換には <code>pconf</code> プールを使用しているため、呼び出し時のメモリコンテキストに注意すること。</li>
+<li>サービス説明文の更新は、サーバーの再起動のたびに行われる設計となっている。</li>
 </ul></body></html>

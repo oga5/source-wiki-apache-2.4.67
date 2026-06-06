@@ -6,22 +6,46 @@
 <li>定義箇所: <code>include/scoreboard.h:161</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の実行時状態を保持する共有メモリ領域へのアクセスポイントとして機能します。サーバー全体の統計情報、プロセス単位の管理情報、および各ワーカー（スレッド）の稼働状況を統合的に管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    global_score *global;
+    process_score *parent;
+    worker_score **servers;
+} scoreboard;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 共有メモリ上に配置された各スコアボード構造体（<code>global_score</code>, <code>process_score</code>, <code>worker_score</code>）へのポインタ。</li>
+<li>**出力**: サーバーの稼働統計、プロセス状態、およびワーカーの処理状況を指し示す構造体。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体は共有メモリ（<code>apr_shm</code>）上に配置されることを前提としています。</li>
+<li><code>servers</code> は <code>worker_score</code> 構造体へのポインタの配列であり、各ワーカーのステータスを追跡するために使用されます。</li>
+<li>共有メモリ上のデータであるため、アクセス時には適切な同期制御が必要です。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>ap_create_scoreboard</code> および <code>ap_init_scoreboard</code> を通じて共有メモリが確保・初期化される際に、本構造体の各ポインタが設定されます。 2. **状態更新**: MPM やプロトコルモジュールが <code>ap_update_child_status</code> 等の API を介して、本構造体が保持するポインタ経由で <code>worker_score</code> 等の値を更新します。 3. **参照**: <code>mod_status</code> 等の監視モジュールが、本構造体を通じて共有メモリ上の統計情報を読み取り、外部へ出力します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: MPM（Multi-Processing Module）および <code>mod_status</code> 等の監視モジュール。</li>
+<li>**呼び出し先**: <code>global_score</code>, <code>process_score</code>, <code>worker_score</code> 構造体。</li>
+<li>注: 具体的な関数レベルの呼び出し元・呼び出し先関係については、提供されたソース excerpt には記載がありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>global_score</code>: サーバー全体の稼働統計を保持。</li>
+<li><code>process_score</code>: プロセス単位の管理情報（PID、世代など）を保持。</li>
+<li><code>worker_score</code>: 個別のスレッド/ワーカーの統計（アクセス数、ステータスなど）を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ競合**: 共有メモリへの同時アクセスが発生するため、同期制御が不十分な場合、データ不整合が生じる可能性があります。</li>
+<li>**ポインタの無効化**: サーバーの再起動や世代交代時に、共有メモリの再確保が行われるため、古いポインタを参照し続けるとクラッシュの原因となります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は共有メモリ上に配置されるため、ポインタの扱いに注意してください。</li>
+<li><code>worker_score</code> 内の文字列フィールドはサイズが固定されており、オーバーフローを防ぐ設計となっています。</li>
+<li><code>include/ap_mmn.h</code> に記載がある通り、本構造体の変更は Module Magic Number (MMN) の更新を伴うバイナリ互換性に影響する変更となります。</li>
 </ul></body></html>

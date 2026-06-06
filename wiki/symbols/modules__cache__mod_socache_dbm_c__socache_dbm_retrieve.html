@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/cache/mod_socache_dbm.c:304</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>DBM ファイルから指定されたキーに対応するキャッシュデータを取得し、期限切れチェックを行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t socache_dbm_retrieve(ap_socache_instance_t *ctx, server_rec *s,
+                                  const unsigned char *id, unsigned int idlen,
+                                  unsigned char *dest, unsigned int *destlen,
+                                  apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: キャッシュインスタンスのコンテキスト。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>id</code>, <code>idlen</code>: 検索対象のキーとその長さ。</li>
+<li><code>dest</code>: 取得したデータを格納するバッファ。</li>
+<li><code>destlen</code>: 入力時は <code>dest</code> の最大サイズ、出力時は取得したデータの実際のサイズ。</li>
+<li><code>p</code>: メモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、見つからない場合は <code>APR_NOTFOUND</code>、容量不足は <code>APR_ENOSPC</code> 等を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;pool</code> は呼び出しごとにクリアされる。</li>
+<li>キャッシュデータは、先頭に <code>apr_time_t</code> 型の期限情報が格納されている必要がある。</li>
+<li>本関数はスレッドセーフではないため、呼び出し側での排他制御が前提となる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>socache_dbm_expire</code> を呼び出し、定期的な期限切れ処理を実行する。 2. <code>apr_dbm_open2</code>（または <code>apr_dbm_open</code>）で DBM ファイルを読み取り専用で開く。 3. <code>apr_dbm_fetch</code> でキーに対応する値を取得する。 4. 取得した値の先頭から <code>apr_time_t</code>（期限）を読み取り、現在時刻と比較する。 5. 期限が切れている場合は <code>socache_dbm_remove</code> を呼び出してエントリを削除し、<code>APR_NOTFOUND</code> を返す。 6. 期限内であれば、期限情報を除いたデータを <code>dest</code> にコピーし、<code>destlen</code> を更新して <code>APR_SUCCESS</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_socache_dbm.c:747</code> に参照あり。</li>
+<li>**呼び出し先**: <code>socache_dbm_expire</code>, <code>apr_dbm_open</code>/<code>apr_dbm_open2</code>, <code>apr_dbm_fetch</code>, <code>apr_dbm_close</code>, <code>socache_dbm_remove</code>, <code>apr_time_now</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュのコンテキスト（ファイルパス等を保持）。</li>
+<li><code>apr_dbm_t</code>: DBM ファイルのハンドル。</li>
+<li><code>apr_datum_t</code>: DBM のキーおよび値を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**APR_NOTFOUND**: キーが存在しない、または期限切れにより削除された場合。</li>
+<li>**APR_ENOSPC**: <code>dest</code> バッファのサイズが取得データに対して不足している場合。</li>
+<li>**APR_EGENERAL**: 取得したデータが <code>apr_time_t</code> のサイズ未満である場合（データ破損等）。</li>
+<li>**DBM オープン失敗**: ファイルの読み込み権限がない場合やファイルが存在しない場合。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>DBM ファイルの特性上、約 1KB 程度のデータサイズ制限がある点に注意すること。</li>
+<li><code>apr_dbm_open</code> の呼び出しを <code>r-&gt;pool</code> に紐付けることでクリーンアップを簡略化できる可能性がある（ソース内の XXX コメント参照）。</li>
 </ul></body></html>

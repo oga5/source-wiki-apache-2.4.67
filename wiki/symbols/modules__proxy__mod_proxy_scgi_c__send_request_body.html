@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_scgi.c:334</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントから受け取ったリクエストボディを読み込み、バックエンドサーバーへ転送する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int send_request_body(request_rec *r, proxy_conn_rec *conn)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエストを保持する <code>request_rec</code> 構造体。</li>
+<li><code>conn</code>: バックエンドへの接続情報を保持する <code>proxy_conn_rec</code> 構造体。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: 正常終了。</li>
+<li><code>HTTP_SERVICE_UNAVAILABLE</code>: バックエンドへの送信失敗。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: クライアントからのデータ読み込み失敗。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> が有効であり、バッファ割り当てに使用される。</li>
+<li><code>conn</code> は既にバックエンドへの接続が確立されている状態であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ap_should_client_block(r)</code> を呼び出し、リクエストボディが存在するか確認する。 2. 存在する場合、<code>AP_IOBUFSIZE</code> サイズのバッファを <code>r-&gt;pool</code> から確保する。 3. <code>ap_get_client_block</code> を用いてクライアントからデータを読み込む。 4. 読み込んだデータがなくなるまで、<code>sendall</code> を介してバックエンドへ順次送信する。 5. 送信中に <code>sendall</code> が <code>OK</code> 以外を返した場合は <code>HTTP_SERVICE_UNAVAILABLE</code> を返す。 6. 読み込み中にエラー（<code>-1</code>）が発生した場合は、エラーログを出力し <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。 7. すべての処理が完了した時点で <code>OK</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_scgi.c:581</code> (SCGIハンドラ内)</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_should_client_block</code> (Apache API)</li>
+<li><code>apr_palloc</code> (APR API)</li>
+<li><code>ap_get_client_block</code> (Apache API)</li>
+<li><code>sendall</code> (モジュール内関数)</li>
+<li><code>ap_log_rerror</code> (Apache API)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストの状態管理。</li>
+<li><code>proxy_conn_rec</code>: バックエンド接続の管理。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**送信失敗**: バックエンドとの通信が途絶した場合、<code>HTTP_SERVICE_UNAVAILABLE</code> を返す。</li>
+<li>**読み込み失敗**: クライアントからのデータ取得が異常終了した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返し、エラーログを記録する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>sendall</code> を介してデータを転送する。<code>sendall</code> の実装詳細については当該関数の定義を参照すること。</li>
+<li>メモリ割り当てはリクエストプール (<code>r-&gt;pool</code>) に依存しており、リクエスト終了時に自動的に解放される。</li>
 </ul></body></html>

@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/http/http_protocol.c:546</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストに含まれる条件付きヘッダー（<code>If-Match</code>, <code>If-Modified-Since</code> 等）を評価し、リソースが条件を満たしているか、あるいは <code>304 Not Modified</code> や <code>412 Precondition Failed</code> を返す必要があるかを判定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_meets_conditions(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報）</li>
+<li>**出力**: <code>int</code> 型のステータスコード。</li>
+<li><code>OK</code>: 条件を満たしている（または条件なし）。</li>
+<li><code>HTTP_NOT_MODIFIED</code> (304): 条件によりリソースの更新が不要。</li>
+<li><code>HTTP_PRECONDITION_FAILED</code> (412): 前提条件が不一致。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストのステータスが成功（<code>ap_is_HTTP_SUCCESS</code>）であり、かつサブクエストや <code>ErrorDocument</code> の処理中でない場合にのみ評価が行われます。</li>
+<li><code>r-&gt;no_local_copy</code> が真の場合、条件評価をスキップして <code>OK</code> を返します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>以下の順序で条件を評価し、最終的なステータスを決定します。 1. **<code>If-Match</code>**: 一致しない場合、<code>412</code> を即時返却。 2. **<code>If-Unmodified-Since</code>**: 条件を満たさない場合、<code>412</code> を返却。 3. **<code>If-None-Match</code>**: 一致する場合、<code>GET</code>/<code>HEAD</code> なら <code>304</code>、それ以外なら <code>412</code> を返却。 4. **<code>If-Modified-Since</code>**: <code>GET</code>/<code>HEAD</code> リクエストにおいて、リソースが更新されていない場合に <code>304</code> を設定。 5. **<code>If-Range</code>**: <code>Range</code> ヘッダーと併用されている場合、条件に関わらず <code>OK</code> を返却。 6. 最終的に <code>not_modified</code> フラグが立っていれば <code>304</code> を返し、それ以外は <code>OK</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/cache/mod_cache.c</code></li>
+<li><code>modules/cache/mod_file_cache.c</code></li>
+<li><code>modules/dav/main/mod_dav.c</code></li>
+<li><code>modules/mappers/mod_negotiation.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_condition_if_match</code></li>
+<li><code>ap_condition_if_unmodified_since</code></li>
+<li><code>ap_condition_if_none_match</code></li>
+<li><code>ap_condition_if_modified_since</code></li>
+<li><code>ap_condition_if_range</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストのメタデータおよびヘッダー情報（<code>headers_out</code>）を保持。</li>
+<li><code>ap_condition_e</code>: 評価結果を示す列挙型（<code>AP_CONDITION_NOMATCH</code>, <code>AP_CONDITION_WEAK</code> 等）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>If-Match</code> の値が <code>*</code> の場合、リソースの存在確認は行われません。</li>
+<li><code>If-Modified-Since</code> で指定された日付が現在時刻より未来の場合は無効とみなされます。</li>
+<li><code>GET</code> または <code>HEAD</code> 以外のメソッドでは、<code>If-None-Match</code> 失敗時に <code>304</code> ではなく <code>412</code> が優先されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>評価順序は RFC に基づいており、ETag 評価が時刻比較よりも優先されます。</li>
+<li><code>not_modified</code> 変数は、複数の条件評価を経て最終的なレスポンスコードを決定するための内部状態として使用されています。</li>
 </ul></body></html>

@@ -6,22 +6,53 @@
 <li>定義箇所: <code>modules/ssl/mod_ssl.c:461</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>接続 (<code>conn_rec</code>) に紐づく SSL 接続コンテキスト (<code>SSLConnRec</code>) を生成、取得、または再初期化し、適切なディレクトリ設定 (<code>SSLDirConfigRec</code>) を適用する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static SSLConnRec *ssl_init_connection_ctx(conn_rec *c,
+                                           ap_conf_vector_t *per_dir_config,
+                                           int reinit)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 現在の接続構造体 (<code>conn_rec</code>)。</li>
+<li><code>per_dir_config</code>: ディレクトリごとの設定ベクトル。<code>NULL</code> の場合はサーバーのデフォルト設定が使用される。</li>
+<li><code>reinit</code>: 再初期化フラグ。0 以外の場合、既存のコンテキストがあっても設定を更新する。</li>
+<li>**出力**:</li>
+<li>接続に関連付けられた <code>SSLConnRec</code> 構造体へのポインタ。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLConnRec</code> は接続の生存期間中、<code>conn_rec</code> のプール (<code>c-&gt;pool</code>) を使用して管理される。</li>
+<li><code>reinit</code> が 0 の場合、既存の <code>SSLConnRec</code> があれば即座にそれが返される。</li>
+<li><code>per_dir_config</code> が提供される場合、<code>ssl_module</code> の設定が <code>sslconn-&gt;dc</code> に格納される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>myConnConfig(c)</code> を使用して既存の <code>SSLConnRec</code> を検索する。 2. コンテキストが存在しない場合は <code>apr_pcalloc</code> で新規作成し、初期化フラグを立てる。 3. <code>reinit</code> フラグが立っているか、新規作成された場合に <code>per_dir_config</code> またはサーバーのデフォルト設定から <code>sslconn-&gt;dc</code> を更新する。 4. 新規作成時のみ、<code>sslconn-&gt;server</code> を設定し、<code>cipher_suite</code> を接続タイプ（プロキシか否か）に応じて初期化し、<code>myConnConfigSet(c, sslconn)</code> で接続に保存する。 5. 最終的に <code>sslconn</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/mod_ssl.c:549</code></li>
+<li><code>modules/ssl/mod_ssl.c:590</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_module_config</code>: 設定ベクトルの取得に使用。</li>
+<li><code>apr_pcalloc</code>: メモリ確保に使用。</li>
+<li><code>myConnConfig</code> / <code>myConnConfigSet</code>: 接続コンテキストの取得・保存に使用。</li>
+<li><code>mySrvConfig</code>: サーバー設定の取得に使用。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLConnRec</code>: 接続ごとの SSL 状態を保持する主要構造体。</li>
+<li><code>conn_rec</code>: Apache の接続構造体。</li>
+<li><code>SSLSrvConfigRec</code>: サーバーごとの SSL 設定。</li>
+<li><code>SSLDirConfigRec</code>: ディレクトリごとの SSL 設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>c-&gt;pool</code> が破棄された後の呼び出しは未定義の動作を引き起こす。</li>
+<li><code>per_dir_config</code> が <code>NULL</code> かつサーバーのデフォルト設定が存在しない場合、<code>ap_get_module_config</code> の結果が不正になる可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>mod_proxy</code> はリクエストごとに <code>per_dir_config</code> を変更するため、<code>reinit</code> フラグを利用して <code>sslconn-&gt;dc</code> を適切に更新する設計となっている。</li>
+<li><code>cipher_suite</code> の初期化ロジックは、<code>c-&gt;outgoing</code> (プロキシ接続) かどうかで参照先が分岐するため、変更時は注意が必要。</li>
 </ul></body></html>

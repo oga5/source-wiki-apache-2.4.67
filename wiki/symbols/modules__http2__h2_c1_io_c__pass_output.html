@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/http2/h2_c1_io.c:260</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>バッファリングされたデータを接続フィルタチェーンへ転送し、TLS 接続の最適化（ウォームアップ/クールダウン）を制御します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t pass_output(h2_c1_io *io, int flush)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>io</code>: <code>h2_c1_io</code> 構造体へのポインタ。</li>
+<li><code>flush</code>: 強制フラッシュを行うかを示すフラグ（非ゼロで有効）。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>io-&gt;is_passing</code> フラグを使用して再帰呼び出しを防止します。</li>
+<li><code>io-&gt;output</code> ブリゲード内のデータは、呼び出し終了時に必ずクリーンアップされます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **再帰チェック**: <code>is_passing</code> が設定されている場合、エラー（<code>APR_EGENERAL</code>）を返し終了します。 2. **データ準備**: <code>append_scratch(io)</code> を呼び出し、スクラッチバッファの内容をブリゲードへ追加します。 3. **フラッシュ処理**: <code>flush</code> が指定され、ブリゲードの末尾がフラッシュバケットでない場合、フラッシュバケットを追加します。 4. **転送**: <code>ap_pass_brigade</code> を呼び出し、フィルタチェーンへデータを送出します。 5. **最適化ロジック**:</p>
+<ul>
+<li>転送量（<code>bytes_written</code>）が <code>warmup_size</code> を超えると <code>write_size</code> を <code>WRITE_SIZE_MAX</code> に拡大します。</li>
+<li>一定時間（<code>cooldown_usecs</code>）書き込みがない場合、<code>write_size</code> を <code>WRITE_SIZE_INITIAL</code> にリセットします。</li>
+<p>6. **後処理**: ブリゲードのクリーンアップと <code>is_passing</code> フラグの解除を行います。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>h2_c1_io_pass</code> (<code>modules/http2/h2_c1_io.c:344</code>)</li>
+<li><code>h2_c1_io_assure_flushed</code> (<code>modules/http2/h2_c1_io.c:354</code>)</li>
+<li>**呼び出し先**:</li>
+<li><code>append_scratch</code></li>
+<li><code>ap_pass_brigade</code></li>
+<li><code>apr_brigade_cleanup</code></li>
+<li><code>ap_log_cerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_c1_io</code>: セッションの入出力状態を保持する主要構造体。</li>
+<li><code>apr_bucket_brigade</code>: 転送対象のデータバケット列。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**再帰呼び出し**: <code>is_passing</code> が既にセットされている場合、出力破損を防ぐために <code>APR_EGENERAL</code> を返します。</li>
+<li>**フィルタエラー**: <code>ap_pass_brigade</code> がエラーを返した場合、そのステータスを保持したままクリーンアップへ移行します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>is_passing</code> フラグは、<code>H2EOS</code> バケットの破棄など、予期せぬ再帰的呼び出しを検知するために重要です。</li>
+<li><code>write_size</code> の動的調整は、TLS レコードの効率的なパッキングを目的としています。</li>
 </ul></body></html>

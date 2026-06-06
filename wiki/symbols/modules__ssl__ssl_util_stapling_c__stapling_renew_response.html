@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/ssl/ssl_util_stapling.c:479</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>OCSP レスポンダーに対して証明書の有効性確認を再問い合わせし、取得したレスポンスをキャッシュへ更新する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>BOOL stapling_renew_response(server_rec *s, modssl_ctx_t *mctx, SSL *ssl,
+                             certinfo *cinf, OCSP_RESPONSE **prsp,
+                             BOOL *pok, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>mctx</code>: SSL コンテキスト。</li>
+<li><code>ssl</code>: 現在の SSL 接続オブジェクト。</li>
+<li><code>cinf</code>: 証明書情報（<code>certinfo</code> 構造体）。</li>
+<li><code>pool</code>: キャッシュ保存に使用するメモリプール。</li>
+<li>**出力**:</li>
+<li><code>prsp</code>: 取得した <code>OCSP_RESPONSE</code> へのポインタ。</li>
+<li><code>pok</code>: レスポンスが有効かどうかのフラグ。</li>
+<li>戻り値: 処理が成功した場合は <code>TRUE</code>、失敗した場合は <code>FALSE</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cinf</code> には有効な証明書情報が含まれている必要がある。</li>
+<li><code>modssl_dispatch_ocsp_request</code> を介して HTTP 通信を行うため、OCSP URI が設定されている必要がある。</li>
+<li>メモリ管理のため、関数内で一時的なサブプールを作成し、終了時に破棄する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>OCSP_REQUEST</code> を生成し、証明書 ID (<code>cinf-&gt;cid</code>) および TLS 拡張情報を追加する。 2. 設定された OCSP レスポンダー URI（または <code>mctx-&gt;stapling_force_url</code>）を解析する。 3. <code>modssl_dispatch_ocsp_request</code> を呼び出し、OCSP レスポンダーへ HTTP リクエストを送信する。 4. レスポンスが成功した場合、<code>stapling_check_response</code> を実行して内容を検証する。 5. 検証結果（<code>pok</code>）と共に <code>stapling_cache_response</code> を呼び出し、キャッシュを更新する。 6. 最後に一時的なリソース（リクエストオブジェクト等）を解放する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_util_stapling.c:893</code>（文脈上、キャッシュ更新が必要なタイミングで呼び出される）。</li>
+<li>**呼び出し先**:</li>
+<li><code>modssl_dispatch_ocsp_request</code>: OCSP リクエストの送信。</li>
+<li><code>stapling_check_response</code>: レスポンスの妥当性検証。</li>
+<li><code>stapling_cache_response</code>: キャッシュへの書き込み。</li>
+<li>OpenSSL API (<code>OCSP_REQUEST_new</code>, <code>OCSP_CERTID_dup</code>, <code>OCSP_response_create</code> 等)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>certinfo</code>: 証明書と OCSP 関連情報を保持する構造体。</li>
+<li><code>modssl_ctx_t</code>: SSL モジュールの設定コンテキスト。</li>
+<li><code>OCSP_RESPONSE</code>, <code>OCSP_REQUEST</code>: OpenSSL の OCSP プロトコル用構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**URI 不備**: OCSP URI が存在しない、または <code>http</code> スキーム以外の場合は <code>FALSE</code> を返す。</li>
+<li>**通信エラー**: レスポンダーからの応答がない場合、<code>mctx-&gt;stapling_fake_trylater</code> が有効であれば <code>TRYLATER</code> ステータスを生成し、そうでなければエラーとして終了する。</li>
+<li>**検証失敗**: <code>stapling_check_response</code> でエラーが検出された場合、<code>pok</code> は <code>FALSE</code> となる。</li>
+<li>**キャッシュ失敗**: キャッシュへの保存に失敗した場合、ログ出力を行うが関数自体は継続する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_pool_t</code> を使用したメモリ管理を行っているため、サブプールの作成と破棄の整合性に注意すること。</li>
+<li><code>MAX_STAPLING_DER</code>（10KB）を超えるレスポンスは切り捨てられる制約がある。</li>
+<li>OCSP レスポンダーとの通信は同期的に行われるため、タイムアウト設定 (<code>mctx-&gt;stapling_responder_timeout</code>) が適切か確認すること。</li>
 </ul></body></html>

@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_ajp.c:181</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>AJP (Apache JServ Protocol) v1.3 を使用して、Apache HTTP Server からバックエンドサーバーへリクエストを転送し、レスポンスを処理する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_proxy_ajp_request(apr_pool_t *p, request_rec *r,
+                         proxy_conn_rec *conn,
+                         conn_rec *origin,
+                         proxy_dir_conf *conf,
+                         apr_uri_t *uri,
+                         char *url, char *server_portstr);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: リクエスト情報 (<code>r</code>)、バックエンド接続情報 (<code>conn</code>)、URI 情報 (<code>uri</code>) 等。</li>
+<li>**出力**: 処理結果を示すステータスコード（<code>OK</code> または <code>HTTP_*</code> エラーコード）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn</code> は <code>ap_proxy_acquire_connection</code> 等で既に確保されている必要がある。</li>
+<li><code>r-&gt;pool</code> を通じたメモリ管理が行われる。</li>
+<li>冪等なリクエスト（<code>is_idempotent</code> が <code>METHOD_IDEMPOTENT</code> を返す場合）は、エラー時に再試行可能なステータスを返すことがある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ヘッダー送信**: <code>ajp_send_header</code> を呼び出し、AJP ヘッダーをバックエンドへ送信する。 2. **ボディ転送**: クライアントからのリクエストボディを <code>ap_get_brigade</code> で読み込み、<code>ajp_send_data_msg</code> を介してバックエンドへストリーミングする。 3. **レスポンス受信**: <code>ajp_read_header</code> でバックエンドからのレスポンスヘッダーを読み取り、<code>ajp_parse_type</code> でメッセージ種別を判定する。 4. **ループ処理**: <code>CMD_AJP13_GET_BODY_CHUNK</code> 等のコマンドに応じて、ボディの追加読み込みやレスポンスのフィルタチェーンへの転送を繰り返す。 5. **終了**: <code>CMD_AJP13_END_RESPONSE</code> を受け取り、リクエストを完了する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_ajp.c</code> 内の <code>proxy_ajp_handler</code>（直接の呼び出し箇所はソースコード行 854 に確認あり）。</li>
+<li>**呼び出し先**: <code>ajp_send_header</code>, <code>ajp_alloc_data_msg</code>, <code>ap_get_brigade</code>, <code>apr_brigade_flatten</code>, <code>ajp_send_data_msg</code>, <code>ajp_read_header</code>, <code>ajp_parse_type</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_conn_rec</code>: バックエンド接続状態。</li>
+<li><code>ajp_msg_t</code>: AJP 通信メッセージバッファ。</li>
+<li><code>apr_bucket_brigade</code>: 入出力データのストリーム管理。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**接続エラー**: バックエンドとの通信失敗時は <code>conn-&gt;close = 1</code> を設定し、コネクションを破棄する。</li>
+<li>**タイムアウト**: <code>APR_STATUS_IS_TIMEUP</code> を検知した場合、<code>HTTP_GATEWAY_TIME_OUT</code> や <code>HTTP_REQUEST_TIME_OUT</code> を返す。</li>
+<li>**冪等性**: 冪等なリクエストであれば、特定の失敗時に <code>HTTP_SERVICE_UNAVAILABLE</code> を返し、バランサーによるリトライを許容する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は AJP プロトコルの高レベル制御を担当する。低レベルなパケット操作は <code>ajp_msg.c</code> 等に委譲されている。</li>
+<li>エラー発生時は <code>conn-&gt;close = 1</code> を適切に設定し、不正な状態のコネクションが再利用されないようにすること。</li>
+<li>AJP には明示的なフラッシュメッセージがないため、<code>CMD_AJP13_SEND_BODY_CHUNK</code> 処理時にタイムアウトベースのフラッシュ制御が行われている。</li>
 </ul></body></html>

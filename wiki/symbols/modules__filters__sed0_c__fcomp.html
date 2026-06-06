@@ -6,22 +6,61 @@
 <li>定義箇所: <code>modules/filters/sed0.c:199</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>sed</code> スクリプトを一行ずつ読み込み、解析して内部表現（<code>sed_reptr_t</code> のリスト）へ変換するコンパイルエンジン。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int fcomp(sed_commands_t *commands, apr_file_t *fin)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>commands</code>: コンパイル状態を保持する <code>sed_commands_t</code> 構造体。</li>
+<li><code>fin</code>: スクリプト読み込み元の <code>apr_file_t</code>。</li>
+<li>**出力**:</li>
+<li>成功時は <code>0</code> を返す。</li>
+<li>構文エラーやメモリ不足などの失敗時は <code>-1</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>commands-&gt;pool</code> が有効な <code>apr_pool_t</code> であること。</li>
+<li><code>commands-&gt;linebuf</code> が未割り当ての場合、内部で <code>LBSIZE + 1</code> のサイズで確保される。</li>
+<li>スクリプトの各行は <code>rline</code> を通じて読み込まれ、<code>commands-&gt;cp</code> を介して解析される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: <code>linebuf</code> を確保し、最初の行を読み込む。<code>#n</code> で始まる場合は <code>nflag</code> をセットする。 2. **ループ処理**: <code>rline</code> でスクリプトを一行ずつ読み込み、以下の手順を繰り返す。</p>
+<ul>
+<li>空行やコメント行をスキップする。</li>
+<li><code>address</code> 関数でコマンドのアドレス範囲を解析・特定する。</li>
+<li><code>switch</code> 文でコマンド文字（<code>!</code>, <code>{</code>, <code>}</code>, <code>=</code>, <code>:</code>, <code>a</code>, <code>c</code>, <code>i</code>, <code>g</code>, <code>G</code>, <code>h</code>, <code>H</code>, <code>t</code>, <code>b</code>, <code>n</code>, <code>N</code>, <code>p</code>, <code>P</code>, <code>r</code> 等）を判定する。</li>
+<li>各コマンドに応じたヘルパー関数（<code>text</code> 等）を呼び出し、<code>sed_reptr_t</code> 構造体に属性を格納する。</li>
+<li>ラベル（<code>:</code>）や分岐（<code>b</code>, <code>t</code>）については、<code>search</code> や <code>dechain</code> を用いてラベルチェーンを解決する。</li>
+<p>3. **終了**: ファイル終端に達するか、エラー発生時に終了する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/filters/sed0.c</code> 内の <code>sed_compile_string</code> および <code>sed_compile_file</code> から呼び出される。</li>
+<li>**呼び出し先**:</li>
+<li><code>rline</code>: スクリプトの読み込み。</li>
+<li><code>address</code>: アドレス指定の解析。</li>
+<li><code>command_errf</code>: エラー報告。</li>
+<li><code>alloc_reptr</code>: コマンドノードの割り当て。</li>
+<li><code>text</code>: テキストブロックの抽出。</li>
+<li><code>search</code>, <code>dechain</code>: ラベル解決。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sed_commands_t</code>: コンパイル全体のコンテキスト。</li>
+<li><code>sed_reptr_t</code>: 個々の <code>sed</code> コマンドを保持するノード。</li>
+<li><code>sed_label_t</code>: 分岐先ラベルの管理構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**構文エラー**: 不明なコマンドや不正なアドレス指定、閉じ括弧の不整合などで <code>-1</code> を返す。</li>
+<li>**メモリ制限**: <code>RESIZE</code> を超えるアドレス指定や、ラベルの制限（<code>labend</code>）を超えた場合にエラーとなる。</li>
+<li>**読み込みエラー**: <code>rline</code> が失敗した場合に処理を中断する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>rline</code> は 1 バイトずつ読み込む実装のため、大規模なスクリプトではパフォーマンスに注意が必要。</li>
+<li><code>S5EMUL</code> マクロの有無により、テキスト挿入時の挙動が変化する可能性がある。</li>
+<li>エラー発生時は <code>command_errf</code> を通じて詳細が報告されるため、呼び出し側は戻り値を確認すること。</li>
 </ul></body></html>

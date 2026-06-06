@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_dbd.c:273</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>Require dbd-group</code> ディレクティブに基づき、データベースから取得したユーザーの所属グループ情報と、設定された許可グループリストを照合して認可判定を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static authz_status dbdgroup_check_authorization(request_rec *r,
+                                                 const char *require_args,
+                                                 const void *parsed_require_args)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>require_args</code>: 未使用。</li>
+<li><code>parsed_require_args</code>: <code>ap_expr_info_t</code> 型の式情報。評価後に許可グループリストとして使用される。</li>
+<li>**出力**:</li>
+<li><code>AUTHZ_GRANTED</code>: ユーザーが指定グループのいずれかに所属している場合。</li>
+<li><code>AUTHZ_DENIED</code>: ユーザーが所属していない、または式評価に失敗した場合。</li>
+<li><code>AUTHZ_DENIED_NO_USER</code>: <code>r-&gt;user</code> が設定されていない場合。</li>
+<li><code>AUTHZ_GENERAL_ERROR</code>: データベースクエリ実行に失敗した場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;user</code> が認証済みであること。</li>
+<li><code>authz_dbd_module</code> の設定が <code>r-&gt;per_dir_config</code> に存在すること。</li>
+<li>データベース接続およびクエリ実行が <code>mod_dbd</code> を介して利用可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>r-&gt;user</code> の存在を確認し、未認証なら <code>AUTHZ_DENIED_NO_USER</code> を返す。 2. <code>authz_dbd_group_query</code> を呼び出し、現在のユーザーが所属する全グループを <code>groups</code> 配列に取得する。クエリ失敗時は <code>AUTHZ_GENERAL_ERROR</code> を返す。 3. <code>parsed_require_args</code> を <code>ap_expr_str_exec</code> で評価し、許可グループの文字列リストを取得する。評価失敗時はログを出力し <code>AUTHZ_DENIED</code> を返す。 4. 取得した許可グループリストを空白区切りで反復し、各グループが <code>groups</code> 配列に含まれているかを確認する。 5. 一致するグループが見つかれば <code>AUTHZ_GRANTED</code> を返し、最後まで見つからなければ <code>AUTHZ_DENIED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/aaa/mod_authz_dbd.c:368</code> にて <code>authz_dbd_hooks</code> 内で登録されている（直接の呼び出し箇所は Apache の認可フレームワーク）。</li>
+<li>**呼び出し先**: </li>
+<li><code>authz_dbd_group_query</code>: ユーザーのグループリスト取得。</li>
+<li><code>ap_expr_str_exec</code>: 許可グループ式の評価。</li>
+<li><code>ap_getword_white</code>: グループ名のトークン分割。</li>
+<li><code>ap_array_str_contains</code>: グループ名の照合。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>authz_dbd_cfg</code>: ディレクトリ単位の設定情報。</li>
+<li><code>request_rec</code>: リクエストごとの状態管理およびメモリプール (<code>r-&gt;pool</code>)。</li>
+<li><code>apr_array_header_t</code>: データベースから取得したグループリストの保持に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>データベース接続エラーやクエリ実行失敗時は <code>AUTHZ_GENERAL_ERROR</code> を返す。</li>
+<li>ユーザーが認証されていない場合、認可処理は即座に拒否される。</li>
+<li>式評価 (<code>ap_expr_str_exec</code>) が失敗した場合、エラーログを出力して <code>AUTHZ_DENIED</code> となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>すべての動的メモリ割り当ては <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動的に解放される。</li>
+<li><code>dbdgroup_check_authorization</code> は <code>mod_authz_core</code> の認可プロバイダーとして登録されるため、直接呼び出すのではなく、Apache の設定ディレクティブを通じて制御される。</li>
 </ul></body></html>

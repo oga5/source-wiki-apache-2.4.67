@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/filters/mod_ext_filter.c:63</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>外部フィルタプログラムを Apache HTTP Server のフィルタとして実行する際、リクエストごとの実行状態とプロセス管理情報を保持するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct ef_ctx_t {
+    apr_pool_t *p;
+    apr_proc_t *proc;
+    apr_procattr_t *procattr;
+    ef_dir_t *dc;
+    ef_filter_t *filter;
+    int noop, hit_eos;
+#if APR_FILES_AS_SOCKETS
+    apr_pollset_t *pollset;
+#endif
+} ef_ctx_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は関数引数として渡されるのではなく、<code>f-&gt;ctx</code>（フィルタコンテキスト）として <code>request_rec</code> に紐付いたプールから <code>apr_pcalloc</code> で割り当てられ、フィルタ処理の各段階で参照・更新されます。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>すべてのメンバはリクエストの生存期間に紐付いたプール（<code>r-&gt;pool</code>）によって管理されます。</li>
+<li><code>filter</code> メンバは、適用されるフィルタの定義情報を指す必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>外部プロセスの起動時に <code>proc</code> および <code>procattr</code> が初期化されます。</li>
+<li><code>noop</code> フラグが真の場合、フィルタ処理はバイパスされます。</li>
+<li><code>hit_eos</code> はストリームの終端（EOS）に到達したかを追跡し、プロセスの終了処理を制御します。</li>
+<li><code>APR_FILES_AS_SOCKETS</code> が有効な環境では、<code>pollset</code> を用いて非同期的な入出力監視を行います。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ef_output_filter</code> や <code>ef_input_filter</code> などのフィルタ処理関数が、<code>f-&gt;ctx</code> を通じて本構造体を取得・利用します。</li>
+<li>**呼び出し先**: 外部プロセスの起動（<code>init_ext_filter_process</code>）や、データ転送・読み取り処理（<code>ef_unified_filter</code> 等）において、本構造体のメンバが引数として渡されます。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ef_dir_t</code>: ディレクトリ単位の設定情報。</li>
+<li><code>ef_filter_t</code>: フィルタの定義情報（コマンドパス等）。</li>
+<li><code>apr_proc_t</code>: 外部プロセスハンドル。</li>
+<li><code>apr_pollset_t</code>: 非同期 I/O 用のポーリングセット（条件付き）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>プロセス起動失敗時やパイプの読み書きエラー発生時、<code>ef_ctx_t</code> 内のフラグやハンドルを通じてエラーハンドリングが行われます。</li>
+<li><code>APR_FILES_AS_SOCKETS</code> が定義されていない環境では、ポーリングの代わりに <code>apr_sleep</code> を用いた待機が発生し、パフォーマンスに影響を与える可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はリクエスト終了時に自動的に解放されるため、手動でのメモリ解放は不要です。</li>
+<li>プロセスの生存期間は <code>apr_pool_note_subprocess</code> によって管理されており、リクエスト終了時に確実に終了するよう設計されています。</li>
 </ul></body></html>

@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/cache/cache_util.c:533</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュされたエンティティが現在のリクエストに対して「鮮度（fresh）」を保っているかを判定し、鮮度が切れている場合に「サンダリング・ハード（Thundering Herd）」を防ぐための排他ロック制御を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int cache_check_freshness(cache_handle_t *h, cache_request_rec *cache, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>h</code>: キャッシュエントリへのハンドル。</li>
+<li><code>cache</code>: リクエストに関連付けられたキャッシュコンテキスト。</li>
+<li><code>r</code>: 現在の HTTP リクエスト構造体。</li>
+<li>**出力**:</li>
+<li><code>1</code>: キャッシュが鮮度を保っている（またはロック競合により鮮度があると見なす）。</li>
+<li><code>0</code>: キャッシュが期限切れ（stale）であり、再検証が必要。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;pool</code> を使用してメモリ管理を行う。</li>
+<li><code>Cache-Control</code> や <code>Pragma</code> ヘッダーの解析結果（<code>cache-&gt;control_in</code>）が利用可能であること。</li>
+<li><code>h-&gt;cache_obj-&gt;info</code> にキャッシュのメタデータが格納されていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **無効化判定**: リクエストまたはキャッシュされたレスポンスに <code>no-cache</code> が含まれる場合、即座に <code>0</code>（stale）を返す。 2. **鮮度計算**: <code>ap_cache_current_age</code> を用いて経過時間を算出。<code>max-age</code>、<code>s-maxage</code>、<code>Expires</code> ヘッダーを RFC 2616 に基づいて比較し、鮮度を判定する。 3. **警告付与**: 鮮度が維持されている場合でも、<code>max-stale</code> の使用やヒューリスティックな期限切れ判定に基づき、必要に応じて <code>Warning</code> ヘッダー（110 または 113）をレスポンスに追加する。 4. **ロック制御**: 鮮度が切れている場合、<code>cache_try_lock</code> を試行する。</p>
+<ul>
+<li>ロック取得成功: <code>0</code> を返し、バックエンドへの再検証を許可する。</li>
+<li>ロック取得失敗（<code>EEXIST</code>）: 他のプロセスが再検証中と見なし、警告を付与した上で <code>1</code> を返し、stale なデータを一時的に提供する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/cache_storage.c:336</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_cache_control</code></li>
+<li><code>ap_cache_current_age</code></li>
+<li><code>cache_try_lock</code></li>
+<li><code>apr_table_get</code>, <code>apr_table_set</code>, <code>apr_table_mergen</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_handle_t</code>: キャッシュオブジェクトへのアクセス用。</li>
+<li><code>cache_request_rec</code>: リクエストごとのキャッシュ制御情報。</li>
+<li><code>cache_server_conf</code>: サーバー設定（<code>ignorecachecontrol</code> 等のフラグを含む）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ロック失敗**: <code>cache_try_lock</code> が予期せぬエラーを返した場合、安全側に倒して <code>0</code>（stale）を返す。</li>
+<li>**設定による無視**: <code>ignorecachecontrol</code> が有効な場合、<code>no-cache</code> ヘッダーを無視してキャッシュを返す場合がある。</li>
+<li>**Age ヘッダーの欠落**: <code>Age</code> ヘッダーがない場合は 0 として計算される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は RFC 2616 の複雑な鮮度計算ロジックを内包している。修正時は <code>s-maxage</code> と <code>max-age</code> の優先順位、および <code>max-stale</code> と <code>must-revalidate</code> の相互作用に注意すること。</li>
+<li>ロック機構はファイルシステムベースであるため、高負荷環境での I/O 競合がパフォーマンスに影響を与える可能性がある。</li>
 </ul></body></html>

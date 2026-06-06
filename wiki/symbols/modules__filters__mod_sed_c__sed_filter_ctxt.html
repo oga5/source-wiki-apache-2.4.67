@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/filters/mod_sed.c:45</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_sed</code> フィルタがリクエストまたはレスポンスのストリームを処理する際、その実行状態を保持するために使用されるコンテキスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct sed_filter_ctxt
+{
+    sed_eval_t eval;             /* libsed の評価エンジン状態 */
+    ap_filter_t *f;              /* フィルタインスタンス */
+    request_rec *r;              /* リクエストレコード */
+    apr_bucket_brigade *bb;      /* 出力用バケットブリゲード */
+    apr_bucket_brigade *bbinp;   /* 入力用バケットブリゲード */
+    char *outbuf;                /* 出力バッファの先頭ポインタ */
+    char *curoutbuf;             /* 出力バッファの現在位置ポインタ */
+    apr_size_t bufsize;          /* バッファのサイズ */
+    apr_pool_t *tpool;           /* 一時的なバケット生成用プール */
+    int numbuckets;              /* 現在のバケット数 */
+} sed_filter_ctxt;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>libsed</code> エンジンによる変換対象データおよび Apache のフィルタチェーンから渡される <code>apr_bucket_brigade</code>。</li>
+<li>**出力**: 変換後のデータを含む <code>apr_bucket_brigade</code>。<code>sed_write_output</code> を通じてバッファリングされ、後続のフィルタへ渡されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>tpool</code> はメモリリークを防ぐため、定期的に <code>clear_ctxpool</code> によってクリアされる必要があります。</li>
+<li><code>sed_request_filter</code> は <code>AP_MODE_READBYTES</code> モードでのみ動作します。</li>
+<li><code>sed_finalize_eval</code> 実行時に改行がない場合、<code>libsed</code> の仕様により自動的に改行が付与されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: リクエストごとに <code>apr_pcalloc</code> で割り当てられ、<code>libsed</code> の評価エンジンが初期化されます。 2. **データ処理**: <code>sed_response_filter</code> 等がバケットを反復し、<code>sed_eval_buffer</code> を呼び出して変換を行います。 3. **バッファリング**: 変換結果は <code>outbuf</code> に蓄積され、<code>MODSED_OUTBUF_SIZE</code> に達するか、EOS/Flush バケットを受信した時点で <code>append_bucket</code> を介してブリゲードへ書き出されます。 4. **終了処理**: EOS バケット受信時に <code>sed_finalize_eval</code> が呼ばれ、内部バッファの残存データがフラッシュされます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_sed.c</code> 内のフィルタ初期化処理（<code>apr_pcalloc</code> による生成）およびフィルタ処理関数（<code>f-&gt;ctx</code> からの取得）。</li>
+<li>**呼び出し先**: <code>libsed</code> の各関数（<code>sed_eval_buffer</code>, <code>sed_finalize_eval</code> 等）、および <code>mod_sed.c</code> 内のユーティリティ関数（<code>clear_ctxpool</code>, <code>alloc_outbuf</code>, <code>append_bucket</code>, <code>flush_output_buffer</code>）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sed_eval_t</code>: <code>libsed</code> の評価状態を保持。</li>
+<li><code>apr_bucket_brigade</code>: Apache のストリームデータ管理構造。</li>
+<li><code>sed_config</code> / <code>sed_expr_config</code>: モジュールの設定情報を保持。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>libsed</code> のコンパイルエラーや実行時エラーが発生した場合、<code>log_sed_errf</code> や <code>sed_compile_errf</code> を通じてログ出力が行われます。</li>
+<li><code>sed_request_filter</code> において <code>AP_MODE_READBYTES</code> 以外のモードが指定された場合、処理は透過的にパスされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>tpool</code> の管理はメモリ効率に直結するため、新しいバケット操作を追加する際は <code>clear_ctxpool</code> のタイミングを考慮してください。</li>
+<li><code>libsed</code> の仕様上、POST データ処理時に意図しない改行付与が発生する可能性があるため、データ整合性が重要な場合は注意が必要です。</li>
 </ul></body></html>

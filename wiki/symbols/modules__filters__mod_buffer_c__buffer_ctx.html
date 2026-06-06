@@ -2,26 +2,51 @@
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>symbols/modules__filters__mod_buffer_c__buffer_ctx.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>buffer_ctx</h1>
 <h2>定義</h2>
 <ul>
-<li>種別: <code>struct</code></li>
-<li>定義箇所: <code>modules/filters/mod_buffer.c:44</code></li>
+<li>**種別**: <code>struct</code></li>
+<li>**定義箇所**: <code>modules/filters/mod_buffer.c:44</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストごとのフィルタ実行時状態を保持し、バッファリング処理（入力および出力フィルタ）のコンテキストを管理するために使用されます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct buffer_ctx {
+    apr_bucket_brigade *bb;      /* メインバッファ */
+    apr_bucket_brigade *tmp;     /* 入力用一時バッファ */
+    buffer_conf *conf;           /* ディレクトリ単位の設定 */
+    apr_off_t remaining;         /* 残り容量 */
+    int seen_eos;                /* EOS（End of Stream）到達フラグ */
+} buffer_ctx;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: フィルタ関数（<code>buffer_out_filter</code>, <code>buffer_in_filter</code>）において、<code>f-&gt;ctx</code> を通じて参照されます。</li>
+<li>**出力**: フィルタの実行状態（バッファ内のデータ、EOS到達状況、残り容量）を保持し、後続のフィルタ呼び出しへ引き継がれます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buffer_ctx</code> およびその内部のブリゲードは、リクエストプール（<code>r-&gt;pool</code>）に紐付いており、リクエスト終了時に自動的に解放されます。</li>
+<li>出力フィルタにおいて、サブクエスト（<code>f-&gt;r-&gt;main</code> が存在する場合）はバッファリングの対象外となります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バッファ管理**: <code>buffer_conf</code> に基づき、データを <code>bb</code> に蓄積します。</li>
+<li>**出力処理**: バッファサイズが上限に達した場合、またはフラッシュ/EOSバケットを受信した際に、蓄積されたデータを下流へ送信します。</li>
+<li>**入力処理**: <code>AP_MODE_READBYTES</code> モード時、上流から読み込んだデータを <code>tmp</code> に蓄積し、要求されたサイズ分を切り出して提供します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>buffer_out_filter</code> および <code>buffer_in_filter</code> が <code>f-&gt;ctx</code> を介してこの構造体を取得します。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buffer_conf</code>: ディレクトリ単位の設定（バッファ上限サイズ等）を保持。</li>
+<li><code>apr_bucket_brigade</code>: バケットの連結リスト。<code>bb</code> および <code>tmp</code> として使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**サブクエスト**: 出力フィルタにおいて、サブクエストの場合はバッファリングを行わず透過させます。</li>
+<li>**入力モード**: 入力フィルタにおいて、<code>AP_MODE_READBYTES</code> 以外のモード（<code>GETLINE</code> 等）ではバッファリングを行わず透過させます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はリクエストプールに依存しているため、メモリリークの心配は少ないですが、サブクエストや非標準的な入力モードでの挙動に注意してください。</li>
 </ul></body></html>

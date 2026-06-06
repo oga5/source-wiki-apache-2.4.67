@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/filters/mod_buffer.c:55</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>出力フィルタチェーンにおいて、小さなバケットを <code>BufferSize</code> ディレクティブで指定されたサイズまで集約（collapse）し、ネットワーク I/O の効率を向上させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t buffer_out_filter(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキストを含むフィルタ構造体。</li>
+<li><code>bb</code>: 処理対象のバケットブリゲード。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 処理結果（<code>APR_SUCCESS</code> またはエラーコード）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サブクエスト（<code>f-&gt;r-&gt;main</code> が存在する場合）ではバッファリングを行わず、フィルタを削除して透過させる。</li>
+<li>コンテキスト <code>ctx</code> はリクエストプール（<code>r-&gt;pool</code>）に紐付いており、リクエスト終了時に自動解放される。</li>
+<li>メタデータバケット（EOS, Flush）はバッファリングされず、即座に下流へ渡される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 初回呼び出し時に <code>buffer_ctx</code> を生成し、設定を読み込む。 2. **空のブリゲード**: 入力が空の場合は即座に下流へ渡す。 3. **バケット処理**:</p>
+<ul>
+<li>**EOS/Flush**: 蓄積済みのバッファをフラッシュし、メタデータバケットを送信する。</li>
+<li>**メタデータ**: 蓄積バッファへ移動し、そのまま保持する。</li>
+<li>**データ**: </li>
+<li>バッファサイズが <code>ctx-&gt;conf-&gt;size</code> を超えた場合、蓄積分をフラッシュする。</li>
+<li>ヒープバケットかつサイズが <code>APR_BUCKET_BUFF_SIZE</code> と一致する場合、コピーではなく移動（move）による最適化を行う。</li>
+<li>それ以外は <code>apr_brigade_write</code> を使用してバッファへコピーする。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache フィルタチェーン（<code>ap_register_output_filter</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_pass_brigade</code>: 下流のフィルタへデータを渡す。</li>
+<li><code>apr_bucket_read</code>: バケットの内容を読み込む。</li>
+<li><code>apr_brigade_write</code>: バッファへデータを書き込む。</li>
+<li><code>ap_remove_output_filter</code>: サブクエスト時に自身を削除する。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>buffer_ctx</code>: 実行時の状態（メインバッファ <code>bb</code>、設定 <code>conf</code> を保持）。</li>
+<li><code>buffer_conf</code>: <code>BufferSize</code> ディレクティブに基づく設定値。</li>
+<li><code>apr_bucket_brigade</code>: バケットの連結リスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**サブクエスト**: バッファリングをスキップし、透過させる。</li>
+<li>**バッファ上限超過**: <code>len &gt; ctx-&gt;conf-&gt;size</code> となった時点で下流へフラッシュする。</li>
+<li>**書き込み失敗**: <code>ap_pass_brigade</code> がエラーを返した場合、ループを継続しつつエラー状態を保持する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>ETag 生成ロジックはコメントアウトされており、現時点では機能していない。</li>
+<li>ヒープバケットの移動最適化は、バケットサイズが <code>APR_BUCKET_BUFF_SIZE</code> と一致する場合にのみ有効である。</li>
+<li>入力フィルタとは異なり、出力フィルタはサブクエストの判定に <code>f-&gt;r-&gt;main</code> を使用している。</li>
 </ul></body></html>

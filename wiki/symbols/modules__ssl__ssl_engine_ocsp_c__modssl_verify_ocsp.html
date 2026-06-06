@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_ocsp.c:262</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>証明書の失効状態を OCSP (Online Certificate Status Protocol) を用いて検証し、その結果を OpenSSL の検証コンテキスト (<code>X509_STORE_CTX</code>) に反映させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int modssl_verify_ocsp(X509_STORE_CTX *ctx, SSLSrvConfigRec *sc,
+                       server_rec *s, conn_rec *c, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: 検証対象の証明書を含む OpenSSL の検証コンテキスト。</li>
+<li><code>sc</code>: SSL サーバー設定構造体。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>c</code>: 接続レコード。</li>
+<li><code>pool</code>: メモリ割り当て用プール。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 検証が成功（<code>V_OCSP_CERTSTATUS_GOOD</code>）した場合は <code>1</code>、それ以外は <code>0</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>OPENSSL_NO_OCSP</code> が定義されていない環境で動作する。</li>
+<li><code>X509_STORE_CTX_get_current_cert(ctx)</code> が有効な証明書を返す必要がある（NULL の場合は即時終了）。</li>
+<li>自己署名証明書（self-issued）に対しては OCSP チェックをスキップし、検証成功として扱う。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 一時的なメモリプール <code>vpool</code> を作成し、メモリ消費を抑制する。 2. **検証実行**: <code>verify_ocsp_status</code> を呼び出し、OCSP レスポンダとの通信および検証を行う。 3. **結果反映**: <code>verify_ocsp_status</code> の戻り値に基づき、<code>X509_STORE_CTX_set_error</code> を使用して OpenSSL の検証エラー状態を更新する。</p>
+<ul>
+<li><code>V_OCSP_CERTSTATUS_GOOD</code>: <code>X509_V_OK</code> を設定。</li>
+<li><code>V_OCSP_CERTSTATUS_REVOKED</code>: <code>X509_V_ERR_CERT_REVOKED</code> を設定。</li>
+<li><code>V_OCSP_CERTSTATUS_UNKNOWN</code>: <code>X509_V_ERR_APPLICATION_VERIFICATION</code> を設定。</li>
+<p>4. **終了処理**: <code>vpool</code> を破棄し、検証結果を呼び出し元へ返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_kernel.c:1679</code></li>
+<li>**呼び出し先**: </li>
+<li><code>verify_ocsp_status</code> (内部関数)</li>
+<li>OpenSSL API (<code>X509_STORE_CTX_get_current_cert</code>, <code>X509_check_issued</code>, <code>X509_STORE_CTX_set_error</code>)</li>
+<li>APR API (<code>apr_pool_create</code>, <code>apr_pool_tag</code>, <code>apr_pool_destroy</code>)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>X509_STORE_CTX</code>: OpenSSL の証明書検証コンテキスト。</li>
+<li><code>SSLSrvConfigRec</code>: <code>mod_ssl</code> のサーバー設定。</li>
+<li><code>apr_pool_t</code>: APR メモリプール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>証明書が取得できない場合、エラーを発生させずに <code>1</code> を返して終了する。</li>
+<li>自己署名証明書は検証をスキップする。</li>
+<li>OCSP レスポンダとの通信は同期的に行われるため、ネットワーク遅延が処理時間に影響する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_ssl</code> の証明書検証プロセスにおけるメインのエントリポイントである。</li>
+<li>メモリリークを防ぐため、<code>vpool</code> の生成と破棄が確実に行われるよう注意すること。</li>
+<li><code>X509_STORE_CTX_set_error</code> によるエラーコードの伝播は、OpenSSL の検証エンジンが後続の処理で正しく解釈できるよう整合性を保つ必要がある。</li>
 </ul></body></html>

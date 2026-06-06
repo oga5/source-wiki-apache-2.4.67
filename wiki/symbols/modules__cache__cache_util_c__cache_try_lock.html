@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/cache/cache_util.c:279</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュ更新時に「サンダリング・ハード（Thundering Herd）」問題を回避するため、ファイルシステム上に排他ロックを作成する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t cache_try_lock(cache_server_conf *conf, cache_request_rec *cache, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>conf</code>: キャッシュサーバー設定（ロックパスや有効期限設定を含む）。</li>
+<li><code>cache</code>: リクエストに関連付けられたキャッシュコンテキスト。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>。ロックが既に存在する場合や作成失敗時はエラーコードを返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conf</code> が NULL、またはロック設定が無効な場合は即座に <code>APR_SUCCESS</code> を返す。</li>
+<li>リクエストのプール (<code>r-&gt;pool</code>) に既にロックファイルが登録されている場合は、再作成せず成功とみなす。</li>
+<li>ロックファイルは、キャッシュキーから生成されたハッシュ値に基づき、2階層のディレクトリ構造内に配置される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **既存チェック**: <code>r-&gt;pool</code> 内のユーザーデータを確認し、既にロックが取得済みであれば終了。 2. **キー生成**: <code>cache-&gt;key</code> が未設定の場合、既存のハンドルから取得するか、<code>cache_generate_key</code> を呼び出して生成。 3. **ディレクトリ作成**: <code>conf-&gt;lockpath</code> 配下に、ハッシュ値に基づくディレクトリを再帰的に作成。 4. **期限切れチェック**: 既存のロックファイルが存在する場合、最終更新時刻 (<code>mtime</code>) を確認。<code>conf-&gt;lockmaxage</code> を超えていれば古いロックを削除。 5. **ロック取得**: <code>APR_EXCL</code> および <code>APR_CREATE</code> フラグを指定してファイルを作成。成功時は <code>r-&gt;pool</code> にファイルハンドルを保存し、<code>APR_DELONCLOSE</code> により終了時に自動削除されるよう設定。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/cache/cache_util.c:771</code></li>
+<li><code>modules/cache/mod_cache.c:191</code></li>
+<li><code>modules/cache/mod_cache.c:490</code></li>
+<li>**呼び出し先**:</li>
+<li><code>cache_generate_key</code></li>
+<li><code>ap_cache_generate_name</code></li>
+<li><code>apr_dir_make_recursive</code></li>
+<li><code>apr_stat</code></li>
+<li><code>apr_file_remove</code></li>
+<li><code>apr_file_open</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_server_conf</code>: ロック設定（<code>lockpath</code>, <code>lockmaxage</code>）を保持。</li>
+<li><code>cache_request_rec</code>: キャッシュキーおよびハンドル情報を保持。</li>
+<li><code>request_rec</code>: リクエストごとのメモリプール (<code>r-&gt;pool</code>) を管理。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ディレクトリ作成失敗**: <code>apr_dir_make_recursive</code> が失敗した場合、エラーログを出力しそのステータスを返す。</li>
+<li>**ロック競合**: 他のプロセスが既にロックを作成している場合、<code>apr_file_open</code> が <code>APR_EEXIST</code> 等のステータスを返し、ロック取得に失敗する。</li>
+<li>**古いロック**: <code>lockmaxage</code> を超えたロックファイルは自動的に削除されるため、デッドロックを防止する設計となっている。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>r-&gt;pool</code> を使用してメモリ管理を行っているため、リクエスト終了時にロックファイルハンドルやパス情報が適切にクリーンアップされる。</li>
+<li>ロックファイル名は <code>ap_cache_generate_name</code> によって生成されるため、ハッシュ衝突の可能性については当該関数の実装に依存する。</li>
 </ul></body></html>

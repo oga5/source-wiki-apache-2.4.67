@@ -6,22 +6,56 @@
 <li>定義箇所: <code>modules/http2/h2_bucket_beam.c:195</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>h2_bucket_beam</code> 内のバッファが空である場合に、データが到着するか、ビームが終了状態になるまでスレッドを待機させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t wait_not_empty(h2_bucket_beam *beam, conn_rec *c, apr_read_type_e block)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>beam</code>: 対象の <code>h2_bucket_beam</code> 構造体。</li>
+<li><code>c</code>: 接続コンテキスト <code>conn_rec</code>。</li>
+<li><code>block</code>: 読み取りモード（<code>APR_BLOCK_READ</code> か否か）。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: バッファにデータが存在する状態。</li>
+<li><code>APR_ECONNABORTED</code>: ビームが異常終了（<code>aborted</code>）している場合。</li>
+<li><code>APR_EOF</code>: ビームが正常終了（<code>closed</code>）している場合。</li>
+<li><code>APR_EAGAIN</code>: 非ブロッキング読み取りでデータが空の場合。</li>
+<li>その他: <code>apr_thread_cond_timedwait</code> または <code>apr_thread_cond_wait</code> の戻り値。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>呼び出し側は、<code>beam-&gt;lock</code> ミューテックスを保持している必要がある。</li>
+<li><code>beam</code> は初期化済みであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>buffer_is_empty(beam)</code> が真である間、ループを継続する。 2. ビームの状態を確認し、<code>aborted</code> なら <code>APR_ECONNABORTED</code>、<code>closed</code> なら <code>APR_EOF</code> を返す。 3. <code>block</code> が <code>APR_BLOCK_READ</code> でない場合、<code>APR_EAGAIN</code> を返す。 4. ブロッキング読み取りの場合:</p>
+<ul>
+<li><code>beam-&gt;timeout &gt; 0</code> ならば <code>apr_thread_cond_timedwait</code> で待機。</li>
+<li>それ以外は <code>apr_thread_cond_wait</code> で無期限待機。</li>
+<p>5. 待機解除後、再度ループ条件を評価する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_bucket_beam.c:742</code>（<code>h2_beam_receive</code> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>buffer_is_empty</code></li>
+<li><code>apr_thread_cond_timedwait</code> / <code>apr_thread_cond_wait</code></li>
+<li><code>H2_BEAM_LOG</code> (マクロ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_bucket_beam</code>: 同期対象のバケット転送構造体。</li>
+<li><code>conn_rec</code>: Apache HTTP Server の接続コンテキスト。</li>
+<li><code>apr_read_type_e</code>: ブロッキング動作を決定する列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**タイムアウト**: <code>beam-&gt;timeout</code> が設定されている場合、待機時間が経過すると <code>apr_thread_cond_timedwait</code> の戻り値が <code>rv</code> に格納され、ループを抜ける可能性がある。</li>
+<li>**異常終了**: <code>beam-&gt;aborted</code> が設定されると、データ有無に関わらず即座に <code>APR_ECONNABORTED</code> を返す。</li>
+<li>**正常終了**: <code>beam-&gt;closed</code> が設定されると、バッファが空であれば <code>APR_EOF</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>beam-&gt;lock</code> を保持した状態で実行される前提であるため、デッドロックを避けるため呼び出し元でのロック管理に注意すること。</li>
+<li><code>H2_BEAM_LOG</code> マクロによるトレース出力が含まれており、デバッグ時には <code>APLOG_TRACE2</code> レベルを確認すること。</li>
 </ul></body></html>

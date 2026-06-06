@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/listen.c:69</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ネットワークソケットの作成、各種ソケットオプションの適用、およびバインドとリスン処理を行う低レベル関数です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t make_sock(apr_pool_t *p, ap_listen_rec *server, int do_bind_listen)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用するプール。</li>
+<li><code>server</code>: ソケット情報およびバインド先アドレスを保持する <code>ap_listen_rec</code> 構造体。</li>
+<li><code>do_bind_listen</code>: バインドおよびリスン処理を実行するかどうかを示すフラグ。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server-&gt;sd</code> には既に初期化済みの <code>apr_socket_t</code> が格納されている必要があります。</li>
+<li><code>do_bind_listen</code> が真の場合、<code>server-&gt;bind_addr</code> が有効である必要があります。</li>
+<li>成功時には <code>server-&gt;sd</code> が更新され、<code>server-&gt;active</code> が 1 に設定されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **オプション設定**: <code>SO_REUSEADDR</code>（Windows以外）、<code>SO_KEEPALIVE</code> を適用します。 2. **バッファ設定**: <code>SendBufferSize</code> および <code>ReceiveBufferSize</code> が設定されている場合、<code>SO_SNDBUF</code> / <code>SO_RCVBUF</code> を適用します。 3. **TCP設定**: プラットフォームがサポートしていれば <code>ap_sock_disable_nagle</code> を呼び出します。 4. **マルチコア最適化**: <code>SO_REUSEPORT</code> が利用可能かつ設定されている場合、ソケットに適用します。 5. **バインド・リスン**: <code>do_bind_listen</code> が真の場合、IPv6 の <code>IPV6_V6ONLY</code> 設定（該当時）、<code>apr_socket_bind</code>、<code>apr_socket_listen</code> を順次実行します。 6. **Windows固有処理**: Windows環境では、バインド後に再度 <code>SO_REUSEADDR</code> を適用します。 7. **状態更新**: 成功時に <code>server-&gt;active</code> を 1 にし、<code>server-&gt;accept_func</code> を <code>NULL</code> に初期化します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/listen.c:338</code></li>
+<li><code>server/listen.c:633</code></li>
+<li>**呼び出し先**:</li>
+<li>APR ネットワーク関数 (<code>apr_socket_opt_set</code>, <code>apr_socket_bind</code>, <code>apr_socket_listen</code>, <code>apr_socket_close</code> 等)</li>
+<li><code>ap_log_perror</code> (ログ出力)</li>
+<li><code>ap_sock_disable_nagle</code> (TCP_NODELAY設定)</li>
+<li><code>setsockopt</code> (OSネイティブのソケットオプション設定)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_listen_rec</code>: リスナーのソケット、アドレス、状態を管理する構造体。</li>
+<li><code>apr_socket_t</code>: APR のソケット抽象化オブジェクト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ソケットオプション設定、バインド、またはリスン処理が失敗した場合、<code>apr_socket_close</code> を呼び出してソケットを閉じ、エラーコードを返します。</li>
+<li><code>SO_SNDBUF</code> / <code>SO_RCVBUF</code> の設定失敗は致命的なエラーとは見なされず、警告ログを出力して処理を継続します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は APR の抽象化が不十分な箇所があり、OS 固有のソケットオプション設定が直接記述されています。</li>
+<li><code>SO_REUSEPORT</code> の挙動はプラットフォーム依存であるため、変更時は注意が必要です。</li>
+<li><code>systemd</code> 関連のロジックは、ソース内のマクロ定義により環境依存の挙動が含まれる可能性があります。</li>
 </ul></body></html>

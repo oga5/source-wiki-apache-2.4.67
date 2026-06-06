@@ -6,22 +6,46 @@
 <li>定義箇所: <code>modules/cache/mod_socache_dbm.c:586</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>DBM ベースの共有オブジェクトキャッシュ（socache）の現在の統計情報（エントリ数、合計サイズ、平均エントリサイズ）を収集し、HTTP レスポンスとして出力する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void socache_dbm_status(ap_socache_instance_t *ctx, request_rec *r, int flags)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: キャッシュインスタンスのコンテキスト（データファイルパス等を含む）。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>flags</code>: 出力形式を制御するフラグ（<code>AP_STATUS_SHORT</code> の有無で HTML 形式かプレーンテキスト形式かを切り替える）。</li>
+<li>**出力**: なし（<code>ap_rprintf</code> 等を通じてクライアントへ直接書き出す）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;pool</code> は、本関数内で <code>apr_pool_clear</code> によりクリアされる。</li>
+<li>DBM ファイルは <code>APR_DBM_RWCREATE</code> モードでオープンされる。</li>
+<li>スレッドセーフではないため、呼び出し側での排他制御が前提となる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ctx-&gt;pool</code> を初期化する。 2. <code>apr_dbm_open</code>（または <code>apr_dbm_open2</code>）を使用して DBM ファイルを開く。失敗時はエラーログを出力して終了する。 3. <code>apr_dbm_firstkey</code> および <code>apr_dbm_nextkey</code> を用いて全エントリを走査する。 4. 各エントリに対して <code>apr_dbm_fetch</code> を実行し、データサイズを累積してエントリ数をカウントする。 5. <code>apr_dbm_close</code> でファイルを閉じる。 6. <code>flags</code> に応じて、HTML またはプレーンテキスト形式で統計情報をレスポンスとして書き出す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_socache_dbm.c:749</code>（<code>socache_dbm</code> 構造体内の関数ポインタとして参照されている）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_pool_clear</code>, <code>apr_dbm_get_driver</code>, <code>apr_dbm_open2</code>, <code>apr_dbm_open</code>, <code>apr_dbm_firstkey</code>, <code>apr_dbm_nextkey</code>, <code>apr_dbm_fetch</code>, <code>apr_dbm_close</code></li>
+<li><code>ap_log_rerror</code>, <code>ap_rprintf</code>, <code>ap_rputs</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュのコンテキストを保持。</li>
+<li><code>apr_dbm_t</code>: DBM ファイルのハンドル。</li>
+<li><code>apr_datum_t</code>: DBM のキーおよび値を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>DBM ファイルのオープンに失敗した場合、エラーログを出力して処理を中断する。</li>
+<li>エントリが 0 件の場合、平均サイズは 0 として計算される。</li>
+<li><code>apr_dbm_firstkey</code> や <code>apr_dbm_fetch</code> の戻り値チェックについては、ソースコード内に「TBD（要検討）」とのコメントがある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> を前提としており、呼び出し側での適切なロック管理が不可欠である。</li>
+<li><code>APU_MAJOR_VERSION</code> 等の条件分岐により、APR-util のバージョンに応じた DBM ドライバの取得方法を切り替えている。</li>
 </ul></body></html>

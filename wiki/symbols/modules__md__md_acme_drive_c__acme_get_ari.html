@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/md/md_acme_drive.c:1097</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ACME サーバーから提供される「ACME Renewal Information (ARI)」を取得し、証明書の推奨更新期間を算出する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t acme_get_ari(md_proto_driver_t *d,
+                          struct md_result_t *result,
+                          apr_time_t *prenew_at,
+                          const char **purl)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>d</code>: 管理対象ドメインのドライバー構造体。</li>
+<li><code>result</code>: 処理結果を記録するコンテナ。</li>
+<li>**出力**:</li>
+<li><code>prenew_at</code>: 算出された推奨更新開始時刻（成功時）。</li>
+<li><code>purl</code>: CA から提供された説明用 URL（成功時）。</li>
+<li>戻り値: <code>APR_SUCCESS</code> またはエラーコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>d-&gt;md</code> に有効なドメイン設定が存在すること。</li>
+<li>静的ファイルで構成された証明書ではないこと。</li>
+<li>CA が ACMEv2 プロトコルをサポートし、かつ ARI 拡張機能を提供していること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期チェック**: 静的ファイル設定や CA URL の欠如を確認し、該当する場合は終了。 2. **証明書収集**: レジストリから現在有効な公開証明書を収集。 3. **通信準備**: <code>md_acme_create</code> および <code>md_acme_setup</code> を呼び出し、ACME 通信セッションを確立。 4. **ARI 取得**: 各証明書に対して <code>ari_cert_id</code> を生成し、CA の ARI エンドポイントへ JSON を要求。 5. **期間算出**: 取得した <code>suggestedWindow</code>（start/end）を解析。 6. **ランダム化**: 取得した期間内でランダムな更新時刻を生成し、全証明書の中で最も早い時刻を <code>prenew_at</code> に設定。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/md/md_acme_drive.c:1245</code>（ソースコード内の直接的な参照）。</li>
+<li>**呼び出し先**: <code>md_acme_create</code>, <code>md_acme_setup</code>, <code>md_acme_get_json</code>, <code>md_cert_get_ari_cert_id</code> 等の <code>md_acme</code> および <code>md_crypt</code> 関連関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>md_proto_driver_t</code>: ドライバーのコンテキスト。</li>
+<li><code>md_cert_t</code>: 証明書情報。</li>
+<li><code>md_json_t</code>: CA から返される ARI JSON データ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ARI 非対応**: CA が ARI をサポートしていない場合、エラーではなく <code>APR_SUCCESS</code> を返し、更新時刻は 0 となる。</li>
+<li>**解析エラー**: JSON の形式不正や時刻フォーマットの不整合が発生した場合、その証明書はスキップされる。</li>
+<li>**通信失敗**: ネットワークエラーや CA 側の応答エラー時は、ログに警告を出力し処理を継続または終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は CA 側の実装状況に強く依存する。</li>
+<li><code>start &gt; end</code> となるような不正な期間が CA から返された場合は警告を出力して無視する設計となっている。</li>
+<li>算出された更新時刻は、<code>start</code> と <code>end</code> の間でランダムに分散されるよう <code>md_rand_bytes</code> を使用している。</li>
 </ul></body></html>

@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/test/mod_dialup.c:46</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>設定された帯域制限（<code>bytes_per_second</code>）に基づき、バケットブリゲードからデータを断続的に送信する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int dialup_send_pulse(dialup_baton_t *db)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>dialup_baton_t *db</code>（送信データ、設定、リクエスト情報を含むコンテキスト）。</li>
+<li>**出力**: <code>int</code> 型のステータスコード。</li>
+<li><code>DONE</code>: 全データの送信完了。</li>
+<li><code>SUSPENDED</code>: 送信すべきデータが残っており、処理を一時停止。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: 接続切断やブリゲード操作の失敗。</li>
+<li><code>AP_FILTER_ERROR</code>: <code>ap_pass_brigade</code> の送信失敗。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>db-&gt;bb</code> に送信対象のデータが格納されていること。</li>
+<li><code>db-&gt;tmpbb</code> は一時的なバケット移動用として利用可能であること。</li>
+<li>リクエストプール (<code>r-&gt;pool</code>) を介してメモリ管理が行われていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>db-&gt;bb</code> が空になるか、設定された <code>bytes_per_second</code> に達するまでループする。 2. <code>apr_brigade_partition</code> を使用して、送信制限分を <code>db-&gt;tmpbb</code> に分割・移動する。 3. <code>apr_bucket_flush_create</code> でフラッシュバケットを作成し、<code>db-&gt;tmpbb</code> の末尾に追加する。 4. <code>ap_pass_brigade</code> を呼び出し、フィルタチェーンを通じてデータを送信する。 5. 送信後、<code>apr_brigade_cleanup</code> で一時ブリゲードをクリアする。 6. 全データ送信完了時は <code>DONE</code> を返し、未送信分がある場合は <code>SUSPENDED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/test/mod_dialup.c:111</code> (<code>dialup_handler</code> 内)</li>
+<li><code>modules/test/mod_dialup.c:207</code> (<code>dialup_callback</code> 内)</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_brigade_partition</code>, <code>apr_brigade_length</code>, <code>apr_brigade_cleanup</code></li>
+<li><code>ap_pass_brigade</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dialup_baton_t</code>: 非同期処理のコンテキストを保持。</li>
+<li><code>apr_bucket_brigade</code>: 送信データのキュー。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**接続切断**: <code>db-&gt;r-&gt;connection-&gt;aborted</code> が真の場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**ブリゲード操作失敗**: <code>apr_brigade_partition</code> が <code>APR_SUCCESS</code> 以外を返した場合、エラーとして終了する。</li>
+<li>**送信失敗**: <code>ap_pass_brigade</code> が失敗した場合、ログを出力し <code>AP_FILTER_ERROR</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>SUSPENDED</code> 状態の利用は MPM の実装に依存するため、環境によっては挙動が異なる可能性がある。</li>
 </ul></body></html>

@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/filters/mod_ratelimit.c:59</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の出力フィルタとして、レスポンスの転送速度を環境変数 <code>rate-limit</code> に基づいて制限する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t rate_limit_filter(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ap_filter_t *f</code> (フィルタコンテキスト), <code>apr_bucket_brigade *bb</code> (送信データブリゲード)</li>
+<li>**出力**: <code>apr_status_t</code> (処理結果。成功時は <code>APR_SUCCESS</code>)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サブリクエストに対してはフィルタを解除し、制限を適用しない。</li>
+<li>環境変数 <code>rate-limit</code> が未設定の場合、フィルタを解除する。</li>
+<li>フィルタコンテキスト <code>f-&gt;ctx</code> は初回呼び出し時に初期化される。</li>
+<li><code>RATE_INTERVAL_MS</code> (200ms) ごとに <code>apr_sleep</code> を呼び出すため、スレッドがブロッキングされる可能性がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 初回実行時に <code>rl_ctx_t</code> を生成し、環境変数から制限速度とバースト量を設定。 2. **状態遷移**:</p>
+<ul>
+<li><code>RATE_FULLSPEED</code>: <code>RL_END</code> バケットを検出するまでデータを制限なしで通過させる。</li>
+<li><code>RATE_LIMIT</code>: <code>RL_START</code> バケットを検出するまで、<code>chunk_size</code> ごとにデータを分割し、<code>apr_sleep</code> を挟んで送信する。</li>
+<p>3. **データ処理**:</p>
+<li><code>holdingbb</code> を使用して、処理しきれなかったデータを次回の呼び出しへ持ち越す。</li>
+<li><code>tmpbb</code> を使用して、送信単位のチャンクを一時保持する。</li>
+<p>4. **終了処理**: EOS (End of Stream) バケットを検出した際、フィルタを解除する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache フィルタチェーン（<code>ap_register_output_filter</code> により登録）。</li>
+<li>**呼び出し先**: <code>ap_pass_brigade</code> (後続フィルタへのデータ送出), <code>ap_remove_output_filter</code> (フィルタ解除), <code>apr_sleep</code> (速度制御のための待機)。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>rl_ctx_t</code>: フィルタの実行状態、速度、バースト量、ブリゲード（<code>tmpbb</code>, <code>holdingbb</code>）を保持するコンテキスト。</li>
+<li><code>rl_state_e</code>: 動作モード（<code>RATE_LIMIT</code> または <code>RATE_FULLSPEED</code>）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ratelimit</code> が 0 以下の場合、ログを出力してフィルタを解除する。</li>
+<li><code>apr_brigade_partition</code> が失敗した場合、エラーを返して処理を中断する。</li>
+<li>ユーザーの切断等により <code>ap_pass_brigade</code> が失敗した場合、そのエラーを伝播する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>RLFDEBUG</code> マクロを定義することで、<code>brigade_dump</code> による詳細なデバッグ出力が可能。</li>
+<li>将来的に Optional Functions への移行が検討されており、モジュールのロード順序依存を解消する可能性がある。</li>
 </ul></body></html>

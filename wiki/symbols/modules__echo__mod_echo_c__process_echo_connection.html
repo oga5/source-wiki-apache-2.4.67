@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/echo/mod_echo.c:130</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の接続処理フックとして動作し、クライアントから受信したデータをそのまま送り返すエコーサーバー機能を実行する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int process_echo_connection(conn_rec *c)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>conn_rec *c</code>（現在の接続情報を保持する構造体）</li>
+<li>**出力**: <code>int</code>（処理結果を示すステータスコード。<code>DECLINED</code> または <code>OK</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>EchoConfig</code> 設定において <code>bEnabled</code> が真である必要がある。</li>
+<li><code>ap_get_brigade</code> を用いて行単位（<code>AP_MODE_GETLINE</code>）でデータを受信することを前提とする。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: 設定を確認し、無効であれば <code>DECLINED</code> を返す。スコアボードを <code>SERVER_BUSY_READ</code> に更新する。 2. **ループ処理**:</p>
+<ul>
+<li><code>ap_get_brigade</code> でクライアントからデータを読み込む。</li>
+<li>読み込み失敗時（EOF/タイムアウト以外）はエラーログを出力してループを抜ける。</li>
+<li>ソケットが未取得であれば取得し、タイムアウトを設定する。</li>
+<li>スコアボードを <code>SERVER_BUSY_WRITE</code> に更新する。</li>
+<li>受信したデータにフラッシュバケットを追加し、<code>ap_pass_brigade</code> でクライアントへ送り返す。</li>
+<li>スコアボードを <code>SERVER_BUSY_KEEPALIVE</code> に更新する。</li>
+<p>3. **終了**: リソースを解放し、スコアボードを <code>SERVER_CLOSING</code> に更新して <code>OK</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_process_connection</code> により登録されたフック経由で呼び出される（<code>modules/echo/mod_echo.c:206</code>）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_get_module_config</code>, <code>ap_time_process_request</code>, <code>update_echo_child_status</code>, <code>apr_brigade_create</code>, <code>ap_get_brigade</code>, <code>ap_log_error</code>, <code>ap_get_conn_socket</code>, <code>apr_socket_timeout_set</code>, <code>apr_bucket_flush_create</code>, <code>ap_pass_brigade</code>, <code>apr_brigade_cleanup</code>, <code>apr_brigade_destroy</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: 接続状態を管理する Apache の基本構造体。</li>
+<li><code>EchoConfig</code>: モジュールの有効/無効状態を保持する設定構造体。</li>
+<li><code>apr_bucket_brigade</code>: フィルタチェーンを流れるデータストリーム。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pConfig-&gt;bEnabled</code> が偽の場合、即座に終了する。</li>
+<li><code>ap_get_brigade</code> が <code>APR_SUCCESS</code> 以外を返した場合、EOF またはタイムアウト以外はエラーとしてログ出力しループを中断する。</li>
+<li>受信したブリゲードが空の場合、エラーとしてループを中断する。</li>
+<li><code>ap_pass_brigade</code> が失敗した場合、エラーログを出力してループを中断する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>AP_MODE_GETLINE</code> を使用しているため、行終端文字を含まないデータやバイナリデータの扱いには注意が必要である。</li>
+<li>独自プロトコル実装のテンプレートとして機能するため、変更時は <code>scoreboard</code> の更新タイミングとフィルタチェーンの整合性に留意すること。</li>
 </ul></body></html>

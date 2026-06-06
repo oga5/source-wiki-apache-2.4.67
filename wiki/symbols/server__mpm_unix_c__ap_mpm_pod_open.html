@@ -6,22 +6,46 @@
 <li>定義箇所: <code>server/mpm_unix.c:447</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>子プロセスとの通信に使用する「Pipe of Death (POD)」を初期化し、親プロセスから子プロセスへ終了や再起動の合図を送るためのパイプペアを作成します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ap_mpm_pod_open(apr_pool_t *p, ap_pod_t **pod)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用する <code>apr_pool_t</code> プール。</li>
+<li><code>pod</code>: <code>ap_pod_t</code> 構造体へのポインタを格納する出力用引数。</li>
+<li>**出力**:</li>
+<li>戻り値: <code>APR_SUCCESS</code>（成功時）、または <code>apr_file_pipe_create_ex</code> が返すエラーコード。</li>
+<li><code>*pod</code>: 初期化された <code>ap_pod_t</code> 構造体。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>p</code> は有効なメモリプールであること。</li>
+<li><code>pod</code> は書き込み可能なメモリ領域を指していること。</li>
+<li>作成されたパイプの読み込み側 (<code>pod_in</code>) は、<code>apr_file_inherit_unset</code> により子プロセスへ継承されない設定となります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_palloc</code> を使用して <code>ap_pod_t</code> 構造体分のメモリを確保します。 2. <code>apr_file_pipe_create_ex</code> を呼び出し、書き込みブロックモードでパイプを作成します。 3. パイプの読み込み側 (<code>pod_in</code>) のタイムアウトを 0 に設定し、非ブロッキング読み込みを可能にします。 4. <code>apr_file_inherit_unset</code> を呼び出し、パイプのファイル記述子が <code>exec</code> 時に子プロセスへ継承されないように設定します。 5. 成功時に <code>APR_SUCCESS</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/prefork/prefork.c</code> (確認済み)</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_palloc</code></li>
+<li><code>apr_file_pipe_create_ex</code></li>
+<li><code>apr_file_pipe_timeout_set</code></li>
+<li><code>apr_file_inherit_unset</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_pod_t</code>: PODのパイプ（<code>pod_in</code>, <code>pod_out</code>）と関連プールを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_file_pipe_create_ex</code> が失敗した場合、そのエラーコードをそのまま返します。</li>
+<li>メモリ不足時には <code>apr_palloc</code> がアボートする可能性があります（APRの挙動に依存）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は Unix 系 MPM におけるプロセス間通信の基盤です。</li>
+<li>パイプの継承フラグを解除しているため、子プロセス生成時に意図せずパイプが引き継がれることを防いでいます。</li>
 </ul></body></html>

@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/aaa/mod_authz_dbm.c:239</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>DBM ファイルに記録されたユーザーの所属グループと、対象ファイルの所有グループを照合し、アクセス認可を判定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static authz_status dbmfilegroup_check_authorization(request_rec *r,
+                                                     const char *require_args,
+                                                     const void *parsed_require_args)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>require_args</code>: 未使用。</li>
+<li><code>parsed_require_args</code>: 未使用。</li>
+<li>**出力**:</li>
+<li><code>AUTHZ_GRANTED</code>: ユーザーがファイルの所有グループに所属している場合。</li>
+<li><code>AUTHZ_DENIED</code>: ユーザーが未認証、グループファイル未設定、DBM 検索失敗、またはグループ不一致の場合。</li>
+<li><code>AUTHZ_DENIED_NO_USER</code>: ユーザー名がリクエストに存在しない場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;user</code> が設定されていること。</li>
+<li><code>authz_dbm_config_rec</code> 設定構造体において <code>grpfile</code> が定義されていること。</li>
+<li><code>authz_owner_get_file_group</code> 関数が利用可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. ユーザー名が空であれば <code>AUTHZ_DENIED_NO_USER</code> を返す。 2. 設定された DBM グループファイルが存在しない場合はエラーログを出力し <code>AUTHZ_DENIED</code> を返す。 3. <code>get_dbm_grp</code> を呼び出し、<code>user:realm</code> をキーとして DBM からユーザーの所属グループリストを取得する。 4. DBM にユーザーが存在しない場合はエラーログを出力し <code>AUTHZ_DENIED</code> を返す。 5. <code>authz_owner_get_file_group(r)</code> を呼び出し、対象ファイルの所有グループを取得する。 6. 取得した所属グループリスト（カンマ区切り）をパースし、ファイルの所有グループと一致するものが存在すれば <code>AUTHZ_GRANTED</code> を返す。 7. 一致するものがない場合はエラーログを出力し <code>AUTHZ_DENIED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/aaa/mod_authz_dbm.c</code> 内の <code>authz_dbmfilegroup_provider</code> 構造体を通じて参照される（直接の関数呼び出し元はソースコード上では明示されていない）。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_module_config</code></li>
+<li><code>ap_auth_name</code></li>
+<li><code>ap_log_rerror</code></li>
+<li><code>get_dbm_grp</code></li>
+<li><code>apr_pstrcat</code></li>
+<li><code>authz_owner_get_file_group</code></li>
+<li><code>ap_getword</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報およびプール管理。</li>
+<li><code>authz_dbm_config_rec</code>: DBM ファイルパスやタイプを保持するディレクトリ設定。</li>
+<li><code>authz_status</code>: 認可結果の列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ユーザー未認証**: <code>r-&gt;user</code> が NULL の場合に <code>AUTHZ_DENIED_NO_USER</code> を返す。</li>
+<li>**設定不備**: <code>grpfile</code> が未設定の場合、ログ出力後に <code>AUTHZ_DENIED</code> を返す。</li>
+<li>**DBM 検索失敗**: <code>get_dbm_grp</code> が <code>APR_SUCCESS</code> 以外を返した場合、<code>AUTHZ_DENIED</code> を返す。</li>
+<li>**グループ不一致**: ユーザーが DBM に存在しても、ファイルの所有グループと一致しない場合は <code>AUTHZ_DENIED</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_authz_owner</code> モジュールが提供する <code>authz_owner_get_file_group</code> に強く依存している。</li>
+<li>メモリ割り当てはすべて <code>r-&gt;pool</code> を使用しているため、明示的な解放は不要。</li>
+<li>DBM ファイルの検索キーとして <code>user:realm</code> を使用している点に注意。</li>
 </ul></body></html>
