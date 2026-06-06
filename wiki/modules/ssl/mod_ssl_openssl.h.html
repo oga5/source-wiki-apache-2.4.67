@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/mod_ssl_openssl.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/mod_ssl_openssl.h</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_ssl</code> モジュールが提供する OpenSSL 固有の API インターフェースを定義するヘッダーファイルです。外部モジュールが <code>mod_ssl</code> の SSL 処理プロセスに介入するためのフックポイントを公開しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> の拡張性を担保するブリッジの役割を果たします。コアとなる SSL 処理ロジックと、サードパーティ製モジュールや他の Apache モジュールとの間で、SSL コンテキストやハンドシェイク状態を共有するための契約（インターフェース）を定義します。</p>
+<h2>責務</h2>
+<ul>
+<li>**OpenSSL バージョン管理**: OpenSSL のバージョンに応じたヘッダーのインクルードと、内部構造体へのアクセス制限（<code>OPENSSL_NO_SSL_INTERN</code>）の制御。</li>
+<li>**拡張フックの定義**: SSL ライフサイクル（初期化、ハンドシェイク、OCSP ステープリング等）における外部介入ポイントの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>init_server</code>: SSL コンテキスト（<code>SSL_CTX</code>）の初期化時に呼び出されるフック。</li>
+<li><code>pre_handshake</code>: TLS ハンドシェイク直前に実行されるフック。</li>
+<li><code>answer_challenge</code>: バーチャルホスト設定外の接続に対し、証明書と秘密鍵を動的に提供するためのフック。</li>
+<li><code>init_stapling_status</code> / <code>get_stapling_status</code>: OCSP ステープリングのステータス取得と提供を行うためのフック群。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>本ファイル自体はインターフェース定義であるため、直接的なロジックは持ちません。 1. **初期化フロー**: <code>init_server</code> フックを通じて、各サーバー設定に対応する <code>SSL_CTX</code> が構築されます。 2. **接続フロー**: 接続確立時、<code>pre_handshake</code> を経て <code>SSL</code> オブジェクトが準備されます。 3. **拡張フロー**: OCSP ステープリング等の機能では、<code>init_stapling_status</code> で責任者が決定され、以降の接続ごとに <code>get_stapling_status</code> が呼び出されて DER 形式のレスポンスデータが供給されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_ssl.h</code>: 基本的なモジュール定義。</li>
+<li><code>openssl/ssl.h</code>, <code>openssl/evp.h</code>, <code>openssl/x509.h</code>: OpenSSL のコア API。</li>
+<li><code>openssl/opensslv.h</code>: バージョン判定用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_private.h</code>: <code>mod_ssl</code> 内部で共有されるプライベートな構造体や定数が定義されており、フックの実装時に参照されます。</li>
+<li><code>ssl_util_stapling.c</code>: 本ヘッダーで定義された OCSP フックを利用する主要な実装箇所です。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>get_stapling_status</code> フックで返される DER データは <code>malloc()</code> で確保する必要があり、所有権は <code>mod_ssl</code> に移譲されます。この点に注意しないとメモリリークや二重解放の原因となります。</li>
+<li>**バージョン互換性**: OpenSSL 3.0 以降とそれ以前でインクルードするヘッダーやマクロが分岐しているため、新しい機能を実装する際は <code>OPENSSL_VERSION_NUMBER</code> によるガードを適切に行ってください。</li>
+<li>**フックの性質**: ここで定義されているフックは <code>APR_DECLARE_EXTERNAL_HOOK</code> を使用しており、Apache のフック機構に基づいています。戻り値が <code>DECLINED</code> の場合は次のフックへ処理が移る点に留意してください。</li>
+</ul></body></html>

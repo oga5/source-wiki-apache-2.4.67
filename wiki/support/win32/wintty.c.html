@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>support/win32/wintty.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>support/win32/wintty.c</h1>
+<h2>概要</h2>
+<p><code>wintty.c</code> は、Windows サービス（Apache HTTP Server など）のコンテキストで実行されているプロセスに対し、標準入出力（stdin/stdout）を対話的なコンソールウィンドウへリダイレクトするためのユーティリティです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support/win32</code> モジュールにおいて、サービスプロセスとユーザー間の対話を実現する補助ツールとして機能します。サービスとして実行中のプロセスが本来持たない「コンソール」を動的に割り当て、ユーザー入力を受け付けたり、出力を表示したりすることを可能にします。</p>
+<h2>責務</h2>
+<ul>
+<li>**コンソール分離と再割り当て**: サービスセッションからコンソールを切り離し、新しいコンソールウィンドウを生成する。</li>
+<li>**ハンドル管理**: サービス環境下で標準入出力ハンドルを適切に複製・継承し、プロセス間通信を維持する。</li>
+<li>**双方向ストリームの仲介**: <code>main</code> スレッドで stdin からの入力をコンソールへ送り、<code>feedback</code> スレッドでコンソールからの入力を stdout へ返す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>main</code>: プログラムの起点。引数解析、サービス検出、コンソール生成、スレッド起動を統括。</li>
+<li><code>feedback</code>: 別スレッドで動作し、コンソール入力（<code>CONIN$</code>）を監視して stdout へ転送する。</li>
+<li><code>feedback_args_t</code>: <code>feedback</code> スレッドに渡される入出力ハンドルの構造体。</li>
+<li><code>isservice</code>: 現在のプロセスがサービスセッションで動作しているかを判定するフラグ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: コマンドライン引数を解析し、現在のプロセスがサービスセッション内にあるかを確認。 2. **ハンドル複製**: <code>DuplicateHandle</code> を使用して、現在の標準入出力ハンドルをサービス環境下でも有効な状態に保つ。 3. **コンソール生成**:</p>
+<ul>
+<li>サービス環境であれば、<code>CreateProcess</code> を用いて <code>WinSta0\Default</code> デスクトップ上で新しいコンソールプロセスを起動。</li>
+<li>通常環境であれば、<code>AllocConsole</code> でコンソールを割り当て。</li>
+<p>4. **データ転送**:</p>
+<li>メインスレッド: <code>ReadFile(stdin)</code> → <code>WriteFile(CONOUT$)</code></li>
+<li>フィードバックスレッド: <code>ReadFile(CONIN$)</code> → <code>WriteFile(stdout)</code></li>
+<p>5. **終了処理**: EOF を検知するとスレッドを待機し、コンソールを解放して終了。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>windows.h</code>: Windows API（プロセス、スレッド、コンソール制御）。</li>
+<li><code>stdlib.h</code>, <code>stdio.h</code>: 標準入出力および文字列操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>support/win32/ApacheMonitor.c</code>: サービスの状態監視を行う関連ツール。</li>
+<li><code>Win32 API (Console Functions)</code>: 本ファイルが多用している <code>AllocConsole</code>, <code>SetConsoleMode</code>, <code>GetStdHandle</code> 等のドキュメントを参照すること。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本コードは「実験的」な実装であり、エラーハンドリングが限定的です。</li>
+<li><code>isservice</code> の検出ロジックは、WindowStation 名が &quot;Service-&quot; で始まるかを確認する独自の手法をとっています。</li>
+<li>サービス環境下でのコンソール操作はセキュリティ上の制約が厳しいため、<code>CreateProcess</code> による別プロセス起動が重要な役割を果たしています。デバッグ時は <code>verbose</code> フラグを有効にすると <code>OutputDebugString</code> で詳細が出力されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/support__win32__wintty_c__printerr.html" target="wiki-view">`printerr`</a></li>
+<li><a href="../../symbols/support__win32__wintty_c__feedback_args_t.html" target="wiki-view">`feedback_args_t`</a></li>
+<li><a href="../../symbols/support__win32__wintty_c__main.html" target="wiki-view">`main`</a></li>
+<li><a href="../../symbols/support__win32__wintty_c__feedback.html" target="wiki-view">`feedback`</a></li>
+</ul></body></html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/generators/mod_asis.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/generators/mod_asis.c</h1>
+<h2>概要</h2>
+<p><code>mod_asis</code> は、Apache HTTP Server において「そのまま送信（Send-As-Is）」機能を提供するモジュールです。ファイルの内容を HTTP レスポンスヘッダーを含めてそのままクライアントに転送します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/generators</code> サブシステムの一部として、特定の MIME タイプ（<code>httpd/send-as-is</code>）を持つファイルに対するリクエスト処理を担当します。サーバーによるヘッダーの自動生成をバイパスし、ファイル内に記述されたヘッダーを優先させる特殊なハンドラを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**HTTP ヘッダーの解析**: ファイルの先頭部分を読み込み、<code>ap_scan_script_header_err_ex</code> を用いてレスポンスヘッダーとして解釈する。</li>
+<li>**内部リダイレクトの処理**: ファイル内で <code>Location</code> ヘッダーが指定されている場合、内部リダイレクトをトリガーする。</li>
+<li>**コンテンツのストリーミング**: ヘッダー以降のファイル本体を、Apache のバケットブリゲード（Bucket Brigade）機構を使用してクライアントへ効率的に送信する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ASIS_MAGIC_TYPE</code>: このモジュールが処理対象とする MIME タイプ（<code>httpd/send-as-is</code>）。</li>
+<li><code>asis_handler</code>: リクエストを処理するメイン関数。ファイルを開き、ヘッダーを解析し、本体を送信する。</li>
+<li><code>asis</code>: モジュールの定義構造体。<code>register_hooks</code> をフックとして登録する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ハンドラ起動**: <code>asis_handler</code> がリクエストを受け取り、ハンドラ名が <code>ASIS_MAGIC_TYPE</code> と一致するか確認する。 2. **ファイルオープン**: 対象ファイルを読み込み専用で開く。 3. **ヘッダー解析**: <code>ap_scan_script_header_err_ex</code> を呼び出し、ファイル先頭のヘッダーを解析して <code>r-&gt;headers_out</code> 等に反映させる。 4. **リダイレクト判定**: <code>Location</code> ヘッダーが存在する場合、<code>ap_internal_redirect_handler</code> を呼び出し、処理をリダイレクト先に委譲する。 5. **本体送信**: ヘッダーを除いた残りのファイル内容を <code>apr_brigade_insert_file</code> でバケットブリゲードに追加し、<code>ap_pass_brigade</code> で出力フィルターチェーンへ流し込む。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_protocol.h</code>: Apache のリクエスト処理およびプロトコル制御の基本。</li>
+<li><code>util_script.h</code>: スクリプトヘッダー解析用関数群。</li>
+<li><code>apr_file_io.h</code> (間接的に <code>apr_strings.h</code> 等経由): ファイル操作用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/generators/mod_cgi.c</code>: CGI スクリプトのヘッダー解析など、類似したヘッダー処理ロジックを持つ。</li>
+<li><code>server/protocol.c</code>: Apache の標準的なレスポンス生成フロー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは、サーバーが自動生成するヘッダー（Date や Server など）を上書きしたい場合や、完全に制御されたレスポンスを返したい場合に利用されます。</li>
+<li>ファイルの先頭が空行で終わっていない場合、ヘッダー解析が正しく行われない可能性があるため、対象ファイルは適切な形式（ヘッダー群 + 空行 + ボディ）である必要があります。</li>
+<li>内部リダイレクトが発生した場合、元のリクエストメソッドに関わらず <code>GET</code> メソッドとして再処理される点に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__generators__mod_asis_c__asis_handler.html" target="wiki-view">`asis_handler`</a></li>
+<li><a href="../../symbols/modules__generators__mod_asis_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

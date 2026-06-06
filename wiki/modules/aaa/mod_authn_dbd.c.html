@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/aaa/mod_authn_dbd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/aaa/mod_authn_dbd.c</h1>
+<h2>概要</h2>
+<p><code>mod_authn_dbd.c</code> は、Apache HTTP Server の認証（Authentication）フェーズにおいて、データベース（DBD）をバックエンドとして利用するための認証プロバイダーを提供します。<code>mod_dbd</code> が提供するデータベース接続機能を利用し、SQL クエリを通じてユーザーのパスワードやレルム情報を検証します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムにおいて、認証プロバイダー（<code>authn</code>）の一種として機能します。<code>mod_authn_core</code> が管理する認証プロバイダーフレームワークに「dbd」という名前で登録され、設定ファイルで <code>AuthBasicProvider dbd</code> のように指定された際に呼び出されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ユーザー認証およびレルム認証のための SQL クエリを保持するディレクトリ設定の管理。</li>
+<li>**認証プロバイダーの実装**: <code>authn_provider</code> インターフェースを実装し、パスワード検証およびレルムハッシュ取得を行う。</li>
+<li>**環境変数注入**: クエリ結果の追加カラムを <code>subprocess_env</code> に展開し、後続の処理で利用可能にする。</li>
+<li>**キャッシュ連携**: <code>mod_authn_socache</code> 等のキャッシュモジュールと連携し、認証結果のキャッシュを試みる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体とコマンド</h3>
+<ul>
+<li><code>authn_dbd_conf</code>: ディレクトリ単位の設定（SQL クエリ文字列）を保持。</li>
+<li><code>authn_dbd_cmds</code>: <code>AuthDBDUserPWQuery</code> および <code>AuthDBDUserRealmQuery</code> ディレクティブを定義。</li>
+</ul>
+<h3>認証プロバイダー関数</h3>
+<ul>
+<li><code>authn_dbd_password</code>: <code>AuthBasic</code> 認証用。データベースからパスワードを取得し、<code>apr_password_validate</code> で検証。</li>
+<li><code>authn_dbd_realm</code>: <code>AuthDigest</code> 認証用。データベースからレルムハッシュを取得。</li>
+</ul>
+<h3>ライフサイクル・フック</h3>
+<ul>
+<li><code>authn_dbd_hooks</code>: モジュールの初期化時にプロバイダーを登録し、オプション関数（キャッシュ用）を取得するフックを設定。</li>
+<li><code>authn_dbd_cr_conf</code> / <code>authn_dbd_merge_conf</code>: 設定の生成とマージ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>authn_dbd_hooks</code> がプロバイダーを登録。<code>opt_retr</code> でキャッシュ用関数を遅延解決。 2. **設定**: <code>authn_dbd_prepare</code> が SQL クエリを解析し、<code>mod_dbd</code> の準備済みステートメントとして登録。 3. **認証実行**:</p>
+<ul>
+<li><code>authn_dbd_acquire_fn</code> を介して <code>mod_dbd</code> から接続を取得。</li>
+<li><code>apr_dbd_pvselect</code> でクエリを実行。</li>
+<li>結果セットをループし、最初のカラムを認証情報として使用。</li>
+<li>残りのカラムは <code>AUTHENTICATE_</code> プレフィックスを付与して環境変数にセット。</li>
+<li><code>AUTHN_CACHE_STORE</code> マクロ経由で結果をキャッシュへ保存。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_dbd.h</code> / <code>apr_dbd.h</code>: データベース接続およびクエリ実行の基盤。</li>
+<li><code>mod_auth.h</code>: 認証プロバイダーインターフェースの定義。</li>
+<li><code>httpd.h</code> / <code>http_config.h</code>: Apache モジュール基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/database/mod_dbd.c</code>: データベース接続管理の提供元。</li>
+<li><code>modules/aaa/mod_authn_core.c</code>: 認証プロバイダーのディスパッチ管理。</li>
+<li><code>modules/aaa/mod_authn_socache.c</code>: 認証結果のキャッシュ機能。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのクエリ結果や一時文字列は <code>request_rec</code> のプール（<code>r-&gt;pool</code>）から割り当てられます。リクエスト終了時に自動解放されるため、明示的な解放は不要です。</li>
+<li>**エラーパス**: データベース接続失敗やクエリ実行失敗は <code>AUTH_GENERAL_ERROR</code> を返し、認証プロセスを中断させます。</li>
+<li>**制約**: <code>AuthDBDUserPWQuery</code> 等のクエリは、必ず最初のカラムにパスワード/ハッシュを返す必要があります。</li>
+<li>**省略された詳細**: SQL インジェクション対策は <code>apr_dbd_pvselect</code> のパラメータバインディングに依存しています。本ファイル内ではクエリの構文解析は行わず、<code>mod_dbd</code> に委譲しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_conf.html" target="wiki-view">`authn_dbd_conf`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_cr_conf.html" target="wiki-view">`authn_dbd_cr_conf`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_merge_conf.html" target="wiki-view">`authn_dbd_merge_conf`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_prepare.html" target="wiki-view">`authn_dbd_prepare`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_password.html" target="wiki-view">`authn_dbd_password`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_realm.html" target="wiki-view">`authn_dbd_realm`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__opt_retr.html" target="wiki-view">`opt_retr`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_dbd_c__authn_dbd_hooks.html" target="wiki-view">`authn_dbd_hooks`</a></li>
+</ul></body></html>

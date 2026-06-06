@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy.c:825</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストの URI がプロキシ設定（<code>ProxyPass</code> 等）と一致するかを判定し、一致した場合はリクエストをプロキシ処理用に書き換える。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_proxy_trans_match(request_rec *r, struct proxy_alias *ent, proxy_dir_conf *dconf)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>ent</code>: マッチング対象となるプロキシエイリアス定義。</li>
+<li><code>dconf</code>: ディレクトリ単位のプロキシ設定。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: マッチ成功、リクエストをプロキシ用に設定済み。</li>
+<li><code>DECLINED</code>: 明示的にプロキシが無効化されている（<code>!</code> 指定）。</li>
+<li><code>HTTP_CONTINUE</code>: マッチせず、処理を継続。</li>
+<li><code>HTTP_INTERNAL_SERVER_ERROR</code>: 正規表現置換の失敗等。</li>
+<li><code>DONE</code>: マッチ成功、かつエンコード済みリクエストとして処理完了。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ent-&gt;fake</code> がリクエスト URI と一致（または正規表現マッチ）する必要がある。</li>
+<li><code>real</code> が <code>!</code> の場合、プロキシ処理は明示的に拒否される。</li>
+<li><code>r-&gt;filename</code> は <code>proxy:</code> で始まる文字列に書き換えられる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **設定適用**: <code>dconf</code> に基づき <code>ent-&gt;fake</code> と <code>ent-&gt;real</code> を補間（<code>interpolate_env</code> が有効な場合）。 2. **マッチング**:</p>
+<ul>
+<li>正規表現の場合: <code>ap_regexec</code> で判定し、<code>ap_pregsub</code> で置換を実行。</li>
+<li>パスプレフィックスの場合: <code>alias_match</code> または <code>alias_match_servlet</code> で判定。</li>
+<p>3. **リクエスト書き換え**:</p>
+<li><code>r-&gt;filename</code> を <code>proxy:&lt;real_path&gt;</code> に設定。</li>
+<li><code>r-&gt;handler</code> を <code>proxy-server</code> に設定。</li>
+<li><code>r-&gt;proxyreq</code> を <code>PROXYREQ_REVERSE</code> に設定。</li>
+<p>4. **フラグ処理**: <code>nocanon</code>, <code>noquery</code>, <code>encoded</code> 等のフラグに応じ、<code>r-&gt;notes</code> に情報を格納。 5. **Servlet マッピング**: <code>PROXYPASS_MAP_SERVLET</code> が有効な場合、<code>r-&gt;uri</code> を正規化されたパスに更新。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy.c</code> 内の <code>proxy_translate_name</code> 等（ソース内の直接的な呼び出し箇所は <code>1027</code> 行目および <code>1039</code> 行目）。</li>
+<li>**呼び出し先**: <code>ap_proxy_interpolate</code>, <code>ap_regexec</code>, <code>ap_pregsub</code>, <code>alias_match</code>, <code>alias_match_servlet</code>, <code>proxy_run_check_trans</code> 等。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache リクエスト構造体。</li>
+<li><code>proxy_alias</code>: プロキシのエイリアス定義（<code>fake</code>, <code>real</code>, <code>flags</code>, <code>regex</code> を保持）。</li>
+<li><code>proxy_dir_conf</code>: プロキシのディレクトリ設定。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**正規表現置換失敗**: <code>ap_pregsub</code> が失敗した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**明示的拒否**: <code>real</code> が <code>!</code> の場合、<code>DECLINED</code> を返す。</li>
+<li>**不整合**: <code>nocanon</code> 指定時に URI の正規化前後でマッチ結果が異なる場合、警告をログ出力し <code>nocanon</code> を無視する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>r-&gt;uri</code> の書き換え（Servlet マッピング時）は、<code>r-&gt;parsed_uri.path</code> にも影響を与えるため注意が必要。</li>
+<li><code>proxy_run_check_trans</code> フックにより、他のプロキシモジュール（<code>mod_proxy_wstunnel</code> 等）が処理に介入する余地がある。</li>
 </ul></body></html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/proxy_util.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/proxy_util.c</h1>
+<h2>概要</h2>
+<p><code>proxy_util.c</code> は、Apache HTTP Server の <code>mod_proxy</code> サブシステムにおける中核的なユーティリティ群を提供します。URL の正規化、プロキシワーカーの管理、ロードバランサーのロジック、バックエンド接続のライフサイクル管理、およびプロキシ特有のネットワーク操作（UDS、HTTP CONNECT 等）を担う、サブシステム内で最も広範な機能を持つファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> の各プロトコルハンドラ（<code>mod_proxy_http</code>, <code>mod_proxy_ajp</code> 等）が共通して利用する基盤機能を提供します。設定の解析、ワーカーの初期化、接続プールの管理といった「プロキシとしての共通動作」を抽象化し、各ハンドラがプロトコル固有のロジックに集中できるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**URL/文字列処理**: URL の正規化、エンコード/デコード、ホスト名/IP アドレスの照合。</li>
+<li>**ワーカー管理**: プロキシワーカーの定義、共有メモリ（SHM）への同期、ヘルスチェック、エラー状態の管理。</li>
+<li>**ロードバランサー**: バランサーの初期化、ワーカー選択アルゴリズムの実行、ステータス管理。</li>
+<li>**接続管理**: バックエンド接続のプール（<code>reslist</code>）、再利用判定、SSL 接続の初期化、UDS（Unix Domain Socket）接続の確立。</li>
+<li>**トンネリング**: <code>ap_proxy_tunnel_run</code> による双方向ストリームの非同期転送。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ワーカー・バランサー管理</h3>
+<ul>
+<li><code>ap_proxy_define_worker_ex</code>: ワーカーの定義と初期設定。</li>
+<li><code>ap_proxy_initialize_worker</code>: ワーカーの接続プール（<code>reslist</code>）とミューテックスの初期化。</li>
+<li><code>ap_proxy_get_worker_ex</code>: URL に一致するワーカーの検索（longest match）。</li>
+<li><code>ap_proxy_sync_balancer</code>: 共有メモリからバランサーとワーカーの構成を同期。</li>
+</ul>
+<h3>接続・通信制御</h3>
+<ul>
+<li><code>ap_proxy_connect_backend</code>: バックエンドへのソケット接続確立と初期化。</li>
+<li><code>ap_proxy_acquire_connection</code> / <code>release_connection</code>: 接続プールからの接続取得と返却。</li>
+<li><code>ap_proxy_transfer_between_connections</code>: 接続間でのデータ転送（トンネリング基盤）。</li>
+<li><code>ap_proxy_tunnel_run</code>: 双方向トンネルのメインループ（非同期ポーリング）。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>ap_proxy_canonenc_ex</code>: URL の正規化とエンコーディング。</li>
+<li><code>ap_proxy_canon_netloc</code>: ネットワークロケーション（ホスト/ポート/認証情報）の解析。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト処理**: <code>ap_proxy_canon_url</code> で URL を正規化し、<code>ap_proxy_pre_request</code> で適切なワーカーまたはバランサーを特定します。 2. **接続確立**: <code>ap_proxy_acquire_connection</code> が接続プールから <code>proxy_conn_rec</code> を取得し、<code>ap_proxy_connect_backend</code> がソケットを生成してバックエンドへ接続します。 3. **データ転送**: <code>ap_proxy_transfer_between_connections</code> が <code>apr_bucket_brigade</code> を介してクライアントとバックエンド間のデータをストリーミングします。 4. **ライフサイクル**: 接続は <code>proxy_conn_rec</code> 内のサブプール（<code>scpool</code>）で管理され、ワーカーの <code>reslist</code> を通じて再利用されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシサブシステムの主要構造体定義。</li>
+<li><code>apr_reslist.h</code> (間接的): 接続プーリングの基盤。</li>
+<li><code>apr_poll.h</code>: トンネリングにおける非同期 I/O 制御。</li>
+<li><code>http_core.h</code>, <code>mpm_common.h</code>: MPM 関連のクエリや設定。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/proxy/proxy_util.h</code>: 本ファイルの公開インターフェース定義。</li>
+<li><code>modules/proxy/mod_proxy.c</code>: プロキシモジュールのフック登録と設定処理。</li>
+<li><code>modules/proxy/mod_proxy_http.c</code>: 本ユーティリティを利用した HTTP プロキシの実装例。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 接続やワーカーのデータは、<code>apr_pool_t</code> の階層構造によって管理されています。特に <code>scpool</code> は接続のライフサイクルに紐付いており、再利用時に適切にクリアされます。</li>
+<li>**スレッドセーフティ**: <code>proxy_mutex</code> を使用して、マルチプロセス/マルチスレッド環境での共有メモリ（バランサー/ワーカー状態）へのアクセスを保護しています。</li>
+<li>**未実装/浅い部分**: <code>proxy_match_ipaddr</code> 等の IP アドレス照合ロジックは IPv6 対応が限定的である可能性があるため、IPv6 環境での利用時は注意が必要です。</li>
+<li>**トンネリング**: <code>ap_proxy_tunnel_run</code> は非常に複雑な非同期ポーリングロジックを含んでおり、デバッグ時は <code>APLOG_TRACE</code> レベルのログが不可欠です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__remote_connect_info.html" target="wiki-view">`remote_connect_info`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__proxy_address.html" target="wiki-view">`proxy_address`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__ap_proxy_strncpy.html" target="wiki-view">`ap_proxy_strncpy`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__ap_proxy_hex2c.html" target="wiki-view">`ap_proxy_hex2c`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__ap_proxy_c2hex.html" target="wiki-view">`ap_proxy_c2hex`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__ap_proxy_canonenc_ex.html" target="wiki-view">`ap_proxy_canonenc_ex`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__ap_proxy_canonenc.html" target="wiki-view">`ap_proxy_canonenc`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__ap_proxy_canon_netloc.html" target="wiki-view">`ap_proxy_canon_netloc`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__proxyerror_core.html" target="wiki-view">`proxyerror_core`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__header_connection.html" target="wiki-view">`header_connection`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__proxy_schemes_t.html" target="wiki-view">`proxy_schemes_t`</a></li>
+<li><a href="../../symbols/modules__proxy__proxy_util_c__proxy_tunnel_conn.html" target="wiki-view">`proxy_tunnel_conn`</a></li>
+</ul></body></html>

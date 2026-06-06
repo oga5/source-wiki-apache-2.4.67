@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_http.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_http.h</h1>
+<h2>概要</h2>
+<p><code>md_http.h</code> は、<code>mod_md</code> モジュール内で HTTP 通信を行うための抽象化レイヤーを定義するヘッダーファイルです。特定の HTTP クライアントライブラリ（例: <code>libcurl</code>）に依存せず、プラグイン可能な実装（<code>md_http_impl_t</code>）を通じて通信機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおけるネットワーク通信のフロントエンドです。ACME プロトコルなどの外部サービスとの通信を抽象化し、上位レイヤーが通信の詳細を意識せずに HTTP リクエストを発行できるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**HTTP セッション管理**: <code>md_http_t</code> を通じた設定（タイムアウト、プロキシ、CA 証明書など）の保持。</li>
+<li>**リクエストの構築**: GET/HEAD/POST リクエストの生成と、ボディ（<code>apr_bucket_brigade</code>）の管理。</li>
+<li>**通信の抽象化**: 実装（<code>md_http_impl_t</code>）を切り替えるためのインターフェース提供。</li>
+<li>**非同期/並列処理**: <code>md_http_multi_perform</code> による複数リクエストの並列実行サポート。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>セッションとリクエスト</h3>
+<ul>
+<li><code>md_http_t</code>: HTTP クライアントのインスタンス。設定と実装へのポインタを保持。</li>
+<li><code>md_http_request_t</code>: 個別の HTTP リクエスト。メソッド、URL、ヘッダー、ボディ、タイムアウト設定を含む。</li>
+<li><code>md_http_response_t</code>: 受信したレスポンス。ステータスコード、ヘッダー、ボディを保持。</li>
+</ul>
+<h3>実装インターフェース</h3>
+<ul>
+<li><code>md_http_impl_t</code>: 通信バックエンドの関数テーブル。<code>init</code>, <code>perform</code>, <code>multi_perform</code> 等を定義。</li>
+<li><code>md_http_use_implementation()</code>: 使用するバックエンド実装を登録する関数。</li>
+</ul>
+<h3>設定・コールバック</h3>
+<ul>
+<li><code>md_http_timeouts_t</code>: 接続、全体、ストール検出のタイムアウト設定。</li>
+<li><code>md_http_callbacks_t</code>: リクエスト完了時やステータス判明時に呼び出されるコールバック関数群。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_http_use_implementation</code> でバックエンドを登録し、<code>md_http_create</code> でセッションを作成。 2. **リクエスト作成**: <code>md_http_GET_create</code> 等でリクエストオブジェクトを生成し、必要に応じてコールバックやタイムアウトを設定。 3. **実行**: <code>md_http_perform</code> を呼び出すと、内部で登録された <code>md_http_impl_t</code> の <code>perform</code> が実行される。 4. **終了**: リクエスト完了後、コールバックが実行され、リクエストに関連するメモリは自動的に解放される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_lib.h</code>, <code>apr_strings.h</code>, <code>apr_buckets.h</code>: Apache Portable Runtime (APR) を使用してメモリ管理とデータストリームを処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/md/md_http.c</code>: 本ヘッダーのインターフェース実装。</li>
+<li><code>modules/md/md_curl.c</code>: <code>md_http</code> の具体的な実装例（<code>libcurl</code> を使用）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>md_http_request_t</code> は <code>md_http_perform</code> の終了時に自動的に破棄されます。呼び出し側で手動解放する必要はありません。</li>
+<li>**実装の切り替え**: 本モジュールは <code>cur_impl</code> 静的変数を通じて実装を保持します。<code>md_http_create</code> 呼び出し前に必ず実装が登録されている必要があります。</li>
+<li>**ストール検出**: <code>md_http_set_stalling</code> を使用することで、低速な通信をタイムアウトさせる安全機構が提供されています。</li>
+<li>**省略箇所**: <code>md_http_request_t</code> 内部の <code>internals</code> ポインタは実装固有のデータ用であり、本ヘッダーでは詳細を定義していません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_t.html" target="wiki-view">`md_http_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_request_t.html" target="wiki-view">`md_http_request_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_response_t.html" target="wiki-view">`md_http_response_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__apr_status_t.html" target="wiki-view">`apr_status_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_callbacks_t.html" target="wiki-view">`md_http_callbacks_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_timeouts_t.html" target="wiki-view">`md_http_timeouts_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_init_cb.html" target="wiki-view">`md_http_init_cb`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__apr_pool_t.html" target="wiki-view">`apr_pool_t`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_next_req.html" target="wiki-view">`md_http_next_req`</a></li>
+<li><a href="../../symbols/modules__md__md_http_h__md_http_impl_t.html" target="wiki-view">`md_http_impl_t`</a></li>
+</ul></body></html>

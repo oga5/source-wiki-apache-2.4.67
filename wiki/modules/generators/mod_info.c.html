@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/generators/mod_info.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/generators/mod_info.c</h1>
+<h2>概要</h2>
+<p><code>mod_info.c</code> は、Apache HTTP Server の実行時設定、読み込まれているモジュール、フックの登録状況、およびプロバイダー情報を HTML 形式で出力する診断用モジュールです。サーバーのデバッグや構成確認を目的としており、<code>/server-info</code> ハンドラを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/generators</code> サブシステムの一部として、サーバーの内部状態を可視化する役割を担います。他の生成系モジュール（<code>mod_cgi</code> 等）がリクエスト処理を行うのに対し、本モジュールはサーバー自身のメタデータを抽出・整形してレスポンスとして返します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定情報の可視化**: <code>ap_conftree</code> を走査し、現在適用されているディレクティブを HTML で表示する。</li>
+<li>**モジュール診断**: 読み込まれている全モジュールのフック参加状況や設定フェーズへの関与を表示する。</li>
+<li>**サーバー環境情報の提供**: MPM 設定、コンパイル時の定義、バージョン情報などを集約する。</li>
+<li>**拡張情報の管理**: <code>AddModuleInfo</code> ディレクティブを介して、各モジュールに対する追加情報を保持・表示する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理</h3>
+<ul>
+<li><code>info_svr_conf</code>: モジュール固有のサーバー設定構造体。追加情報を保持する <code>more_info</code> 配列を持つ。</li>
+<li><code>create_info_config</code> / <code>merge_info_config</code>: 設定の初期化およびマージを行うライフサイクル関数。</li>
+<li><code>info_cmds</code>: <code>AddModuleInfo</code> ディレクティブを定義するコマンドテーブル。</li>
+</ul>
+<h3>表示・整形ロジック</h3>
+<ul>
+<li><code>mod_info_module_cmds</code>: 設定ツリーを再帰的に走査し、ディレクティブを整形出力するコア関数。</li>
+<li><code>mod_info_indent</code> / <code>mod_info_show_cmd</code>: 設定ファイルの階層構造を視覚化するためのインデントおよび出力ヘルパー。</li>
+<li><code>put_int_flush_right</code>: 行番号などを右寄せで出力するユーティリティ。</li>
+</ul>
+<h3>フック・モジュール解析</h3>
+<ul>
+<li><code>startup_hooks</code> / <code>request_hooks</code> / <code>other_hooks</code>: サーバー内の全フックポイントを網羅したルックアップテーブル。</li>
+<li><code>module_find_hook</code>: 特定のモジュールが特定のフックに登録されているかを判定する。</li>
+<li><code>get_sorted_modules</code>: 読み込まれているモジュールリストを名前順にソートして取得する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト処理**: <code>display_info</code> がハンドラとして呼び出され、クエリ文字列（<code>?server</code>, <code>?hooks</code> 等）に応じて表示内容を分岐する。 2. **設定走査**: <code>mod_info_module_cmds</code> が <code>ap_conftree</code> を辿り、各ディレクティブのファイル名や行番号を追跡しながら HTML を生成する。 3. **フック解析**: <code>show_active_hooks</code> が定義済みの <code>hook_lookup_t</code> テーブルをループし、各フックポイントに登録されているモジュールを <code>module_find_hook</code> で検索・表示する。 4. **DUMP_CONFIG 対応**: <code>check_config</code> フックにおいて <code>-DDUMP_CONFIG</code> が指定されている場合、標準出力へ設定ツリーをダンプする。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>: サーバーコアおよび設定管理 API。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作およびユーティリティ。</li>
+<li><code>ap_mpm.h</code>, <code>mpm_common.h</code>: MPM 固有情報の取得。</li>
+<li><code>ap_provider.h</code>: プロバイダー情報のリストアップ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>http_config.c</code>: <code>ap_conftree</code>（設定ツリー）の定義元。</li>
+<li><code>modules/generators/mod_status.c</code>: サーバーの稼働状況を表示する類似の診断モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての出力およびデータ構造は <code>request_rec</code> のプール（<code>r-&gt;pool</code>）を使用しており、リクエスト終了時に自動的に解放されます。</li>
+<li>**セキュリティ**: 本モジュールはサーバーの全設定を露出させるため、本番環境では <code>Require</code> ディレクティブ等でアクセス制限をかけることが強く推奨されます。</li>
+<li>**制限事項**: <code>TODO</code> コメントにある通り、一部のコンパイル時定義（<code>BIG_SECURITY_HOLE</code> 等）の表示は、ヘッダーの依存関係により完全ではない場合があります。</li>
+<li>**レイアウト**: <code>mod_info_indent</code> は <code>r</code> が NULL の場合（<code>DUMP_CONFIG</code> 時）にファイルハンドル <code>out</code> を使用する設計になっており、リクエスト処理とコマンドライン出力の両方に対応しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__generators__mod_info_c__info_entry.html" target="wiki-view">`info_entry`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__info_svr_conf.html" target="wiki-view">`info_svr_conf`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__create_info_config.html" target="wiki-view">`create_info_config`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__merge_info_config.html" target="wiki-view">`merge_info_config`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__put_int_flush_right.html" target="wiki-view">`put_int_flush_right`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__set_fn_info.html" target="wiki-view">`set_fn_info`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__get_fn_info.html" target="wiki-view">`get_fn_info`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__mod_info_indent.html" target="wiki-view">`mod_info_indent`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__mod_info_show_cmd.html" target="wiki-view">`mod_info_show_cmd`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__mod_info_show_open.html" target="wiki-view">`mod_info_show_open`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__hook_struct_t.html" target="wiki-view">`hook_struct_t`</a></li>
+<li><a href="../../symbols/modules__generators__mod_info_c__hook_lookup_t.html" target="wiki-view">`hook_lookup_t`</a></li>
+</ul></body></html>

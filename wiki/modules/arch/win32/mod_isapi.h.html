@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/arch/win32/mod_isapi.h.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/arch/win32/mod_isapi.h</h1>
+<h2>概要</h2>
+<p><code>mod_isapi.h</code> は、Apache HTTP Server 上で ISAPI (Internet Server Application) 拡張を動作させるためのインターフェース定義ヘッダーです。Microsoft IIS の ISAPI 2.0 仕様をベースに、Apache 側でエミュレーションまたはサポートする構造体、関数ポインタ、および定数を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p>本ヘッダーは <code>mod_isapi.c</code> が実装する ISAPI ハンドラアーキテクチャの契約を規定します。Windows 環境において、外部の ISAPI DLL が Apache と通信するための共通言語を提供し、Apache の内部リクエスト処理と ISAPI のコールバック関数を橋渡しします。</p>
+<h2>責務</h2>
+<ul>
+<li>**ISAPI 仕様の定義**: <code>EXTENSION_CONTROL_BLOCK</code> (ECB) を中心とした、ISAPI 拡張が利用するデータ構造の定義。</li>
+<li>**通信インターフェースの提供**: <code>GetServerVariable</code> や <code>ServerSupportFunction</code> などの関数ポインタ型の定義。</li>
+<li>**拡張機能のサポート**: <code>HSE_TF_INFO</code> や <code>HSE_SEND_HEADER_EX_INFO</code> など、IIS 5.0 相当の拡張機能の定義。</li>
+<li>**状態管理の抽象化**: <code>HSE_STATUS_*</code> 定数による、非同期処理やセッション終了の制御フローの定義。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル・エントリポイント</h3>
+<ul>
+<li><code>GetExtensionVersion</code>: DLL ロード時に呼び出される初期化関数。</li>
+<li><code>HttpExtensionProc</code>: 各リクエストのメイン処理関数。</li>
+<li><code>TerminateExtension</code>: DLL アンロード時に呼び出される終了処理関数。</li>
+</ul>
+<h3>通信・制御構造体</h3>
+<ul>
+<li><code>EXTENSION_CONTROL_BLOCK</code>: ISAPI 拡張に渡されるリクエストコンテキストの核。</li>
+<li><code>HCONN</code>: <code>isapi_cid</code> への不透明なポインタ。Apache 側のリクエスト状態を保持。</li>
+<li><code>HSE_VERSION_INFO</code>: バージョン情報および拡張機能の説明用構造体。</li>
+</ul>
+<h3>サーバーサポート関数 (ServerSupportFunction)</h3>
+<ul>
+<li><code>HSE_REQ_*</code>: <code>ServerSupportFunction</code> を通じて実行される各種操作（リダイレクト、パス変換、ログ追加、非同期完了通知など）。</li>
+</ul>
+<h3>I/O 拡張</h3>
+<ul>
+<li><code>HSE_TF_INFO</code>: <code>TransmitFile</code> 相当のファイル転送用構造体。</li>
+<li><code>HSE_SEND_HEADER_EX_INFO</code>: 拡張ヘッダー送信用の構造体。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**リクエスト処理**: Apache が <code>HttpExtensionProc</code> を呼び出す際、<code>EXTENSION_CONTROL_BLOCK</code> を介してリクエスト情報とコールバック関数群（<code>WriteClient</code> 等）を渡します。</li>
+<li>**非同期エミュレーション**: 本モジュールはネイティブな非同期 I/O を持たないため、<code>HSE_IO_SYNC</code> フラグが指定されない場合、完了関数を即時実行する「偽装非同期」フローを採用しています。</li>
+<li>**セッション管理**: <code>HSE_STATUS_PENDING</code> が返された場合、Apache は <code>HSE_REQ_DONE_WITH_SESSION</code> が呼び出されるまでセッションを維持します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_uint32_t</code> (APR ライブラリ経由の型定義)</li>
+<li><code>apr_os_file_t</code> (ファイルハンドル操作用)</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/arch/win32/mod_isapi.c</code>: 本ヘッダーで定義されたインターフェースの実際の実装。</li>
+<li><code>modules/arch/win32/mod_win32.c</code>: Windows プラットフォーム固有の機能を提供する関連モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>EXTENSION_CONTROL_BLOCK</code> などの構造体は、Apache がリクエストのライフサイクルに合わせて管理します。ISAPI 側で永続化してはなりません。</li>
+<li>**未サポート機能**: <code>HSE_REQ_GET_SSPI_INFO</code> や <code>HSE_REQ_GET_CERT_INFO_EX</code> など、一部の IIS 固有機能は Apache のアーキテクチャと整合しないため、意図的にサポートされていません。</li>
+<li>**スレッド安全性**: <code>APR_THREAD_FUNC</code> が指定されている通り、各エントリポイントはマルチスレッド環境で呼び出されることを前提としています。</li>
+<li>**ヘッダーの制約**: <code>HSE_SEND_HEADER_EX_INFO</code> のヘッダー文字列には NULL 文字を含めないでください。Apache の内部処理と競合する可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__HSE_VERSION_INFO.html" target="wiki-view">`HSE_VERSION_INFO`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__isapi_cid.html" target="wiki-view">`isapi_cid`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__HCONN.html" target="wiki-view">`HCONN`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__apr_uint32_t.html" target="wiki-view">`apr_uint32_t`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__EXTENSION_CONTROL_BLOCK.html" target="wiki-view">`EXTENSION_CONTROL_BLOCK`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__HSE_SEND_HEADER_EX_INFO.html" target="wiki-view">`HSE_SEND_HEADER_EX_INFO`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__HSE_TF_INFO.html" target="wiki-view">`HSE_TF_INFO`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__HSE_URL_MAPEX_INFO.html" target="wiki-view">`HSE_URL_MAPEX_INFO`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_h__ecb.html" target="wiki-view">`ecb`</a></li>
+</ul></body></html>

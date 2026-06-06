@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/http2/mod_h2test/mod_h2test.c.md</title><link rel="stylesheet" href="../../../../../styles.css"></head><body><h1>test/modules/http2/mod_h2test/mod_h2test.c</h1>
+<h2>概要</h2>
+<p><code>mod_h2test.c</code> は、Apache HTTP Server の HTTP/2 テストスイート用の診断・検証用モジュールです。主に HTTP/2 プロトコルの挙動（ストリーム制御、トレーラー、エラー処理、遅延など）を検証するためのカスタムハンドラを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>本モジュールは、実際の運用環境ではなく、テスト環境において特定のネットワーク挙動をシミュレートする「テスト用エンドポイント」として機能します。<code>mod_h2</code> の動作を検証するための補助的な役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストハンドリング**: 特定のハンドラ名（<code>h2test-echo</code>, <code>delay</code>, <code>trailer</code>, <code>error</code>）に基づき、リクエストを処理する。</li>
+<li>**挙動シミュレーション**: 意図的な遅延、エラー発生、トレーラーヘッダーの付与、ストリームの強制終了などを実行する。</li>
+<li>**設定と初期化**: モジュールのフック登録および子プロセス初期化時の状態管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>モジュール定義とフック</h3>
+<ul>
+<li><code>h2test_hooks</code>: Apache のフックシステムに各ハンドラを登録するエントリーポイント。</li>
+<li><code>AP_DECLARE_MODULE(h2test)</code>: モジュールのメタデータ定義。</li>
+</ul>
+<h3>リクエストハンドラ</h3>
+<ul>
+<li><code>h2test_echo_handler</code>: リクエストボディをそのままレスポンスとして返す（エコー）。遅延や強制終了のパラメータをサポート。</li>
+<li><code>h2test_delay_handler</code>: 指定された遅延を挟みながらレスポンスを分割送信する。</li>
+<li><code>h2test_trailer_handler</code>: トレーラーヘッダーを付与したレスポンスを生成する。</li>
+<li><code>h2test_error_handler</code>: 指定された HTTP ステータスやエラー種別（タイムアウト、リセット等）をシミュレートする。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>duration_parse</code>: 文字列形式の期間（例: &quot;10s&quot;, &quot;50ms&quot;）を <code>apr_interval_time_t</code> に変換する。</li>
+<li><code>status_from_str</code>: 文字列から <code>apr_status_t</code> エラーコードをマッピングする。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト受信**: 各ハンドラは <code>request_rec</code> を受け取り、<code>r-&gt;handler</code> を確認して自身の担当か判定します。 2. **パラメータ解析**: <code>r-&gt;args</code> を解析し、テスト用の制御パラメータ（遅延時間、エラーフラグ等）を抽出します。 3. **ブリゲード操作**: <code>apr_bucket_brigade</code> を使用してレスポンスを構築します。<code>ap_pass_brigade</code> を介してフィルタチェーンへデータを流し込みます。 4. **エラー処理**: 処理中にエラーが発生した場合、<code>ap_bucket_error_create</code> を使用してエラーバケットを挿入し、クライアントへ通知します。 5. **クリーンアップ**: <code>apr_pool</code> を利用したメモリ管理により、リクエスト終了時にバケットや一時データが自動的に解放されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_optional.h</code>, <code>apr_strings.h</code>, <code>apr_time.h</code>: APR ユーティリティ。</li>
+<li><code>httpd.h</code>, <code>http_protocol.h</code>, <code>http_request.h</code>: Apache HTTP Server コア API。</li>
+<li><code>mod_h2test.h</code>: モジュール固有の定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_h2</code>: 本モジュールが検証対象とする HTTP/2 実装モジュール。</li>
+<li><code>test/modules/http2/</code>: HTTP/2 関連のテストケースが格納されているディレクトリ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのメモリ割り当ては <code>r-&gt;pool</code> に紐付いており、リクエスト終了時に自動的に解放されます。明示的な <code>free</code> は不要です。</li>
+<li>**エラーパス**: <code>goto cleanup</code> パターンが多用されています。これは <code>apr_brigade</code> の操作中にエラーが発生した際、適切にリソースを解放しつつ終了するための定石です。</li>
+<li>**制約**: 本モジュールはテスト専用です。プロダクション環境での使用は想定されておらず、意図的にエラーを発生させる機能が含まれているため、セキュリティ上のリスクがあります。</li>
+<li>**省略された詳細**: <code>h2test_post_config</code> 内の <code>mod_h2test_init_counter</code> は、モジュールの二重初期化を防ぐための単純なフラグであり、本質的なロジックはハンドラ群に集中しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__duration_parse.html" target="wiki-view">`duration_parse`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_post_config.html" target="wiki-view">`h2test_post_config`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_child_init.html" target="wiki-view">`h2test_child_init`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_echo_handler.html" target="wiki-view">`h2test_echo_handler`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_delay_handler.html" target="wiki-view">`h2test_delay_handler`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_trailer_handler.html" target="wiki-view">`h2test_trailer_handler`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__status_from_str.html" target="wiki-view">`status_from_str`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_error_handler.html" target="wiki-view">`h2test_error_handler`</a></li>
+<li><a href="../../../../symbols/test__modules__http2__mod_h2test__mod_h2test_c__h2test_hooks.html" target="wiki-view">`h2test_hooks`</a></li>
+</ul></body></html>

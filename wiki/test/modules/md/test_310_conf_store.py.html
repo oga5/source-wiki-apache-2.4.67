@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/md/test_310_conf_store.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>test/modules/md/test_310_conf_store.py</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_md</code> モジュールにおける設定（<code>MDomain</code> 等）と、永続化ストア（<code>a2md</code> 管理下のディレクトリ）との同期および整合性を検証する統合テストスイートです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/md</code> サブシステムにおいて、設定変更がどのようにストアの状態へ反映されるか、あるいは設定削除時にストアがどのように振る舞うか（保持されるか、デフォルト値へフォールバックするか）を網羅的にテストします。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定の適用と検証**: <code>MDConf</code> を用いて Apache 設定を生成・インストールし、<code>a2md</code> コマンド経由でストアの状態を検証する。</li>
+<li>**ライフサイクル管理**: 設定の追加、更新、削除、および再起動時の整合性確認。</li>
+<li>**デフォルト値の検証**: 設定項目を削除した際に、システムが適切にデフォルト値へ復帰するかを確認する。</li>
+<li>**エッジケースのテスト**: 不正なファイルがストアに混入した場合の耐性や、ストアディレクトリの切り替えテスト。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li>**<code>TestConf</code> クラス**: テストの基底クラス。<code>pytest</code> フィクスチャを用いて環境の初期化（<code>acme.start</code>）とクリーンアップを行う。</li>
+<li>**<code>MDConf</code>**: テスト用の Apache 設定を構築・インストールするヘルパー。</li>
+<li>**<code>env</code> (MDTestEnv)**: テスト環境の抽象化。<code>a2md</code> コマンドの実行、Apache の再起動、ストア状態の取得（<code>check_md</code>）を担当。</li>
+<li>**<code>a2md</code>**: <code>mod_md</code> の管理ツール。ストアのリスト取得、更新、ドライブ操作を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定生成**: <code>MDConf(env, text=&quot;...&quot;)</code> で設定文字列を定義し、<code>.install()</code> で Apache 設定ファイルへ書き出す。 2. **適用**: <code>env.apache_restart()</code> を呼び出し、<code>mod_md</code> に設定を再読み込みさせる。 3. **検証**: <code>env.a2md([&quot;list&quot;])</code> または <code>env.check_md(...)</code> を呼び出し、JSON 出力を解析して期待される状態（<code>renew-mode</code>, <code>ca</code>, <code>privkey</code> 等）と照合する。 4. **状態遷移**: テストケース内で設定を段階的に変更し、ストア内のデータが期待通りに更新または保持されるかを確認する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>MDConf</code>: 設定生成用ユーティリティ。</li>
+<li><code>MDTestEnv</code>: テスト環境制御用ユーティリティ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/modules/md/md_conf.py</code>: <code>MDConf</code> クラスの定義。</li>
+<li><code>test/modules/md/md_env.py</code>: <code>MDTestEnv</code> クラスの定義。</li>
+<li><code>test/modules/md/test_001_store.py</code>: ストアの基本的な操作に関するテスト。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**テストの前提**: <code>a2md</code> バイナリと ACME テストサーバーが利用可能であることが必須条件です。</li>
+<li>**メモリと永続化**: このテストは実際のファイルシステム上のストアディレクトリを操作します。各テストメソッドの開始時に <code>env.clear_store()</code> が呼ばれ、クリーンな状態が保証されます。</li>
+<li>**エラーパス**: <code>env.apache_restart()</code> の戻り値と <code>env.apachectl_stderr</code> をチェックすることで、設定エラー時の挙動を検証しています。</li>
+<li>**省略箇所**: 本ファイルは設定の「ストアへの反映」に特化しており、ACME プロトコルの詳細なハンドシェイクや証明書の暗号学的な検証は他のテストファイル（<code>test_502_acmev2_drive.py</code> 等）に委譲されています。</li>
+</ul></body></html>

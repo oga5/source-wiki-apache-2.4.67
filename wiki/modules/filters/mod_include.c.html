@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/mod_include.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/mod_include.c</h1>
+<h2>概要</h2>
+<p><code>mod_include.c</code> は、Apache HTTP Server における Server Side Includes (SSI) 機能を実装する出力フィルタモジュールです。HTML コンテンツ内の SSI ディレクティブ（<code>&lt;!--#...--&gt;</code>）を解析し、動的な置換や条件分岐、外部ファイルのインクルードを実行します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> ディレクトリ内で、コンテンツの動的生成を担う主要なフィルタです。<code>mod_include.h</code> で公開されている API を通じて、他のモジュールが SSI ハンドラを登録したり、文字列解析機能を利用したりすることを可能にしています。</p>
+<h2>責務</h2>
+<ul>
+<li>**SSI 解析エンジン**: ストリームベースのステートマシンによるディレクティブの抽出。</li>
+<li>**ディレクティブ処理**: <code>if</code>, <code>echo</code>, <code>include</code>, <code>set</code> 等の標準的な SSI コマンドの実行。</li>
+<li>**式評価**: レガシーな SSI 式パーサーおよび <code>ap_expr</code> を利用した条件評価。</li>
+<li>**環境変数管理**: SSI 実行時の変数展開とサブプロセス環境の管理。</li>
+<li>**設定管理**: <code>XBitHack</code> やタグ形式のカスタマイズなど、ディレクトリ/サーバー単位の設定保持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンテキスト管理</h3>
+<ul>
+<li><code>include_ctx_t</code>: フィルタの実行状態を保持する公開構造体。</li>
+<li><code>ssi_internal_ctx</code>: 解析状態、バッファ、引数リストなどを保持する非公開の内部構造体。</li>
+</ul>
+<h3>解析・実行</h3>
+<ul>
+<li><code>send_parsed_content</code>: フィルタのメインループ。バケットを走査し、ステートマシンを駆動する。</li>
+<li><code>handle_...</code>: <code>handle_if</code>, <code>handle_echo</code> 等、各 SSI ディレクティブに対応するハンドラ関数群。</li>
+<li><code>ap_ssi_parse_string</code>: 文字列内の変数（<code>$VAR</code>）を展開するユーティリティ。</li>
+<li><code>parse_expr</code> / <code>parse_ap_expr</code>: 条件式を解析・評価するパーサー。</li>
+</ul>
+<h3>設定構造体</h3>
+<ul>
+<li><code>include_dir_config</code>: ディレクトリ単位の設定（<code>xbithack</code>, <code>lastmodified</code> 等）。</li>
+<li><code>include_server_config</code>: サーバー単位の設定（タグの開始/終了シーケンス）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>includes_filter</code> がリクエストごとにコンテキストを初期化し、<code>INCLUDES</code> フィルタを登録。 2. **解析**: <code>send_parsed_content</code> がバケットブリゲードを走査。<code>find_start_sequence</code> でタグ開始を検出し、ステートマシン（<code>parse_state_t</code>）を遷移させる。 3. **引数抽出**: <code>find_argument</code> でディレクティブの引数を解析し、<code>arg_item_t</code> リストに格納。 4. **実行**: <code>include_handlers</code> ハッシュからディレクティブに対応する関数を検索し実行。 5. **出力**: 処理結果を新しいバケットとしてブリゲードに挿入し、<code>ap_pass_brigade</code> で後続のフィルタへ渡す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code>: Apache コア API。</li>
+<li><code>util_filter.h</code>: フィルタチェーン制御。</li>
+<li><code>ap_expr.h</code>: 式評価エンジン。</li>
+<li><code>apr_buckets.h</code>: ストリーム処理用バケット管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/filters/mod_include.h</code>: 公開 API 定義。</li>
+<li><code>server/util_expr.c</code>: <code>ap_expr</code> の実装（条件評価の基盤）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>include_ctx_t</code> 内には <code>pool</code>（永続）と <code>dpool</code>（ディレクティブ実行ごとにクリア）の2種類が存在します。解析中のデータは <code>dpool</code> を使用し、メモリリークを防ぐ設計になっています。</li>
+<li>**ステートマシン**: <code>PARSE_PRE_HEAD</code> から <code>PARSE_EXECUTE</code> までの状態遷移は非常に複雑です。特に <code>find_partial_start_sequence</code> は、タグがバッファ境界をまたぐ場合の処理を慎重に行っています。</li>
+<li>**サブリクエスト**: <code>handle_include</code> 等でサブリクエストを生成しますが、これらは <code>r-&gt;pool</code> を共有または継承するため、メモリ寿命の管理には注意が必要です。</li>
+<li>**未実装/浅い部分**: <code>bndm</code> アルゴリズムによる高速検索が実装されていますが、複雑な正規表現の評価は <code>ap_expr</code> に依存しており、このファイル自体は主にパーサーの構造とディレクティブのディスパッチに注力しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_include_c__result_item_t.html" target="wiki-view">`result_item_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__token_type_t.html" target="wiki-view">`token_type_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__token_t.html" target="wiki-view">`token_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__parse_node_t.html" target="wiki-view">`parse_node_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__xbithack_t.html" target="wiki-view">`xbithack_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__include_dir_config.html" target="wiki-view">`include_dir_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__include_server_config.html" target="wiki-view">`include_server_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__parse_state_t.html" target="wiki-view">`parse_state_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__arg_item_t.html" target="wiki-view">`arg_item_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__backref_t.html" target="wiki-view">`backref_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__bndm_t.html" target="wiki-view">`bndm_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_include_c__ssi_internal_ctx.html" target="wiki-view">`ssi_internal_ctx`</a></li>
+</ul></body></html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http/chunk_filter.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http/chunk_filter.c</h1>
+<h2>概要</h2>
+<p>HTTP/1.1 の「チャンク転送エンコーディング（Chunked Transfer Encoding）」を実装する出力フィルタです。サーバーからクライアントへ送信されるレスポンスボディを、RFC 2616 に準拠したチャンク形式に変換します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> サブシステムにおける出力フィルタチェーンの一部です。コンテンツ生成後に呼び出され、データストリームをチャンク化して下位フィルタ（最終的にはネットワーク出力）へ渡します。</p>
+<h2>責務</h2>
+<ul>
+<li>**チャンクヘッダーの付与**: データ長を 16 進数で算出し、ヘッダーを各データブロックの先頭に挿入。</li>
+<li>**チャンク終端の処理**: 各チャンクの末尾に <code>CRLF</code> を挿入。</li>
+<li>**最終チャンクの生成**: ストリーム終了（EOS）時に <code>0\r\n\r\n</code> を付与し、チャンク転送の完了を通知。</li>
+<li>**エラーハンドリング**: バックエンド（mod_proxy 等）からの <code>HTTP_BAD_GATEWAY</code> を検知した場合、チャンクの終了処理を抑制し、接続を閉じるためのフラグを立てる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ap_http_chunk_filter</code>: 本ファイルのメインエントリポイント。フィルタチェーンに登録される関数。</li>
+<li><code>bad_gateway_seen</code>: バックエンドエラーをフィルタコンテキスト内で記憶するための静的変数。</li>
+<li><code>ASCII_CRLF</code> / <code>ASCII_ZERO</code>: チャンクプロトコルで使用される定数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ブリゲードの走査**: <code>apr_bucket_brigade</code> 内の各バケットを順次確認します。 2. **データ長の計算**: バケットの長さを集計します。不明な長さ（パイプ等）の場合は読み込みを試みます。 3. **変換処理**:</p>
+<ul>
+<li>データが存在する場合、ヘッダー（サイズ）とフッター（<code>CRLF</code>）をバケットとして挿入します。</li>
+<li><code>EOS</code> バケットが見つかった場合、最終チャンクマーカーを挿入します。</li>
+<p>4. **フィルタの通過**: <code>ap_pass_brigade</code> を呼び出し、加工済みのブリゲードを次のフィルタへ渡します。 5. **ループ**: ブリゲードが空になるまで、あるいは <code>EOS</code> に到達するまで処理を繰り返します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code> (間接的): バケット操作の基盤。</li>
+<li><code>http_protocol.h</code>: プロトコル関連のユーティリティ。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの管理インターフェース。</li>
+<li><code>http_core.h</code>: 接続状態やコア設定へのアクセス。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/http_filters.c</code>: フィルタチェーンの構築と管理。</li>
+<li><code>modules/http/http_protocol.c</code>: HTTP プロトコル全体の制御。</li>
+<li><code>server/util_filter.c</code>: フィルタの登録・実行メカニズムの本体。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_bucket_transient_create</code> や <code>apr_bucket_immortal_create</code> を使用して、バケットのライフサイクルを適切に管理しています。</li>
+<li>**エラー時の挙動**: <code>HTTP_BAD_GATEWAY</code> が発生した際、<code>f-&gt;ctx</code> に <code>bad_gateway_seen</code> をセットすることで、正常な終了処理（<code>0\r\n\r\n</code> の付与）をスキップするロジックは重要です。これにより、壊れたレスポンスをクライアントが正当な終了と誤認するのを防いでいます。</li>
+<li>**注意点**: <code>chunk_hdr</code> はスタック上に確保されていますが、<code>transient</code> バケットとして使用されるため、この関数を抜ける前にデータがコピーされる前提で設計されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html" target="wiki-view">`ap_http_chunk_filter`</a></li>
+</ul></body></html>

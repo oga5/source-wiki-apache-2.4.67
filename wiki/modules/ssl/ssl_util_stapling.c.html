@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/ssl_util_stapling.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/ssl_util_stapling.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_ssl</code> における **OCSP Stapling**（RFC 6066）の実装を提供します。SSL/TLS ハンドシェイク中に、サーバーが証明書の有効性確認結果（OCSP レスポンス）をクライアントへ直接提供することで、クライアント側の OCSP クエリを不要にし、プライバシーとパフォーマンスを向上させます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> の一部として、OpenSSL の TLS 拡張機能（Certificate Status Request）を処理します。<code>ssl_engine_init.c</code> 等から初期化され、ハンドシェイク時にコールバックとして動作します。</p>
+<h2>責務</h2>
+<ul>
+<li>**OCSP レスポンスのキャッシュ管理**: <code>socache</code> を利用したレスポンスの保存と取得。</li>
+<li>**レスポンスの更新**: キャッシュ切れや無効なレスポンスに対する OCSP レスポンダーへの再問い合わせ。</li>
+<li>**同期制御**: 複数のプロセス/スレッド環境におけるキャッシュアクセスおよび更新処理の排他制御。</li>
+<li>**証明書情報の管理**: 証明書と OCSP レスポンダー URI の紐付け管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>キャッシュ・状態管理</h3>
+<ul>
+<li><code>certinfo</code>: 証明書ハッシュ、OCSP <code>CERTID</code>、レスポンダー URI を保持する構造体。</li>
+<li><code>stapling_certinfo</code>: 証明書情報を保持するグローバルハッシュテーブル。</li>
+<li><code>stapling_cache_response</code> / <code>stapling_get_cached_response</code>: キャッシュへの読み書きを行うラッパー。</li>
+</ul>
+<h3>コールバック・フック</h3>
+<ul>
+<li><code>stapling_cb</code>: OpenSSL の <code>SSL_CTX_set_tlsext_status_cb</code> に登録されるメインのコールバック関数。</li>
+<li><code>ssl_run_init_stapling_status</code> / <code>ssl_run_get_stapling_status</code>: 他モジュールが OCSP ステータスを提供するためのフック。</li>
+</ul>
+<h3>同期制御</h3>
+<ul>
+<li><code>ssl_stapling_mutex_init</code>: 実行時に必要なグローバルミューテックスの初期化。</li>
+<li><code>stapling_refresh_mutex_on/off</code>: レスポンス更新時の競合を防ぐための排他制御。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>modssl_init_stapling</code> が呼ばれ、コールバック <code>stapling_cb</code> を登録。 2. **ハンドシェイク時**: クライアントがステータス拡張を要求すると <code>stapling_cb</code> が起動。 3. **キャッシュ検索**: <code>stapling_get_cached_response</code> でキャッシュを検索。 4. **更新判断**: キャッシュがない、または期限切れの場合、<code>stapling_refresh_mutex</code> を取得し、<code>stapling_renew_response</code> で OCSP レスポンダーへ HTTP リクエストを送信。 5. **レスポンス返却**: <code>stapling_set_response</code> を通じて OpenSSL に OCSP レスポンスを渡す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: <code>mod_ssl</code> 内部構造体定義。</li>
+<li><code>ap_mpm.h</code>: マルチプロセス管理用。</li>
+<li><code>apr_thread_mutex.h</code>: APR レベルの排他制御。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_engine_ocsp.c</code>: OCSP リクエストの送信やレスポンスの解析など、低レベルな OCSP 通信ロジック。</li>
+<li><code>ssl_scache.c</code>: セッションキャッシュの抽象化レイヤー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>certinfo</code> や <code>OCSP_CERTID</code> は APR プールで管理されます。<code>stapling_renew_response</code> 内では一時的なサブプールを作成し、メモリリークを防いでいます。</li>
+<li>**排他制御**: <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> が設定されているキャッシュバックエンドを使用する場合、明示的なミューテックス操作が必須となります。</li>
+<li>**制約**: <code>MAX_STAPLING_DER</code>（10KB）を超える OCSP レスポンスは切り捨てられます。</li>
+<li>**省略箇所**: 本ファイルは OCSP プロトコルの詳細なパース（ASN.1 構造など）については OpenSSL API に依存しており、その内部実装は含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__certinfo.html" target="wiki-view">`certinfo`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_certid_free.html" target="wiki-view">`ssl_stapling_certid_free`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_certinfo_hash_init.html" target="wiki-view">`ssl_stapling_certinfo_hash_init`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_get_issuer.html" target="wiki-view">`stapling_get_issuer`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_init_cert.html" target="wiki-view">`ssl_stapling_init_cert`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_get_certinfo.html" target="wiki-view">`stapling_get_certinfo`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_cache_response.html" target="wiki-view">`stapling_cache_response`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_get_cached_response.html" target="wiki-view">`stapling_get_cached_response`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_set_response.html" target="wiki-view">`stapling_set_response`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_check_response.html" target="wiki-view">`stapling_check_response`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_renew_response.html" target="wiki-view">`stapling_renew_response`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ocsp_resp.html" target="wiki-view">`ocsp_resp`</a></li>
+</ul></body></html>

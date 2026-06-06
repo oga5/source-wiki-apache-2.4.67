@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c1_io.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c1_io.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 セッションにおけるクライアント接続（C1）の入出力処理を担うモジュールです。Apache HTTP Server のフィルタチェーンと <code>nghttp2</code> ライブラリの間で、バッファリング、TLS 最適化、およびデータ転送の仲介を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>h2_session</code> の下位レイヤーとして機能し、接続ごとの入出力バッファ（<code>h2_c1_io</code>）を管理します。特に TLS 接続時のパケットサイズ最適化や、効率的なデータ転送のためのスクラッチバッファリングを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**出力バッファリング**: TLS 接続時に MTU を考慮したチャンクサイズ（<code>WRITE_SIZE_INITIAL</code> / <code>MAX</code>）でデータをまとめ、効率的な TLS レコード生成を支援する。</li>
+<li>**入力フィード**: <code>ap_get_brigade</code> を通じてクライアントからのデータを読み込み、<code>nghttp2_session_mem_recv</code> へ渡す。</li>
+<li>**フィルタ管理**: <code>apr_bucket_brigade</code> を使用して、接続フィルタチェーンへのデータ投入とフラッシュ制御を行う。</li>
+<li>**デバッグ支援**: <code>C1_IO_BB_LOG</code> マクロによる、バケットブリゲードの状態可視化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル・初期化</h3>
+<ul>
+<li><code>h2_c1_io_init</code>: セッションに関連付けられた IO 構造体の初期化。TLS の有無やウォームアップ設定を適用する。</li>
+</ul>
+<h3>データ操作・転送</h3>
+<ul>
+<li><code>h2_c1_io_add_data</code>: 生データをバッファに追加。バッファリングが有効な場合はスクラッチ領域へコピー。</li>
+<li><code>h2_c1_io_append</code>: <code>apr_bucket_brigade</code> を受け取り、メタデータや非バッファ対象バケットを適切に処理して出力キューへ追加。</li>
+<li><code>h2_c1_io_pass</code>: バッファリングされたデータを接続フィルタへ書き出す。</li>
+<li><code>h2_c1_io_assure_flushed</code>: 保留中のデータがある場合に強制フラッシュを行う。</li>
+</ul>
+<h3>入力処理</h3>
+<ul>
+<li><code>h2_c1_read</code>: クライアントからの入力を読み込み、<code>nghttp2</code> セッションへフィードするメインループ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **出力フロー**:</p>
+<ul>
+<li><code>h2_c1_io_append</code> がブリゲードを受け取り、<code>assure_scratch_space</code> を経由してスクラッチバッファにデータを集約。</li>
+<li><code>pass_output</code> が <code>ap_pass_brigade</code> を呼び出し、フィルタチェーンへデータを流す。</li>
+<li>転送量に応じて <code>write_size</code> を動的に調整し、TLS のウォームアップ/クールダウンを制御する。</li>
+<p>2. **入力フロー**:</p>
+<li><code>h2_c1_read</code> が <code>read_and_feed</code> を呼び出し、<code>ap_get_brigade</code> でデータを取得。</li>
+<li><code>c1_in_feed_brigade</code> がブリゲード内の各バケットを <code>nghttp2_session_mem_recv</code> に渡してプロトコル解析を進行させる。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_bucket_brigade</code>, <code>apr_bucket</code>: Apache のデータ転送単位。</li>
+<li><code>nghttp2</code>: HTTP/2 プロトコル処理ライブラリ。</li>
+<li><code>http_connection.h</code>, <code>http_protocol.h</code>: Apache 接続フィルタチェーンとのインターフェース。</li>
+<li><code>h2_session.h</code>: セッション状態管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_session.c</code>: 本モジュールの呼び出し元であり、セッションイベントのディスパッチを行う。</li>
+<li><code>h2_c1.h</code>: C1 接続の定義。</li>
+<li><code>h2_util.h</code>: ブリゲード操作のユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_c1_io</code> が管理する <code>output</code> ブリゲードは、<code>h2_session</code> のライフサイクルに依存します。スクラッチバッファは <code>apr_bucket_alloc</code> を使用し、<code>append_scratch</code> 時にヒープバケットとしてブリゲードへ所有権が移転します。</li>
+<li>**再帰呼び出しの防止**: <code>is_passing</code> フラグにより、<code>pass_output</code> 内での再帰的な呼び出しを検知し、エラーを返します。</li>
+<li>**TLS 最適化**: <code>WRITE_SIZE_INITIAL</code> (1300バイト) から開始し、<code>warmup_size</code> を超えると <code>WRITE_SIZE_MAX</code> (16KB) に拡大するロジックが含まれています。</li>
+<li>**省略された詳細**: <code>nghttp2</code> の内部的なストリーム状態遷移については本ファイルでは扱わず、<code>h2_session.c</code> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_bb_log.html" target="wiki-view">`h2_c1_io_bb_log`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_init.html" target="wiki-view">`h2_c1_io_init`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__append_scratch.html" target="wiki-view">`append_scratch`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__assure_scratch_space.html" target="wiki-view">`assure_scratch_space`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__read_to_scratch.html" target="wiki-view">`read_to_scratch`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__pass_output.html" target="wiki-view">`pass_output`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_needs_flush.html" target="wiki-view">`h2_c1_io_needs_flush`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_pending.html" target="wiki-view">`h2_c1_io_pending`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_pass.html" target="wiki-view">`h2_c1_io_pass`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_assure_flushed.html" target="wiki-view">`h2_c1_io_assure_flushed`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_add_data.html" target="wiki-view">`h2_c1_io_add_data`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_append.html" target="wiki-view">`h2_c1_io_append`</a></li>
+</ul></body></html>

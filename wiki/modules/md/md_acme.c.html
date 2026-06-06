@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_acme.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_acme.c</h1>
+<h2>概要</h2>
+<p><code>md_acme.c</code> は、ACME プロトコル（RFC 8555等）を用いた証明書管理の通信層を担う中心的なファイルです。ACME サーバーとのディレクトリ情報の取得、リクエストの署名（JWS）、ノンストップな通信のためのノンスト管理、およびサーバーからのエラー（Problem）の解釈を抽象化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ACME プロトコルの「クライアント」としての役割を果たします。<code>md_http.c</code> を利用して低レベルな HTTP 通信を行い、<code>md_jws.c</code> を利用して署名付きリクエストを生成します。上位層（<code>md_acme_order.c</code> や <code>md_acme_acct.c</code>）が ACME のビジネスロジックを実装するのに対し、本ファイルはプロトコル特有の通信規約を隠蔽します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ACME プロトコル通信**: GET/POST リクエストの抽象化と、ACME サーバーへの適応（v1/v2 バージョン判定）。</li>
+<li>**リクエストのライフサイクル管理**: リクエストごとのメモリプール管理、ノンスト（Nonce）の更新、再試行ロジックの実行。</li>
+<li>**エラーハンドリング**: ACME サーバーから返される <code>application/problem+json</code> の解析と、Apache 内部ステータスへのマッピング。</li>
+<li>**アカウント管理**: アカウント情報のロード、検証、および保存のインターフェース提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト・通信制御</h3>
+<ul>
+<li><code>md_acme_req_create()</code>: リクエスト用のメモリプールを確保し、初期状態を構築する。</li>
+<li><code>md_acme_req_send()</code>: ACME リクエストの送信エンジン。Nonce の付与、署名、再試行ロジックを内包する。</li>
+<li><code>md_acme_POST()</code> / <code>md_acme_GET()</code>: 上位層向けの公開 API。コールバック関数を介して非同期的なレスポンス処理を行う。</li>
+</ul>
+<h3>プロトコル・エラー解析</h3>
+<ul>
+<li><code>acme_problem_status_t</code>: ACME エラー型と Apache ステータスコードの対応表。</li>
+<li><code>inspect_problem()</code>: サーバーからのエラーレスポンスを解析し、再試行が必要か（<code>APR_EAGAIN</code>）を判定する。</li>
+<li><code>md_acme_problem_is_input_related()</code>: エラーがユーザー入力に起因するものか判定する。</li>
+</ul>
+<h3>セットアップ・状態管理</h3>
+<ul>
+<li><code>md_acme_create()</code>: ACME サーバーとの通信用コンテキスト（<code>md_acme_t</code>）を初期化する。</li>
+<li><code>md_acme_setup()</code>: サーバーのディレクトリ情報を取得し、API エンドポイントを特定する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_acme_create</code> でコンテキストを作成し、<code>md_acme_setup</code> でサーバーのディレクトリ情報を取得して <code>md_acme_t</code> を構成する。 2. **リクエスト送信**: <code>md_acme_POST</code> 等が呼ばれると、<code>md_acme_req_create</code> でリクエスト専用プールが作成される。 3. **署名と送信**: <code>md_acme_req_send</code> 内で <code>acmev2_req_init</code> が呼ばれ、<code>md_jws_sign</code> を用いてペイロードが署名される。 4. **レスポンス処理**: <code>on_response</code> コールバックが HTTP レスポンスを捕捉。Nonce を更新し、JSON 解析後に成功時は <code>on_json</code>、エラー時は <code>inspect_problem</code> へ委譲する。 5. **終了**: <code>md_acme_req_done</code> で結果を <code>md_acme_t</code> の <code>last</code> フィールドにコピーし、リクエスト用プールを破棄する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_pool_t</code>, <code>apr_table_t</code> 等によるメモリとデータ構造の管理。</li>
+<li>**md_http.h**: HTTP 通信の実行。</li>
+<li>**md_jws.h**: ACME リクエストの署名。</li>
+<li>**md_json.h**: ACME プロトコルで多用される JSON の読み書き。</li>
+<li>**md_acme.h**: 公開インターフェースとデータ構造の定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_acme_acct.c</code>: アカウントの永続化と検証。</li>
+<li><code>md_acme_order.c</code>: 証明書発行フローの制御。</li>
+<li><code>md_jws.c</code>: リクエストの署名ロジックの詳細。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>md_acme_req_t</code> はリクエストごとに独自の <code>apr_pool_t</code> を持ちます。<code>md_acme_req_done</code> で確実に破棄されるため、リクエスト処理中に確保したメモリはリクエストプールに紐付ける必要があります。</li>
+<li>**再試行**: <code>md_acme_req_send</code> は <code>APR_EAGAIN</code> を受け取ると再帰的に再試行を行います。無限ループを防ぐため <code>max_retries</code> が設定されています。</li>
+<li>**省略された詳細**: 本ファイルは通信の「実行」に特化しており、証明書の生成や秘密鍵の暗号化ロジックは <code>md_crypt.c</code> に委譲されています。また、ACME v1 の実装は v2 への移行に伴い、現在は v2 が優先される設計となっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_c__acme_problem_status_t.html" target="wiki-view">`acme_problem_status_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__problem_status_get.html" target="wiki-view">`problem_status_get`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__md_acme_problem_is_input_related.html" target="wiki-view">`md_acme_problem_is_input_related`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__req_update_nonce.html" target="wiki-view">`req_update_nonce`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__http_update_nonce.html" target="wiki-view">`http_update_nonce`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__md_acme_req_create.html" target="wiki-view">`md_acme_req_create`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__acmev2_new_nonce.html" target="wiki-view">`acmev2_new_nonce`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__md_acme_init.html" target="wiki-view">`md_acme_init`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__inspect_problem.html" target="wiki-view">`inspect_problem`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__acmev2_req_init.html" target="wiki-view">`acmev2_req_init`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__json_ctx.html" target="wiki-view">`json_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__update_dir_ctx.html" target="wiki-view">`update_dir_ctx`</a></li>
+</ul></body></html>

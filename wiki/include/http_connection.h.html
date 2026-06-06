@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/http_connection.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/http_connection.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるコネクション処理のライフサイクルを定義するヘッダーファイルです。接続の確立からプロトコル処理、そして終了（リンガリングクローズ）に至るまでの一連のインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>APACHE_CORE</code> サブシステムの一部として、コアの接続管理機能を提供します。MPM（Multi-Processing Module）が受け取ったソケットを、HTTP プロトコルレベルの処理へ橋渡しする役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続のライフサイクル管理**: 接続の開始、処理、終了の各フェーズをフックとして公開。</li>
+<li>**プロトコルドライバー**: <code>ap_process_connection</code> を通じて、登録されたプロトコルモジュールへ処理を委譲。</li>
+<li>**クローズ処理の最適化**: TCP RST を防ぐための「リンガリングクローズ（遅延クローズ）」の実装。</li>
+<li>**EOC（End Of Connection）管理**: 接続終了をフィルタチェーンに通知するためのバケット型の定義。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ap_process_connection</code>: 接続処理のメインエントリポイント。</li>
+<li><code>ap_lingering_close</code>: 接続終了時にデータを完全に送受信し切るための安全なクローズ処理。</li>
+<li><code>AP_BUCKET_IS_EOC</code>: フィルタチェーン内で「接続終了」バケットを判定するマクロ。</li>
+<li><code>create_connection</code>, <code>pre_connection</code>, <code>process_connection</code>: 接続の各段階でモジュールが介入するための主要フック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **接続開始**: MPM がソケットを受け取り、<code>create_connection</code> フックが <code>conn_rec</code> を生成します。 2. **準備**: <code>pre_connection</code> フックが呼ばれ、フィルタのセットアップやプロトコル固有の初期化が行われます。 3. **処理**: <code>ap_process_connection</code> が呼び出され、登録されたプロトコルハンドラがリクエストを処理します。 4. **終了**: 処理完了後、<code>ap_lingering_close</code> が呼ばれ、クライアントからの残存データ読み込みや TCP 接続の正常な終了を試みます。この際、EOC バケットがフィルタチェーンに投入され、終了が伝播されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: ソケット等のネットワーク抽象化レイヤー。</li>
+<li><code>apr_buckets.h</code>: フィルタチェーンでデータを扱うためのバケット管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>httpd.h</code>: <code>conn_rec</code> 構造体定義など、接続管理の基盤となるデータ構造。</li>
+<li><code>util_filter.h</code>: 接続に関連付けられたフィルタチェーンの操作。</li>
+<li><code>mpm_common.h</code>: MPM 側での接続受け入れ処理との連携。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「プロトコルモジュール」を開発する際の最重要インターフェースです。</li>
+<li><code>ap_process_connection</code> は、単一の接続に対して複数のプロトコルが順次処理を行う可能性がある（プロトコル切り替えなど）ことを考慮して設計されています。</li>
+<li>リンガリングクローズは、HTTP 1.1 のパイプライン処理や Keep-Alive 接続において、クライアントとの整合性を保つために不可欠な処理です。実装時にはこの挙動を意識してください。</li>
+</ul></body></html>

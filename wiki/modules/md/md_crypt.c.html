@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_crypt.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_crypt.c</h1>
+<h2>概要</h2>
+<p><code>md_crypt.c</code> は、OpenSSL をラップして ACME プロトコルに必要な暗号化操作（鍵生成、署名、証明書解析、DER/PEM 変換）を提供するモジュールです。Apache HTTP Server の <code>mod_md</code> における暗号化の抽象化層として機能します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、暗号化の低レイヤー処理を担います。<code>md_acme.c</code> や <code>md_reg.c</code> が高レベルな ACME トランザクションを扱うのに対し、本ファイルはそれらが利用する「鍵の生成」「証明書の検証」「署名の作成」といった具体的な暗号処理をカプセル化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**乱数生成**: プロセス固有のシードを用いた安全な乱数生成の初期化。</li>
+<li>**鍵管理**: RSA/EC 鍵の生成、ファイルシステムへの保存・読み込み、HTTP レスポンスからの抽出。</li>
+<li>**証明書処理**: X.509 証明書の解析、有効期限チェック、SAN（Subject Alternative Names）の抽出、チェーンの読み込み。</li>
+<li>**署名とハッシュ**: SHA-256 ダイジェスト計算、HMAC、および CSR（証明書署名要求）の作成。</li>
+<li>**ASN.1 変換**: ASN.1 時間形式の APR 時間への変換。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>鍵管理</h3>
+<ul>
+<li><code>md_pkey_t</code>: 秘密鍵を保持する構造体。<code>EVP_PKEY</code> をラップし、APR プールと紐付けられたライフサイクル管理を行う。</li>
+<li><code>md_pkey_gen()</code>: 指定された仕様（RSA/EC）に基づき秘密鍵を生成する。</li>
+<li><code>md_pkey_fsave()</code> / <code>md_pkey_fload()</code>: 秘密鍵のファイル入出力。</li>
+</ul>
+<h3>証明書管理</h3>
+<ul>
+<li><code>md_cert_t</code>: X.509 証明書を保持する構造体。</li>
+<li><code>md_cert_read_chain()</code>: PEM 形式の証明書チェーンを解析し、配列に格納する。</li>
+<li><code>md_cert_req_create()</code>: CSR を生成し、Base64URL エンコードされた DER 形式で返す。</li>
+<li><code>md_cert_self_sign()</code>: 自己署名証明書を作成する（チャレンジ検証用）。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>md_crypt_init()</code>: OpenSSL の初期化と乱数シードのセットアップ。</li>
+<li><code>md_asn1_generalized_time_get()</code>: ASN.1 形式の時間を <code>apr_time_t</code> に変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_crypt_init</code> が呼ばれると、<code>getpid()</code> を含むスタックデータを用いて <code>RAND_seed</code> を実行し、OpenSSL の乱数状態を確立する。 2. **鍵生成**: <code>md_pkey_gen</code> は <code>md_pkey_spec_t</code> を受け取り、<code>EVP_PKEY_CTX</code> を用いて RSA または EC 鍵を生成し、<code>md_pkey_t</code> に格納する。 3. **証明書解析**: <code>md_cert_read_http</code> や <code>md_cert_fload</code> は、DER/PEM データを <code>d2i_X509</code> または <code>PEM_read_bio_X509</code> で解析し、<code>md_cert_t</code> を作成する。 4. **クリーンアップ**: すべての構造体は APR プールと紐付いており、<code>apr_pool_cleanup_register</code> を介して <code>EVP_PKEY_free</code> や <code>X509_free</code> が自動的に呼び出される。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**OpenSSL**: <code>evp.h</code>, <code>rsa.h</code>, <code>x509v3.h</code> 等（暗号処理の核）。</li>
+<li>**APR**: <code>apr_file_io.h</code>, <code>apr_buckets.h</code>（ファイル操作とメモリ管理）。</li>
+<li>**内部モジュール**: <code>md.h</code>, <code>md_util.h</code>, <code>md_json.h</code>（データ構造とユーティリティ）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_crypt.h</code>: 本ファイルの公開インターフェース定義。</li>
+<li><code>md_jws.c</code>: 本ファイルの暗号機能を利用して JWS（JSON Web Signature）を構築する。</li>
+<li><code>md_acme.c</code>: 本ファイルの CSR 生成機能を利用して ACME 注文を行う。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての OpenSSL オブジェクトは APR プールに関連付けられたクリーンアップハンドラによって管理されます。手動で <code>free</code> を呼ぶ必要はありませんが、プールが破棄されるタイミングに注意してください。</li>
+<li>**OpenSSL バージョン**: OpenSSL 1.0.x と 1.1.x/3.0.x の API 差異を吸収するためのマクロ（<code>MD_OPENSSL_10x</code> 等）が多用されています。</li>
+<li>**スレッド安全性**: <code>md_crypt_init</code> は静的フラグ <code>initialized</code> を使用して一度だけ実行されるよう保護されています。</li>
+<li>**省略箇所**: 本ファイルは OpenSSL の複雑なエラーハンドリングをラップしていますが、一部の低レベルな ASN.1 拡張の解析は、特定の ACME 要件に特化して実装されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_crypt_c__md_pkey_t.html" target="wiki-view">`md_pkey_t`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__seed_RAND.html" target="wiki-view">`seed_RAND`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__rand_choosenum.html" target="wiki-view">`rand_choosenum`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__time_t.html" target="wiki-view">`time_t`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__md_crypt_init.html" target="wiki-view">`md_crypt_init`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__fwrite_buffer.html" target="wiki-view">`fwrite_buffer`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__md_rand_bytes.html" target="wiki-view">`md_rand_bytes`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__passwd_ctx.html" target="wiki-view">`passwd_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__pem_passwd.html" target="wiki-view">`pem_passwd`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__RSA_get0_key.html" target="wiki-view">`RSA_get0_key`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__md_cert_t.html" target="wiki-view">`md_cert_t`</a></li>
+<li><a href="../../symbols/modules__md__md_crypt_c__md_check_cert_and_pkey.html" target="wiki-view">`md_check_cert_and_pkey`</a></li>
+</ul></body></html>

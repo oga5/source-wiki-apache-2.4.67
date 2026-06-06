@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_mplx.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_mplx.h</h1>
+<h2>概要</h2>
+<p><code>h2_mplx.h</code> は、HTTP/2 セッションにおける「ストリーム多重化（Multiplexer）」のコア定義を提供します。クライアントとのメイン接続（c1）と、個々のリクエストを処理するセカンダリ接続（c2）の間で、データ、イベント、および処理リソースを仲介するハブの役割を果たします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> において、<code>h2_session</code> が HTTP/2 プロトコル層を管理するのに対し、<code>h2_mplx</code> はそのセッション内のリクエスト処理を非同期に管理します。<code>h2_workers</code> と連携し、スレッドプール上で実行されるリクエスト処理と、メイン接続の I/O を橋渡しします。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストのスケジューリング**: 優先度に基づいたストリーム処理の順序付け。</li>
+<li>**接続仲介**: c1（メイン）と c2（ワーカースレッド）間のデータフローの同期と管理。</li>
+<li>**ライフサイクル管理**: ストリームの生成から破棄、およびワーカースレッドの割り当て管理。</li>
+<li>**リソース制限**: 同時実行ストリーム数やメモリ使用量の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_mplx</code>: 多重化器のメイン構造体。ストリームの状態管理、ロック、キュー、ワーカースレッドへの参照を保持。</li>
+<li><code>h2_mplx_c1_*</code>: メイン接続（c1）から呼び出される API。ストリームの開始、ポーリング、シャットダウンを担当。</li>
+<li><code>h2_mplx_c2_*</code>: セカンダリ接続（c2）から呼び出される API。I/O 完了通知やストリーム取得を担当。</li>
+<li><code>h2_mplx_worker_*</code>: ワーカースレッドがリクエストを取得するために使用する API。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **入力**: <code>h2_mplx_c1_process</code> により、新しいストリームが処理キューに追加されます。 2.  **実行**: <code>h2_mplx_worker_pop_c2</code> を通じてワーカースレッドがリクエストを取得し、c2 コンテキストで処理を開始します。 3.  **同期**: <code>h2_mplx_c1_poll</code> を使用して、c1 は c2 からの出力データやイベントを監視します。 4.  **終了**: 処理が完了したストリームは、<code>h2_mplx_c1_stream_cleanup</code> を経て破棄キュー（<code>spurge</code>）へ移動し、最終的にクリーンアップされます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_queue.h</code>: 内部キュー管理。</li>
+<li><code>h2_workers.h</code>: ワーカースレッド管理。</li>
+<li><code>h2_private.h</code>, <code>h2.h</code>: HTTP/2 共通定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_mplx.c</code>: 上記 API の実装。</li>
+<li><code>h2_stream.h</code>: 多重化される個々のストリームの定義。</li>
+<li><code>h2_c2.h</code>: セカンダリ接続の処理詳細。</li>
+<li><code>h2_bucket_beam.h</code>: c1-c2 間のデータ転送（バケットの受け渡し）に使用される機構。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**命名規則**: 関数名のプレフィックス（<code>c1_</code>, <code>c2_</code>, <code>worker_</code>）は、その関数を呼び出すべきコンテキストを厳密に示しています。これらを混同するとデッドロックや競合状態を引き起こすため注意してください。</li>
+<li>**スレッド安全性**: <code>h2_mplx</code> は内部で <code>apr_thread_mutex_t</code> を使用して保護されています。複雑な状態遷移を伴うため、ロックの取得範囲を最小限に抑える設計になっています。</li>
+<li>**デバッグ**: <code>H2_MPLX_MSG</code> マクロを使用すると、ログ出力時に <code>child_num</code> と <code>id</code> を含めた一貫性のあるログが生成可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_mplx_h__h2_c2_transit.html" target="wiki-view">`h2_c2_transit`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_h__h2_mplx.html" target="wiki-view">`h2_mplx`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_h__h2_stream.html" target="wiki-view">`h2_stream`</a></li>
+</ul></body></html>

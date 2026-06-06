@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_curl.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_curl.c</h1>
+<h2>概要</h2>
+<p><code>md_curl.c</code> は、<code>libcurl</code> を使用した HTTP クライアント機能の実装です。<code>md_http</code> モジュールのバックエンドとして機能し、ACME プロトコル等の通信に必要な同期・非同期リクエスト処理を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ネットワーク通信の抽象化レイヤーを担います。<code>md_http.h</code> で定義されたインターフェースを実装し、上位層（ACME ロジック等）が libcurl の詳細を意識せずに HTTP 通信を行えるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**HTTP 実装の提供**: <code>md_http_impl_t</code> 構造体を通じて、初期化、リクエスト実行、クリーンアップの各操作を <code>md_http</code> に提供。</li>
+<li>**libcurl 変換**: <code>md_http_request_t</code>（内部データ構造）と <code>libcurl</code> のオプション、コールバック、ステータスコード間のマッピング。</li>
+<li>**リソース管理**: <code>apr_pool_t</code> を利用したメモリ管理と、<code>libcurl</code> ハンドルのライフサイクル管理（再利用または破棄）。</li>
+<li>**非同期多重化**: <code>curl_multi</code> インターフェースを用いた、複数のリクエストを並行処理するイベントループの制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>内部データ構造</h3>
+<ul>
+<li><code>md_curl_internals_t</code>: リクエストごとの libcurl ハンドル、ヘッダーリスト、レスポンスバッファを保持するコンテキスト。</li>
+</ul>
+<h3>コールバック関数</h3>
+<ul>
+<li><code>req_data_cb</code>: <code>apr_bucket_brigade</code> からデータを読み取り、libcurl へ渡す。</li>
+<li><code>resp_data_cb</code>: libcurl からのレスポンスデータを <code>apr_brigade</code> に書き込む。</li>
+<li><code>header_cb</code>: HTTP レスポンスヘッダーを解析し、<code>apr_table_t</code> に格納する。</li>
+<li><code>curl_debug_log</code>: libcurl の詳細な通信ログを <code>md_log</code> に出力する。</li>
+</ul>
+<h3>実装インターフェース</h3>
+<ul>
+<li><code>md_curl_get_impl()</code>: <code>md_http</code> モジュールにこの実装を登録するためのエントリポイント。</li>
+<li><code>md_curl_perform()</code>: 単一リクエストの同期実行。</li>
+<li><code>md_curl_multi_perform()</code>: 複数のリクエストを <code>curl_multi</code> で並行実行するメインループ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_curl_get_impl</code> が呼ばれ、<code>curl_global_init</code> が実行される。 2. **セットアップ**: <code>internals_setup</code> が <code>md_http_request_t</code> を libcurl の <code>easy_handle</code> に変換。<code>apr_pool_t</code> のライフサイクルに紐づく。 3. **実行**:</p>
+<ul>
+<li>単一の場合: <code>curl_easy_perform</code> を呼び出し、完了後にコールバックを起動。</li>
+<li>多重の場合: <code>curl_multi_perform</code> を使用。<code>nextreq</code> コールバックで順次リクエストを追加し、<code>curl_multi_wait</code> でイベントを待機。</li>
+<p>4. **終了**: <code>fire_status</code> によりレスポンス処理が完了し、<code>md_http_req_destroy</code> でリソースが解放される。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>curl/curl.h</code>: libcurl API。</li>
+<li><code>apr_buckets.h</code>: HTTP ボディのストリーミング処理。</li>
+<li><code>md_http.h</code>: HTTP 抽象化インターフェース。</li>
+<li><code>md_util.h</code>: ユーティリティ関数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_http.h</code>: 本モジュールが実装するインターフェースの定義。</li>
+<li><code>md_acme.c</code>: 本モジュールを利用して ACME サーバーと通信する上位モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>md_http_request_t</code> のプールに依存します。<code>internals</code> 構造体はリクエスト終了時に <code>md_curl_req_cleanup</code> で適切に解放される必要があります。</li>
+<li>**スレッド安全性**: <code>libcurl</code> のハンドルはスレッドセーフではないため、リクエストごとのプール内で管理される設計です。</li>
+<li>**エッジケース**: <code>resp_limit</code> を超えるレスポンスボディは <code>resp_data_cb</code> で拒否され、エラーとして処理されます。</li>
+<li>**省略箇所**: <code>curl_multi</code> の詳細なエラーハンドリングや、特定の SSL オプション（<code>CURLSSLOPT_NO_REVOKE</code> 等）のプラットフォーム依存の挙動については、実装の深部を直接参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_curl_c__curl_status.html" target="wiki-view">`curl_status`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__md_curl_internals_t.html" target="wiki-view">`md_curl_internals_t`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__req_data_cb.html" target="wiki-view">`req_data_cb`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__resp_data_cb.html" target="wiki-view">`resp_data_cb`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__header_cb.html" target="wiki-view">`header_cb`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__curlify_hdrs_ctx.html" target="wiki-view">`curlify_hdrs_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__curlify_headers.html" target="wiki-view">`curlify_headers`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__timeout_msec.html" target="wiki-view">`timeout_msec`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__timeout_sec.html" target="wiki-view">`timeout_sec`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__curl_debug_log.html" target="wiki-view">`curl_debug_log`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__internals_setup.html" target="wiki-view">`internals_setup`</a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__update_status.html" target="wiki-view">`update_status`</a></li>
+</ul></body></html>

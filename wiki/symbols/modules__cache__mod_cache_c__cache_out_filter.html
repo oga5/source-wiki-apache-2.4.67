@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/cache/mod_cache.c:641</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュされたレスポンスをストレージから読み出し、フィルタチェーンを通じてクライアントへ送信する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t cache_out_filter(ap_filter_t *f, apr_bucket_brigade *in)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: 現在のフィルタコンテキスト。<code>f-&gt;ctx</code> に <code>cache_request_rec</code> が格納されていることを期待する。</li>
+<li><code>in</code>: 処理対象のバケットブリゲード。</li>
+<li>**出力**: </li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code> または <code>ap_pass_brigade</code> の戻り値）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;ctx</code> が <code>cache_request_rec</code> 構造体として初期化されていること。</li>
+<li>キャッシュの検索（<code>cache_select</code>）が先行して完了しており、<code>cache-&gt;handle</code> が有効であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **コンテキスト検証**: <code>f-&gt;ctx</code> が空の場合、キャッシュが無効と判断し、フィルタを削除して後続のフィルタへブリゲードを渡す。 2. **EOS（End of Stream）待機**: 入力ブリゲード <code>in</code> を走査し、<code>EOS</code> バケットが見つかるまで既存のバケットを破棄する。 3. **レスポンス復元**: <code>EOS</code> を検知すると以下を実行する。</p>
+<ul>
+<li>キャッシュされた <code>Content-Type</code> をレスポンスヘッダーに設定。</li>
+<li>キャッシュされたステータスコードを <code>r-&gt;status</code> に反映。</li>
+<li><code>cache-&gt;provider-&gt;recall_body</code> を呼び出し、キャッシュされたボディデータをブリゲードへ読み込む。</li>
+<p>4. **終了処理**: フィルタ自身をチェーンから削除し、復元したボディを含むブリゲードを後続のフィルタへ渡す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_cache.c</code> 内の2箇所（行2668, 2678）から参照されている。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_remove_output_filter</code>: フィルタの終了時に自身を削除。</li>
+<li><code>cache-&gt;provider-&gt;recall_body</code>: キャッシュストレージからのデータ読み出し。</li>
+<li><code>ap_pass_brigade</code>: 後続のフィルタへのデータ転送。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_request_rec</code>: キャッシュリクエストの管理構造体。</li>
+<li><code>ap_filter_t</code>: Apache フィルタ構造体。</li>
+<li><code>apr_bucket_brigade</code>: データ転送用のバケットリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キャッシュコンテキスト欠如**: <code>cache</code> が NULL の場合、エラーログを出力し、フィルタを無効化して処理を継続する。</li>
+<li>**EOS 未到達**: <code>EOS</code> バケットがブリゲード内に存在しない間は、入力バケットを破棄し続ける。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本フィルタは <code>AP_FTYPE_CONTENT_SET</code> 相当のフェーズで動作する。</li>
+<li><code>recall_body</code> はプロバイダー依存の実装であるため、ストレージ固有の挙動については各プロバイダー（<code>mod_cache_disk</code> 等）のコードを参照すること。</li>
 </ul></body></html>

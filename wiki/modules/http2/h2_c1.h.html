@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c1.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c1.h</h1>
+<h2>概要</h2>
+<p><code>h2_c1.h</code> は、Apache HTTP Server における HTTP/2 の「プライマリ接続（C1）」を管理するためのインターフェースを定義します。C1 はクライアントと直接通信を行う接続を指し、HTTP/2 セッションのライフサイクル管理、ワーカープールの初期化、およびプロトコル切り替え（Upgrade/Direct）の制御を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> モジュールにおいて、C1 はクライアントとの通信の入り口です。<code>h2_c2</code>（バックエンド/ストリーム処理）と対を成し、クライアントからのリクエストをセッションとして確立し、適切なストリーム処理へと橋渡しする役割を果たします。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス初期化**: 子プロセス起動時のワーカープール（<code>h2_workers</code>）の生成と設定。</li>
+<li>**セッション管理**: クライアント接続に対する <code>h2_session</code> の生成と実行。</li>
+<li>**プロトコル制御**: HTTP/1.1 からの Upgrade や、H2Direct による直接的な HTTP/2 接続の判定。</li>
+<li>**接続フックの提供**: Apache の接続処理パイプラインに HTTP/2 を組み込むためのフック登録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_c1_child_init</code>: 子プロセス起動時にワーカープールを初期化する。</li>
+<li><code>h2_c1_setup</code>: 接続に対して HTTP/2 セッションを割り当て、初期化する。</li>
+<li><code>h2_c1_run</code>: HTTP/2 セッションのメインループを実行する。</li>
+<li><code>h2_c_logio_add_bytes_in/out</code>: <code>mod_logio</code> と連携するための外部関数ポインタ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: <code>h2_c1_child_init</code> が呼ばれ、設定に基づいたワーカープールが作成されます。 2.  **セットアップ**: <code>h2_c1_setup</code> が接続（<code>conn_rec</code>）を受け取り、<code>h2_session</code> を生成して接続コンテキストに紐付けます。この際、不要なフィルタ（<code>reqtimeout</code> 等）が除去されます。 3.  **実行**: <code>h2_c1_run</code> が呼び出されると、セッションが終了するまでループし、クライアントからのフレームを処理します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>http_core.h</code>: Apache コア機能へのアクセス。</li>
+<li><code>h2_conn_ctx.h</code> (前方宣言): 接続コンテキストの管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_c1.c</code>: 上記関数の実装。</li>
+<li><code>h2_session.h</code>: セッションの内部状態と処理ロジック。</li>
+<li><code>h2_workers.h</code>: HTTP/2 ストリームを並列処理するためのワーカー管理。</li>
+<li><code>h2_c2.h</code>: C1 が受け取ったリクエストを処理するバックエンド側のインターフェース。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**C1 vs C2**: 本ファイルが扱う「C1」はクライアント接続を指します。ストリームごとの処理を行う「C2」とは分離されており、C1 は主にセッションの維持とフレームのデマルチプレクスを担当します。</li>
+<li>**MPM 依存**: <code>h2_c1_run</code> は MPM（Multi-Processing Module）の特性（非同期処理の可否など）に依存するため、実行環境の MPM 設定に注意してください。</li>
+<li>**フィルタの除去**: <code>h2_c1_setup</code> 内で <code>reqtimeout</code> フィルタを明示的に削除している点に注目してください。これは HTTP/1.1 用のタイムアウト監視が HTTP/2 のストリーム多重化と競合するためです。</li>
+</ul></body></html>

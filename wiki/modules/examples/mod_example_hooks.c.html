@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/examples/mod_example_hooks.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/examples/mod_example_hooks.c</h1>
+<h2>概要</h2>
+<p><code>mod_example_hooks.c</code> は、Apache HTTP Server の全処理フェーズにおけるフック呼び出しを可視化・追跡するための教育用モジュールです。サーバーの起動からリクエスト処理、接続管理に至るまで、ほぼすべての利用可能なフックに介入し、その実行順序とコンテキストを HTML 形式で出力します。</p>
+<h2>モジュール内での役割</h2>
+<p>本モジュールは、Apache モジュール開発者がフックの実行タイミングや設定の継承ルールを理解するための「リファレンス実装」として機能します。実運用環境での使用は推奨されません。</p>
+<h2>責務</h2>
+<ul>
+<li>**フックの可視化**: サーバーの全ライフサイクルにおけるコールバックを捕捉し、ログおよび HTML レポートとして蓄積する。</li>
+<li>**設定管理**: ディレクトリおよびサーバー単位の設定構造体（<code>x_cfg</code>）の生成、マージ、および継承ルールのデモンストレーション。</li>
+<li>**ディレクティブ提供**: <code>Example</code> ディレクティブを通じた設定の適用と、その影響範囲の追跡。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体と管理</h3>
+<ul>
+<li><code>struct x_cfg</code>: モジュールの設定データ。<code>cmode</code>（スコープ）、<code>local</code>（ディレクティブ有無）、<code>congenital</code>（継承フラグ）、<code>trace</code>（ログ文字列）を保持。</li>
+<li><code>x_create_dir_config</code> / <code>x_create_server_config</code>: 設定構造体の初期化とメモリ割り当て。</li>
+<li><code>x_merge_dir_config</code> / <code>x_merge_server_config</code>: 親設定と子設定をマージするロジック。</li>
+</ul>
+<h3>フック登録とディレクティブ</h3>
+<ul>
+<li><code>x_register_hooks</code>: <code>ap_hook_*</code> を用いて、全フェーズのコールバック関数をサーバーに登録する。</li>
+<li><code>x_cmds</code>: <code>Example</code> ディレクティブを定義する <code>command_rec</code> 配列。</li>
+<li><code>example_hooks_module</code>: モジュールのエントリポイントとなる <code>module</code> 構造体。</li>
+</ul>
+<h3>トレースユーティリティ</h3>
+<ul>
+<li><code>trace_startup</code>: 起動時のフックをグローバル変数に記録。</li>
+<li><code>trace_request</code>: リクエスト単位のフックを <code>request_rec-&gt;notes</code> に記録。</li>
+<li><code>trace_connection</code>: 接続単位のフックを <code>conn_rec-&gt;pool</code> のユーザーデータに記録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>x_register_hooks</code> がサーバー起動時に呼ばれ、各フック関数を登録。 2. **設定**: <code>Example</code> ディレクティブが解析されると <code>cmd_example</code> が呼ばれ、設定構造体にフラグを立てる。 3. **実行**: 各フック関数（<code>x_handler</code> 等）が呼ばれるたびに、対応する <code>trace_*</code> 関数が呼び出され、現在のコンテキスト（<code>request_rec</code> や <code>conn_rec</code>）から情報を抽出して文字列を生成し、プールに保存する。 4. **出力**: <code>x_handler</code> が <code>example-hooks-handler</code> を受け取ると、蓄積されたトレース文字列を HTML としてクライアントに返却する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache コア API。</li>
+<li><code>apr_pools.h</code> (経由): メモリ管理およびユーザーデータ保存。</li>
+<li><code>apr_strings.h</code>: 文字列操作とトレース生成。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/examples/mod_example_ipc.c</code>: プロセス間通信の例。</li>
+<li><code>modules/examples/mod_case_filter.c</code>: フィルタ処理の例。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのトレース文字列は、関連する <code>pool</code>（<code>request_pool</code> や <code>connection_pool</code>）から割り当てられます。これにより、リクエスト終了時に自動的にメモリが解放されます。</li>
+<li>**パフォーマンス**: 本モジュールはすべてのリクエストで文字列連結とログ出力を行うため、高負荷環境では深刻なパフォーマンス低下を招きます。</li>
+<li>**制限事項**: <code>EXAMPLE_LOG_EACH</code> マクロを有効にすると <code>error_log</code> が肥大化します。また、マルチスレッド環境でのグローバル変数 <code>trace</code> の使用は競合の可能性があるため、注意が必要です。</li>
+<li>**未実装**: 意図的に一部の複雑なフックや、非リクエスト関連の HTML バックトレースは簡略化されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_cfg.html" target="wiki-view">`x_cfg`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_create_dir_config.html" target="wiki-view">`x_create_dir_config`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_create_server_config.html" target="wiki-view">`x_create_server_config`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_check_config.html" target="wiki-view">`x_check_config`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_insert_filter.html" target="wiki-view">`x_insert_filter`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_insert_error_filter.html" target="wiki-view">`x_insert_error_filter`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_check_access.html" target="wiki-view">`x_check_access`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_check_authn.html" target="wiki-view">`x_check_authn`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_get_suexec_identity.html" target="wiki-view">`x_get_suexec_identity`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_create_connection.html" target="wiki-view">`x_create_connection`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_get_mgmt_items.html" target="wiki-view">`x_get_mgmt_items`</a></li>
+<li><a href="../../symbols/modules__examples__mod_example_hooks_c__x_create_request.html" target="wiki-view">`x_create_request`</a></li>
+</ul></body></html>

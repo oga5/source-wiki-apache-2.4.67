@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>support/httxt2dbm.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>support/httxt2dbm.c</h1>
+<h2>概要</h2>
+<p><code>httxt2dbm.c</code> は、Apache HTTP Server の <code>RewriteMap</code> 機能で使用されるテキスト形式のマップファイルを、高速な検索が可能な DBM（Database Manager）形式に変換するためのコマンドラインユーティリティです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュール内のツール群の一つであり、サーバーの実行時ではなく、管理者が設定ファイルを準備する段階で使用されるオフラインツールです。</p>
+<h2>責務</h2>
+<ul>
+<li>テキストファイル（キーと値のペア）を読み込み、指定された DBM フォーマットでデータベースを生成する。</li>
+<li>APR（Apache Portable Runtime）の DBM 抽象化レイヤーを利用し、環境に応じた複数の DBM バックエンド（SDBM, GDBM, DB, NDBM）をサポートする。</li>
+<li>標準入力からの読み込みをサポートし、パイプライン処理に適した設計を提供する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>to_dbm()</code>: テキストファイルを一行ずつ解析し、<code>apr_dbm_store</code> を用いて DBM ファイルへ書き込むコアロジック。</li>
+<li><code>main()</code>: 引数の解析、DBM ファイルのオープン、および処理のライフサイクル管理を行う。</li>
+<li><code>REWRITE_MAX_TXT_MAP_LINE</code>: 1行あたりの最大文字数（デフォルト 1024）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>apr_app_initialize</code> で環境を整え、<code>apr_getopt</code> でコマンドライン引数（入力元、出力先、フォーマット）を解析する。 2. **ファイルオープン**: 入力ファイルを <code>apr_file_open</code>（または標準入力）、出力 DBM を <code>apr_dbm_open_ex</code> で開く。 3. **変換ループ**: <code>to_dbm</code> 関数がテキストファイルを走査し、空白文字でキーと値を分割。<code>apr_pstrmemdup</code> でメモリを確保しつつ、<code>apr_dbm_store</code> で DBM に格納する。 4. **終了処理**: <code>apr_dbm_close</code> でデータベースを閉じ、<code>atexit</code> に登録された <code>apr_terminate</code> によりリソースを解放する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code> / <code>apr_dbm.h</code>: DBM 操作およびポータブルなファイル操作の基盤。</li>
+<li><code>apr_getopt.h</code>: コマンドライン引数の解析。</li>
+<li><code>apr_pools.h</code>: メモリ管理（プールベース）。</li>
+<li><code>stdlib.h</code>: <code>atexit</code> による終了処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_rewrite.c</code>: 本ツールで生成された DBM ファイルを実際に読み込んで書き換えルールを適用する Apache モジュール。</li>
+<li><code>apr_dbm.h</code>: 本ツールが依存する DBM 抽象化インターフェースの定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>to_dbm</code> 内では <code>apr_pool_clear</code> を使用して、ループごとのメモリ消費を抑制しています。大量のデータを変換する場合でもメモリリークの心配は少ない設計です。</li>
+<li>**フォーマット指定**: <code>-f</code> オプションで指定可能なフォーマットは、ビルド時に APR-util がサポートしているものに依存します。利用可能なフォーマットは <code>usage()</code> 関数内のチェックロジックで確認可能です。</li>
+<li>**エラーハンドリング**: DBM のオープン失敗時や変換エラー時には、APR のエラーコードを人間が読みやすい形式（<code>%pm</code>）で出力するようになっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__httxt2dbm_c__usage.html" target="wiki-view">`usage`</a></li>
+<li><a href="../symbols/support__httxt2dbm_c__to_dbm.html" target="wiki-view">`to_dbm`</a></li>
+<li><a href="../symbols/support__httxt2dbm_c__main.html" target="wiki-view">`main`</a></li>
+</ul></body></html>

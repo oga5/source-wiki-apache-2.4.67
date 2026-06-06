@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/filters/mod_deflate.c:392</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>mod_deflate</code> フィルタにおいて、圧縮・伸長処理のライフサイクル全体を通じて状態を保持するためのコンテキスト構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct deflate_ctx_t
+{
+    z_stream stream;
+    unsigned char *buffer;
+    unsigned long crc;
+    apr_bucket_brigade *bb, *proc_bb;
+    int (*libz_end_func)(z_streamp);
+    unsigned char *validation_buffer;
+    apr_size_t validation_buffer_length;
+    char header[10];
+    apr_size_t header_len;
+    int zlib_flags;
+    int ratio_hits;
+    apr_off_t inflate_total;
+    unsigned int consume_pos, consume_len;
+    unsigned int filter_init:1;
+    unsigned int done:1;
+} deflate_ctx;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: フィルタチェーンを流れる <code>apr_bucket_brigade</code> データ。</li>
+<li>**出力**: zlib を介して処理された圧縮/伸長済みデータ、および <code>EOS</code> (End of Stream) 到達時のフッター情報。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リクエストプールに紐付いており、リクエスト終了時に <code>apr_pool_cleanup_register</code> を通じて zlib リソースが解放される必要があります。</li>
+<li><code>buffer</code> は設定された <code>bufferSize</code> に基づいて動的に確保されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: フィルタ初回呼び出し時に <code>filter_init</code> フラグを用いて <code>zlib</code> を初期化します。 2. **データ処理**: <code>stream</code> を使用してバケット内のデータを圧縮・伸長し、<code>proc_bb</code> を経由して後続のフィルタへ渡します。 3. **終了処理**: <code>done</code> フラグが立つまで処理を継続し、<code>EOS</code> 検知時に <code>libz_end_func</code> を呼び出してリソースを解放します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>deflate_out_filter</code>, <code>inflate_out_filter</code>, <code>deflate_in_filter</code> 等のフィルタ関数。</li>
+<li>**呼び出し先**: <code>consume_buffer</code>, <code>flush_libz_buffer</code>, <code>check_ratio</code>, <code>consume_zlib_flags</code> 等のモジュール内ユーティリティ関数。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>z_stream</code>: zlib のコア状態管理構造体。</li>
+<li><code>apr_bucket_brigade</code>: Apache のデータストリーム管理構造体。</li>
+<li><code>deflate_filter_config</code>: サーバー全体の設定情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**制限超過**: <code>ratio_limit</code> や <code>inflate_limit</code> を超えた場合、<code>APR_EINVAL</code> や <code>APR_ENOSPC</code> を返して処理を中断します。</li>
+<li>**スキップ条件**: <code>HEAD</code> リクエスト、<code>204 No Content</code>、または既に圧縮済みのコンテンツは処理対象外となります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>mod_deflate</code> の状態管理の要です。zlib の内部的なハフマン符号化や LZ77 圧縮アルゴリズムの詳細は zlib ライブラリ側に依存するため、本ファイルでは管理していません。</li>
 </ul></body></html>

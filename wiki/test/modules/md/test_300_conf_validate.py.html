@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/md/test_300_conf_validate.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>test/modules/md/test_300_conf_validate.py</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_md</code> モジュールにおける設定ディレクティブの妥当性検証および構成ルールのテストスイートです。<code>MDomain</code> 定義、仮想ホスト（vhost）との整合性、証明書関連の設定、および設定ファイルの破損に対する回復挙動を網羅的に検証します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/md</code> モジュール群において、設定の静的解析および Apache 起動時の構成チェックを担当する統合テスト層です。<code>MDConf</code> クラスを介して Apache の設定を動的に生成し、期待される成功または失敗（エラーログの確認を含む）を検証します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定の妥当性検証**: <code>MDomain</code> 定義の重複、vhost との不整合、無効なパラメータ指定の検出。</li>
+<li>**構成ルールの検証**: <code>MDMatchNames</code> や <code>MDRequireHttps</code> 等のディレクティブが正しく適用されるかの確認。</li>
+<li>**エラーハンドリング**: 設定エラー時の Apache 起動失敗と、特定のログコード（AHxxxxx）の出力確認。</li>
+<li>**自己修復機能のテスト**: 設定ファイル（JSON）が破損した際の Apache の挙動（修復または停止）の検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>テストクラス</h3>
+<ul>
+<li><code>TestConf</code>: <code>pytest</code> を用いたテストスイートの基底クラス。<code>MDTestEnv</code> を利用して環境を制御します。</li>
+</ul>
+<h3>設定操作クラス</h3>
+<ul>
+<li><code>MDConf</code>: Apache 設定を構築するためのヘルパー。<code>add()</code> や <code>add_vhost()</code> で設定を生成し、<code>install()</code> で適用します。</li>
+</ul>
+<h3>環境制御</h3>
+<ul>
+<li><code>env</code>: <code>MDTestEnv</code> インスタンス。Apache の起動・停止、設定ストアのパージ、ログの監視（<code>httpd_error_log</code>）を提供します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>_class_scope</code> フィーチャにより、クラス単位で ACME サーバーの起動とストアの初期化が行われます。 2. **設定生成**: 各テストメソッド内で <code>MDConf</code> をインスタンス化し、<code>text</code> 引数や <code>add_vhost()</code> を通じて設定文字列を構築します。 3. **適用と検証**:</p>
+<ul>
+<li><code>conf.install()</code> を呼び出し、Apache 設定を書き込みます。</li>
+<li><code>env.apache_restart()</code> または <code>env.apache_fail()</code> を呼び出し、戻り値で成否を判定します。</li>
+<li><code>env.httpd_error_log.ignore_recent()</code> を使用して、期待されるエラーログを無視（確認）します。</li>
+<p>4. **破損テスト**: <code>test_md_300_030/031</code> では、ファイルシステム上の JSON ファイルを直接書き換えることで、<code>mod_md</code> のロード時の堅牢性を検証します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>.md_conf.MDConf</code>: 設定生成用ユーティリティ。</li>
+<li><code>.md_env.MDTestEnv</code>: テスト環境の抽象化レイヤー。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/modules/md/md_conf.py</code>: <code>MDConf</code> クラスの実装詳細。</li>
+<li><code>test/modules/md/md_env.py</code>: テスト環境のセットアップと Apache 制御の実装。</li>
+<li><code>test/modules/md/test_310_conf_store.py</code>: 設定の永続化とストア管理に関する追加テスト。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**ログの無視**: <code>env.httpd_error_log.ignore_recent()</code> は、テストが意図的に発生させたエラーログを「確認済み」として処理するために必須です。これがないと、テスト実行時にログの不一致で警告が出ることがあります。</li>
+<li>**メモリと永続化**: 本テストはファイルシステム上の設定ファイル（<code>store_dir</code>）を直接操作します。<code>env.purge_store()</code> や <code>env.clear_store()</code> を呼び出さないと、テスト間で設定が汚染される可能性があります。</li>
+<li>**網羅性**: 本ファイルは <code>mod_md</code> の設定ディレクティブの多くを網羅していますが、ACME プロトコル自体の通信フローは <code>test_502_acmev2_drive.py</code> 等の別ファイルで扱われます。</li>
+<li>**制約**: <code>test_md_300_031</code> での「破損したストア」のテストは、Apache の起動失敗を期待するものであり、ファイルシステムの状態を破壊するため、テスト終了後のクリーンアップが重要です。</li>
+</ul></body></html>

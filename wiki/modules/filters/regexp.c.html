@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/regexp.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/regexp.c</h1>
+<h2>概要</h2>
+<p><code>regexp.c</code> は、<code>libsed</code> の一部として正規表現のコンパイルおよびマッチングエンジンを実装するファイルです。AT&amp;T <code>sed</code> 由来のコードベースであり、バイトコード形式の正規表現を生成し、それを逐次実行する低レベルな処理を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> 内の <code>mod_sed.c</code> や <code>mod_substitute.c</code> が提供するテキスト置換機能のバックエンドとして機能します。<code>regexp.h</code> で定義されたバイトコード構造を解釈し、入力ストリームに対するパターンマッチングを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**正規表現コンパイル**: 文字列形式の正規表現を、<code>sed_step</code> が解釈可能なバイトコード（<code>CBRA</code>, <code>CCHR</code>, <code>CCL</code> 等）へ変換する。</li>
+<li>**マッチング実行**: コンパイル済みバイトコードを用いて、入力文字列に対するパターンマッチングを行う。</li>
+<li>**エラーハンドリング**: コンパイル時の構文エラーを検出し、<code>sed_commands_t</code> を通じてエラーメッセージを報告する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンパイル・実行制御</h3>
+<ul>
+<li><code>sed_compile()</code>: 正規表現文字列をバイトコードに変換するメイン関数。</li>
+<li><code>sed_step()</code>: マッチングの開始点。<code>circf</code>（行頭マッチフラグ）に基づき、最適化された検索または全走査を行う。</li>
+<li><code>_advance()</code>: 再帰的またはループ構造でバイトコードを解釈し、マッチングを判定するコアエンジン。</li>
+</ul>
+<h3>内部ヘルパー・マクロ</h3>
+<ul>
+<li><code>GETC/PEEKC/UNGETC</code>: コンパイル時の入力ストリーム操作用マクロ。</li>
+<li><code>PLACE/ISTHERE</code>: 文字クラス（<code>CCL</code>）のビットマップ操作用マクロ。</li>
+<li><code>regerr()</code>: コンパイルエラーコードを人間が読めるメッセージに変換する。</li>
+<li><code>getrnge()</code>: <code>{n,m}</code> 形式の範囲指定を解析し、<code>step_vars_storage</code> に格納する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **コンパイル**: <code>sed_compile</code> が <code>commands-&gt;cp</code> から文字を読み取り、<code>ep</code>（実行ポインタ）へバイトコードを書き込む。<code>bracket</code> スタックを用いて <code>\(</code> <code>\)</code> のネストを管理する。 2. **マッチング**: <code>sed_step</code> が入力文字列の各位置から <code>_advance</code> を呼び出す。 3. **バイトコード解釈**: <code>_advance</code> は <code>switch</code> 文でバイトコードを順次処理する。<code>STAR</code>（繰り返し）や <code>RNGE</code>（範囲）が含まれる場合、バックトラッキングを伴うループ処理が行われる。 4. **状態保持**: マッチングの境界（<code>loc1</code>, <code>loc2</code>）やキャプチャグループ（<code>braslist</code>, <code>braelist</code>）は <code>step_vars_storage</code> 構造体を通じて管理される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>libsed.h</code>, <code>sed.h</code>: <code>sed</code> の基本データ構造とコマンド定義。</li>
+<li><code>regexp.h</code>: バイトコード定数および <code>step_vars_storage</code> 定義。</li>
+<li><code>apr.h</code>, <code>apr_lib.h</code>: Apache Portable Runtime による移植性確保。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/filters/sed0.c</code>, <code>sed1.c</code>: <code>sed</code> のコマンド処理ロジック。</li>
+<li><code>modules/filters/mod_sed.c</code>: 本エンジンを利用する Apache モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>sed_compile</code> は呼び出し元が確保したバッファ（<code>ep</code>）に対して書き込みを行います。バッファオーバーフローを防ぐため、<code>endbuf</code> による境界チェックが随所で行われています。</li>
+<li>**設計の性質**: 本コードは非常に古い AT&amp;T <code>sed</code> の実装を継承しており、再帰的な <code>_advance</code> 呼び出しや、特定のバイトコードに対する <code>goto</code> を多用した最適化が行われています。</li>
+<li>**制約**: <code>NBRA</code>（キャプチャグループ数）は 9 に制限されています。</li>
+<li>**省略箇所**: <code>_advance</code> 内の複雑なバックトラッキングロジック（特に <code>STAR</code> や <code>RNGE</code> の組み合わせ）は、コードの可読性よりも実行効率を優先した実装となっています。詳細な解析には、<code>regexp.h</code> のバイトコード定義と照らし合わせることを推奨します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__regexp_c__comperr.html" target="wiki-view">`comperr`</a></li>
+<li><a href="../../symbols/modules__filters__regexp_c__regerr.html" target="wiki-view">`regerr`</a></li>
+<li><a href="../../symbols/modules__filters__regexp_c__sed_compile.html" target="wiki-view">`sed_compile`</a></li>
+<li><a href="../../symbols/modules__filters__regexp_c__sed_step.html" target="wiki-view">`sed_step`</a></li>
+<li><a href="../../symbols/modules__filters__regexp_c__getrnge.html" target="wiki-view">`getrnge`</a></li>
+</ul></body></html>

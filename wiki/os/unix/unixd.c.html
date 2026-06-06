@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>os/unix/unixd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>os/unix/unixd.c</h1>
+<h2>概要</h2>
+<p><code>os/unix/unixd.c</code> は、Apache HTTP Server の Unix 系プラットフォームにおける MPM（Multi-Processing Module）共通の低レイヤー機能を提供します。プロセス権限の管理、リソース制限（rlimit）の設定、Unix 特有のシグナルハンドリング、および <code>suexec</code> を介した特権プロセス生成の抽象化を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>os/unix</code> モジュール群の中核であり、<code>unixd.h</code> で定義されたデータ構造の実装を提供します。MPM が OS レベルの制約やセキュリティ要件（root 権限からの降格など）を扱う際のユーティリティとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス権限管理**: root 権限で起動した際のプロセス ID 降格に伴う、ミューテックス（SysV セマフォ等）の所有権・パーミッション調整。</li>
+<li>**リソース制限**: <code>setrlimit</code> を用いたプロセスごとのリソース上限設定。</li>
+<li>**特権プロセス生成**: <code>suexec</code> を利用した、指定ユーザー権限での外部プロセス実行。</li>
+<li>**シグナル管理**: MPM のライフサイクル（停止・再起動）を制御するシグナルハンドラの登録と、<code>retained_data</code> を介した状態保持。</li>
+<li>**プラットフォーム固有対応**: <code>_OSD_POSIX</code>（BS2000）環境における特殊な <code>fork</code> 処理の抽象化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・状態管理</h3>
+<ul>
+<li><code>ap_unixd_config</code>: サーバーの実行ユーザー/グループ情報や <code>suexec</code> 設定を保持するグローバル構造体。</li>
+<li><code>retained_data</code>: MPM 再起動時にも生存させる必要がある状態（停止フラグ、世代管理など）を保持する内部静的変数。</li>
+</ul>
+<h3>プロセス・権限操作</h3>
+<ul>
+<li><code>ap_unixd_set_rlimit()</code>: <code>rlimit</code> を設定するコマンドハンドラ。</li>
+<li><code>ap_os_create_privileged_process()</code>: <code>suexec</code> を経由して特権プロセスを生成するエントリポイント。</li>
+<li><code>ap_unixd_set_proc_mutex_perms()</code>: プロセスミューテックスの所有権を <code>ap_unixd_config</code> のユーザーに合わせる。</li>
+</ul>
+<h3>シグナル・ライフサイクル</h3>
+<ul>
+<li><code>ap_unixd_mpm_set_signals()</code>: MPM の停止・再起動シグナルを登録する。</li>
+<li><code>sig_term</code>, <code>sig_restart</code>: シグナルハンドラ。<code>retained_data</code> を更新して MPM の状態遷移をトリガーする。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **シグナルフロー**: <code>ap_unixd_mpm_set_signals</code> がシグナルハンドラを登録。シグナル受信時、ハンドラは <code>retained_data</code> のフラグを更新。メインループはこれらを監視し、適切なタイミングで停止・再起動を実行する。 2. **権限降格フロー**: サーバー起動時に root で実行されている場合、<code>ap_unixd_set_proc_mutex_perms</code> が呼び出され、ミューテックスのパーミッションを <code>ap_unixd_config</code> で指定された非特権ユーザーに変更する。 3. **特権プロセス生成**: <code>ap_os_create_privileged_process</code> は <code>get_suexec_identity</code> フックを呼び出し、対象ユーザー情報を取得。<code>suexec</code> バイナリを介してプロセスを起動する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_proc_mutex.h</code>, <code>apr_signal.h</code>, <code>apr_thread_proc.h</code> 等によるプラットフォーム抽象化。</li>
+<li>**OS ヘッダー**: <code>pwd.h</code>, <code>grp.h</code>, <code>sys/resource.h</code>, <code>sys/sem.h</code> 等の Unix システムコール用ヘッダー。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>mpm_common.h</code> 等のサーバーコア定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>os/unix/unixd.h</code>: 本ファイルのデータ構造と関数宣言。</li>
+<li><code>server/mpm_common.c</code>: MPM 共通のシグナル処理やリソース管理の補完。</li>
+<li><code>modules/arch/unix/mod_suexec.c</code>: <code>suexec</code> の具体的な実装ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>retained_data</code> は <code>ap_pglobal</code> プールに関連付けられており、サーバーのライフサイクル全体で生存します。</li>
+<li>**エッジケース**: <code>ap_unixd_accept</code> は、<code>EMFILE</code> や <code>ENETDOWN</code> などのソケットエラーを適切にハンドリングし、必要に応じてサーバーを停止させるロジックを含みます。</li>
+<li>**注意点**: <code>_OSD_POSIX</code> 関連のコードは特定のレガシー環境向けであり、一般的な Unix/Linux 環境では無効化されます。</li>
+<li>**省略箇所**: <code>ap_unixd_accept</code> 内のプラットフォーム固有のエラーハンドリング（HPUX 等）は、歴史的な経緯による複雑な条件分岐が含まれていますが、本質的には「致命的なエラーか否かの判定」に集約されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/os__unix__unixd_c__ap_unixd_set_rlimit.html" target="wiki-view">`ap_unixd_set_rlimit`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__ap_os_create_privileged_process.html" target="wiki-view">`ap_os_create_privileged_process`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__proc_mutex_mech.html" target="wiki-view">`proc_mutex_mech`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__ap_unixd_set_proc_mutex_perms.html" target="wiki-view">`ap_unixd_set_proc_mutex_perms`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__ap_unixd_set_global_mutex_perms.html" target="wiki-view">`ap_unixd_set_global_mutex_perms`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__ap_unixd_accept.html" target="wiki-view">`ap_unixd_accept`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__retained_data_cleanup.html" target="wiki-view">`retained_data_cleanup`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__ap_unixd_mpm_get_retained_data.html" target="wiki-view">`ap_unixd_mpm_get_retained_data`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__sig_term.html" target="wiki-view">`sig_term`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__sig_restart.html" target="wiki-view">`sig_restart`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__unset_signals.html" target="wiki-view">`unset_signals`</a></li>
+<li><a href="../../symbols/os__unix__unixd_c__bs2_ForkType.html" target="wiki-view">`bs2_ForkType`</a></li>
+</ul></body></html>

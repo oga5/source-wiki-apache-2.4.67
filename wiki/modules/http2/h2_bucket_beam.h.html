@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_bucket_beam.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_bucket_beam.h</h1>
+<h2>概要</h2>
+<p><code>h2_bucket_beam</code> は、HTTP/2 通信において、スレッド間で <code>apr_bucket</code>（データチャンク）を効率的に受け渡すための同期メカニズムを提供します。コピーを最小限に抑えつつ、スレッドセーフなバッファリングとフロー制御を実現します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおいて、主に <code>h2_mplx</code>（マルチプレクサ）と連携し、異なるスレッド（例：HTTP/2 セッションスレッドとバックエンド処理スレッド）間でデータを橋渡しする役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッド間データ転送**: 異なるスレッドコンテキスト間でのバケットの受け渡し。</li>
+<li>**フロー制御**: バッファサイズ制限に基づく送信側のブロッキング制御。</li>
+<li>**イベント通知**: 送受信や消費状況をコールバック経由で通知する仕組みの提供。</li>
+<li>**リソース管理**: バケットのライフサイクル管理と、必要に応じたファイルバケットのコピー制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_bucket_beam</code>: 転送の基盤となる構造体。ロック、条件変数、バケットリストを保持。</li>
+<li><code>h2_beam_send()</code>: 送信側がバケットをビームに投入する関数。</li>
+<li><code>h2_beam_receive()</code>: 受信側がバケットを取り出す関数。</li>
+<li><code>h2_blist</code>: <code>apr_bucket</code> を管理するための軽量なリング構造体。</li>
+<li><code>h2_beam_io_callback</code>: データ消費量を送信側に通知するためのコールバック型。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **送信**: <code>h2_beam_send</code> が呼ばれると、バケットが <code>buckets_to_send</code> リストに追加されます。バッファ上限に達している場合、条件変数により待機します。 2. **受信**: <code>h2_beam_receive</code> が呼ばれると、リストからバケットが取り出され、受信側のブリゲードへ移動します。 3. **消費報告**: 受信側がバケットを処理した後、送信側に対して <code>h2_beam_report_consumption</code> を通じて消費済みバイト数が通知されます。これにより、送信側は次のデータを投入可能になります。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>h2_conn_ctx.h</code>: 接続コンテキストの定義。</li>
+<li><code>apr_thread_mutex.h</code> / <code>apr_thread_cond.h</code>: スレッド同期用プリミティブ。</li>
+<li><code>apr_buckets.h</code>: Apache Portable Runtime のバケット管理機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_bucket_beam.c</code>: 実装本体。リング操作やロック制御の詳細が含まれます。</li>
+<li><code>h2_mplx.h</code>: このビームを使用してストリーム間のデータ多重化を行う上位モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**スレッド安全性**: 本構造体はマルチスレッド環境での使用を前提としており、内部で <code>apr_thread_mutex_t</code> を使用しています。</li>
+<li>**ブロッキング**: <code>h2_beam_send</code> はバッファが満杯の場合にブロックする可能性があるため、呼び出し元のスレッド設計に注意が必要です。</li>
+<li>**コールバック**: 送信側と受信側でコールバックを適切に登録することで、非同期的なデータフローの監視が可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html" target="wiki-view">`h2_bucket_beam`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_h__apr_off_t.html" target="wiki-view">`apr_off_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_h__h2_blist.html" target="wiki-view">`h2_blist`</a></li>
+</ul></body></html>

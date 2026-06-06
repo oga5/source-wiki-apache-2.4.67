@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/mod_deflate.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/mod_deflate.c</h1>
+<h2>概要</h2>
+<p><code>mod_deflate</code> は、Apache HTTP Server において動的なコンテンツ圧縮（Gzip）および伸長（Inflate）を提供するフィルタモジュールです。zlib ライブラリをラップし、HTTP ストリームの入出力に対して透過的なデータ変換を行います。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache のフィルタチェーンの一部として動作します。出力フィルタ（<code>DEFLATE</code>, <code>INFLATE</code>）および入力フィルタ（<code>DEFLATE</code>）を登録し、リクエストの <code>Content-Encoding</code> ヘッダーや <code>Accept-Encoding</code> リクエストヘッダーに基づいて、動的に圧縮・伸長を適用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**圧縮/伸長処理**: zlib を使用したストリームの変換。</li>
+<li>**HTTP プロトコル整合性**: <code>Content-Encoding</code> の管理、<code>Vary: Accept-Encoding</code> の付与、<code>ETag</code> の調整。</li>
+<li>**リソース保護**: 圧縮比や伸長後のサイズ制限による DoS 攻撃対策。</li>
+<li>**設定管理**: 圧縮レベル、ウィンドウサイズ、メモリ使用量などのチューニング。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>deflate_filter_config</code>: サーバー全体の設定（圧縮レベル、バッファサイズ等）。</li>
+<li><code>deflate_dirconf_t</code>: ディレクトリ単位の設定（伸長サイズ制限、圧縮比制限）。</li>
+</ul>
+<h3>コンテキスト</h3>
+<ul>
+<li><code>deflate_ctx</code>: フィルタのライフサイクル中に保持される状態。zlib の <code>z_stream</code>、バッファ、CRC、ヘッダー情報、処理済みバイト数などを管理。</li>
+</ul>
+<h3>フィルタ関数</h3>
+<ul>
+<li><code>deflate_out_filter</code>: 出力データを圧縮するフィルタ。</li>
+<li><code>inflate_out_filter</code>: 出力データを伸長するフィルタ。</li>
+<li><code>deflate_in_filter</code>: 入力データ（リクエストボディ）を伸長するフィルタ。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>flush_libz_buffer</code>: zlib の内部バッファをフラッシュし、ブリゲードへ書き出す。</li>
+<li><code>check_gzip</code>: リクエストが Gzip 圧縮されているか判定し、ヘッダーを調整する。</li>
+<li><code>consume_buffer</code>: 圧縮/伸長されたデータを <code>apr_bucket_brigade</code> に追加する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: フィルタが初めて呼ばれた際、<code>deflate_ctx</code> を生成し <code>deflateInit2</code> / <code>inflateInit2</code> で zlib を初期化。 2. **データ処理**:</p>
+<ul>
+<li><code>apr_bucket_brigade</code> からバケットを読み取り、zlib に渡す。</li>
+<li><code>zlib</code> の出力バッファが満杯になるか、フラッシュ要求（<code>FLUSH</code> バケット）が来た時点で <code>consume_buffer</code> を呼び出し、次のフィルタへデータを渡す。</li>
+<p>3. **終了処理**: <code>EOS</code> (End of Stream) バケットを検知すると、zlib の残存データをフラッシュし、Gzip フッター（CRC/サイズ）を付与して <code>deflateEnd</code> / <code>inflateEnd</code> を呼び出す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>zlib.h</code>: 圧縮・伸長アルゴリズムのコア。</li>
+<li><code>util_filter.h</code>, <code>apr_buckets.h</code>: Apache フィルタチェーンおよびデータブリゲードの管理。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: モジュール登録および設定管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/filters/mod_brotli.c</code>: 同様の圧縮フィルタ（Brotli）。</li>
+<li><code>modules/filters/mod_filter.c</code>: フィルタの適用条件を制御する基盤モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>deflate_ctx</code> はリクエストプールに紐付いており、リクエスト終了時に <code>apr_pool_cleanup_register</code> を通じて zlib リソースが解放されます。</li>
+<li>**メモリレイアウト**: <code>deflate_ctx</code> 内の <code>buffer</code> は設定された <code>bufferSize</code> に基づいて動的に確保されます。</li>
+<li>**エッジケース**: </li>
+<li><code>HEAD</code> リクエストや <code>204 No Content</code>、既に圧縮済みのコンテンツはフィルタをスキップします。</li>
+<li>伸長時の <code>ratio_limit</code> や <code>inflate_limit</code> を超えた場合、<code>APR_EINVAL</code> や <code>APR_ENOSPC</code> を返して処理を中断します。</li>
+<li>**省略箇所**: zlib の内部的なハフマン符号化や LZ77 圧縮アルゴリズムの詳細は zlib ライブラリ側に依存するため、本ファイルでは触れていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_filter_config.html" target="wiki-view">`deflate_filter_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_dirconf_t.html" target="wiki-view">`deflate_dirconf_t`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__check_gzip.html" target="wiki-view">`check_gzip`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__getLong.html" target="wiki-view">`getLong`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__create_deflate_server_config.html" target="wiki-view">`create_deflate_server_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__create_deflate_dirconf.html" target="wiki-view">`create_deflate_dirconf`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_window_size.html" target="wiki-view">`deflate_set_window_size`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_buffer_size.html" target="wiki-view">`deflate_set_buffer_size`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_note.html" target="wiki-view">`deflate_set_note`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_memlevel.html" target="wiki-view">`deflate_set_memlevel`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_ctx.html" target="wiki-view">`deflate_ctx`</a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_check_etag.html" target="wiki-view">`deflate_check_etag`</a></li>
+</ul></body></html>

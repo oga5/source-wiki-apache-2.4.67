@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_conn_ctx.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_conn_ctx.h</h1>
+<h2>概要</h2>
+<p><code>h2_conn_ctx.h</code> は、Apache HTTP/2 モジュールにおいて、各接続（<code>conn_rec</code>）に付随する状態管理コンテキストを定義するヘッダーファイルです。HTTP/2 のセッション管理（C1）と、ストリーム処理のために生成されるサブ接続（C2）の両方で共通のメタデータ構造を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> は、クライアントとの直接接続（C1）と、内部的なストリーム処理用接続（C2）を区別して扱います。本ファイルは、これら異なる接続タイプに共通の「HTTP/2 関連のコンテキスト」を <code>conn_config</code> に格納・取得するためのインターフェースを提供し、モジュール全体の状態追跡を可能にします。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続コンテキストの定義**: <code>h2_conn_ctx_t</code> 構造体による、接続ごとの状態（セッション情報、ストリームID、タイムアウト、入出力パイプ等）の保持。</li>
+<li>**ライフサイクル管理**: 接続の初期化、セッションの割り当て、および接続終了時のデタッチ処理。</li>
+<li>**C1/C2 識別**: クライアント接続と内部処理用接続のメタデータを統合的に管理し、必要に応じて適切なリソース（<code>h2_mplx</code> や <code>h2_bucket_beam</code>）を紐付ける。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとの状態を保持するメイン構造体。</li>
+<li><code>h2_conn_ctx_get(c)</code>: <code>conn_rec</code> からコンテキストを取得するマクロ。</li>
+<li><code>h2_conn_ctx_create_for_c1</code>: クライアント接続（C1）用のコンテキスト生成関数。</li>
+<li><code>h2_conn_ctx_init_for_c2</code>: ストリーム処理用接続（C2）用のコンテキスト初期化関数。</li>
+<li><code>H2_PIPE_IN</code> / <code>H2_PIPE_OUT</code>: C2 接続におけるデータ通知パイプのインデックス。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 接続確立時に <code>h2_conn_ctx_create_for_c1</code> が呼ばれ、<code>ap_set_module_config</code> を通じて <code>conn_rec</code> にコンテキストがアタッチされます。 2. **C2 への展開**: ストリーム処理が開始されると、<code>h2_conn_ctx_init_for_c2</code> が呼ばれ、親接続（C1）の情報を引き継ぎつつ、<code>h2_mplx</code> や <code>h2_bucket_beam</code> がコンテキストに設定されます。 3. **状態更新**: 処理中、<code>h2_conn_ctx_set_timeout</code> 等を通じて、入出力ビームやパイプのタイムアウト設定が同期的に更新されます。 4. **破棄**: 接続終了時に <code>h2_conn_ctx_detach</code> が呼ばれ、コンテキストの参照が解除されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>h2.h</code>: モジュール共通の定義。</li>
+<li><code>apr_pools.h</code> / <code>apr_network_io.h</code>: メモリ管理およびソケット操作用。</li>
+<li><code>httpd.h</code>: Apache HTTP Server のコア構造体（<code>conn_rec</code>, <code>server_rec</code>）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_conn_ctx.c</code>: 本ヘッダーで宣言された関数の実装。</li>
+<li><code>h2_session.h</code>: C1 接続のセッション管理。</li>
+<li><code>h2_mplx.h</code>: C2 接続におけるストリーム多重化管理。</li>
+<li><code>h2_bucket_beam.h</code>: ストリーム間でのデータ転送メカニズム。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本構造体は C1（クライアント接続）と C2（内部処理用接続）の両方で再利用されるため、各フィールドが「C1 用」「C2 用」のどちらで利用されるかというコメントを注視してください。</li>
+<li><code>h2_conn_ctx_get</code> マクロは、<code>ap_get_module_config</code> をラップしたものであり、HTTP/2 モジュールが有効な接続であれば常に有効なコンテキストが返ることを前提としています。</li>
+<li>C2 接続のライフサイクルは <code>h2_mplx</code> と密接に関連しているため、デバッグ時は <code>h2_mplx.c</code> と併せて参照することをお勧めします。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_h__h2_conn_ctx_t.html" target="wiki-view">`h2_conn_ctx_t`</a></li>
+</ul></body></html>

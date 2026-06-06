@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/mod_md_os.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/mod_md_os.c</h1>
+<h2>概要</h2>
+<p><code>mod_md_os.c</code> は、Apache HTTP Server の <code>mod_md</code> モジュールにおいて、OS 固有の低レベルな操作を抽象化するユーティリティファイルです。主にファイルシステムの権限管理と、サーバープロセスの制御（シグナル送信）を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> は証明書の自動管理を行うため、証明書ファイルやディレクトリを生成・更新します。本ファイルは、それらのリソースが Apache のワーカプロセスから適切にアクセス可能であることを保証し、必要に応じてサーバーの再起動をトリガーする役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**権限管理**: 証明書ディレクトリやファイルの所有者（UID/GID）を、Apache の実行ユーザーに合わせて調整する。</li>
+<li>**プロセス制御**: 証明書の更新完了時などに、親プロセスへシグナルを送り、サーバーのグレースフル再起動を要求する。</li>
+<li>**プラットフォーム抽象化**: OS ごとの差異（Unix系 vs Windows）を吸収し、サポートされない環境では <code>APR_ENOTIMPL</code> を返す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>md_try_chown</code>: 指定されたパスの所有者を変更するラッパー。ルート権限で実行されている場合のみ動作します。</li>
+<li><code>md_make_worker_accessible</code>: <code>ap_unixd_config.user_id</code> を使用して、ファイルやディレクトリをワーカプロセスから読み書き可能にします。</li>
+<li><code>md_server_graceful</code>: 親プロセスに対して <code>AP_SIG_GRACEFUL</code> を送信し、設定の再読み込みを促します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **権限変更**: <code>md_make_worker_accessible</code> が呼び出されると、内部で <code>md_try_chown</code> が実行されます。これは <code>ap_unixd_config</code> から現在の実行ユーザー情報を取得し、<code>chown</code> システムコールをラップします。 2. **シグナル送信**: <code>md_server_graceful</code> は <code>getppid()</code> で親プロセスを特定し、<code>kill()</code> を用いてシグナルを送信します。成功時は <code>APR_SUCCESS</code> を返し、失敗時はエラーをログ出力します。 3. **条件分岐**: コンパイル時のマクロ（<code>AP_NEED_SET_MUTEX_PERMS</code> や <code>WIN32</code>）により、OS がサポートしていない機能は即座に <code>APR_ENOTIMPL</code> を返すよう設計されています。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <code>httpd.h</code>, <code>http_log.h</code>: Apache/APR の基本機能。</li>
+<li><code>ap_mpm.h</code>, <code>unixd.h</code>: MPM（Multi-Processing Module）の設定情報や Unix 固有の定義。</li>
+<li><code>md_util.h</code>: モジュール共通のユーティリティ。</li>
+<li><code>mod_md_os.h</code>: 本ファイルのヘッダー。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_md_config.c</code>: 実行ユーザー設定（<code>User</code>/<code>Group</code> ディレクティブ）の管理。</li>
+<li><code>md_store.c</code>: 証明書や鍵の永続化を担当しており、本ファイルの権限調整機能を頻繁に利用します。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「特権が必要な操作」を扱うため、実行環境の権限設定に依存します。</li>
+<li><code>md_try_chown</code> は <code>geteuid()</code> が 0（root）でない場合、何もしない（成功を返す）設計になっています。これは、非特権ユーザーで実行されている場合に権限エラーで停止しないための安全策です。</li>
+<li>Windows 環境では多くの機能が <code>APR_ENOTIMPL</code> となるため、クロスプラットフォームでの動作確認時には注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__mod_md_os_c__md_try_chown.html" target="wiki-view">`md_try_chown`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_os_c__md_make_worker_accessible.html" target="wiki-view">`md_make_worker_accessible`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_os_c__md_server_graceful.html" target="wiki-view">`md_server_graceful`</a></li>
+</ul></body></html>

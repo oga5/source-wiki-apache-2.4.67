@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/mod_proxy_wstunnel.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/mod_proxy_wstunnel.c</h1>
+<h2>概要</h2>
+<p><code>mod_proxy_wstunnel</code> は、Apache HTTP Server における WebSocket プロトコル（<code>ws:</code> / <code>wss:</code>）のトンネリングを専門に扱うプロキシモジュールです。HTTP アップグレードリクエストをバックエンドへ転送し、双方向のデータストリームを確立します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> サブシステムの一部として、特定のスキーム（<code>ws</code>, <code>wss</code>）に対するハンドラを提供します。<code>mod_proxy_http</code> と共存し、設定に応じてフォールバックを行う柔軟性を持ちます。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト処理**: WebSocket アップグレードリクエストの検証とバックエンドへの転送。</li>
+<li>**トンネリング**: クライアントとバックエンド間の双方向通信を <code>apr_pollset</code> を用いて非同期的に中継。</li>
+<li>**設定管理**: <code>ProxyWebsocketFallbackToProxyHttp</code> ディレクティブによる <code>mod_proxy_http</code> へのフォールバック制御。</li>
+<li>**URL 正規化**: WebSocket 特有のスキームを処理し、バックエンド接続用の正規化された URL を生成。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定とライフサイクル</h3>
+<ul>
+<li><code>proxyws_dir_conf</code>: ディレクトリ単位の設定構造体。フォールバックの可否を保持。</li>
+<li><code>create_proxyws_dir_config</code> / <code>merge_proxyws_dir_config</code>: 設定の初期化と継承ロジック。</li>
+<li><code>ws_proxy_hooks</code>: <code>proxy_hook_scheme_handler</code> 等を登録し、<code>mod_proxy_http</code> より優先的に処理を行うためのフック設定。</li>
+</ul>
+<h3>プロキシ処理</h3>
+<ul>
+<li><code>proxy_wstunnel_handler</code>: メインのエントリポイント。接続の確立からトンネリングの開始までを統括。</li>
+<li><code>proxy_wstunnel_request</code>: 実際のトンネリングループ。<code>apr_pollset</code> を使用してクライアントとバックエンドのソケットを監視し、データを転送。</li>
+<li><code>proxy_wstunnel_canon</code>: URL の解析と正規化。<code>ws</code>/<code>wss</code> スキームを処理し、バックエンド接続用の <code>r-&gt;filename</code> を構築。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック**: <code>proxy_wstunnel_check_trans</code> がリクエストをインターセプトし、<code>Upgrade</code> ヘッダーの有無を確認。 2. **正規化**: <code>proxy_wstunnel_canon</code> が URL を解析し、<code>proxy:</code> スキームを付与して内部転送用形式に変換。 3. **ハンドラ**: <code>proxy_wstunnel_handler</code> がバックエンド接続を確保し、<code>ap_proxy_connect_backend</code> で接続を確立。 4. **トンネリング**: <code>proxy_wstunnel_request</code> が <code>apr_pollset</code> を作成し、クライアントとバックエンドのソケットを登録。ループ内で <code>ap_proxy_transfer_between_connections</code> を呼び出し、双方向のデータ転送を実行。 5. **終了**: どちらかの接続が切断されるかエラーが発生するまでループし、最後に接続を解放。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシ共通のデータ構造（<code>proxy_conn_rec</code>, <code>proxy_worker</code> 等）と API。</li>
+<li><code>http_config.h</code>: モジュール設定およびディレクティブ定義用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/proxy/mod_proxy_http.c</code>: 本モジュールがフォールバック先として依存する、標準的な HTTP プロキシモジュール。</li>
+<li><code>modules/proxy/proxy_util.c</code>: 接続の管理や転送処理の共通関数群。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>r-&gt;pool</code> を使用してリクエスト単位のライフサイクルを管理しています。<code>apr_brigade</code> はバックエンドとの通信バッファとして使用されます。</li>
+<li>**トンネリングの性質**: <code>proxy_wstunnel_request</code> 内のループは、トンネルが確立されるとリクエスト処理全体を占有します。そのため、このハンドラが実行されると他の処理は行われません。</li>
+<li>**フォールバック**: <code>mod_proxy_http</code> がロードされている場合、設定によりそちらへ処理を委譲可能です。<code>ws_proxy_hooks</code> で <code>mod_proxy_http</code> を成功時の後続として指定している点に注意してください。</li>
+<li>**制限事項**: 本ソースは WebSocket のトンネリングに特化しており、HTTP/2 などの高度なプロトコル変換ロジックは含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxyws_dir_conf.html" target="wiki-view">`proxyws_dir_conf`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_check_trans.html" target="wiki-view">`proxy_wstunnel_check_trans`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_canon.html" target="wiki-view">`proxy_wstunnel_canon`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_request.html" target="wiki-view">`proxy_wstunnel_request`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_handler.html" target="wiki-view">`proxy_wstunnel_handler`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__create_proxyws_dir_config.html" target="wiki-view">`create_proxyws_dir_config`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__merge_proxyws_dir_config.html" target="wiki-view">`merge_proxyws_dir_config`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxyws_fallback_to_proxy_http.html" target="wiki-view">`proxyws_fallback_to_proxy_http`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_post_config.html" target="wiki-view">`proxy_wstunnel_post_config`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__ws_proxy_hooks.html" target="wiki-view">`ws_proxy_hooks`</a></li>
+</ul></body></html>

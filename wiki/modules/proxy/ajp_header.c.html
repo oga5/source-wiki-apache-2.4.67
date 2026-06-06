@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/ajp_header.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/ajp_header.c</h1>
+<h2>概要</h2>
+<p>AJP (Apache JServ Protocol) v13 プロトコルにおけるリクエスト・レスポンスのマーシャリング（直列化）およびアンマーシャリング（非直列化）を担う実装ファイルです。HTTP リクエストを AJP メッセージ形式に変換し、バックエンドからの応答を解析して Apache の <code>request_rec</code> 構造体に反映させるための低レベルな変換ロジックを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy_ajp</code> の中核となるデータ変換層です。<code>ajp_msg_t</code> 構造体（<code>ajp_msg.c</code> で定義）を操作し、ネットワーク経由で送受信されるバイナリパケットと、Apache 内部の HTTP 抽象化レイヤーとの間の橋渡しを行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストのマーシャリング**: Apache の <code>request_rec</code> から AJP <code>FORWARD_REQUEST</code> パケットを構築。</li>
+<li>**レスポンスのアンマーシャリング**: AJP <code>SEND_HEADERS</code> パケットを解析し、<code>headers_out</code> 等へマッピング。</li>
+<li>**プロトコル変換**: HTTP ヘッダー名やメソッドを AJP 固有の数値 ID に変換、またはその逆を行う。</li>
+<li>**データパケットの管理**: ボディチャンクの送受信におけるメッセージ構築と長さの検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ヘッダー・メソッド変換</h3>
+<ul>
+<li><code>sc_for_req_header</code>: HTTP ヘッダー名を AJP 内部 ID に変換（高速化のため文字列比較を最適化）。</li>
+<li><code>sc_for_req_method_by_id</code>: Apache のメソッド ID を AJP 固有のメソッドコードに変換。</li>
+<li><code>long_res_header_for_sc</code>: AJP 応答ヘッダー ID を文字列名に逆変換。</li>
+</ul>
+<h3>メッセージ処理 (Marshal/Unmarshal)</h3>
+<ul>
+<li><code>ajp_marshal_into_msgb</code>: リクエスト情報を <code>ajp_msg_t</code> に詰め込むメイン関数。SSL 情報や環境変数もここで処理。</li>
+<li><code>ajp_unmarshal_response</code>: バックエンドからの応答パケットを解析し、<code>request_rec</code> を更新。</li>
+</ul>
+<h3>送受信インターフェース</h3>
+<ul>
+<li><code>ajp_send_header</code>: メッセージ作成から送信までの一連の処理を実行。</li>
+<li><code>ajp_read_header</code>: ソケットからパケットを読み込み、メッセージの型を特定。</li>
+<li><code>ajp_parse_data</code>: ボディチャンクの長さを検証し、データポインタを抽出。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **送信フロー**: <code>ajp_send_header</code> が <code>ajp_msg_create</code> でバッファを確保し、<code>ajp_marshal_into_msgb</code> でヘッダー、環境変数、SSL 情報を順次 <code>ajp_msg_append_*</code> 経由でバイナリ化します。最後に <code>ajp_ilink_send</code> で送信します。 2. **受信フロー**: <code>ajp_read_header</code> がパケットを受信し、<code>ajp_parse_header</code> が <code>ajp_unmarshal_response</code> を呼び出します。ここで <code>headers_out</code> が再構築され、<code>Set-Cookie</code> や <code>Location</code> 等のヘッダーに対して <code>ap_proxy_cookie_reverse_map</code> 等の変換が適用されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ajp_header.h</code>: AJP プロトコルの定数定義。</li>
+<li><code>ajp.h</code>: <code>ajp_msg_t</code> 構造体およびリンク層の関数定義。</li>
+<li><code>util_script.h</code>: Apache のスクリプトユーティリティ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ajp_msg.c</code>: メッセージバッファのメモリ管理とバイナリ操作の基盤。</li>
+<li><code>ajp_link.c</code>: ソケットを通じた低レベルなパケット送受信。</li>
+<li><code>mod_proxy_ajp.c</code>: 本ファイルを呼び出し、プロキシ処理のメインループを制御。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ajp_msg_t</code> は <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を使用して割り当てられます。ライフサイクルはリクエストの終了と共に終了します。</li>
+<li>**EBCDIC 対応**: <code>APR_CHARSET_EBCDIC</code> が定義されている環境では、文字列の変換処理が挿入されます。</li>
+<li>**制約**: <code>sc_for_req_header</code> は固定長のバッファと <code>memcmp</code> を使用して最適化されており、新しいヘッダーを追加する際は注意が必要です。</li>
+<li>**未実装/省略**: 本ファイルはプロトコルのパースに特化しており、コネクションプーリングや負荷分散のロジックは含みません。これらは <code>mod_proxy</code> 側の責務です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__long_res_header_for_sc.html" target="wiki-view">`long_res_header_for_sc`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__sc_for_req_header.html" target="wiki-view">`sc_for_req_header`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__sc_for_req_method_by_id.html" target="wiki-view">`sc_for_req_method_by_id`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_marshal_into_msgb.html" target="wiki-view">`ajp_marshal_into_msgb`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__addit_dammit.html" target="wiki-view">`addit_dammit`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_unmarshal_response.html" target="wiki-view">`ajp_unmarshal_response`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_send_header.html" target="wiki-view">`ajp_send_header`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_read_header.html" target="wiki-view">`ajp_read_header`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_parse_type.html" target="wiki-view">`ajp_parse_type`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_parse_header.html" target="wiki-view">`ajp_parse_header`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_parse_data.html" target="wiki-view">`ajp_parse_data`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_header_c__ajp_alloc_data_msg.html" target="wiki-view">`ajp_alloc_data_msg`</a></li>
+</ul></body></html>

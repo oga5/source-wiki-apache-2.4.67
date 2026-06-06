@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/util_fcgi.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/util_fcgi.c</h1>
+<h2>概要</h2>
+<p>FastCGI プロトコル（RFC 3652）のバイナリ構造を Apache HTTP Server 内で扱うためのユーティリティ群を提供します。主に FastCGI レコードのヘッダーおよびボディのシリアライズ・デシリアライズ、ならびに環境変数（<code>apr_table_t</code>）の FastCGI 形式へのエンコードを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、FastCGI を利用するバックエンド（<code>mod_proxy_fcgi</code> 等）と Apache の内部データ構造の橋渡しを行います。プロトコルの低レイヤーなバイト操作を抽象化し、一貫したインターフェースを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル構造の変換**: <code>ap_fcgi_header</code> および <code>ap_fcgi_begin_request_body</code> 構造体と、ネットワーク転送用のバイト配列間の相互変換。</li>
+<li>**環境変数のエンコード**: FastCGI の <code>PARAMS</code> レコードで要求される「長さ＋データ」形式への環境変数の変換。</li>
+<li>**バッファ管理**: エンコード時のバッファオーバーフロー防止と、分割送信のためのイテレータ管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ヘッダー・ボディ操作</h3>
+<ul>
+<li><code>ap_fcgi_header_to_array</code> / <code>from_array</code>: ヘッダー構造体とバイト配列の変換。</li>
+<li><code>ap_fcgi_header_fields_from_array</code>: ヘッダーの各フィールドを個別の変数に展開。</li>
+<li><code>ap_fcgi_fill_in_header</code> / <code>fill_in_request_body</code>: 構造体の各フィールドを安全に初期化。</li>
+</ul>
+<h3>環境変数エンコード</h3>
+<ul>
+<li><code>ap_fcgi_encoded_env_len</code>: 指定されたバッファサイズ内に収まる環境変数の総バイト数を計算し、処理すべき要素のインデックスを更新。</li>
+<li><code>ap_fcgi_encode_env</code>: <code>apr_table_t</code> から FastCGI 形式のバイトストリームへ変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ヘッダー処理**: <code>ap_fcgi_fill_in_header</code> でヘッダーを構築し、<code>ap_fcgi_header_to_array</code> でバイト列に変換して送信バッファへコピーします。 2. **環境変数エンコード**:</p>
+<ul>
+<li><code>ap_fcgi_encoded_env_len</code> を呼び出し、現在のバッファ容量でエンコード可能な要素数とバイト数を算出します。</li>
+<li><code>ap_fcgi_encode_env</code> がその範囲内で <code>apr_table_t</code> を走査し、キーと値の長さを FastCGI 形式（1バイトまたは4バイトの長さフィールド）でエンコードしてバッファに書き込みます。</li>
+<li><code>starting_elem</code> ポインタを介して、複数回にわたる分割送信の進捗を保持します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>: Apache のコアデータ構造（<code>request_rec</code> 等）。</li>
+<li><code>http_core.h</code>: コアモジュールの定義。</li>
+<li><code>http_log.h</code>: エラーログ出力用。</li>
+<li><code>util_fcgi.h</code>: プロトコル定義と構造体宣言。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/proxy/mod_proxy_fcgi.c</code>: 本ユーティリティの主要な利用者。FastCGI 通信のロジックが実装されています。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: 本ファイル内の関数はメモリの割り当てを行いません。呼び出し元が提供したバッファ（<code>unsigned char a[]</code> や <code>void *buffer</code>）に対して操作を行います。</li>
+<li>**境界条件**: <code>ap_fcgi_encode_env</code> は <code>APR_ENOSPC</code> を返し、バッファ不足を明示的に通知します。</li>
+<li>**レイアウト**: FastCGI の長さフィールドは、値が 127 を超える場合に 4 バイト（最上位ビットが 1）を使用する可変長エンコーディングを採用しており、<code>ap_fcgi_encode_env</code> 内でこのビット演算が行われています。</li>
+<li>**省略された領域**: FastCGI のパケット受信時のパディング処理や、ソケット I/O 自体は本ファイルには含まれていません。これらはプロトコル定義のサポートに特化しているためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_header_to_array.html" target="wiki-view">`ap_fcgi_header_to_array`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_header_from_array.html" target="wiki-view">`ap_fcgi_header_from_array`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_header_fields_from_array.html" target="wiki-view">`ap_fcgi_header_fields_from_array`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_begin_request_body_to_array.html" target="wiki-view">`ap_fcgi_begin_request_body_to_array`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_fill_in_header.html" target="wiki-view">`ap_fcgi_fill_in_header`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_fill_in_request_body.html" target="wiki-view">`ap_fcgi_fill_in_request_body`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_encoded_env_len.html" target="wiki-view">`ap_fcgi_encoded_env_len`</a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_encode_env.html" target="wiki-view">`ap_fcgi_encode_env`</a></li>
+</ul></body></html>

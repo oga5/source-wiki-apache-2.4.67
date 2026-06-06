@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_acme_authz.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_acme_authz.c</h1>
+<h2>概要</h2>
+<p>ACME プロトコルにおけるドメイン認証（Authorization）プロセスを管理するモジュールです。ACME サーバーから提示されたチャレンジ（HTTP-01, TLS-ALPN-01, DNS-01）の取得、検証準備、およびサーバーへの応答通知を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ACME 注文（Order）プロセスの一部として機能します。<code>md_acme_order.c</code> 等から呼び出され、ドメインの所有権証明に必要な環境構築とサーバーとの通信を仲介します。</p>
+<h2>責務</h2>
+<ul>
+<li>**認証状態の管理**: ACME サーバーから認証リソースを取得し、状態（Pending, Valid, Invalid）を解析・保持する。</li>
+<li>**チャレンジの解決**: サーバーが要求するチャレンジタイプを特定し、対応するセットアップ処理（ファイル配置、証明書生成、外部コマンド実行）を実行する。</li>
+<li>**ライフサイクル管理**: 認証完了後のクリーンアップ（<code>teardown</code>）およびエラー発生時の詳細情報の抽出。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>認証コンテキスト</h3>
+<ul>
+<li><code>md_acme_authz_t</code>: 認証リソースの構造体。ドメイン名、URL、現在の状態、エラー情報、JSON 表現を保持する。</li>
+<li><code>md_acme_authz_create()</code>: 認証オブジェクトの初期化。</li>
+</ul>
+<h3>チャレンジ処理</h3>
+<ul>
+<li><code>md_acme_authz_respond()</code>: 認証のメインエントリポイント。サポートするチャレンジタイプを順次試行し、セットアップを試みる。</li>
+<li><code>cha_type</code>: チャレンジタイプごとの <code>setup</code> および <code>teardown</code> 関数を定義するディスパッチテーブル。</li>
+<li><code>CHA_TYPES</code>: HTTP-01, TLS-ALPN-01, DNS-01 の実装を束ねる静的配列。</li>
+</ul>
+<h3>サーバー通信</h3>
+<ul>
+<li><code>md_acme_authz_retrieve()</code>: サーバーから認証リソースをフェッチする。</li>
+<li><code>md_acme_authz_update()</code>: 既存の認証リソースを最新の状態に更新する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **取得**: <code>md_acme_authz_retrieve</code> が ACME サーバーから JSON を取得し、<code>md_acme_authz_t</code> を構築する。 2. **選択**: <code>md_acme_authz_respond</code> が、設定された優先順位に従い、サーバーが提示したチャレンジとローカルでサポート可能なチャレンジを照合する。 3. **セットアップ**: 適合する <code>cha_setup</code> 関数（<code>cha_http_01_setup</code> 等）が呼び出される。</p>
+<ul>
+<li>内部で <code>setup_key_authz</code> を呼び出し、鍵認証トークンを生成。</li>
+<li>必要に応じて <code>md_store</code> を使用してファイルシステムへデータを保存、または外部コマンドを実行。</li>
+<li>成功時、<code>md_acme_POST</code> を介してサーバーへ応答を送信。</li>
+<p>4. **終了**: <code>md_acme_authz_teardown</code> が <code>setup_token</code> を解析し、対応する <code>teardown</code> 関数を呼び出してリソースを解放する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pool_t</code>, <code>apr_tables.h</code>, <code>apr_hash.h</code>: メモリ管理とデータ構造。</li>
+<li><code>md_json.h</code>: ACME サーバーとの JSON 通信解析。</li>
+<li><code>md_store.h</code>: チャレンジ用ファイル（証明書やトークン）の永続化。</li>
+<li><code>md_acme.h</code>: ACME プロトコル通信の基盤。</li>
+<li><code>md_crypt.h</code>: トークン生成や署名検証。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_acme_order.c</code>: 認証プロセスを包含する上位の注文管理。</li>
+<li><code>md_store.c</code>: チャレンジデータの物理的な保存先管理。</li>
+<li><code>md_jws.h</code>: ACME サーバーへの署名付きリクエスト生成。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのオブジェクトは <code>apr_pool_t</code> に紐付いており、明示的な <code>free</code> は不要です。</li>
+<li>**エラー処理**: <code>md_result_t</code> を使用して、認証失敗時の詳細な診断情報を上位層へ伝播させます。</li>
+<li>**設計の意図**: チャレンジのセットアップは <code>cha_type</code> 構造体によるディスパッチ方式を採用しており、新しいチャレンジタイプ（例: 今後のプロトコル拡張）の追加が容易な設計になっています。</li>
+<li>**制約**: <code>md_acme_authz_t</code> の <code>resource</code> フィールドは、サーバーから取得した生の JSON へのポインタを保持します。このライフサイクルは <code>authz</code> オブジェクトと同期している必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__md_acme_authz_create.html" target="wiki-view">`md_acme_authz_create`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__md_acme_authz_cha_t.html" target="wiki-view">`md_acme_authz_cha_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__authz_req_ctx.html" target="wiki-view">`authz_req_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__authz_req_ctx_init.html" target="wiki-view">`authz_req_ctx_init`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__md_acme_authz_retrieve.html" target="wiki-view">`md_acme_authz_retrieve`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__error_ctx_t.html" target="wiki-view">`error_ctx_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__copy_challenge_error.html" target="wiki-view">`copy_challenge_error`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__md_acme_authz_update.html" target="wiki-view">`md_acme_authz_update`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__cha_from_json.html" target="wiki-view">`cha_from_json`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__apr_pool_t.html" target="wiki-view">`apr_pool_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__cha_type.html" target="wiki-view">`cha_type`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_authz_c__cha_find_ctx.html" target="wiki-view">`cha_find_ctx`</a></li>
+</ul></body></html>

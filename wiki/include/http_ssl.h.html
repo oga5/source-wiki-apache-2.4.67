@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/http_ssl.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/http_ssl.h</h1>
+<h2>概要</h2>
+<p><code>http_ssl.h</code> は、Apache HTTP Server における SSL/TLS プロトコル処理の抽象化レイヤーを定義するヘッダーファイルです。特定の SSL 実装（OpenSSL 等）に依存せず、モジュール間で SSL 関連の機能や情報を共有するための共通インターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache のコア機能と、SSL を提供するモジュール（<code>mod_ssl</code> など）を繋ぐブリッジとして機能します。このファイルで定義されたフックや関数を通じて、コアは SSL の状態確認、証明書の管理、OCSP ステープリングなどの高度な機能を、具体的な実装を意識することなく呼び出すことが可能です。</p>
+<h2>責務</h2>
+<ul>
+<li>**SSL 状態の可視化**: 接続が SSL で保護されているかの判定。</li>
+<li>**証明書管理の抽象化**: サーバー証明書や秘密鍵の登録・収集プロセスの定義。</li>
+<li>**変数ルックアップ**: SSL セッションに関連する変数（証明書情報など）の取得。</li>
+<li>**OCSP ステープリング**: 証明書の有効性確認のための OCSP レスポンスの提供と取得。</li>
+<li>**チャレンジ応答**: TLS-ALPN-01 等のドメイン検証用証明書の動的提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ssl_conn_is_ssl</code>: 接続が SSL を使用しているかを確認するフック。</li>
+<li><code>ap_ssl_var_lookup</code>: SSL 関連の環境変数や情報を取得する汎用関数。</li>
+<li><code>ssl_add_cert_files</code>: サーバー証明書と秘密鍵を登録するためのフック。</li>
+<li><code>ap_ssl_ocsp_get_resp</code>: OCSP ステープリング用のレスポンスを取得する関数。</li>
+<li><code>ap_ssl_answer_challenge</code>: TLS ハンドシェイク中に特定の証明書を動的に提供するフック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>本ファイルはインターフェース定義であるため、実際の処理はフックの登録と呼び出しによって行われます。 1. **初期化**: <code>ap_setup_ssl_optional_fns</code> が呼び出され、古いスタイルの SSL モジュール関数との互換性を確保します。 2. **設定時**: <code>ssl_add_cert_files</code> や <code>ssl_ocsp_prime_hook</code> を通じて、各モジュールが証明書や OCSP 情報を登録します。 3. **実行時**: リクエスト処理中に <code>ap_ssl_var_lookup</code> が呼ばれると、登録されたフックが順次実行され、適切な値が返されます。 4. **ハンドシェイク時**: <code>ap_ssl_answer_challenge</code> が呼ばれると、特定の条件（SNI 等）に基づき、動的に証明書が差し替えられます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>: Apache の基本構造体（<code>conn_rec</code>, <code>server_rec</code> 等）の定義。</li>
+<li><code>apr_portable.h</code>: ポータブルな型定義。</li>
+<li><code>apr_mmap.h</code>: メモリマップドファイル操作用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_ssl</code>: 本ヘッダーで定義されたフックの主要な実装元。</li>
+<li><code>http_core.h</code>: サーバー設定や接続管理の基盤。</li>
+<li><code>util_filter.h</code>: SSL フィルタリング処理の接続点。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「SSL モジュールが提供すべき機能」の契約書です。新しい SSL 関連モジュールを作成する場合、これらのフックを実装することで Apache のエコシステムに統合できます。</li>
+<li><code>AP_DECLARE_HOOK</code> で定義されたフックは、複数のモジュールが登録可能です。戻り値の扱いに注意し、必要に応じて <code>DECLINED</code> を適切に返す設計が求められます。</li>
+<li>OCSP 関連の関数は、メモリの生存期間が呼び出し中のみである点に注意してください。データを保持する必要がある場合は、必ず呼び出し側でコピーを作成してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__http_ssl_h__apr_size_t.html" target="wiki-view">`apr_size_t`</a></li>
+</ul></body></html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/balancers/mod_lbmethod_byrequests.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/proxy/balancers/mod_lbmethod_byrequests.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_proxy</code> におけるロードバランシング手法の一つ、「リクエスト数ベース（byrequests）」の実装です。各ワーカーに設定された <code>lbfactor</code>（重み）に基づき、リクエストを動的に分配します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のロードバランサー機能に対し、<code>proxy_balancer_method</code> プロバイダーとして機能を提供します。リクエストの振り分け先を決定するアルゴリズムをカプセル化し、他のバランサーモジュールと並列してプラグイン可能なアーキテクチャを構成します。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷分散アルゴリズムの提供**: <code>lbfactor</code> を基準とした「最も緊急に処理が必要なワーカー」の選出。</li>
+<li>**状態管理**: 各ワーカーの <code>lbstatus</code>（累積負荷状況）の更新と、必要に応じたリセット。</li>
+<li>**プロバイダー登録**: <code>PROXY_LBMETHOD</code> インターフェースを通じて、バランサーが利用可能なメソッドとして自身を登録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>byrequests</code>: このモジュールが提供する <code>proxy_balancer_method</code> 構造体。アルゴリズムの各フック（find, reset 等）を定義。</li>
+<li><code>find_best_byrequests</code>: リクエストごとに呼び出されるメインの選出関数。</li>
+<li><code>is_best_byrequests</code>: 各ワーカーの <code>lbstatus</code> を更新し、比較を行うためのコールバック関数。</li>
+<li><code>ap_proxy_balancer_get_best_worker_fn</code>: <code>mod_proxy</code> から提供される、ワーカー走査のためのオプション関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>post_config</code> フックで <code>mod_proxy</code> から <code>proxy_balancer_get_best_worker</code> 関数を取得します。 2. **選出**: <code>find_best_byrequests</code> が呼ばれると、<code>is_best_byrequests</code> を用いて全ワーカーを走査します。</p>
+<ul>
+<li>各ワーカーの <code>lbstatus</code> に <code>lbfactor</code> を加算します。</li>
+<li><code>lbstatus</code> が最大であるワーカーを「次回の処理対象」として選出します。</li>
+<p>3. **更新**: 選出されたワーカーの <code>lbstatus</code> から、全ワーカーの <code>lbfactor</code> 合計値を減算し、バランスを維持します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシ機能の基本構造体（<code>proxy_worker</code>, <code>proxy_balancer</code> 等）の定義。</li>
+<li><code>ap_hooks.h</code>, <code>ap_mpm.h</code>: Apache のフック機構および MPM 関連の定義。</li>
+<li><code>scoreboard.h</code>: 共有メモリ上のワーカー状態管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_proxy.c</code>: ロードバランサーの基盤となるメインモジュール。</li>
+<li><code>mod_lbmethod_bybusyness.c</code> / <code>mod_lbmethod_bytraffic.c</code>: 他のロードバランシング手法の実装例。これらと比較することで、アルゴリズムの差異を理解できます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**アルゴリズムの特性**: この手法は「重み付きラウンドロビン」に近い挙動をします。<code>lbfactor</code> が大きいほど頻繁に選出されます。</li>
+<li>**スレッドセーフ**: <code>reset</code> 関数などは呼び出し元でミューテックス保護されている前提で実装されています。</li>
+<li>**デバッグ**: <code>lbstatus</code> は共有メモリ上に保持されるため、ワーカーの再起動や設定変更時に値がどのように変化するかを追跡する際は、<code>scoreboard</code> の状態に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__is_best_byrequests.html" target="wiki-view">`is_best_byrequests`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__find_best_byrequests.html" target="wiki-view">`find_best_byrequests`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__reset.html" target="wiki-view">`reset`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__age.html" target="wiki-view">`age`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__lbmethod_byrequests_post_config.html" target="wiki-view">`lbmethod_byrequests_post_config`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__register_hook.html" target="wiki-view">`register_hook`</a></li>
+</ul></body></html>

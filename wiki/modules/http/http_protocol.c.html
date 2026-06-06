@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http/http_protocol.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http/http_protocol.c</h1>
+<h2>概要</h2>
+<p>HTTP プロトコル処理の核心を担うソースファイルです。クライアントとの直接的な通信、HTTP ステータスコードの管理、リクエストメソッドのレジストリ管理、および条件付きリクエスト（If-Match 等）の評価ロジックを所有しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> サブシステムにおいて、HTTP プロトコルレベルのセマンティクスを実装する最下層のレイヤーです。<code>http_filters.c</code> がフィルタチェーンを介してデータを送受信するのに対し、本ファイルはプロトコル仕様（RFC）に基づく判断と、レスポンス生成の定型処理を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ステータス管理**: HTTP ステータスコードからステータス行への変換およびエラーレスポンスの生成。</li>
+<li>**メソッド管理**: 標準および動的に登録された HTTP メソッドの識別とレジストリ管理。</li>
+<li>**条件付きリクエスト評価**: <code>If-Match</code>, <code>If-Modified-Since</code> 等のヘッダーに基づくキャッシュ制御ロジック。</li>
+<li>**接続制御**: Keep-Alive の可否判定と接続状態の管理。</li>
+<li>**コンテンツ制御**: <code>Content-Type</code> や <code>Accept-Ranges</code> ヘッダーの操作。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>メソッド管理</h3>
+<ul>
+<li><code>ap_method_register</code>: 新規 HTTP メソッドを動的に登録し、内部 ID を割り当てる。</li>
+<li><code>ap_method_number_of</code>: 文字列からメソッド ID を取得。組み込みメソッドは高速な <code>lookup_builtin_method</code> を使用。</li>
+<li><code>methods_registry</code>: 動的メソッドを保持する <code>apr_hash_t</code>。</li>
+</ul>
+<h3>条件付きリクエスト評価</h3>
+<ul>
+<li><code>ap_meets_conditions</code>: リクエストが条件を満たすか判定するメイン関数。</li>
+<li><code>ap_condition_if_match</code> 等: 各種 <code>If-*</code> ヘッダーの評価を行い、<code>AP_CONDITION_STRONG</code> などの列挙値を返す。</li>
+</ul>
+<h3>レスポンス生成・制御</h3>
+<ul>
+<li><code>ap_send_error_response</code>: エラー発生時に定型的な HTML エラーページを生成し、フィルタチェーンを再構築する。</li>
+<li><code>ap_set_keepalive</code>: Keep-Alive の可否を判定し、必要なヘッダーを <code>headers_out</code> に追加する。</li>
+<li><code>status_lines</code>: 全 HTTP ステータスコードと理由句の静的配列。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **メソッド識別**: <code>ap_method_number_of</code> は、まず <code>lookup_builtin_method</code> で静的解析を行い、見つからない場合に <code>methods_registry</code> を検索する。 2. **条件評価**: <code>ap_meets_conditions</code> は、<code>If-Match</code> -&gt; <code>If-Unmodified-Since</code> -&gt; <code>If-None-Match</code> -&gt; <code>If-Modified-Since</code> -&gt; <code>If-Range</code> の順で評価し、最終的なステータス（<code>HTTP_NOT_MODIFIED</code> 等）を決定する。 3. **エラー処理**: <code>ap_send_error_response</code> は、<code>r-&gt;output_filters</code> を <code>r-&gt;proto_output_filters</code> にリセットし、<code>insert_error_filter</code> フックを呼び出した後、<code>get_canned_error_string</code> で生成した HTML を出力する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_hash.h</code>, <code>apr_tables.h</code>, <code>apr_strings.h</code> 等によるメモリ管理とデータ構造。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code> 等。</li>
+<li>**ユーティリティ**: <code>util_filter.h</code> (フィルタ操作), <code>util_time.h</code> (時刻比較)。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>include/http_protocol.h</code>: 本ファイルの公開インターフェース定義。</li>
+<li><code>modules/http/http_filters.c</code>: 本ファイルが生成したレスポンスを実際にクライアントへ送出するフィルタの実装。</li>
+<li><code>modules/http/http_request.c</code>: リクエストの解析と処理のライフサイクル管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を多用します。<code>apr_palloc</code> で確保されたメモリはリクエスト終了時に自動解放されるため、永続的なデータ保持には注意が必要です。</li>
+<li>**パフォーマンス**: <code>status_lines</code> 配列は <code>RESPONSE_CODES</code> 定数に厳密に依存しており、インデックス計算は <code>index_of_response</code> 内の <code>shortcut</code> 配列による定数時間アクセスを前提としています。</li>
+<li>**設計の意図**: <code>lookup_builtin_method</code> は <code>shilka</code> ツールによる自動生成コードであり、手動でメソッドを追加する際は注意が必要です。</li>
+<li>**未実装・浅い部分**: <code>ap_send_error_response</code> 内の <code>get_canned_error_string</code> は、セキュリティ上の理由から詳細なエラー情報の表示を制限しており、設定による柔軟な制御は今後の課題としてコメントアウトされています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__http_protocol_c__is_mpm_running.html" target="wiki-view">`is_mpm_running`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_set_keepalive.html" target="wiki-view">`ap_set_keepalive`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_condition_if_match.html" target="wiki-view">`ap_condition_if_match`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_condition_if_unmodified_since.html" target="wiki-view">`ap_condition_if_unmodified_since`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_condition_if_none_match.html" target="wiki-view">`ap_condition_if_none_match`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_condition_if_modified_since.html" target="wiki-view">`ap_condition_if_modified_since`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_condition_if_range.html" target="wiki-view">`ap_condition_if_range`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_meets_conditions.html" target="wiki-view">`ap_meets_conditions`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__register_one_method.html" target="wiki-view">`register_one_method`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_method_registry_destroy.html" target="wiki-view">`ap_method_registry_destroy`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_get_status_line_ex.html" target="wiki-view">`ap_get_status_line_ex`</a></li>
+<li><a href="../../symbols/modules__http__http_protocol_c__ap_get_status_line.html" target="wiki-view">`ap_get_status_line`</a></li>
+</ul></body></html>

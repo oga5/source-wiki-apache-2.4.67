@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/scoreboard.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/scoreboard.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の実行時状態を管理するスコアボード機能の実装です。マルチプロセス/マルチスレッド環境において、各ワーカーの現在の状態（接続数、処理中のリクエスト、稼働時間など）を共有メモリまたはプロセス内メモリに保持し、監視や管理を可能にします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの基盤コンポーネントであり、MPM（Multi-Processing Module）と密接に連携します。MPM が子プロセスやスレッドを生成・管理する際、そのライフサイクルと状態を記録するための共有データ構造を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スコアボードの初期化とメモリ管理**: 共有メモリ（SHM）またはヒープメモリの確保、および構造体のレイアウト構築。</li>
+<li>**状態更新のディスパッチ**: ワーカーのステータス変化（<code>SERVER_READY</code> から <code>SERVER_BUSY_READ</code> 等）を記録するインターフェースの提供。</li>
+<li>**統計情報の集計**: リクエスト数、転送バイト数、処理時間などのメトリクス更新。</li>
+<li>**設定管理**: <code>ExtendedStatus</code> などの設定値に基づいた詳細な状態追跡の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>グローバル状態</h3>
+<ul>
+<li><code>ap_scoreboard_image</code>: スコアボード全体を指すポインタ。<code>global</code>（全体）、<code>parent</code>（プロセス）、<code>servers</code>（ワーカー）の各構造体へのアクセス起点。</li>
+<li><code>ap_scoreboard_fname</code>: 共有メモリファイル名。</li>
+<li><code>ap_extended_status</code>: 詳細な統計情報を記録するかどうかのフラグ。</li>
+</ul>
+<h3>初期化・ライフサイクル</h3>
+<ul>
+<li><code>ap_init_scoreboard()</code>: 確保されたメモリ領域を <code>scoreboard</code> 構造体としてマッピングする。</li>
+<li><code>ap_create_scoreboard()</code>: スコアボードの作成と初期化。MPM から呼び出される。</li>
+<li><code>ap_cleanup_scoreboard()</code>: プロセス終了時のメモリ解放。</li>
+</ul>
+<h3>状態更新（Mutators）</h3>
+<ul>
+<li><code>ap_update_child_status_...()</code> ファミリー: ワーカーの状態を更新する一連の関数。<code>request_rec</code> や <code>conn_rec</code> から情報を抽出し、スコアボードに書き込む。</li>
+<li><code>ap_increment_counts()</code>: リクエスト処理完了時の統計（アクセス数、バイト数）の加算。</li>
+<li><code>ap_time_process_request()</code>: リクエスト処理時間の計測。</li>
+</ul>
+<h3>アクセサ</h3>
+<ul>
+<li><code>ap_get_scoreboard_worker()</code> / <code>ap_get_scoreboard_process()</code>: 特定のワーカーやプロセスのスコア構造体を取得する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: MPM が <code>ap_create_scoreboard</code> を呼び出し、<code>ap_calc_scoreboard_size</code> で必要なサイズを計算。共有メモリが確保されると、<code>ap_init_scoreboard</code> がポインタ演算を用いて <code>ap_scoreboard_image</code> をメモリ上に構築します。 2. **更新**: リクエスト処理の各フェーズで <code>ap_update_child_status</code> が呼ばれます。内部の <code>update_child_status_internal</code> が、<code>ap_extended_status</code> が有効な場合に限り、リクエスト文字列のコピーやクライアント IP の記録を行います。 3. **データフロー**: <code>ap_sb_handle_t</code>（ハンドル）がワーカーを特定し、共有メモリ上の該当オフセットにある <code>worker_score</code> 構造体を直接更新します。ロックは不要と設計されています（各スロットは単一の所有者によってのみ書き込まれるため）。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_shm.h</code>: 共有メモリ管理。</li>
+<li><code>ap_mpm.h</code>: MPM の制限値（<code>thread_limit</code>, <code>server_limit</code>）の取得。</li>
+<li><code>scoreboard.h</code>: 公開構造体定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>include/scoreboard.h</code>: スコアボードのデータ構造定義（<code>worker_score</code>, <code>process_score</code> 等）。</li>
+<li><code>modules/generators/mod_status.c</code>: スコアボードの情報を読み取り、HTML/テキストで出力するモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリレイアウト**: <code>ap_init_scoreboard</code> は、単一のメモリブロックを <code>global</code>、<code>parent</code> 配列、<code>servers</code>（ワーカーの2次元配列）の順に分割して配置します。このため、メモリ確保後の再配置は不可能です。</li>
+<li>**ロックの不在**: 本実装は「1スロットにつき1書き込み者」という不変条件に依存しています。このため、排他制御なしで高速な更新が可能です。</li>
+<li>**制限事項**: <code>ap_cleanup_shared_mem</code> の TODO にある通り、IPC 手法が共有メモリに限定されている点は将来的な拡張の余地があります。</li>
+<li>**詳細な統計**: <code>ap_extended_status</code> が有効な場合、リクエスト文字列のコピーなどが発生するため、高負荷時にはパフォーマンスへの影響を考慮する必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__scoreboard_c__ap_sb_handle_t.html" target="wiki-view">`ap_sb_handle_t`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_create_scoreboard.html" target="wiki-view">`ap_create_scoreboard`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_update_sb_handle.html" target="wiki-view">`ap_update_sb_handle`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_create_sb_handle.html" target="wiki-view">`ap_create_sb_handle`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_update_child_status_from_indexes.html" target="wiki-view">`ap_update_child_status_from_indexes`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_update_child_status.html" target="wiki-view">`ap_update_child_status`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_update_child_status_from_conn.html" target="wiki-view">`ap_update_child_status_from_conn`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_update_child_status_from_server.html" target="wiki-view">`ap_update_child_status_from_server`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_get_scoreboard_worker_from_indexes.html" target="wiki-view">`ap_get_scoreboard_worker_from_indexes`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_get_scoreboard_worker.html" target="wiki-view">`ap_get_scoreboard_worker`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_get_scoreboard_process.html" target="wiki-view">`ap_get_scoreboard_process`</a></li>
+<li><a href="../symbols/server__scoreboard_c__ap_get_scoreboard_global.html" target="wiki-view">`ap_get_scoreboard_global`</a></li>
+</ul></body></html>

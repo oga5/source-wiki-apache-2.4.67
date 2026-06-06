@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_store.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_store.c</h1>
+<h2>概要</h2>
+<p><code>md_store.c</code> は、Managed Domain (MD) サブシステムにおける永続化層の抽象化レイヤーです。ファイルシステムやその他のバックエンドに依存せず、<code>md_store_t</code> 構造体を通じてドメイン関連データ（証明書、秘密鍵、JSON設定など）の読み書きを行うための統一インターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> モジュールにおいて、データ永続化の「ゲートウェイ」として機能します。上位レイヤー（<code>md_reg.c</code> 等）は、具体的なストレージ実装（<code>md_store_fs.c</code> 等）を直接操作するのではなく、本ファイルの関数を介してデータにアクセスします。これにより、ストレージのバックエンドを将来的に変更・拡張可能にしています。</p>
+<h2>責務</h2>
+<ul>
+<li>**抽象化インターフェース**: <code>md_store_t</code> が保持する関数ポインタを呼び出し、具体的なストレージ操作を委譲する。</li>
+<li>**データ型変換**: <code>md_t</code> や <code>md_credentials_t</code> などの高レベルなデータ構造と、ストレージ上のシリアライズ形式（JSON, PEM）との橋渡し。</li>
+<li>**グループ管理**: ストレージグループ（<code>MD_SG_DOMAINS</code>, <code>MD_SG_ACCOUNTS</code> 等）の名称解決と管理。</li>
+<li>**利便性関数の提供**: 頻出する「MDのロード/セーブ」「秘密鍵/証明書のロード/セーブ」を簡略化するヘルパー関数の提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ストレージ操作（委譲）</h3>
+<ul>
+<li><code>md_store_load</code>, <code>md_store_save</code>: ストレージに対する汎用的な読み書き関数。</li>
+<li><code>md_store_load_json</code>, <code>md_store_save_json</code>: JSONデータ専用のラッパー。</li>
+<li><code>md_store_iter</code>, <code>md_store_iter_names</code>: ストレージ内のエントリを走査するためのイテレータ。</li>
+</ul>
+<h3>高レベルデータ操作（ヘルパー）</h3>
+<ul>
+<li><code>md_load</code>, <code>md_save</code>: <code>md_t</code> 構造体の永続化を扱う。</li>
+<li><code>md_pkey_load</code>, <code>md_pkey_save</code>: 秘密鍵のロード/セーブ。</li>
+<li><code>md_pubcert_load</code>, <code>md_pubcert_save</code>: 公開証明書チェーンのロード/セーブ。</li>
+<li><code>md_creds_load</code>, <code>md_creds_save</code>: 秘密鍵と証明書チェーンをセットで扱う。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>md_store_group_name</code>: ストレージグループ列挙型を文字列に変換。</li>
+<li><code>md_pkey_filename</code>, <code>md_chain_filename</code>: 鍵や証明書のファイル命名規則を適用。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **委譲フロー**: <code>md_store_load</code> などの関数は、引数として渡された <code>md_store_t *store</code> の関数ポインタ（<code>store-&gt;load</code> など）を呼び出します。 2. **JSON変換フロー**: <code>md_save</code> は <code>md_util_pool_vdo</code> を使用して一時プールを確保し、<code>md_to_json</code> でシリアライズした後に <code>md_store_save_json</code> を呼び出します。 3. **イテレーションフロー**: <code>md_store_md_iter</code> は、内部で <code>insp_md</code> コールバックを定義し、<code>md_store_iter</code> を通じてストレージを走査します。各エントリが見つかるたびに <code>insp_md</code> が呼ばれ、JSONを <code>md_t</code> に復元してユーザー提供の <code>inspect</code> 関数へ渡します。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: ファイル操作、ハッシュ、文字列処理、メモリプール管理に使用。</li>
+<li>**内部ヘッダー**: <code>md.h</code> (コア定義), <code>md_json.h</code> (JSON処理), <code>md_crypt.h</code> (暗号化関連), <code>md_store.h</code> (インターフェース定義)。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_store.h</code>: 本ファイルのインターフェース定義。</li>
+<li><code>md_store_fs.c</code>: <code>md_store_t</code> の具体的なファイルシステム実装。</li>
+<li><code>md_reg.c</code>: <code>md_store</code> を利用してドメインレジストリを管理する上位モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ほとんどの関数は <code>apr_pool_t *p</code> を引数に取り、メモリのライフサイクルをプールに依存させています。</li>
+<li>**不変条件**: <code>md_store_t</code> はインターフェースであり、具体的な実装（<code>md_store_fs</code> 等）が提供する関数ポインタが正しく初期化されていることを前提としています。</li>
+<li>**省略された詳細**: 本ファイルは「抽象化層」であるため、実際のファイルI/Oやロックの排他制御ロジックは含まれていません。これらは <code>md_store_fs.c</code> などの実装側に委ねられています。</li>
+<li>**ファイル命名**: <code>pk_filename</code> 関数内では、ファイルシステムの大文字小文字の区別を考慮し、小文字への正規化が行われています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_group_name.html" target="wiki-view">`md_store_group_name`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_load.html" target="wiki-view">`md_store_load`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_save.html" target="wiki-view">`md_store_save`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_remove.html" target="wiki-view">`md_store_remove`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_purge.html" target="wiki-view">`md_store_purge`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_iter.html" target="wiki-view">`md_store_iter`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_load_json.html" target="wiki-view">`md_store_load_json`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_save_json.html" target="wiki-view">`md_store_save_json`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_store_move.html" target="wiki-view">`md_store_move`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_group_ctx.html" target="wiki-view">`md_group_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__md_load_ctx.html" target="wiki-view">`md_load_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_store_c__inspect_md_ctx.html" target="wiki-view">`inspect_md_ctx`</a></li>
+</ul></body></html>

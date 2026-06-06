@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cache/mod_socache_dbm.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cache/mod_socache_dbm.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の共有オブジェクトキャッシュ（socache）インターフェースに対する DBM ベースの実装です。ファイルシステム上の DBM ファイルをバックエンドとして利用し、セッションキャッシュや SSL セッション ID などの小規模なデータを永続化・共有します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_socache</code> サブシステムにおける「プロバイダー」の一つです。<code>ap_socache_provider_t</code> 構造体を通じて、キャッシュのライフサイクル管理、読み書き、期限切れ処理を抽象化されたインターフェースとして提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ライフサイクル管理**: DBM ファイルの作成、初期化、および破棄（アンリンク）。</li>
+<li>**データ操作**: DBM を用いたキー・値ペアの保存、取得、削除。</li>
+<li>**期限切れ処理**: キャッシュエントリに付与されたタイムスタンプに基づく自動削除。</li>
+<li>**権限管理**: 必要に応じて、Apache 子プロセスがアクセスできるよう DBM ファイルの所有権を調整。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>インスタンス管理</h3>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュインスタンスのコンテキスト。データファイルパス、プール、期限切れ間隔を保持。</li>
+<li><code>socache_dbm_create</code>: インスタンスの初期化とメモリ確保。</li>
+<li><code>socache_dbm_init</code>: DBM ファイルのオープンと権限設定。</li>
+</ul>
+<h3>データ操作</h3>
+<ul>
+<li><code>socache_dbm_store</code>: データを DBM に書き込む。期限（<code>apr_time_t</code>）を値の先頭に付与して保存。</li>
+<li><code>socache_dbm_retrieve</code>: キーからデータを取得し、期限切れチェックを行う。</li>
+<li><code>socache_dbm_remove</code>: 特定のキーを削除。</li>
+</ul>
+<h3>メンテナンス・ユーティリティ</h3>
+<ul>
+<li><code>socache_dbm_expire</code>: キャッシュ全体をスキャンし、期限切れエントリを削除する。</li>
+<li><code>socache_dbm_status</code>: キャッシュの状態（エントリ数、サイズ）を報告。</li>
+<li><code>socache_dbm_iterate</code>: 全エントリを走査し、コールバック関数を実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>socache_dbm_init</code> が呼ばれ、DBM ファイルが作成されます。ルート権限で実行されている場合、<code>try_chown</code> を通じて子プロセスがアクセス可能な所有者に変更されます。 2. **データ保存**: <code>socache_dbm_store</code> は、<code>apr_time_t</code>（期限）と実際のデータを連結したバッファを作成し、DBM に書き込みます。 3. **期限切れチェック**: <code>socache_dbm_retrieve</code> や <code>socache_dbm_expire</code> は、値の先頭から <code>apr_time_t</code> を読み取り、現在時刻と比較します。期限切れの場合、<code>socache_dbm_remove</code> を呼び出して削除します。 4. **スキャン**: <code>socache_dbm_expire</code> は、DBM ライブラリの制約を考慮し、2 パス（スキャンしてキーを収集 → 削除）で安全に期限切れ処理を行います。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ap_socache.h</code>: socache インターフェース定義。</li>
+<li><code>apr_dbm.h</code>: DBM ファイル操作の抽象化レイヤー。</li>
+<li><code>unixd.h</code>: プロセス権限管理（<code>try_chown</code> 用）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cache/mod_cache_socache.c</code>: このプロバイダーを利用する上位モジュール。</li>
+<li><code>include/ap_socache.h</code>: プロバイダーが実装すべきインターフェースの定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>ap_socache_instance_t</code> 内のプールは、mutex が保持されている間のみ使用可能です。</li>
+<li>**スレッド安全性**: 本モジュールは <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> を指定しており、スレッドセーフではありません。呼び出し側での排他制御が前提となります。</li>
+<li>**レイアウト**: DBM ファイルはプラットフォームにより <code>.db</code>, <code>.dir</code>, <code>.pag</code> などの拡張子が付与されます。<code>socache_dbm_destroy</code> はこれら全ての可能性を考慮して削除を試みます。</li>
+<li>**制限事項**: DBM ファイルの特性上、大きなデータの保存には適していません（約 1KB 程度の制限）。</li>
+<li>**省略された詳細**: DBM ライブラリ自体の内部実装（GDBM, Berkeley DB 等）については、APR の抽象化レイヤーに依存しているため、本ファイルでは触れられていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__ap_socache_instance_t.html" target="wiki-view">`ap_socache_instance_t`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_create.html" target="wiki-view">`socache_dbm_create`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__try_chown.html" target="wiki-view">`try_chown`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_init.html" target="wiki-view">`socache_dbm_init`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_destroy.html" target="wiki-view">`socache_dbm_destroy`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_store.html" target="wiki-view">`socache_dbm_store`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_retrieve.html" target="wiki-view">`socache_dbm_retrieve`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_remove.html" target="wiki-view">`socache_dbm_remove`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_expire.html" target="wiki-view">`socache_dbm_expire`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_status.html" target="wiki-view">`socache_dbm_status`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__socache_dbm_iterate.html" target="wiki-view">`socache_dbm_iterate`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_dbm_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

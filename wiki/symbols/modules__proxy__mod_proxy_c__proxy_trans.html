@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy.c:979</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストの URL を解析し、設定された <code>ProxyPass</code> ルールに基づいてリクエストがプロキシ対象であるかを判定し、必要に応じてリクエストをプロキシ処理へルーティングする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_trans(request_rec *r, int pre_trans)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体 (<code>request_rec</code>)。</li>
+<li><code>pre_trans</code>: フックの実行フェーズを示すフラグ（1: <code>pre_translate_name</code> フック、0: <code>translate_name</code> フック）。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: プロキシ対象として処理が完了。</li>
+<li><code>DECLINED</code>: プロキシ対象外。</li>
+<li><code>DONE</code>: 処理済み（<code>pre_trans</code> が真の場合）。</li>
+<li>その他: <code>ap_proxy_trans_match</code> が返す HTTP ステータスコード。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;proxyreq</code> が既に設定されている場合、本関数は即座に終了する。</li>
+<li><code>r-&gt;uri</code> が <code>/</code> で始まらない場合や、<code>no-proxy</code> 環境変数が設定されている場合はプロキシ対象外となる。</li>
+<li><code>pre_trans</code> フラグと <code>PROXYPASS_MAP_ENCODED</code> フラグの整合性が一致する場合のみ、マッチング処理が実行される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期チェック**: <code>r-&gt;proxyreq</code> の確認および URI の妥当性チェックを行う。 2. **環境変数確認**: <code>no-proxy</code> 環境変数が設定されていれば <code>DECLINED</code> を返す。 3. **ディレクトリ設定の確認**: <code>dconf-&gt;alias</code> が存在する場合、<code>ap_proxy_trans_match</code> を呼び出し、マッチすればその結果を返す。 4. **サーバー設定の走査**: <code>conf-&gt;aliases</code> リストを順次走査し、各エイリアスに対して <code>ap_proxy_trans_match</code> を試行する。 5. **終了**: マッチするルールが見つからない場合は <code>DECLINED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>proxy_pre_translate_name</code> (<code>modules/proxy/mod_proxy.c:1051</code>)</li>
+<li><code>proxy_translate_name</code> (<code>modules/proxy/mod_proxy.c:1056</code>)</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_proxy_trans_match</code> (マッチング実行)</li>
+<li><code>ap_get_module_config</code> (設定取得)</li>
+<li><code>apr_table_get</code> (環境変数取得)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+<li><code>proxy_dir_conf</code>: ディレクトリ単位のプロキシ設定。</li>
+<li><code>proxy_server_conf</code>: サーバー単位のプロキシ設定。</li>
+<li><code>proxy_alias</code>: プロキシパスの定義構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;uri</code> が NULL または <code>/</code> で始まらない場合、即座に <code>DECLINED</code> となる。</li>
+<li><code>pre_trans</code> とエンコードフラグの不一致により、意図せずマッチングがスキップされる場合がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>pre_translate_name</code> と <code>translate_name</code> の両フックから呼び出されるため、<code>pre_trans</code> フラグによる条件分岐が重要である。</li>
+<li><code>ap_proxy_trans_match</code> の戻り値が <code>HTTP_CONTINUE</code> 以外の場合、その値がそのまま関数の戻り値となる。</li>
 </ul></body></html>

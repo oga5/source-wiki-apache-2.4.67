@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_io.c:323</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の入力フィルタと OpenSSL の BIO レイヤーを仲介するコンテキスト構造体です。復号化前のデータバッファ、フィルタ状態、および HTTPD のバケットブリゲードを保持し、SSL 入力処理のステートを管理します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    SSL *ssl;
+    BIO *bio_out;
+    ap_filter_t *f;
+    apr_status_t rc;
+    ap_input_mode_t mode;
+    apr_read_type_e block;
+    apr_bucket_brigade *bb;
+    char_buffer_t cbuf;
+    apr_pool_t *pool;
+    char buffer[AP_IOBUFSIZE];
+    ssl_filter_ctx_t *filter_ctx;
+} bio_filter_in_ctx_t;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: OpenSSL の <code>BIO</code> オブジェクトに <code>BIO_set_data</code> を介して格納されます。</li>
+<li>**出力**: フィルタ処理関数（<code>ssl_io_input_read</code> 等）において、復号化前のデータ取得や、HTTPD フィルタスタックへのデータ受け渡しに使用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>bio_filter_in_ctx_t</code> は、OpenSSL の BIO データ領域に紐付けられており、BIO の生存期間中有効である必要があります。</li>
+<li><code>bb</code> (バケットブリゲード) は、接続に関連付けられたメモリプールによって管理されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>OpenSSL が <code>BIO_read</code> を実行すると、この構造体を通じて HTTPD の <code>ap_get_brigade</code> が呼び出され、ネットワークから暗号化データが取得されます。</li>
+<li><code>cbuf</code> (char_buffer_t) を使用して、読み取り時に発生した余剰データを保持し、次回の読み取り要求時に再利用します。</li>
+<li><code>buffer</code> フィールドは <code>AP_IOBUFSIZE</code> (8192バイト) の固定長バッファとして、一時的なデータ保持に使用されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ssl_io_input_read</code>, <code>ssl_io_input_getline</code>, <code>ssl_io_filter_error</code> 等の <code>ssl_engine_io.c</code> 内の関数が、BIO からこのコンテキストを取得して操作します。</li>
+<li>**呼び出し先**: <code>BIO_get_data(bio)</code> を通じて、BIO メソッドの実装から参照されます。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ssl_filter_ctx_t</code>: SSL 接続のメインコンテキスト。</li>
+<li><code>char_buffer_t</code>: 読み取りデータのキャッシュ用構造体。</li>
+<li><code>apr_bucket_brigade</code>: HTTPD のデータ転送用バケットリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>AP_IOBUFSIZE</code> を超えるデータ読み取りは、複数回のフィルタ呼び出しに分割されます。</li>
+<li><code>rc</code> フィールドにより、直近の I/O 操作の <code>apr_status_t</code> が保持されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>BIO</code> のデータ領域として格納されるため、メモリ管理は <code>apr_pool_t</code> のライフサイクルと同期させる必要があります。</li>
+<li><code>buffer</code> のサイズは <code>AP_IOBUFSIZE</code> に固定されているため、変更が必要な場合は HTTPD の全体設定との整合性に注意してください。</li>
 </ul></body></html>

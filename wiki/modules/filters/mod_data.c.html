@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/mod_data.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/mod_data.c</h1>
+<h2>概要</h2>
+<p><code>mod_data.c</code> は、HTTP レスポンスボディを RFC 2397 形式の「data URL」に変換する出力フィルタモジュールです。このフィルタを適用すると、レスポンスは <code>data:[&lt;mime-type&gt;];base64,&lt;payload&gt;</code> という形式のテキストに変換され、ブラウザ等でインライン表示可能な形式に加工されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> サブシステムにおいて、コンテンツの変換を行うフィルタの一つです。主にデバッグや、特定の小規模なリソースを単一のテキストストリームとして埋め込みたい場合に使用されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**データ変換**: レスポンスボディを Base64 エンコードし、data URL スキームに適合させる。</li>
+<li>**ヘッダー調整**: <code>Content-Type</code> を <code>text/plain</code> に強制変更し、<code>Content-Length</code> をエンコード後のサイズに合わせて再計算する。</li>
+<li>**ストリーム処理**: <code>apr_bucket_brigade</code> を介して、メモリ効率を考慮したチャンク単位の Base64 変換を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>data_out_filter</code>: フィルタの本体。レスポンスの各バケットを読み取り、Base64 変換を適用する。</li>
+<li><code>data_ctx</code>: フィルタのコンテキスト構造体。Base64 変換の境界をまたぐための <code>overflow</code> バッファと、出力用ブリゲードを保持する。</li>
+<li><code>data_module</code>: Apache モジュール定義構造体。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 初回呼び出し時に <code>data_ctx</code> を作成し、data URL のヘッダー部分（<code>data:mime;base64,</code>）を生成して出力ブリゲードに書き込む。 2. **変換ループ**:</p>
+<ul>
+<li><code>EOS</code> (End of Stream) バケットが来るまで、入力ブリゲードからデータを読み取る。</li>
+<li>Base64 エンコードは 3 バイト単位で行う必要があるため、端数（1〜2バイト）を <code>ctx-&gt;overflow</code> に保持し、次のバケットのデータと連結して処理する。</li>
+<li>変換後のデータは <code>ctx-&gt;bb</code> に書き込まれ、<code>ap_pass_brigade</code> で後続のフィルタへ渡される。</li>
+<p>3. **終了処理**: <code>EOS</code> 到達時に <code>overflow</code> バッファに残った端数を処理し、最後に <code>EOS</code> を下流へ流す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_base64.h</code>: Base64 エンコード処理。</li>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲード操作。</li>
+<li><code>util_filter.h</code>: Apache フィルタフレームワークの基盤。</li>
+<li><code>httpd.h</code>, <code>http_protocol.h</code>: リクエスト処理およびヘッダー操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/filters/mod_filter.c</code>: フィルタの適用順序や条件を制御する基盤モジュール。</li>
+<li><code>modules/filters/mod_buffer.c</code>: フィルタチェーン内でデータをバッファリングする際の参考となる実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**サブリクエストの制限**: 現在の実装では、サブリクエストに対してはフィルタを適用せず、そのままパススルーします。これはサブリクエストの終了判定（EOS）が複雑であるためです。</li>
+<li>**メモリ効率**: <code>APR_BUCKET_BUFF_SIZE</code> を利用して一度に 6000 バイト単位で処理しており、巨大なレスポンスに対してもメモリを圧迫しない設計になっています。</li>
+<li>**Content-Length**: Base64 変換によりサイズが増加するため、元の <code>Content-Length</code> が大きすぎる場合はヘッダーを削除する安全策が取られています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_data_c__data_ctx.html" target="wiki-view">`data_ctx`</a></li>
+<li><a href="../../symbols/modules__filters__mod_data_c__data_out_filter.html" target="wiki-view">`data_out_filter`</a></li>
+<li><a href="../../symbols/modules__filters__mod_data_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

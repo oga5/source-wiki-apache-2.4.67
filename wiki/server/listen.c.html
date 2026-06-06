@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/listen.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/listen.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるネットワークリスナーの管理、ソケットのバインド、および設定を行うモジュールです。サーバー起動時のソケット作成から、設定ファイルで指定された <code>Listen</code> ディレクティブの処理、マルチコア環境でのリスナーバケットの複製までを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールのサブコンポーネントとして、MPM（Multi-Processing Module）が接続を受け入れるための「入り口」を準備します。<code>http_main.c</code> や各 MPM から呼び出され、OS レベルのソケット状態と Apache の内部的なリスナー構造体 (<code>ap_listen_rec</code>) を同期させます。</p>
+<h2>責務</h2>
+<ul>
+<li>**リスナー管理**: <code>Listen</code> ディレクティブによるリスナーの登録と、サーバー再起動時の古いリスナーのクリーンアップ。</li>
+<li>**ソケット設定**: <code>SO_REUSEADDR</code>, <code>SO_KEEPALIVE</code>, <code>TCP_NODELAY</code>, <code>SO_SNDBUF</code>, <code>SO_RCVBUF</code> などのソケットオプションの適用。</li>
+<li>**マルチコア最適化**: <code>SO_REUSEPORT</code> を利用したリスナーバケットの複製による負荷分散。</li>
+<li>**システム統合**: <code>systemd</code> ソケットアクティベーションのサポート。</li>
+<li>**フィルタ適用**: <code>AcceptFilter</code> の設定と適用。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リスナー管理</h3>
+<ul>
+<li><code>ap_listeners</code>: 現在アクティブなリスナーの連結リスト。</li>
+<li><code>ap_listen_rec</code>: リスナー情報を保持する構造体。ソケット、バインド先アドレス、プロトコル、次へのポインタを含む。</li>
+<li><code>ap_setup_listeners()</code>: 設定に基づき全リスナーを初期化・バインドするメイン関数。</li>
+<li><code>ap_duplicate_listeners()</code>: マルチコア環境用にリスナーを複製する。</li>
+</ul>
+<h3>設定・状態変数</h3>
+<ul>
+<li><code>ap_listenbacklog</code>, <code>ap_listencbratio</code>: 接続待ち行列やコア比率の設定値。</li>
+<li><code>ap_have_so_reuseport</code>: プラットフォームが <code>SO_REUSEPORT</code> をサポートしているかのフラグ。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>make_sock()</code>: ソケットの作成、オプション設定、バインド、リスンを行う低レベル関数。</li>
+<li><code>alloc_listener()</code>: 設定ファイルからリスナーを解析・生成する。</li>
+<li><code>ap_apply_accept_filter()</code>: OS 固有のアクセプトフィルタ（<code>defer_accept</code> 等）を適用する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <code>ap_set_listener()</code> が設定ファイルを読み込み、<code>alloc_listener()</code> を通じて <code>ap_listeners</code> リストを構築します。 2. **初期化フェーズ**: <code>ap_setup_listeners()</code> が呼ばれ、<code>open_listeners()</code> が各リスナーに対して <code>make_sock()</code> を実行します。 3. **複製フェーズ**: <code>ap_duplicate_listeners()</code> が呼ばれると、<code>ap_listen_buckets</code> にリスナーのコピーが作成され、マルチプロセス/スレッド間での負荷分散が準備されます。 4. **終了フェーズ**: <code>ap_close_listeners()</code> がプロセス終了時や再起動時にソケットをクローズします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: APR ネットワーク抽象化層。</li>
+<li><code>ap_listen.h</code>: リスナー構造体の定義。</li>
+<li><code>http_config.h</code>: 設定コマンド処理用。</li>
+<li><code>mpm_common.h</code>: MPM 共通ユーティリティ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/core.c</code>: <code>AcceptFilter</code> の定義やコア設定の保持。</li>
+<li><code>server/main.c</code>: サーバーのライフサイクル管理。</li>
+<li><code>include/ap_listen.h</code>: <code>ap_listen_rec</code> 構造体の詳細定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: リスナー構造体は <code>process-&gt;pool</code> に割り当てられ、サーバーのライフサイクル全体で生存します。</li>
+<li>**不変条件**: <code>ap_listeners</code> は常に <code>Listen</code> ディレクティブの順序を維持しようとしますが、IPv6/IPv4 のバインド順序調整のためにリストの並び替えが行われることがあります。</li>
+<li>**エッジケース**: <code>SO_REUSEPORT</code> の挙動は Linux と BSD で異なるため、コード内でプラットフォーム判定を行っています。</li>
+<li>**省略箇所**: <code>systemd</code> 関連のコードは <code>HAVE_SYSTEMD</code> マクロで囲まれており、環境依存のロジックが多いため、詳細なシステムコールフローは省略しています。</li>
+<li>**注意点**: <code>make_sock</code> は APR 抽象化が不十分な箇所があり、OS 固有のソケットオプション設定が直接記述されている箇所があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__listen_c__make_sock.html" target="wiki-view">`make_sock`</a></li>
+<li><a href="../symbols/server__listen_c__find_accf_name.html" target="wiki-view">`find_accf_name`</a></li>
+<li><a href="../symbols/server__listen_c__ap_apply_accept_filter.html" target="wiki-view">`ap_apply_accept_filter`</a></li>
+<li><a href="../symbols/server__listen_c__close_listeners_on_exec.html" target="wiki-view">`close_listeners_on_exec`</a></li>
+<li><a href="../symbols/server__listen_c__alloc_systemd_listener.html" target="wiki-view">`alloc_systemd_listener`</a></li>
+<li><a href="../symbols/server__listen_c__set_systemd_listener.html" target="wiki-view">`set_systemd_listener`</a></li>
+<li><a href="../symbols/server__listen_c__match_address.html" target="wiki-view">`match_address`</a></li>
+<li><a href="../symbols/server__listen_c__find_listeners.html" target="wiki-view">`find_listeners`</a></li>
+<li><a href="../symbols/server__listen_c__alloc_listener.html" target="wiki-view">`alloc_listener`</a></li>
+<li><a href="../symbols/server__listen_c__open_listeners.html" target="wiki-view">`open_listeners`</a></li>
+<li><a href="../symbols/server__listen_c__ap_setup_listeners.html" target="wiki-view">`ap_setup_listeners`</a></li>
+<li><a href="../symbols/server__listen_c__ap_duplicate_listeners.html" target="wiki-view">`ap_duplicate_listeners`</a></li>
+</ul></body></html>

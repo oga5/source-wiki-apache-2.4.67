@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/ajp.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/ajp.h</h1>
+<h2>概要</h2>
+<p><code>ajp.h</code> は、Apache HTTP Server とサーブレットコンテナ（Tomcat 等）間で通信を行うための **AJP (Apache Jserv Protocol) v13** の定義および API を提供するヘッダーファイルです。プロトコルの定数、エラーコード、メッセージ構造体、およびメッセージのシリアライズ・デシリアライズ・送受信を行うための関数群を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy_ajp</code> の中核となるデータ構造と通信インターフェースを定義しています。<code>mod_proxy</code> サブシステムにおいて、バックエンドとのバイナリ通信プロトコルを抽象化する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル定義**: AJP13 のヘッダー、コマンドタイプ、デフォルトポート等の定数管理。</li>
+<li>**メッセージ構造の定義**: <code>ajp_msg_t</code> による AJP メッセージのメモリレイアウトと状態管理。</li>
+<li>**シリアライズ/デシリアライズ**: メッセージへのデータ追加（append）および抽出（get/peek）API の提供。</li>
+<li>**通信抽象化**: ソケットを介したメッセージの送受信およびヘッダー解析のインターフェース提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>メッセージ構造体</h3>
+<ul>
+<li><code>ajp_msg_t</code>: AJP メッセージを保持する構造体。バッファ、現在の読み取り位置、メッセージ長、サーバーサイドフラグを管理します。</li>
+</ul>
+<h3>プロトコル定数</h3>
+<ul>
+<li><code>AJP13_WS_HEADER</code>: AJP メッセージの開始シグネチャ。</li>
+<li><code>CMD_AJP13_*</code>: <code>FORWARD_REQUEST</code>, <code>SEND_BODY_CHUNK</code>, <code>END_RESPONSE</code> 等の AJP13 コマンドタイプ。</li>
+</ul>
+<h3>メッセージ操作 API</h3>
+<ul>
+<li>**構築・管理**: <code>ajp_msg_create</code>, <code>ajp_msg_reset</code>, <code>ajp_msg_reuse</code>, <code>ajp_msg_end</code>。</li>
+<li>**シリアライズ (Append)**: <code>ajp_msg_append_uint32/16/8</code>, <code>ajp_msg_append_string_ex</code>, <code>ajp_msg_append_bytes</code>。</li>
+<li>**デシリアライズ (Get/Peek)**: <code>ajp_msg_get_uint32/16/8</code>, <code>ajp_msg_peek_uint16/8</code>, <code>ajp_msg_get_string</code>, <code>ajp_msg_get_bytes</code>。</li>
+</ul>
+<h3>通信・解析 API</h3>
+<ul>
+<li>**送受信**: <code>ajp_ilink_send</code>, <code>ajp_ilink_receive</code>。</li>
+<li>**高レベル解析**: <code>ajp_send_header</code>, <code>ajp_read_header</code>, <code>ajp_parse_header</code>, <code>ajp_parse_data</code>。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **構築**: <code>ajp_msg_create</code> でプールからメモリを確保し、<code>ajp_msg_t</code> を初期化します。 2. **シリアライズ**: <code>ajp_msg_append_*</code> 関数群を用いて、リクエストヘッダーやデータをバッファに書き込みます。 3. **送信**: <code>ajp_ilink_send</code> がバッファの内容をソケットへ書き出します。 4. **受信・解析**: <code>ajp_ilink_receive</code> でソケットから読み込み、<code>ajp_parse_*</code> 関数群を用いてメッセージタイプやヘッダーを抽出します。 5. **状態管理**: <code>ajp_msg_t</code> 内の <code>pos</code> が読み取り位置を追跡し、<code>len</code> がメッセージ全体のサイズを保持します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pools.h</code>: メッセージのメモリ管理。</li>
+<li><code>apr_network_io.h</code>: ソケット通信。</li>
+<li><code>httpd.h</code>, <code>http_request.h</code>: Apache リクエストコンテキストとの連携。</li>
+<li><code>mod_proxy.h</code>: プロキシ設定構造体との依存。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ajp_msg.c</code>: <code>ajp_msg_t</code> の操作関数の実装。</li>
+<li><code>ajp_header.c</code>: AJP ヘッダーの解析・構築ロジック。</li>
+<li><code>ajp_link.c</code>: ソケットを通じた低レベルな送受信の実装。</li>
+<li><code>mod_proxy_ajp.c</code>: 本ヘッダーを利用したプロキシモジュールのメインロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ajp_msg_t</code> は <code>apr_pool_t</code> を介して割り当てられます。ライフサイクルはリクエストの生存期間に依存します。</li>
+<li>**EBCDIC 対応**: <code>ajp_msg_append_string_ex</code> は EBCDIC 環境での ASCII 変換フラグをサポートしています。</li>
+<li>**制約**: <code>AJP_MSG_BUFFER_SZ</code> (8KB) および <code>AJP_MAX_BUFFER_SZ</code> (64KB) がメッセージサイズの物理的な上限となります。</li>
+<li>**エラーハンドリング**: <code>AJP_E*</code> で始まる独自のエラーコードが定義されており、APR のエラーコードと組み合わせて使用されます。</li>
+<li>**省略**: 本ヘッダーはインターフェース定義に特化しており、具体的なソケットのタイムアウト処理やバッファの再配置ロジックは実装ファイル (<code>.c</code>) に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__ajp_h__ajp_msg_t.html" target="wiki-view">`ajp_msg_t`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_h__ajp_msg.html" target="wiki-view">`ajp_msg`</a></li>
+</ul></body></html>

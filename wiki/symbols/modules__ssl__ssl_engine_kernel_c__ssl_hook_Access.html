@@ -6,22 +6,47 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_kernel.c:1047</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のアクセス制御フェーズにおいて、SSL/TLS 接続の検証、再ネゴシエーションの要否判断、および <code>SSLRequire</code> ディレクティブによる条件式評価を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_hook_Access(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: <code>int</code> (HTTP ステータスコードまたは <code>DECLINED</code>)</li>
+<li><code>HTTP_FORBIDDEN</code>: SSL 接続が必須であるにもかかわらず未確立の場合、または <code>SSLRequire</code> の条件を満たさない場合。</li>
+<li><code>DECLINED</code>: SSL 接続が有効でない場合、または SSL 関連のチェックを通過し、他のモジュールによるアクセス制御を許可する場合。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>スレーブ接続の場合、マスター接続から <code>SSLConnRec</code> を取得して検証を行う。</li>
+<li>サブリクエストやスレーブ接続において、並行リクエストとの競合を防ぐため再ネゴシエーションを禁止するガードロジックが適用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **接続確認**: リクエストに関連付けられた SSL 接続情報を取得。 2. **必須チェック**: <code>SSLRequireSSL</code> が設定されている場合、SSL 接続がなければ拒否。 3. **有効性確認**: SSL が無効な場合は <code>DECLINED</code> を返す。 4. **再ネゴシエーション**: プロトコルバージョンに応じて <code>ssl_hook_Access_modern</code> または <code>ssl_hook_Access_classic</code> を呼び出し、ディレクトリ単位の設定変更に伴う再ネゴシエーションを実行。 5. **ユーザー名設定**: <code>FakeBasicAuth</code> が無効な場合、設定されたユーザー名変数をルックアップして <code>r-&gt;user</code> に代入。 6. **条件評価**: <code>SSLRequire</code> で定義された式を <code>ap_expr_exec</code> で評価し、不一致の場合は <code>HTTP_FORBIDDEN</code> を返す。 7. **終了**: すべてのチェックを通過した場合、他のモジュールによる認証を妨げないよう <code>DECLINED</code> を返す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/mod_ssl.c</code> (Apache の <code>ap_hook_check_access</code> フックとして登録)</li>
+<li>**呼び出し先**: </li>
+<li><code>ssl_hook_Access_modern</code> / <code>ssl_hook_Access_classic</code></li>
+<li><code>ssl_var_lookup</code></li>
+<li><code>ap_expr_exec</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLDirConfigRec</code>: ディレクトリ単位の SSL 設定。</li>
+<li><code>SSLSrvConfigRec</code>: サーバー単位の SSL 設定。</li>
+<li><code>SSLConnRec</code>: 接続単位の SSL 状態。</li>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**SSL 必須設定違反**: <code>bSSLRequired</code> が真で SSL 接続がない場合、<code>HTTP_FORBIDDEN</code> を返し、<code>r-&gt;notes</code> に <code>ssl-access-forbidden</code> を記録する。</li>
+<li>**式評価失敗**: <code>SSLRequire</code> の式評価がエラーまたは不一致の場合、<code>HTTP_FORBIDDEN</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>TLS 1.3 以降では再ネゴシエーションが廃止されているため、<code>ssl_hook_Access_modern</code> との分岐ロジックが重要。</li>
+<li><code>r-&gt;user</code> の設定は <code>FakeBasicAuth</code> の有無によりタイミングが制御されている点に注意。</li>
+<li>戻り値として <code>OK</code> ではなく <code>DECLINED</code> を返すことで、他の認証モジュールとの協調を維持している。</li>
 </ul></body></html>

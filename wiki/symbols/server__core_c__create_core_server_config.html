@@ -6,22 +6,55 @@
 <li>定義箇所: <code>server/core.c:467</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のサーバー単位（仮想ホスト含む）の設定構造体 <code>core_server_config</code> を初期化し、メモリを割り当てる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void *create_core_server_config(apr_pool_t *a, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>a</code>: 設定構造体の割り当てに使用する <code>apr_pool_t</code>。</li>
+<li><code>s</code>: 設定対象となる <code>server_rec</code> 構造体。</li>
+<li>**出力**:</li>
+<li>初期化済みの <code>core_server_config</code> 構造体へのポインタ（<code>void *</code> 型）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>s-&gt;is_virtual</code> の値に基づき、グローバルサーバー設定か仮想ホスト設定かを判定する。</li>
+<li>構造体内の各フィールドは <code>apr_pcalloc</code> によりゼロ初期化される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>core_server_config</code> 構造体分のメモリを <code>apr_pcalloc</code> で確保する。 2. **グローバルサーバーの場合 (<code>!is_virtual</code>)**:</p>
+<ul>
+<li><code>ap_document_root</code> および <code>access_name</code> をデフォルト値で設定。</li>
+<li><code>accf_map</code> テーブルを作成し、プラットフォーム（APR_HAS_SO_ACCEPTFILTER, WIN32 等）に応じて <code>http</code>/<code>https</code> のアクセプトフィルタを登録。</li>
+<li><code>flush_max_threshold</code> および <code>flush_max_pipelined</code> を設定。</li>
+<p>3. **仮想ホストの場合**:</p>
+<li>メインサーバーの設定から <code>error_log_format</code> を継承。</li>
+<li><code>flush_max_pipelined</code> を <code>-1</code> に設定。</li>
+<p>4. **共通処理**:</p>
+<li><code>sec_dir</code> および <code>sec_url</code> 用の配列を初期化。</li>
+<li><code>trace_enable</code> を <code>AP_TRACE_UNSET</code> に設定。</li>
+<li><code>protocols</code> 配列を初期化し、<code>protocols_honor_order</code>、<code>merge_slashes</code>、<code>strict_host_check</code> を未設定状態（<code>UNSET</code> または <code>-1</code>）で初期化。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/core.c:5826</code>（サーバー設定構造体作成時）。</li>
+<li>**呼び出し先**: <code>apr_pcalloc</code>, <code>apr_table_make</code>, <code>apr_table_setn</code>, <code>ap_get_core_module_config</code>, <code>apr_array_make</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>core_server_config</code>: 本関数が生成する主要な設定構造体。</li>
+<li><code>server_rec</code>: サーバーの属性を保持する構造体。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pcalloc</code> がメモリ不足で失敗した場合、APR の仕様に従いプロセスが終了する可能性がある。</li>
+<li>仮想ホスト設定時にメインサーバーの設定が未初期化である場合、<code>ap_get_core_module_config</code> の結果に依存する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>core_module</code> の設定作成フックとして機能する。</li>
+<li>プラットフォーム固有のアクセプトフィルタ設定が含まれているため、OS 間の挙動差異に注意すること。</li>
+<li><code>merge_slashes</code> や <code>strict_host_check</code> などの新しい設定項目を追加する際は、ここで適切なデフォルト値（<code>UNSET</code> 等）を割り当てること。</li>
 </ul></body></html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/debugging/mod_bucketeer.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/debugging/mod_bucketeer.c</h1>
+<h2>概要</h2>
+<p><code>mod_bucketeer</code> は、Apache HTTP Server の出力フィルタとして動作するデバッグ用モジュールです。データストリーム内の特定の制御文字を検出し、バケット（Bucket）の分割やフラッシュ、送信を強制的に実行することで、バケット処理の挙動をテスト・検証するために使用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/debugging</code> ディレクトリに属し、フィルタチェーンの挙動を意図的に操作する「インジェクション・ツール」としての役割を担います。主に開発者がバケットの断片化やストリーム制御をシミュレートする際に利用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**バケットの分割**: 設定されたデリミタ（<code>^B</code>, <code>^P</code>, <code>^F</code>）をデータ内で検出し、バケットを再構成する。</li>
+<li>**ストリーム制御**: 制御文字に応じて、バケットのフラッシュや下流フィルタへのブリゲード送信をトリガーする。</li>
+<li>**コンテンツフィルタリング**: <code>text/</code> で始まるコンテンツタイプのみを対象とし、それ以外は透過的に処理する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>bucketeer_out_filter</code>: モジュールの核となる出力フィルタ関数。バケットの走査と分割ロジックを実装。</li>
+<li><code>bucketeer_filter_config_t</code>: デリミタ設定を保持する構造体。</li>
+<li><code>bucketeer_ctx_t</code>: フィルタ実行中の状態（ブリゲード）を保持するコンテキスト。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>create_bucketeer_server_config</code> でデフォルトのデリミタ（<code>0x02</code>, <code>0x10</code>, <code>0x06</code>）を定義。 2. **フィルタ起動**: <code>bucketeer_out_filter</code> が呼び出されると、対象が <code>text/</code> か判定し、非対象ならフィルタを解除してパススルーする。 3. **バケット走査**: ブリゲード内の各バケットを読み込み、データ内にデリミタが存在するか確認する。 4. **分割と処理**:</p>
+<ul>
+<li><code>bucketdelimiter</code>: バケットを分割し、新しいバケットを作成。</li>
+<li><code>flushdelimiter</code>: フラッシュバケットを挿入。</li>
+<li><code>passdelimiter</code>: 現在のブリゲードを下流へ送信（<code>ap_pass_brigade</code>）。</li>
+<p>5. **終了**: EOS（End of Stream）バケットを検知すると、残りのブリゲードを送信して終了する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>util_filter.h</code>: Apache フィルタフレームワークの基本。</li>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲード操作の API。</li>
+<li><code>http_protocol.h</code>, <code>http_request.h</code>: リクエストおよびプロトコル制御。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/debugging/mod_dumpio.c</code>: 同ディレクトリに存在し、I/O データのダンプを行うデバッグモジュール。併せて参照することで、フィルタチェーンの可視化と操作の両面を理解できます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**副作用**: 本モジュールは <code>Content-Length</code> ヘッダーを削除します。バケットの分割・再構成によりデータ長が変化するため、この挙動は必須です。</li>
+<li>**注意点**: <code>bucketeer_out_filter</code> 内の <code>XXX</code> コメントにある通り、現在の実装では残りのデータ処理に改善の余地があります。実運用環境ではなく、あくまでデバッグ環境での使用を前提としてください。</li>
+<li>**デリミタ**: デフォルトのデリミタは ASCII 制御文字です。バイナリデータを扱う場合は、意図しない分割が発生する可能性があるため注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__bucketeer_filter_config_t.html" target="wiki-view">`bucketeer_filter_config_t`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__create_bucketeer_server_config.html" target="wiki-view">`create_bucketeer_server_config`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__bucketeer_ctx_t.html" target="wiki-view">`bucketeer_ctx_t`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__bucketeer_out_filter.html" target="wiki-view">`bucketeer_out_filter`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

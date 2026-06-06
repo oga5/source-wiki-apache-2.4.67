@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_usertrack.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_usertrack.c</h1>
+<h2>概要</h2>
+<p><code>mod_usertrack</code> は、クライアントのサイト内での行動経路を追跡するために、一意な識別子（Cookie）を生成・管理する Apache モジュールです。ブラウザから Cookie が送信されない場合にのみ、サーバー側で新しい Cookie を生成し、<code>Set-Cookie</code> ヘッダーを介してクライアントに付与します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムの一部として、リクエスト処理の初期段階（<code>fixups</code> フック）で動作します。主にログ記録用のメタデータ生成を目的としており、認証目的のセキュアなトークン生成には適していません。</p>
+<h2>責務</h2>
+<ul>
+<li>**Cookie のライフサイクル管理**: クライアントからの既存 Cookie の検証、および未設定時の新規 Cookie 生成。</li>
+<li>**設定管理**: <code>CookieTracking</code> や <code>CookieName</code> などのディレクティブを通じた、Cookie の有効期限、ドメイン、SameSite 属性、セキュリティフラグ（Secure/HttpOnly）の制御。</li>
+<li>**ログ連携**: 生成または抽出した Cookie 値を <code>r-&gt;notes</code> に格納し、<code>CustomLog</code> 等で <code>% {Cookie}n</code> として利用可能にする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>cookie_log_state</code>: サーバー全体の設定（有効期限など）。</li>
+<li><code>cookie_dir_rec</code>: ディレクトリごとの設定（Cookie 名、正規表現、属性フラグ）。</li>
+</ul>
+<h3>コアロジック</h3>
+<ul>
+<li><code>spot_cookie</code>: <code>fixups</code> フック関数。リクエストヘッダーから Cookie を検索し、存在しなければ <code>make_cookie</code> を呼び出す。</li>
+<li><code>make_cookie</code>: 新規 Cookie 文字列を生成し、<code>err_headers_out</code> に <code>Set-Cookie</code> を追加する。</li>
+<li><code>set_and_comp_regexp</code>: Cookie 名に基づいた検索用正規表現をコンパイルする。</li>
+</ul>
+<h3>設定ハンドラ</h3>
+<ul>
+<li><code>set_cookie_exp</code>: <code>CookieExpires</code> の解析（数値または <code>mod_expires</code> 形式の期間指定）。</li>
+<li><code>set_cookie_name</code>, <code>set_cookie_domain</code>, <code>set_cookie_style</code>, <code>set_samesite_value</code>: 各属性のバリデーションと設定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック登録**: <code>register_hooks</code> が <code>spot_cookie</code> を <code>APR_HOOK_REALLY_FIRST</code> で登録。 2. **Cookie 抽出**: <code>spot_cookie</code> が <code>headers_in</code> から Cookie を読み取り、<code>dcfg-&gt;regexp</code> を用いてマッチングを行う。 3. **判定**:</p>
+<ul>
+<li>マッチした場合: <code>r-&gt;notes</code> に値を保存し <code>DECLINED</code> を返す。</li>
+<li>マッチしない場合: <code>make_cookie</code> を呼び出し、乱数と時刻から一意な値を生成して <code>Set-Cookie</code> ヘッダーを付与し <code>OK</code> を返す。</li>
+<p>4. **正規表現**: <code>set_and_comp_regexp</code> は、Cookie 名の変更時に動的に正規表現を再構築し、<code>ap_pregcomp</code> でコンパイルする。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作およびユーティリティ。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache のリクエスト処理およびモジュール設定基盤。</li>
+<li><code>http_log.h</code>: エラーログ出力用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_headers.c</code>: HTTP ヘッダー操作の参考。</li>
+<li><code>mod_expires.c</code>: <code>set_cookie_exp</code> のロジックの元となった時間計算ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ（Cookie 文字列や正規表現）は <code>request_rec</code> のプールまたは設定プールに割り当てられており、リクエスト終了時に自動解放されます。</li>
+<li>**制約**: <code>spot_cookie</code> はサブリクエスト（<code>r-&gt;main</code>）では動作しません。</li>
+<li>**セキュリティ**: 本モジュールは暗号学的に安全な Cookie を生成しません。認証目的での使用は厳禁です。</li>
+<li>**正規表現**: <code>NUM_SUBS</code> (3) は、正規表現内のキャプチャグループ数と一致させる必要があります。<code>set_cookie_name</code> でこの整合性がチェックされます。</li>
+<li>**省略箇所**: <code>make_cookie</code> 内の <code>apr_random_insecure_bytes</code> は、OS の乱数生成器に依存します。詳細なエントロピー源については本ファイル外の APR 実装に委ねられています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__cookie_log_state.html" target="wiki-view">`cookie_log_state`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__cookie_type_e.html" target="wiki-view">`cookie_type_e`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__cookie_dir_rec.html" target="wiki-view">`cookie_dir_rec`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__make_cookie.html" target="wiki-view">`make_cookie`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__set_and_comp_regexp.html" target="wiki-view">`set_and_comp_regexp`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__spot_cookie.html" target="wiki-view">`spot_cookie`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__make_cookie_log_state.html" target="wiki-view">`make_cookie_log_state`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__make_cookie_dir.html" target="wiki-view">`make_cookie_dir`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__set_cookie_exp.html" target="wiki-view">`set_cookie_exp`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__set_cookie_name.html" target="wiki-view">`set_cookie_name`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__set_cookie_domain.html" target="wiki-view">`set_cookie_domain`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_usertrack_c__set_cookie_style.html" target="wiki-view">`set_cookie_style`</a></li>
+</ul></body></html>

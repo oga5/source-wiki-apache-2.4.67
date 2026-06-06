@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/core/mod_so.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/core/mod_so.c</h1>
+<h2>概要</h2>
+<p><code>mod_so.c</code> は、Apache HTTP Server の実行時に共有オブジェクト（DSO: Dynamic Shared Object）を動的にロードおよびアンロードするためのコアモジュールです。サーバーを再起動することなく、<code>LoadModule</code> および <code>LoadFile</code> ディレクティブを通じて機能拡張を可能にします。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の設定フェーズにおいて、外部バイナリをプロセス空間にマッピングし、Apache のモジュール構造として統合するブリッジの役割を果たします。<code>modules/core</code> 内で DSO 関連の唯一の実行エンジンとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**DSO 管理**: <code>apr_dso</code> を利用した共有ライブラリのロードとシンボル解決。</li>
+<li>**モジュール統合**: ロードした DSO を Apache の内部モジュールリストへ登録し、設定を適用。</li>
+<li>**ライフサイクル管理**: 設定プール（<code>pconf</code>）に関連付けられたクリーンアップ処理による、サーバー終了時のモジュールアンロード。</li>
+<li>**検証**: ロード対象のモジュールが Apache のバイナリ互換性（<code>MODULE_MAGIC_COOKIE</code>）を満たしているかの検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定と状態管理</h3>
+<ul>
+<li><code>so_module</code>: モジュールのメイン構造体。<code>so_cmds</code> と <code>so_sconf_create</code> を保持。</li>
+<li><code>so_server_conf</code>: ロードされたモジュールを追跡するための配列（<code>loaded_modules</code>）を保持するサーバー設定構造体。</li>
+</ul>
+<h3>コマンドハンドラ</h3>
+<ul>
+<li><code>load_module</code>: <code>LoadModule</code> ディレクティブを処理。DSO のロード、シンボル解決、Apache への登録、設定の初期化を行う。</li>
+<li><code>load_file</code>: <code>LoadFile</code> ディレクティブを処理。任意の共有ライブラリをロードする。</li>
+</ul>
+<h3>内部ユーティリティ</h3>
+<ul>
+<li><code>dso_load</code>: <code>apr_dso_load</code> をラップし、サーバールートからの相対パス解決やエラーハンドリングを行う。</li>
+<li><code>unload_module</code>: <code>apr_pool_cleanup</code> から呼び出され、モジュールをアンロードする。</li>
+<li><code>ap_find_loaded_module_symbol</code>: ロード済みモジュールの構造体ポインタを名前から検索する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>so_sconf_create</code> がサーバー設定を初期化し、<code>loaded_modules</code> 配列を確保。 2. **ロード処理**: <code>load_module</code> が呼び出されると、まず重複ロードをチェックし、次に <code>dso_load</code> でファイルをロード。 3. **シンボル解決**: <code>apr_dso_sym</code> を使用して、共有オブジェクト内の <code>module</code> 構造体シンボルを取得。 4. **統合**: <code>ap_add_loaded_module</code> で Apache のグローバルモジュールリストに追加し、<code>ap_single_module_configure</code> で設定を適用。 5. **クリーンアップ**: <code>apr_pool_cleanup_register</code> により、サーバー終了時に <code>unload_module</code> が実行されるよう予約。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_dso.h</code>: 動的ロードの抽象化レイヤー。</li>
+<li><code>http_config.h</code>: モジュール設定およびコマンド登録用。</li>
+<li><code>httpd.h</code>: サーバーの基本構造体（<code>server_rec</code> 等）。</li>
+<li><code>mod_so.h</code>: オプション関数（<code>ap_find_loaded_module_symbol</code>）の宣言。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/core/mod_so.h</code>: このモジュールが提供する公開 API の定義。</li>
+<li><code>server/config.c</code>: <code>ap_add_loaded_module</code> や <code>ap_single_module_configure</code> など、モジュール統合の受け入れ側。</li>
+<li><code>server/util_dso.c</code>: (存在する場合) DSO 関連の低レベルユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: ロードされたモジュール情報は <code>cmd-&gt;pool</code>（通常は <code>pconf</code>）に紐付けられており、サーバーの再起動や終了時に自動的に解放されます。</li>
+<li>**プラットフォーム依存**: <code>NO_DLOPEN</code> が定義されている環境では、動的ロード機能は無効化され、警告ログを出力するスタブに置き換わります。</li>
+<li>**制約**: 組み込み済みの静的モジュールと名前が衝突する場合、ロードは拒否されます。</li>
+<li>**未実装/浅い部分**: <code>load_file</code> は単にライブラリをロードするだけで、Apache モジュールとしての登録は行いません。また、エラーハンドリングは <code>apr_dso_error</code> を通じてプラットフォーム固有のメッセージに依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__core__mod_so_c__so_server_conf.html" target="wiki-view">`so_server_conf`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__so_sconf_create.html" target="wiki-view">`so_sconf_create`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__unload_module.html" target="wiki-view">`unload_module`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__dso_load.html" target="wiki-view">`dso_load`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__load_module.html" target="wiki-view">`load_module`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__load_file.html" target="wiki-view">`load_file`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__ap_find_loaded_module_symbol.html" target="wiki-view">`ap_find_loaded_module_symbol`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__dump_loaded_modules.html" target="wiki-view">`dump_loaded_modules`</a></li>
+<li><a href="../../symbols/modules__core__mod_so_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

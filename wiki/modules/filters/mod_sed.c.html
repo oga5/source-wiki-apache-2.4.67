@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/mod_sed.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/mod_sed.c</h1>
+<h2>概要</h2>
+<p><code>mod_sed.c</code> は、Apache HTTP Server のリクエストおよびレスポンスストリームに対して、<code>sed</code> 形式の正規表現置換を適用するためのフィルタモジュールです。<code>libsed</code> ライブラリをバックエンドとして利用し、ストリーム処理中に動的なテキスト変換を実現します。</p>
+<h2>モジュール内での役割</h2>
+<p>HTTP フィルタチェーンの一部として動作し、<code>OutputSed</code> および <code>InputSed</code> ディレクティブを通じて設定された変換ルールを適用します。<code>mod_substitute</code> と類似していますが、より複雑な <code>sed</code> スクリプトの実行を可能にする点に特徴があります。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>OutputSed</code> / <code>InputSed</code> ディレクティブの解析と <code>sed</code> 式のコンパイル。</li>
+<li>**フィルタコンテキスト管理**: リクエストごとの状態（<code>sed_filter_ctxt</code>）の初期化と破棄。</li>
+<li>**ストリーム処理**: <code>apr_bucket_brigade</code> を介したデータの読み込み、<code>libsed</code> への引き渡し、および変換後のデータ再構築。</li>
+<li>**エラーハンドリング**: <code>libsed</code> からのコンパイルエラーや実行時エラーのログ出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>sed_config</code>: ディレクトリ単位の設定を保持。<code>input</code> と <code>output</code> の <code>sed_expr_config</code> を含む。</li>
+<li><code>sed_expr_config</code>: 個別の <code>sed</code> コマンドセットと直近のエラーメッセージを保持。</li>
+</ul>
+<h3>フィルタコンテキスト</h3>
+<ul>
+<li><code>sed_filter_ctxt</code>: フィルタ実行中の状態を保持。<code>sed_eval_t</code>（<code>libsed</code> の評価状態）、出力用バッファ、一時プール（<code>tpool</code>）、および処理中のブリゲードを管理。</li>
+</ul>
+<h3>コールバック関数</h3>
+<ul>
+<li><code>sed_write_output</code>: <code>libsed</code> が変換結果を出力する際に呼び出される。バッファリングを行い、一定量に達すると <code>apr_bucket</code> を生成してブリゲードに追加する。</li>
+<li><code>log_sed_errf</code> / <code>sed_compile_errf</code>: <code>libsed</code> からのエラー通知を受け取り、Apache のログシステムへ転送する。</li>
+</ul>
+<h3>フィルタエントリポイント</h3>
+<ul>
+<li><code>sed_response_filter</code>: 出力フィルタ。レスポンスボディを逐次処理し、変換結果を後続のフィルタへ渡す。</li>
+<li><code>sed_request_filter</code>: 入力フィルタ。リクエストボディを読み込み、変換後に呼び出し元へ返す。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>init_context</code> がリクエストごとに呼ばれ、<code>libsed</code> の評価エンジンを初期化する。 2. **データ処理**:</p>
+<ul>
+<li><code>sed_response_filter</code> はブリゲード内のバケットを反復し、<code>sed_eval_buffer</code> を呼び出す。</li>
+<li><code>sed_write_output</code> は変換されたデータを <code>ctx-&gt;outbuf</code> に蓄積し、<code>MODSED_OUTBUF_SIZE</code> に達するか EOS/Flush バケットに遭遇した時点で <code>append_bucket</code> を通じてブリゲードへ書き出す。</li>
+<p>3. **終了処理**: <code>sed_finalize_eval</code> が EOS バケット受信時に呼ばれ、<code>sed</code> の内部バッファに残ったデータをフラッシュする。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>libsed.h</code>: <code>sed</code> 評価エンジンのコア API。</li>
+<li><code>util_filter.h</code>, <code>apr_buckets.h</code>: Apache フィルタチェーンおよびデータブリゲードの操作。</li>
+<li><code>http_config.h</code>, <code>http_log.h</code>: モジュール設定およびログ出力。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>sed0.c</code>, <code>sed1.c</code>: <code>libsed</code> の実装本体。</li>
+<li><code>mod_substitute.c</code>: 類似の置換機能を提供するモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>sed_filter_ctxt</code> 内の <code>tpool</code> は、一時的なバケット生成に使用されます。<code>clear_ctxpool</code> によって定期的にクリアされ、メモリリークを防いでいます。</li>
+<li>**Solaris sed 互換性**: <code>sed_finalize_eval</code> 実行時に改行がない場合、自動的に改行を付与する挙動があります。これは <code>libsed</code> の仕様であり、POST データ処理時に意図しないデータ変更が発生する可能性があるため注意が必要です。</li>
+<li>**制約**: <code>sed_request_filter</code> は <code>AP_MODE_READBYTES</code> モードのみをサポートしており、それ以外のモードは後続のフィルタへ透過的にパスします。</li>
+<li>**省略箇所**: <code>libsed</code> 内部の正規表現エンジン（<code>regexp.c</code> 等）の詳細は本ファイルには含まれていません。これらは <code>libsed</code> の責務として抽象化されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_sed_c__sed_expr_config.html" target="wiki-view">`sed_expr_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__sed_config.html" target="wiki-view">`sed_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__sed_filter_ctxt.html" target="wiki-view">`sed_filter_ctxt`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__log_sed_errf.html" target="wiki-view">`log_sed_errf`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__sed_compile_errf.html" target="wiki-view">`sed_compile_errf`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__clear_ctxpool.html" target="wiki-view">`clear_ctxpool`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__alloc_outbuf.html" target="wiki-view">`alloc_outbuf`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__append_bucket.html" target="wiki-view">`append_bucket`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__flush_output_buffer.html" target="wiki-view">`flush_output_buffer`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__sed_write_output.html" target="wiki-view">`sed_write_output`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__compile_sed_expr.html" target="wiki-view">`compile_sed_expr`</a></li>
+<li><a href="../../symbols/modules__filters__mod_sed_c__sed_eval_cleanup.html" target="wiki-view">`sed_eval_cleanup`</a></li>
+</ul></body></html>

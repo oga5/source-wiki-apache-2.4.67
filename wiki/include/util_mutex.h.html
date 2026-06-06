@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/util_mutex.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/util_mutex.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるミューテックス（排他制御）設定および管理のための共通ライブラリです。各モジュールが独自のミューテックスを登録し、ユーザーが <code>Mutex</code> ディレクティブを通じてメカニズム（<code>flock</code>, <code>pthread</code> 等）を選択・制御するためのインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache のコア機能の一部として、プラットフォーム依存の排他制御メカニズムを抽象化します。各モジュールが直接 APR のミューテックスを扱うのではなく、本ヘッダーを介して登録・作成を行うことで、サーバー全体での一貫した設定管理を実現します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定のパース**: <code>Mutex</code> ディレクティブの文字列を解析し、適切なロックメカニズムとファイルパスへ変換する。</li>
+<li>**ミューテックスの登録**: モジュールが使用するミューテックスの種類をコアに事前登録する。</li>
+<li>**インスタンス生成**: 登録済みの定義に基づき、<code>apr_global_mutex_t</code> や <code>apr_proc_mutex_t</code> を生成・初期化する。</li>
+<li>**設定の優先順位管理**: 個別設定、グローバル設定、モジュールデフォルト、組み込みデフォルトの順でメカニズムを決定する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ap_mutex_register()</code>: モジュールが起動時にミューテックス型を登録するための必須関数。</li>
+<li><code>ap_global_mutex_create()</code> / <code>ap_proc_mutex_create()</code>: 登録済み型に基づき、実際にロックオブジェクトを生成する関数。</li>
+<li><code>ap_parse_mutex()</code>: 設定文字列を解析する内部ユーティリティ。</li>
+<li><code>AP_MUTEX_ALLOW_NONE</code>: 「none」設定を許可するためのフラグ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **登録フェーズ**: モジュールは <code>pre_config</code> フック内で <code>ap_mutex_register()</code> を呼び出し、ミューテックスの型名とデフォルト値をコアに通知します。 2.  **設定フェーズ**: ユーザーが <code>httpd.conf</code> で <code>Mutex</code> ディレクティブを指定すると、コアは設定を保持します。 3.  **生成フェーズ**: 実行時にモジュールが <code>ap_global_mutex_create()</code> を呼び出すと、コアは保持している設定（優先順位に従い解決済み）を参照し、適切な APR ミューテックスを生成して返します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>: サーバーの基本構造体（<code>server_rec</code> 等）の定義。</li>
+<li><code>http_config.h</code>: 設定ディレクティブ処理のための定義。</li>
+<li><code>apr_global_mutex.h</code>: APR レベルのグローバルミューテックス機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_mutex.c</code>: 本ヘッダーで宣言された関数の実装。</li>
+<li><code>include/http_core.h</code>: <code>Mutex</code> ディレクティブの定義やコア設定構造体が含まれる。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**登録の重要性**: <code>ap_mutex_register()</code> を呼び出さないミューテックス型は、設定ファイルで指定しても拒否されます。必ず <code>pre_config</code> フックで行ってください。</li>
+<li>**マルチインスタンス**: 同一のミューテックス型で複数のインスタンスが必要な場合（例: 複数の共有メモリ領域）、<code>instance_id</code> を使用して一意なロックファイルを生成できます。</li>
+<li>**プラットフォーム依存**: 利用可能なメカニズム（<code>flock</code>, <code>fcntl</code>, <code>pthread</code> 等）はコンパイル時の APR の機能に依存します。<code>AP_AVAILABLE_MUTEXES_STRING</code> マクロを使用すると、現在の環境で利用可能な選択肢をログ等で提示できます。</li>
+</ul></body></html>

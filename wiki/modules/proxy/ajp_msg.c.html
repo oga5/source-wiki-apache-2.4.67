@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/ajp_msg.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/ajp_msg.c</h1>
+<h2>概要</h2>
+<p>AJP (Apache JServ Protocol) メッセージの構築、解析、およびデバッグ用ダンプ機能を提供する低レベルユーティリティ群です。<code>ajp_msg_t</code> 構造体を操作し、バイナリデータのシリアライズ・デシリアライズを安全に行うためのインターフェースを定義します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/proxy</code> における AJP プロトコルスタックの基盤層です。<code>ajp_header.c</code> や <code>ajp_link.c</code> が上位のプロトコルロジックを担うのに対し、本ファイルは生のバイトバッファに対する読み書きの整合性を保証する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**メッセージ管理**: <code>ajp_msg_t</code> の初期化、リセット、再利用、およびコピー。</li>
+<li>**データシリアライズ**: 整数値（8/16/32bit）や文字列、バイト配列を AJP メッセージ形式へ変換してバッファへ追加。</li>
+<li>**データデシリアライズ**: メッセージバッファから各型を読み出し、ポインタ位置を更新。</li>
+<li>**検証とデバッグ**: メッセージヘッダーの署名検証、サイズチェック、およびログ出力用のバイナリダンプ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>メッセージライフサイクル</h3>
+<ul>
+<li><code>ajp_msg_create</code>: プールからメッセージ構造体を割り当て。</li>
+<li><code>ajp_msg_reset</code> / <code>ajp_msg_reuse</code>: バッファを保持したままメッセージを初期化。</li>
+<li><code>ajp_msg_end</code>: メッセージの末尾をマークし、ヘッダーの長さを確定。</li>
+</ul>
+<h3>データ操作 (Append/Get)</h3>
+<ul>
+<li><code>ajp_msg_append_uint{8,16,32}</code>: ネットワークバイトオーダーを意識した値の追加。</li>
+<li><code>ajp_msg_append_string_ex</code>: 文字列の追加（EBCDIC変換オプション付き）。</li>
+<li><code>ajp_msg_get_{uint,string,bytes}</code>: バッファから値を読み出し、内部カーソル <code>pos</code> を進める。</li>
+<li><code>ajp_msg_peek_{uint16,uint8}</code>: カーソルを動かさずに値を参照。</li>
+</ul>
+<h3>検証・デバッグ</h3>
+<ul>
+<li><code>ajp_msg_check_header</code>: AJP署名（0x4142 または 0x1234）とサイズを検証。</li>
+<li><code>ajp_msg_dump</code>: バイナリデータを人間が読める形式に変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **構築フロー**: <code>ajp_msg_reset</code> で開始し、<code>append</code> 系関数でデータを順次追加。最後に <code>ajp_msg_end</code> を呼び出し、ヘッダーの長さフィールドを更新して送信準備を完了させます。 2. **解析フロー**: 受信したバイト列を <code>ajp_msg_check_header</code> で検証後、<code>get</code> 系関数で <code>pos</code> カーソルをインクリメントしながらデータを抽出します。 3. **エラーハンドリング**: すべての操作は <code>max_size</code> を超える書き込みや、バッファ範囲外の読み出しを <code>ajp_log_overflow</code> で検出し、<code>AJP_EOVERFLOW</code> などのエラーコードを返します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ajp.h</code>: <code>ajp_msg_t</code> 構造体定義、定数（<code>AJP_HEADER_LEN</code> 等）、およびプロトコルコマンド定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ajp_header.c</code>: AJPヘッダーの具体的なフィールド処理。</li>
+<li><code>ajp_link.c</code>: <code>ajp_msg_t</code> を用いたソケット通信の実装。</li>
+<li><code>mod_proxy_ajp.c</code>: 本モジュールの機能を呼び出すメインのエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ajp_msg_t</code> のバッファは <code>apr_pool_t</code> によって管理されます。<code>ajp_msg_reuse</code> はバッファの再割り当てを行わず、既存のメモリを再利用するため効率的です。</li>
+<li>**安全性**: 本ファイル内の関数は、バッファオーバーフローを防止するために常に <code>max_size</code> との比較を行っています。</li>
+<li>**EBCDIC対応**: <code>ajp_msg_append_string_ex</code> はプラットフォーム依存の文字コード変換を考慮しており、移植性を意識した実装になっています。</li>
+<li>**省略箇所**: 本ファイルは純粋なデータ操作に特化しており、ネットワークI/Oや具体的なプロトコル状態遷移（ステートマシン）は含まれていません。これらは <code>ajp_link.c</code> 等の上位層で扱われます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_dump.html" target="wiki-view">`ajp_msg_dump`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_log.html" target="wiki-view">`ajp_msg_log`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_check_header.html" target="wiki-view">`ajp_msg_check_header`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_reset.html" target="wiki-view">`ajp_msg_reset`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_reuse.html" target="wiki-view">`ajp_msg_reuse`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_end.html" target="wiki-view">`ajp_msg_end`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_log_overflow.html" target="wiki-view">`ajp_log_overflow`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_append_uint32.html" target="wiki-view">`ajp_msg_append_uint32`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_append_uint16.html" target="wiki-view">`ajp_msg_append_uint16`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_append_uint8.html" target="wiki-view">`ajp_msg_append_uint8`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_append_string_ex.html" target="wiki-view">`ajp_msg_append_string_ex`</a></li>
+<li><a href="../../symbols/modules__proxy__ajp_msg_c__ajp_msg_append_bytes.html" target="wiki-view">`ajp_msg_append_bytes`</a></li>
+</ul></body></html>

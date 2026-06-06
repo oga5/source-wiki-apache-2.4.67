@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cache/mod_cache_disk.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cache/mod_cache_disk.c</h1>
+<h2>概要</h2>
+<p><code>mod_cache_disk</code> は、HTTP 1.1 キャッシュをディスク上に永続化するための Apache HTTP Server モジュールです。URI をハッシュ化し、ディレクトリ構造にマッピングしてヘッダーとボディを別々のファイルとして保存します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_cache</code> サブシステムのストレージプロバイダーとして機能します。<code>cache_provider</code> 構造体を通じて、キャッシュの検索、保存、削除、無効化のインターフェースを <code>mod_cache</code> に提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ストレージ管理**: キャッシュファイルの作成、読み込み、削除、およびディレクトリ構造の維持。</li>
+<li>**メタデータ管理**: <code>disk_cache_info_t</code> を用いたキャッシュの有効期限、ステータス、および Vary ヘッダー情報の管理。</li>
+<li>**整合性チェック**: キャッシュされたヘッダーとボディの inode/device ID を比較し、ファイルが正当であることを検証。</li>
+<li>**設定管理**: <code>CacheRoot</code> やファイルサイズ制限などの設定をサーバーおよびディレクトリ単位で管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロバイダーインターフェース</h3>
+<ul>
+<li><code>cache_disk_provider</code>: <code>mod_cache</code> が呼び出す関数ポインターの集合。</li>
+<li><code>create_entity</code> / <code>open_entity</code>: キャッシュオブジェクトの初期化と既存キャッシュの検索。</li>
+<li><code>store_headers</code> / <code>store_body</code>: キャッシュへの書き込み処理。</li>
+<li><code>recall_headers</code> / <code>recall_body</code>: キャッシュからの読み出し処理。</li>
+<li><code>commit_entity</code>: 一時ファイルから本番ファイルへのリネーム（コミット）。</li>
+</ul>
+<h3>内部データ構造</h3>
+<ul>
+<li><code>disk_cache_object_t</code>: キャッシュ対象の URI に対応するディスク上の状態を保持する主要構造体。</li>
+<li><code>disk_cache_file_t</code>: ヘッダー、ボディ、Vary 情報を管理するファイルハンドルとパスのラッパー。</li>
+<li><code>disk_cache_conf</code> / <code>disk_cache_dir_conf</code>: サーバー全体およびディレクトリ単位の設定保持。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>header_file</code> / <code>data_file</code>: URI からハッシュ値を生成し、ディスク上のパスを構築。</li>
+<li><code>safe_file_rename</code>: <code>htcacheclean</code> 等によるディレクトリ削除を考慮した、リトライ付きファイルリネーム。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **検索フロー**: <code>open_entity</code> が URI からハッシュを生成し、<code>.header</code> ファイルを読み込む。Vary ヘッダーが存在する場合、リクエストヘッダーを元にキーを再生成し、正しいキャッシュファイルを特定する。 2. **保存フロー**: <code>store_body</code> が <code>apr_bucket_brigade</code> を通じてデータを受け取り、一時ファイルに書き込む。<code>commit_entity</code> が最後に <code>file_cache_el_final</code> を呼び出し、一時ファイルを最終的なキャッシュパスへアトミックにリネームする。 3. **データ構造のライフサイクル**: <code>r-&gt;pool</code> をベースに、<code>create_entity</code> で初期化され、<code>commit_entity</code> またはエラー発生時にクリーンアップされる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_cache.h</code>: キャッシュサブシステムの共通インターフェース。</li>
+<li><code>apr_file_io.h</code>: ファイルシステム操作（<code>apr_file_mktemp</code>, <code>apr_file_rename</code> 等）。</li>
+<li><code>apr_strings.h</code>: 文字列操作とパス構築。</li>
+<li><code>http_config.h</code> / <code>http_log.h</code>: モジュール設定とログ出力。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cache/mod_cache_disk.h</code>: <code>disk_cache_object_t</code> 等のデータ構造定義。</li>
+<li><code>modules/cache/cache_disk_common.h</code>: 共通のディスクキャッシュ定義。</li>
+<li><code>modules/cache/cache_util.c</code>: キャッシュキー生成等の共通ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>disk_cache_object_t</code> は <code>r-&gt;pool</code> に依存しており、リクエスト終了時に自動解放されます。ファイルハンドルは <code>apr_pool_cleanup_register</code> を使用して安全にクローズされます。</li>
+<li>**アトミック性**: <code>safe_file_rename</code> は、<code>htcacheclean</code> がディレクトリを削除する競合状態を考慮した設計になっています。</li>
+<li>**制限事項**: 現在、Range リクエストのキャッシュはサポートされていません。</li>
+<li>**未実装/浅い部分**: <code>regen_key</code> におけるヘッダー値の正規化（大文字小文字の区別など）は、RFC 準拠の観点で改善の余地があります。また、<code>read_table</code> における EBCDIC 変換処理は特定のプラットフォーム向けに特化されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__header_file.html" target="wiki-view">`header_file`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__data_file.html" target="wiki-view">`data_file`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__mkdir_structure.html" target="wiki-view">`mkdir_structure`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__safe_file_rename.html" target="wiki-view">`safe_file_rename`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__file_cache_el_final.html" target="wiki-view">`file_cache_el_final`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__file_cache_temp_cleanup.html" target="wiki-view">`file_cache_temp_cleanup`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__file_cache_create.html" target="wiki-view">`file_cache_create`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__file_cache_recall_mydata.html" target="wiki-view">`file_cache_recall_mydata`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__regen_key.html" target="wiki-view">`regen_key`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__array_alphasort.html" target="wiki-view">`array_alphasort`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__tokens_to_array.html" target="wiki-view">`tokens_to_array`</a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_disk_c__create_entity.html" target="wiki-view">`create_entity`</a></li>
+</ul></body></html>

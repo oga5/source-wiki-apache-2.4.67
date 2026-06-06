@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm/prefork/prefork.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>server/mpm/prefork/prefork.c</h1>
+<h2>概要</h2>
+<p><code>prefork.c</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）の一つである <code>mpm_prefork</code> の実装です。各リクエストを単一のプロセスで処理する非スレッド型のモデルを提供します。スレッドセーフではないライブラリとの互換性を維持しつつ、リクエストの急増に備えてあらかじめ子プロセスを生成（プリフォーク）しておくことで応答性を高めます。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の MPM サブシステムにおいて、プロセス管理のライフサイクルを担います。親プロセスが子プロセスの生成、監視、終了、および負荷に応じた動的なスケーリングを管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: 子プロセスの生成 (<code>make_child</code>)、死活監視、およびシグナルによる制御。</li>
+<li>**リソース最適化**: <code>MinSpareServers</code> / <code>MaxSpareServers</code> に基づく動的なプロセス数調整。</li>
+<li>**接続処理**: <code>accept()</code> ミューテックスによる排他制御と、リスニングソケットのポーリング。</li>
+<li>**設定管理**: <code>ServerLimit</code> や <code>MaxRequestWorkers</code> などのグローバル設定の検証と適用。</li>
+<li>**ライフサイクル管理**: 設定の読み込みから、正常終了、グレースフル再起動までの状態遷移。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・状態管理</h3>
+<ul>
+<li><code>prefork_retained_data</code>: 再起動を跨いで保持されるデータ構造。世代管理やスケーリング状態を格納。</li>
+<li><code>ap_daemons_limit</code> / <code>server_limit</code>: 同時接続数およびプロセス数の上限設定。</li>
+<li><code>retained</code>: モジュール全体で共有される <code>prefork_retained_data</code> のインスタンス。</li>
+</ul>
+<h3>プロセス制御</h3>
+<ul>
+<li><code>child_main()</code>: 子プロセスのメインループ。接続の待機、処理、終了条件のチェックを行う。</li>
+<li><code>make_child()</code>: 新規子プロセスの <code>fork()</code> と初期化。</li>
+<li><code>perform_idle_server_maintenance()</code>: アイドルプロセス数を監視し、必要に応じて増減させる。</li>
+</ul>
+<h3>同期・通信</h3>
+<ul>
+<li><code>prefork_child_bucket</code>: リスナー、パイプ（POD: Pipe of Death）、ミューテックスを保持する構造体。</li>
+<li><code>accept_mutex_on()</code> / <code>accept_mutex_off()</code>: <code>accept()</code> 呼び出し時の競合を防ぐためのプロセス間ミューテックス操作。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>prefork_hooks</code> が各フェーズのフックを登録。<code>prefork_pre_config</code> で設定の初期化と <code>retained</code> データの確保を行う。 2. **起動**: <code>prefork_run</code> がメインループを開始。<code>startup_children</code> で初期プロセスを生成。 3. **監視**: 親プロセスは <code>ap_wait_or_timeout</code> で子プロセスの終了を待ち、<code>perform_idle_server_maintenance</code> で負荷に応じたプロセス増減を行う。 4. **接続処理**: 子プロセスは <code>child_main</code> 内で <code>accept()</code> を実行。<code>SAFE_ACCEPT</code> マクロにより、必要に応じてミューテックスで保護された接続受け入れを行う。 5. **終了**: シグナル（<code>SIGTERM</code>, <code>AP_SIG_GRACEFUL</code>）を受け取ると、POD を通じて子プロセスに通知し、クリーンアップ後に終了する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code> 系: ポータブルなプロセス、スレッド、メモリ管理。</li>
+<li><code>scoreboard.h</code>: プロセス状態の共有メモリ管理。</li>
+<li><code>ap_mpm.h</code> / <code>mpm_common.h</code>: MPM 共通インターフェース。</li>
+<li><code>unixd.h</code>: Unix 特有の権限管理やプロセス制御。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/mpm/prefork/mpm_default.h</code>: デフォルトの制限値定義。</li>
+<li><code>server/scoreboard.c</code>: プロセス状態の可視化と共有メモリの操作。</li>
+<li><code>server/util_unixd.c</code>: Unix 権限ドロップやシグナル処理の共通実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>pconf</code> は設定用、<code>pchild</code> は子プロセス固有の生存期間を持つメモリプールです。<code>child_main</code> 内で <code>pchild</code> を適切に破棄することでメモリリークを防いでいます。</li>
+<li>**シグナル処理**: <code>die_now</code> フラグはシグナルハンドラから更新されるため <code>volatile</code> です。</li>
+<li>**制約**: <code>ServerLimit</code> は再起動時に変更できません。これは共有メモリのレイアウトが固定されるためです。</li>
+<li>**省略された詳細**: <code>GPROF</code> 関連のコードはプロファイリング用であり、通常の運用では無視して差し支えありません。また、<code>APR_HAS_THREADS</code> 関連の分岐は、この MPM が非スレッド型であっても、APR の基盤としてスレッドサポートが有効な環境を考慮したものです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_retained_data.html" target="wiki-view">`prefork_retained_data`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_child_bucket.html" target="wiki-view">`prefork_child_bucket`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__chdir_for_gprof.html" target="wiki-view">`chdir_for_gprof`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_note_child_killed.html" target="wiki-view">`prefork_note_child_killed`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_note_child_started.html" target="wiki-view">`prefork_note_child_started`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__clean_child_exit.html" target="wiki-view">`clean_child_exit`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__accept_mutex_on.html" target="wiki-view">`accept_mutex_on`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html" target="wiki-view">`accept_mutex_off`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_query.html" target="wiki-view">`prefork_query`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_get_name.html" target="wiki-view">`prefork_get_name`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__just_die.html" target="wiki-view">`just_die`</a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_check_config.html" target="wiki-view">`prefork_check_config`</a></li>
+</ul></body></html>

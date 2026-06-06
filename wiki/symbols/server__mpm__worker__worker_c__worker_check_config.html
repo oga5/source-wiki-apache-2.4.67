@@ -6,22 +6,57 @@
 <li>定義箇所: <code>server/mpm/worker/worker.c:2120</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>worker</code> MPM における設定値の妥当性を検証し、制約条件に基づいて値を自動調整する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int worker_check_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>, <code>plog</code>, <code>ptemp</code>: APR プール。</li>
+<li><code>s</code>: サーバー設定レコード。</li>
+<li>**出力**:</li>
+<li>常に <code>OK</code> を返す。</li>
+<li>**副作用**:</li>
+<li>グローバルな設定変数（<code>server_limit</code>, <code>thread_limit</code>, <code>threads_per_child</code>, <code>max_workers</code>, <code>ap_daemons_limit</code>, <code>ap_daemons_to_start</code>, <code>min_spare_threads</code>）を検証し、必要に応じて修正する。</li>
+<li>設定値が範囲外の場合、エラーログを出力する。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ServerLimit</code> および <code>ThreadLimit</code> は、再起動を跨いで変更することはできない。</li>
+<li><code>MaxRequestWorkers</code> は <code>ThreadsPerChild</code> の整数倍である必要がある。</li>
+<li><code>MaxRequestWorkers</code> は少なくとも <code>ThreadsPerChild</code> 以上である必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **起動判定**: <code>retained-&gt;mpm-&gt;module_loads</code> を確認し、初回起動時か否かを判定する。 2. **制限値の検証**:</p>
+<ul>
+<li><code>server_limit</code> と <code>thread_limit</code> がコンパイル時の最大値（<code>MAX_SERVER_LIMIT</code>, <code>MAX_THREAD_LIMIT</code>）を超えていないか、また 1 未満でないかを確認し、範囲内に収める。</li>
+<li>再起動時に <code>server_limit</code> や <code>thread_limit</code> が初回起動時の値と異なる場合、警告を出力して元の値に強制的に戻す。</li>
+<p>3. **スレッド・プロセス数の調整**:</p>
+<li><code>threads_per_child</code> が <code>thread_limit</code> を超えないよう調整する。</li>
+<li><code>max_workers</code> が <code>threads_per_child</code> 未満の場合、<code>threads_per_child</code> まで引き上げる。</li>
+<li><code>max_workers</code> を <code>threads_per_child</code> の倍数に切り捨てる。</li>
+<li><code>ap_daemons_limit</code> を計算し、<code>server_limit</code> を超える場合は制限する。</li>
+<p>4. **最小値の保証**: <code>ap_daemons_to_start</code> および <code>min_spare_threads</code> が 1 未満の場合、1 に設定する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_check_config</code> によりフックとして登録されている（<code>server/mpm/worker/worker.c:2348</code>）。</li>
+<li>**呼び出し先**: <code>ap_log_error</code> を呼び出し、設定の不整合をログに記録する。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained</code>: モジュール再読み込み時にも保持されるデータ構造。<code>first_server_limit</code> および <code>first_thread_limit</code> を保持する。</li>
+<li><code>server_rec</code>: サーバー設定を保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>設定値がコンパイル時の制限（<code>MAX_SERVER_LIMIT</code>, <code>MAX_THREAD_LIMIT</code>）を超える場合、警告ログを出力し、上限値に切り詰める。</li>
+<li>設定値が 1 未満の場合、警告ログを出力し、1 に引き上げる。</li>
+<li>再起動時に変更不可なパラメータ（<code>ServerLimit</code>, <code>ThreadLimit</code>）が変更された場合、変更を無視して元の値を維持する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は設定の整合性を保つためのガードレールとして機能する。</li>
+<li><code>startup</code> フラグにより、サーバー起動時のコンソール出力と、再起動時のエラーログ出力を切り分けている。</li>
+<li><code>ap_daemons_limit</code> の計算ロジックは <code>max_workers</code> と <code>threads_per_child</code> の関係に強く依存するため、変更時は注意が必要である。</li>
 </ul></body></html>

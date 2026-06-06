@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/main/util_lock.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/main/util_lock.c</h1>
+<h2>概要</h2>
+<p>WebDAV プロトコルにおけるリポジトリ非依存のロック管理機能を提供します。リソースのロック状態のシリアライズ、XML 解析、ロックの継承、および「ロック・ヌル（lock-null）」リソースの管理を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> サブシステムにおいて、リポジトリの実装（<code>dav_hooks_repository</code>）とロックデータベースの実装（<code>dav_hooks_locks</code>）を繋ぐ仲介層です。リポジトリ固有の詳細はフック経由で委譲し、このファイルはプロトコルレベルのロジック（Depthヘッダーの解釈やXML生成など）を統括します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ロック情報の変換**: <code>dav_lock</code> 構造体と XML（<code>&lt;activelock&gt;</code>）間の相互変換。</li>
+<li>**ロックの伝播**: <code>DAV_INFINITY</code> 深さを持つロックの再帰的な適用および継承。</li>
+<li>**ライフサイクル管理**: ロックの追加（<code>dav_add_lock</code>）、解除（<code>dav_unlock</code>）、およびリソース生成時の状態遷移（<code>dav_notify_created</code>）。</li>
+<li>**ロック・ヌル管理**: 存在しないリソースに対するロック状態の判定と、リソース作成時のロック状態の昇格。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ロック操作・変換</h3>
+<ul>
+<li><code>dav_lock_get_activelock</code>: <code>dav_lock</code> リストを XML 文字列に変換します。</li>
+<li><code>dav_lock_parse_lockinfo</code>: クライアントからの <code>LOCK</code> リクエスト XML を解析し、<code>dav_lock</code> 構造体を生成します。</li>
+<li><code>dav_add_lock</code>: 指定リソースにロックを追加し、必要に応じて子リソースへ再帰的に適用します。</li>
+<li><code>dav_unlock</code>: 指定されたトークンに基づき、リソースおよびその配下のロックを解除します。</li>
+</ul>
+<h3>状態管理・継承</h3>
+<ul>
+<li><code>dav_get_resource_state</code>: リソースが通常、ロック・ヌル、または存在しない状態かを判定します。</li>
+<li><code>dav_notify_created</code>: リソース作成時に、親からのロック継承やロック・ヌル状態の解消をトリガーします。</li>
+<li><code>dav_inherit_locks</code>: 親リソースから子リソースへロックを伝播させます。</li>
+</ul>
+<h3>ウォーカー（内部ヘルパー）</h3>
+<ul>
+<li><code>dav_lock_walker</code> / <code>dav_unlock_walker</code> / <code>dav_inherit_walker</code>: <code>walk</code> フックで使用されるコールバック関数群。再帰的なロック操作の単位処理を担当します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ロック追加**: <code>dav_add_lock</code> が呼び出されると、まず対象リソースに直接ロックを適用し、<code>depth &gt; 0</code> の場合は <code>resource-&gt;hooks-&gt;walk</code> を介して <code>dav_lock_walker</code> を全子孫に適用します。 2. **ロック解除**: <code>dav_unlock</code> は <code>dav_get_direct_resource</code> を使用して、間接ロックの起点となる直接ロックのリソースを特定し、そこから <code>dav_unlock_walker</code> を用いて再帰的に削除します。 3. **継承**: <code>dav_inherit_locks</code> は親リソースのロックを取得し、<code>dav_inherit_walker</code> を通じて新しいリソースへ再帰的に適用します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_dav.h</code>: DAV の主要構造体およびフック定義。</li>
+<li><code>apr_strings.h</code>, <code>apr.h</code>: APR ユーティリティ。</li>
+<li><code>http_log.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code>: Apache HTTP Server のリクエスト処理およびログ出力。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/dav/main/mod_dav.c</code>: DAV モジュールのメインエントリーポイント。</li>
+<li><code>modules/dav/main/util.c</code>: DAV 共通ユーティリティ（バッファ管理など）。</li>
+<li><code>modules/dav/main/providers.c</code>: ロックプロバイダーの登録と管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>r-&gt;pool</code> を多用しており、リクエストのライフサイクルに依存します。</li>
+<li>**設計上の注意**: <code>dav_lock_get_activelock</code> 内の <code>dav_buffer</code> は、効率的な文字列構築のために使用されています。</li>
+<li>**未実装・課題**: コード内の <code>###</code> コメントで示されている通り、エラーハンドリングの粒度や、一部の再帰処理におけるマルチステータスレスポンスの生成には改善の余地があります。</li>
+<li>**ロック・ヌル**: <code>r-&gt;path_info</code> を使用した判定は、リポジトリ実装によっては正しく機能しない可能性があるため、注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_lock_get_activelock.html" target="wiki-view">`dav_lock_get_activelock`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_lock_parse_lockinfo.html" target="wiki-view">`dav_lock_parse_lockinfo`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_lock_walker.html" target="wiki-view">`dav_lock_walker`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_add_lock.html" target="wiki-view">`dav_add_lock`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_lock_query.html" target="wiki-view">`dav_lock_query`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_unlock_walker.html" target="wiki-view">`dav_unlock_walker`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_get_direct_resource.html" target="wiki-view">`dav_get_direct_resource`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_unlock.html" target="wiki-view">`dav_unlock`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_inherit_walker.html" target="wiki-view">`dav_inherit_walker`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_inherit_locks.html" target="wiki-view">`dav_inherit_locks`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_get_resource_state.html" target="wiki-view">`dav_get_resource_state`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_lock_c__dav_notify_created.html" target="wiki-view">`dav_notify_created`</a></li>
+</ul></body></html>

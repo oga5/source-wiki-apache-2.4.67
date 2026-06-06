@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_workers.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_workers.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 サブシステムにおける「セカンダリ接続」を処理するための専用スレッドプールを管理するモジュールです。動的なスレッド生成・破棄、接続プロデューサー（<code>ap_conn_producer_t</code>）の管理、およびスレッド間での作業割り当てを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>h2_mplx</code> や <code>h2_c2</code> と連携し、HTTP/2 ストリームの並列処理を支える実行基盤を提供します。MPM（Multi-Processing Module）が管理するメインスレッドとは別に、HTTP/2 特有の多重化された接続を処理するワーカー群を制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッドプール管理**: <code>min_active</code> から <code>max_slots</code> の範囲でワーカーを動的に増減させ、アイドルタイムアウトによるスレッド削減を行う。</li>
+<li>**接続プロデューサー管理**: 接続の供給元（プロデューサー）を登録・アクティブ化し、ワーカーが接続をプルする仕組みを提供。</li>
+<li>**ライフサイクル制御**: ワーカーの起動、終了、およびシャットダウン時のクリーンアップ。</li>
+<li>**同期**: スレッドセーフなリングバッファ（<code>apr_ring</code>）を用いたタスクキューイングと条件変数によるスレッドのウェイクアップ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>構造体</h3>
+<ul>
+<li><code>h2_workers</code>: プール全体の管理構造体。スレッド属性、スロット配列、および状態別（free, idle, busy, zombie）のリングバッファを保持。</li>
+<li><code>h2_slot</code>: 個々のワーカーの状態を保持。スレッドハンドル、条件変数、および現在処理中のプロデューサーへの参照を持つ。</li>
+<li><code>ap_conn_producer_t</code>: 接続の供給元。<code>fn_next</code>（接続取得）、<code>fn_done</code>（完了通知）等のコールバックを保持。</li>
+</ul>
+<h3>主要関数</h3>
+<ul>
+<li>**ライフサイクル**: <code>h2_workers_create</code>（初期化）、<code>h2_workers_shutdown</code>（停止）、<code>workers_pool_cleanup</code>（破棄）。</li>
+<li>**プロデューサー操作**: <code>h2_workers_register</code>（登録）、<code>h2_workers_activate</code>（処理開始）、<code>h2_workers_join</code>（完了待ち）。</li>
+<li>**内部制御**: <code>slot_run</code>（ワーカーのメインループ）、<code>activate_slot</code>（新規スレッド生成）、<code>get_next</code>（プロデューサーからのタスク取得）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **タスク投入**: <code>h2_workers_activate</code> がプロデューサーを <code>prod_active</code> リングに追加し、<code>wake_idle_worker</code> を呼び出す。 2. **ワーカー起動**: <code>wake_idle_worker</code> はアイドル中のスロットを検索し、条件変数 <code>more_work</code> をシグナルする。スロットが足りない場合は <code>activate_slot</code> で新規スレッドを生成する。 3. **タスク実行**: <code>slot_run</code> 内のループで <code>get_next</code> を呼び出し、プロデューサーから <code>conn_rec</code> を取得。<code>ap_process_connection</code> または <code>h2_c2_process</code> を実行する。 4. **完了処理**: 接続処理終了後、<code>fn_done</code> を呼び出し、<code>prod_done</code> 条件変数をブロードキャストして <code>h2_workers_join</code> を待機しているスレッドに通知する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_ring.h</code>: スロットおよびプロデューサーの管理用リスト構造。</li>
+<li><code>apr_thread_mutex.h</code>, <code>apr_thread_cond.h</code>: スレッド間の同期と排他制御。</li>
+<li><code>h2_c2.h</code>: セカンダリ接続処理のインターフェース。</li>
+<li><code>http_connection.h</code>: <code>conn_rec</code> 構造体の定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_mplx.c</code>: このワーカープールを利用してストリームの多重化を行う。</li>
+<li><code>h2_c2.c</code>: セカンダリ接続の具体的な処理ロジック。</li>
+<li><code>h2_workers.h</code>: 公開インターフェース定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_workers</code> は独自の <code>apr_pool_t</code> を持ち、スレッド生成時に各スロットへサブプールを割り当てます。<code>workers_pool_cleanup</code> は MPM シャットダウン時に呼ばれ、全スレッドの終了を待機します。</li>
+<li>**スレッド安全性**: すべてのリング操作と状態遷移は <code>workers-&gt;lock</code> によって保護されています。</li>
+<li>**エッジケース**: <code>slot_run</code> 内の接続 ID 生成ロジック（<code>c-&gt;id = (c-&gt;master-&gt;id &lt;&lt; 8)^slot-&gt;id</code>）は、<code>mod_unique_id</code> との互換性を保つための苦肉の策であり、非常に高い並列度では衝突の可能性があることに注意してください。</li>
+<li>**省略箇所**: <code>AP_HAS_THREAD_LOCAL</code> 定義時の挙動や、特定のプラットフォーム依存のスタックサイズ設定については、標準的な MPM の挙動に準拠しているため詳細を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_workers_c__prod_state_t.html" target="wiki-view">`prod_state_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__ap_conn_producer_t.html" target="wiki-view">`ap_conn_producer_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__h2_slot_state_t.html" target="wiki-view">`h2_slot_state_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__h2_slot.html" target="wiki-view">`h2_slot`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__h2_workers.html" target="wiki-view">`h2_workers`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__activate_slot.html" target="wiki-view">`activate_slot`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__join_zombies.html" target="wiki-view">`join_zombies`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__wake_idle_worker.html" target="wiki-view">`wake_idle_worker`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__get_next.html" target="wiki-view">`get_next`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__slot_run.html" target="wiki-view">`slot_run`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__wake_all_idles.html" target="wiki-view">`wake_all_idles`</a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_c__workers_pool_cleanup.html" target="wiki-view">`workers_pool_cleanup`</a></li>
+</ul></body></html>

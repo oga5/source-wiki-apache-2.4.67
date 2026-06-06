@@ -6,22 +6,41 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_kernel.c:1193</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアント証明書のサブジェクトDN（Distinguished Name）をユーザー名として利用し、HTTP Basic認証ヘッダーを擬似的に生成（FakeBasicAuth）することで、証明書ベースの認証をアプリケーション層の認証機構と統合する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_hook_UserCheck(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （現在のHTTPリクエスト構造体）</li>
+<li>**出力**: <code>int</code> （Apacheのフック戻り値。<code>DECLINED</code> または <code>HTTP_FORBIDDEN</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サブリクエスト（<code>!ap_is_initial_req(r)</code>）の場合は処理をスキップする。</li>
+<li><code>SSL_OPT_STRICTREQUIRE</code> が有効で、かつ <code>ssl-access-forbidden</code> ノートが存在する場合は <code>HTTP_FORBIDDEN</code> を返す。</li>
+<li>TLSが有効であること、クライアント証明書が提示されていること、<code>SSL_OPT_FAKEBASICAUTH</code> が設定されていること、および <code>r-&gt;user</code> が未設定であることが実行の前提条件。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **不正利用の検知**: 既存の <code>Authorization</code> ヘッダーが、証明書DNを模倣した不正な形式（ユーザー名が <code>/</code> で始まりパスワードが <code>password</code>）でないか検証し、該当すれば <code>HTTP_FORBIDDEN</code> を返す。 2. **条件判定**: 前提条件を満たさない場合は <code>DECLINED</code> を返す。 3. **DNの取得**: <code>sslconn-&gt;client_cert</code> からサブジェクトDNを抽出し、<code>sslconn-&gt;client_dn</code> にキャッシュする。 4. **ヘッダーの偽装**: <code>client_dn</code> と固定パスワード <code>password</code> を用いて <code>Basic</code> 認証文字列を生成し、<code>r-&gt;headers_in</code> の <code>Authorization</code> ヘッダーを上書きする。 5. **終了**: 処理完了後、<code>DECLINED</code> を返して後続の認証フェーズへ制御を渡す。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/mod_ssl.c</code> の <code>ap_hook_check_authn</code> により登録され、認証フェーズで呼び出される。</li>
+<li>**呼び出し先**: Apache API (<code>ap_getword</code>, <code>ap_pbase64encode</code>, <code>ap_log_rerror</code> 等) および OpenSSL API (<code>X509_get_subject_name</code>, <code>X509_NAME_oneline</code>) を利用。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLConnRec</code>: SSL接続固有の情報を保持。</li>
+<li><code>SSLDirConfigRec</code>: ディレクトリ単位のSSL設定（<code>nOptions</code> 等）。</li>
+<li><code>request_rec</code>: HTTPリクエスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>FakeBasicAuth</code> を悪用したなりすまし試行を検知した場合、<code>HTTP_FORBIDDEN</code> を返す。</li>
+<li>必要なSSL情報が欠落している場合や、既に認証済みの場合は処理をスキップする。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>FakeBasicAuth</code> オプションに強く依存している。</li>
+<li><code>client_dn</code> の生成には <code>X509_NAME_oneline</code> を使用しており、OpenSSLのメモリ管理ルールに従い <code>OPENSSL_free</code> で解放している。</li>
+<li>生成される偽装ヘッダーのパスワード <code>password</code> は、<code>crypt</code> の仕様を考慮した固定値である。</li>
 </ul></body></html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/mappers/mod_dir.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/mappers/mod_dir.c</h1>
+<h2>概要</h2>
+<p><code>mod_dir.c</code> は、Apache HTTP Server におけるディレクトリリクエストの処理を担うモジュールです。主に「ディレクトリインデックス（<code>DirectoryIndex</code>）の解決」と「末尾スラッシュなしのディレクトリに対するリダイレクト処理」を制御します。また、ファイルが存在しない場合に備えた <code>FallbackResource</code> の処理も提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/mappers</code> サブシステムの一部として、リクエストのパスがディレクトリを指している場合に、適切なコンテンツ（インデックスファイル）を特定し、内部リダイレクトを行う役割を持ちます。<code>fixups</code> フックの最後（<code>APR_HOOK_LAST</code>）で動作し、他のモジュールがリクエストを処理しなかった場合のフォールバックとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>DirectoryIndex</code>, <code>DirectorySlash</code>, <code>DirectoryCheckHandler</code>, <code>FallbackResource</code> などのディレクティブを解析し、ディレクトリごとの設定構造体 <code>dir_config_rec</code> を構築・マージする。</li>
+<li>**ディレクトリリダイレクト**: 末尾に <code>/</code> がないディレクトリリクエストに対し、<code>DirectorySlash</code> 設定に基づいて正規化（リダイレクト）を行う。</li>
+<li>**インデックス解決**: 設定されたインデックスファイルリストを順次探索し、最初に見つかった有効なファイルを内部リダイレクトで提供する。</li>
+<li>**フォールバック処理**: ファイルが存在しない場合に <code>FallbackResource</code> で指定されたリソースへ転送する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>dir_config_rec</code>: ディレクトリごとの設定を保持。<code>index_names</code>（インデックスリスト）、<code>do_slash</code>（スラッシュ補完フラグ）、<code>dflt</code>（フォールバック先）などを含む。</li>
+</ul>
+<h3>設定コマンドハンドラ</h3>
+<ul>
+<li><code>add_index</code>: <code>DirectoryIndex</code> を解析し、配列に格納する。</li>
+<li><code>configure_slash</code> / <code>configure_checkhandler</code>: フラグ設定を更新。</li>
+<li><code>configure_redirect</code>: <code>DirectoryIndexRedirect</code> のステータスコード（3xx）を検証・設定。</li>
+</ul>
+<h3>フックとメインロジック</h3>
+<ul>
+<li><code>dir_fixups</code>: エントリポイント。ファイルタイプに基づき <code>fixup_dir</code> または <code>fixup_dflt</code> へ振り分ける。</li>
+<li><code>fixup_dir</code>: ディレクトリリクエストのメイン処理。スラッシュ補完とインデックス探索を行う。</li>
+<li><code>fixup_dflt</code>: <code>FallbackResource</code> の処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック起動**: <code>dir_fixups</code> がリクエストの <code>finfo</code> を確認。 2. **ディレクトリ判定**: <code>APR_DIR</code> であれば <code>fixup_dir</code> を呼び出し、末尾スラッシュの確認と <code>DirectoryIndex</code> の探索を行う。 3. **サブリクエスト**: <code>ap_sub_req_lookup_uri</code> を使用して、インデックス候補が実際に存在するか（<code>APR_REG</code> か）を確認する。 4. **リダイレクト/転送**:</p>
+<ul>
+<li>条件を満たすインデックスが見つかれば <code>ap_internal_fast_redirect</code> で処理を完了。</li>
+<li><code>DirectoryIndexRedirect</code> が有効な場合は、クライアントへ 3xx レスポンスを返す。</li>
+<p>5. **フォールバック**: <code>APR_NOFILE</code> の場合、<code>fixup_dflt</code> が <code>FallbackResource</code> を確認し、同様にサブリクエスト経由で転送を試みる。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache のコアリクエスト処理および設定フレームワーク。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作およびメモリ管理（APR）。</li>
+<li><code>mod_rewrite.h</code>: リライトモジュールとの連携用定数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_autoindex.c</code>: <code>mod_dir</code> がインデックスを見つけられなかった場合に、ディレクトリ一覧を表示する役割を担うことが多い。</li>
+<li><code>http_request.c</code>: <code>ap_sub_req_lookup_uri</code> や <code>ap_internal_fast_redirect</code> の実装元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>dir_config_rec</code> は Apache の設定プール（<code>pool</code>）上で管理されます。<code>fixup</code> 内で生成されるサブリクエストは、<code>ap_destroy_sub_req</code> を呼び出すことで適切にクリーンアップされます。</li>
+<li>**不変条件**: <code>fixup_dir</code> は <code>path_info</code> が存在する場合、ディレクトリインデックス処理をスキップします。</li>
+<li>**注意点**: <code>FallbackResource</code> を使用する場合、指定先が存在しないと無限ループに陥る可能性があるため、設定には注意が必要です。</li>
+<li>**省略箇所**: 本ページでは、<code>apr_array_header_t</code> の詳細な操作や、<code>ap_getword_conf</code> による引数解析の細部については、標準的な Apache モジュール開発の範疇であるため省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__moddir_cfg.html" target="wiki-view">`moddir_cfg`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__dir_config_rec.html" target="wiki-view">`dir_config_rec`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__add_index.html" target="wiki-view">`add_index`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__configure_slash.html" target="wiki-view">`configure_slash`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__configure_checkhandler.html" target="wiki-view">`configure_checkhandler`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__configure_redirect.html" target="wiki-view">`configure_redirect`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__create_dir_config.html" target="wiki-view">`create_dir_config`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__merge_dir_configs.html" target="wiki-view">`merge_dir_configs`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__fixup_dflt.html" target="wiki-view">`fixup_dflt`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__fixup_dir.html" target="wiki-view">`fixup_dir`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__dir_fixups.html" target="wiki-view">`dir_fixups`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

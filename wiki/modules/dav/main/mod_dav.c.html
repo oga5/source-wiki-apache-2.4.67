@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/main/mod_dav.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/main/mod_dav.c</h1>
+<h2>概要</h2>
+<p><code>mod_dav.c</code> は Apache HTTP Server における WebDAV (RFC 4918) プロトコルの実装の中核となるモジュールです。リポジトリの実装から独立した抽象レイヤーを提供し、HTTP メソッドのディスパッチ、リクエストの検証、および XML レスポンスの生成を管理します。</p>
+<h2>モジュール内での役割</h2>
+<p>本ファイルは <code>mod_dav</code> のエントリーポイントであり、Apache のフック（<code>handler</code>, <code>fixups</code>）を登録して WebDAV リクエストを捕捉します。具体的なリポジトリ操作（ファイルシステムやバージョン管理システムなど）は、<code>dav_provider</code> インターフェースを介して外部モジュールに委譲します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストハンドリング**: WebDAV メソッド（PROPFIND, PUT, DELETE, LOCK 等）のディスパッチ。</li>
+<li>**設定管理**: <code>DAV</code> ディレクティブによるプロバイダーの選択と、ディレクトリごとの設定（<code>dav_dir_conf</code>）の管理。</li>
+<li>**レスポンス生成**: XML 形式のマルチステータスレスポンス（<code>dav_send_multistatus</code>）の構築。</li>
+<li>**リソース解決**: <code>dav_get_resource</code> を用いたリクエスト URI からリポジトリリソースへの変換。</li>
+<li>**フック管理**: ライブプロパティやレポート生成のための外部拡張ポイントの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>dav_dir_conf</code>: ディレクトリごとの設定。プロバイダー名、ロックタイムアウト、DAV 有効フラグを保持。</li>
+<li><code>dav_server_conf</code>: サーバー全体の設定（現在は未使用）。</li>
+</ul>
+<h3>メソッドハンドラ</h3>
+<ul>
+<li><code>dav_handler</code>: Apache のリクエストハンドラ。<code>r-&gt;method_number</code> に基づき各メソッド関数へ振り分ける。</li>
+<li><code>dav_method_*</code>: 各 WebDAV メソッド（<code>dav_method_get</code>, <code>dav_method_put</code>, <code>dav_method_propfind</code> 等）の実装。</li>
+</ul>
+<h3>ユーティリティ・ヘルパー</h3>
+<ul>
+<li><code>dav_get_provider</code>: 現在のリクエストに対する <code>dav_provider</code> を取得。</li>
+<li><code>dav_send_multistatus</code>: WebDAV のマルチステータスレスポンスをストリーム出力する。</li>
+<li><code>dav_handle_err</code>: <code>dav_error</code> 構造体から適切な HTTP ステータスまたは XML エラーレスポンスを生成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> が Apache の <code>handler</code> および <code>fixups</code> フックを登録。 2. **リクエスト捕捉**: <code>dav_fixups</code> がリクエストを評価し、DAV が有効な場合に <code>r-&gt;handler</code> を <code>dav-handler</code> に設定。 3. **ディスパッチ**: <code>dav_handler</code> が呼び出され、メソッドに応じた <code>dav_method_*</code> 関数を実行。 4. **リソース解決**: 各メソッドは <code>dav_get_resource</code> を呼び出し、プロバイダー経由で <code>dav_resource</code> オブジェクトを取得。 5. **実行と応答**: プロバイダーのフック（<code>repos</code>, <code>locks</code>, <code>vsn</code> 等）を呼び出し、結果を <code>dav_send_multistatus</code> 等でクライアントへ送信。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_dav.h</code>: DAV 共通データ構造とフック定義。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code>: Apache コア API。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: APR ユーティリティ。</li>
+<li><code>ap_provider.h</code>: プロバイダー登録メカニズム。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/dav/main/mod_dav.h</code>: 本モジュールが使用する主要なデータ構造とフックの定義。</li>
+<li><code>modules/dav/main/providers.c</code>: プロバイダーの登録と検索ロジック。</li>
+<li><code>modules/dav/main/util.c</code>: XML エスケープやリクエスト検証などの共通ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: Apache の <code>request_rec</code> に紐付く <code>pool</code> を多用します。<code>dav_send_multistatus</code> 等ではサブプールを作成し、反復処理中のメモリ消費を抑制しています。</li>
+<li>**エラー処理**: <code>dav_error</code> 構造体によるスタックベースのエラー管理が行われています。<code>dav_handle_err</code> はエラー発生時にリクエストを終了させるための標準的な出口です。</li>
+<li>**未実装・浅い部分**: <code>dav_server_conf</code> は現在未使用です。また、一部のメソッド（<code>BASELINE_CONTROL</code> 等）はスタブ状態であり、将来の拡張や特定のプロバイダー実装に依存します。</li>
+<li>**注意点**: <code>dav_method_copymove</code> 等の複雑なメソッドは、リソースのロック状態やバージョン管理状態に強く依存するため、プロバイダー側の実装との整合性が重要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_create_server_config.html" target="wiki-view">`dav_create_server_config`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_create_dir_config.html" target="wiki-view">`dav_create_dir_config`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_provider_name.html" target="wiki-view">`dav_get_provider_name`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_provider.html" target="wiki-view">`dav_get_provider`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_lock_hooks.html" target="wiki-view">`dav_get_lock_hooks`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_propdb_hooks.html" target="wiki-view">`dav_get_propdb_hooks`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_vsn_hooks.html" target="wiki-view">`dav_get_vsn_hooks`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_binding_hooks.html" target="wiki-view">`dav_get_binding_hooks`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_search_hooks.html" target="wiki-view">`dav_get_search_hooks`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_base_path.html" target="wiki-view">`dav_get_base_path`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_depth.html" target="wiki-view">`dav_get_depth`</a></li>
+<li><a href="../../../symbols/modules__dav__main__mod_dav_c__dav_get_overwrite.html" target="wiki-view">`dav_get_overwrite`</a></li>
+</ul></body></html>

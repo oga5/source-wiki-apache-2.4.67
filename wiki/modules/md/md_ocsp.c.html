@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_ocsp.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_ocsp.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、マネージド証明書（Managed Domains）における OCSP ステープリングのためのクライアント機能を提供します。証明書の失効状態を定期的に取得・更新し、ローカルストレージにキャッシュして、TLS ハンドシェイク時に stapling 用の DER データを供給する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムの一部として、証明書のライフサイクル管理（<code>md_reg.c</code>）と連携し、証明書の有効性検証を自動化します。<code>mod_md_ocsp.c</code> が Apache HTTP Server のフックと本モジュールを接続するブリッジとなります。</p>
+<h2>責務</h2>
+<ul>
+<li>**状態管理**: 証明書ごとの OCSP ステータス（<code>md_ocsp_status_t</code>）の保持と、メモリ上のハッシュテーブルによる管理。</li>
+<li>**通信と更新**: OCSP レスポンダーへの HTTP POST リクエストの実行、レスポンスの解析（OpenSSL <code>OCSP_RESPONSE</code>）、および検証。</li>
+<li>**永続化**: <code>md_store</code> を介した OCSP レスポンスの JSON 形式での保存と読み込み。</li>
+<li>**スケジューリング**: <code>md_ocsp_renew</code> による、期限切れ間近のステータスの更新処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>レジストリ管理</h3>
+<ul>
+<li><code>md_ocsp_reg_t</code>: OCSP 処理のグローバルコンテキスト。ストレージ、スレッドミューテックス、証明書 ID マップを保持。</li>
+<li><code>md_ocsp_reg_make()</code>: レジストリの初期化とミューテックスの作成。</li>
+</ul>
+<h3>ステータス管理</h3>
+<ul>
+<li><code>md_ocsp_status_t</code>: 個別の証明書に対する OCSP 状態。DER データ、有効期限、レスポンダー URL を含む。</li>
+<li><code>md_ocsp_prime()</code>: 証明書を OCSP 管理対象として登録し、初期状態をロードする。</li>
+<li><code>md_ocsp_get_status()</code>: ステープリング用の DER データを取得するコールバック関数。</li>
+</ul>
+<h3>更新・検証</h3>
+<ul>
+<li><code>ocsp_status_refresh()</code>: ストレージから最新の OCSP レスポンスを読み込み、メモリ状態を更新する。</li>
+<li><code>ostat_on_resp()</code>: HTTP レスポンスのパースと検証（Nonce チェック、署名検証、ステータス確認）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_ocsp_prime</code> で証明書と issuer から <code>OCSP_CERTID</code> を生成し、管理対象に追加。 2. **定期更新**: <code>md_ocsp_renew</code> が呼び出されると、期限が近いステータスを抽出し、<code>md_http</code> を用いて非同期的にリクエストを送信。 3. **レスポンス処理**: <code>ostat_on_resp</code> が HTTP レスポンスを受け取り、<code>d2i_OCSP_RESPONSE</code> でデコード。検証後、<code>ostat_set</code> でメモリを更新し、<code>ocsp_status_save</code> でストレージへ書き出す。 4. **データ供給**: <code>md_ocsp_get_status</code> が呼ばれると、メモリ上の最新データをコールバック経由で提供。必要に応じて <code>ocsp_status_refresh</code> で最新化を試みる。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_hash_t</code>, <code>apr_thread_mutex_t</code>, <code>apr_pool_t</code> 等によるメモリ・スレッド管理。</li>
+<li>**OpenSSL**: <code>openssl/ocsp.h</code> を中心とした証明書 ID 生成、DER デコード、Nonce 検証。</li>
+<li>**md_store**: OCSP レスポンスの永続化（JSON）。</li>
+<li>**md_http**: OCSP レスポンダーへの通信。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/md/md_ocsp.h</code>: 公開インターフェース定義。</li>
+<li><code>modules/md/mod_md_ocsp.c</code>: Apache HTTP Server への統合レイヤー。</li>
+<li><code>modules/md/md_store.c</code>: 永続化ストレージの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>md_ocsp_reg_t</code> は <code>apr_pool_t</code> に紐付いており、プール破棄時に <code>ocsp_reg_cleanup</code> が呼ばれ、ハッシュテーブル内の全ステータスが解放されます。</li>
+<li>**スレッド安全性**: <code>reg-&gt;mutex</code> により、複数スレッドからのステータス読み書きが保護されています。</li>
+<li>**エッジケース**: OCSP レスポンダーが Nonce を返さない場合や、レスポンスがキャッシュされている場合でも、有効期限（<code>nextUpdate</code>）に基づいて更新を試みる設計になっています。</li>
+<li>**省略箇所**: 本ファイル内の <code>md_openssl_free</code> などの単純なラッパーや、JSON 変換の細部は、OpenSSL/APR の標準的な利用パターンであるため詳細な解説を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_reg_t.html" target="wiki-view">`md_ocsp_reg_t`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_status_t.html" target="wiki-view">`md_ocsp_status_t`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_id_map_t.html" target="wiki-view">`md_ocsp_id_map_t`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_openssl_free.html" target="wiki-view">`md_openssl_free`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_cert_stat_name.html" target="wiki-view">`md_ocsp_cert_stat_name`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_cert_stat_value.html" target="wiki-view">`md_ocsp_cert_stat_value`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_init_id.html" target="wiki-view">`md_ocsp_init_id`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__ostat_req_cleanup.html" target="wiki-view">`ostat_req_cleanup`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_update_t.html" target="wiki-view">`md_ocsp_update_t`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__md_ocsp_todo_ctx_t.html" target="wiki-view">`md_ocsp_todo_ctx_t`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__ocsp_summary_ctx_t.html" target="wiki-view">`ocsp_summary_ctx_t`</a></li>
+<li><a href="../../symbols/modules__md__md_ocsp_c__ocsp_status_ctx_t.html" target="wiki-view">`ocsp_status_ctx_t`</a></li>
+</ul></body></html>

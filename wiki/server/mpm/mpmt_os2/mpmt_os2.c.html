@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm/mpmt_os2/mpmt_os2.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>server/mpm/mpmt_os2/mpmt_os2.c</h1>
+<h2>概要</h2>
+<p>OS/2 プラットフォーム向けのマルチプロセス・マルチスレッド（MPM）実装のメインエントリーポイントです。親プロセスによる子プロセスの管理と、子プロセス内でのスレッドプールによるリクエスト処理の橋渡しを行います。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache HTTP Server の MPM サブシステムの一部として、OS/2 特有のプロセス間通信（共有メモリ、ミューテックス）を利用したプロセス管理層を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: 親プロセスによる子プロセスの生成（<code>DosExecPgm</code>）、監視（<code>DosWaitChild</code>）、および終了処理。</li>
+<li>**リソース共有**: 共有メモリを用いたリスナーソケットとスコアボードのプロセス間受け渡し。</li>
+<li>**設定管理**: <code>StartServers</code> や <code>MinSpareThreads</code> などの MPM 固有ディレクティブの解析と検証。</li>
+<li>**シグナル処理**: OS/2 環境下でのシャットダウンおよび再起動シグナルのハンドリング。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロセス管理・状態</h3>
+<ul>
+<li><code>mpmt_os2_run</code>: MPM のメインループ。親プロセスと子プロセスの分岐点。</li>
+<li><code>master_main</code>: 親プロセスのメイン処理。子プロセスの監視と管理を行う。</li>
+<li><code>spawn_child</code>: 新しい子プロセスを生成し、スコアボードを更新する。</li>
+<li><code>ap_mpm_child_main</code>: 子プロセスが実行するメイン処理（<code>mpmt_os2_child.c</code> で定義）。</li>
+</ul>
+<h3>データ構造</h3>
+<ul>
+<li><code>listen_socket_t</code>: 子プロセスへ渡すリスナーソケットの情報を保持。</li>
+<li><code>parent_info_t</code>: 共有メモリに配置される構造体。リスナー配列と同期用ミューテックスを保持。</li>
+</ul>
+<h3>グローバル変数</h3>
+<ul>
+<li><code>ap_mpm_accept_mutex</code>: 複数の子プロセスがリスナーソケットを競合しないように制御する OS/2 ミューテックス。</li>
+<li><code>shutdown_pending</code> / <code>restart_pending</code>: プロセス終了・再起動のフラグ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>mpmt_os2_hooks</code> によりフックが登録され、<code>mpmt_os2_run</code> が呼び出されます。 2. **分岐**: <code>DosGetNamedSharedMem</code> を試行し、成功すれば子プロセスとして <code>ap_mpm_child_main</code> へ移行、失敗すれば親プロセスとして <code>master_main</code> を実行します。 3. **親プロセス**: 共有メモリを確保し、リスナーソケットを格納。<code>DosWaitChild</code> で子プロセスの終了を監視し、必要に応じて <code>spawn_child</code> で補充します。 4. **子プロセス**: 親から渡された共有メモリからソケットを取得し、<code>ap_mpm_child_main</code> でスレッドプールを起動してリクエストを処理します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>os2.h</code>: OS/2 API（<code>DosAllocSharedMem</code>, <code>DosExecPgm</code> 等）へのアクセス。</li>
+<li><code>scoreboard.h</code>: プロセス間での状態共有。</li>
+<li><code>ap_listen.h</code>: リスナーソケットの管理。</li>
+<li><code>apr_portable.h</code>: APR と OS/2 ネイティブハンドルの変換。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code>: 子プロセス内のスレッド管理とリクエスト処理の実装。</li>
+<li><code>server/mpm/mpmt_os2/mpm_default.h</code>: MPM のデフォルト設定値。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: 共有メモリ（<code>parent_info_t</code>）は親プロセスで確保され、子プロセスで読み取った後に <code>DosFreeMem</code> で解放されます。</li>
+<li>**制約**: <code>HARD_SERVER_LIMIT</code> により最大プロセス数が 10 に制限されています。</li>
+<li>**省略箇所**: <code>ap_mpm_child_main</code> の内部詳細（スレッドプールの動的調整ロジック）は本ファイルには含まれず、<code>mpmt_os2_child.c</code> に委譲されています。</li>
+<li>**注意**: OS/2 特有の <code>Dos</code> 系 API を多用しているため、他プラットフォームへの移植性は考慮されていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__listen_socket_t.html" target="wiki-view">`listen_socket_t`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html" target="wiki-view">`parent_info_t`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_run.html" target="wiki-view">`mpmt_os2_run`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__master_main.html" target="wiki-view">`master_main`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html" target="wiki-view">`spawn_child`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__sig_term.html" target="wiki-view">`sig_term`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__sig_restart.html" target="wiki-view">`sig_restart`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__set_signals.html" target="wiki-view">`set_signals`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_query.html" target="wiki-view">`mpmt_os2_query`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_get_name.html" target="wiki-view">`mpmt_os2_get_name`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_pre_config.html" target="wiki-view">`mpmt_os2_pre_config`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_check_config.html" target="wiki-view">`mpmt_os2_check_config`</a></li>
+</ul></body></html>

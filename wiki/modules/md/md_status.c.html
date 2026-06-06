@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_status.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_status.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、Managed Domain (MD) のステータス情報の集約と、証明書更新ジョブ（<code>md_job_t</code>）の永続化・ライフサイクル管理を担当します。JSON 形式でのステータス出力機能と、ディスク上のジョブ状態を同期させるためのロジックを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、管理者が現在の証明書状態や更新ジョブの進捗を把握するための「レポート生成器」および「ジョブコントローラー」として機能します。<code>md_reg.c</code>（レジストリ）や <code>md_store.c</code>（ストレージ）と密接に連携し、高レベルな状態を JSON に変換します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ステータスレポート生成**: MD および証明書の状態、OCSP ステータス、更新期限などを JSON 構造に集約する。</li>
+<li>**ジョブ永続化**: <code>md_job_t</code> 構造体の JSON シリアライズ/デシリアライズ、およびストレージへの保存・読み込み。</li>
+<li>**ジョブ実行管理**: ジョブの開始・終了時のログ記録、エラー発生時のバックオフ（再試行間隔）計算、イベント通知の管理。</li>
+<li>**オブザーバビリティ**: <code>md_result_t</code> の変更を監視し、進捗状況をログに反映させるフック機能。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ステータス生成（JSON）</h3>
+<ul>
+<li><code>md_status_get_md_json</code>: 単一 MD の詳細なステータス JSON を生成。</li>
+<li><code>md_status_get_json</code>: 全 MD のステータスを一覧化。</li>
+<li><code>md_status_take_stock</code>: 全 MD の状態（完了、更新中、エラー等）をカウントし、概要を生成。</li>
+</ul>
+<h3>ジョブ管理（<code>md_job_t</code>）</h3>
+<ul>
+<li><code>md_job_make</code>: ジョブインスタンスの初期化。</li>
+<li><code>md_job_load</code> / <code>md_job_save</code>: ストレージとの間でのジョブ状態の同期。</li>
+<li><code>md_job_start_run</code> / <code>md_job_end_run</code>: ジョブ実行のライフサイクル管理。</li>
+<li><code>md_job_log_append</code>: ジョブ実行履歴の追記（最大件数制限あり）。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>md_job_delay_on_errors</code>: エラー時の指数バックオフとジッター計算。</li>
+<li><code>job_observation_start</code>: <code>md_result_t</code> の変更を監視するコールバックの設定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ステータス取得**: <code>md_status_get_md_json</code> が呼び出されると、<code>md_reg</code> から証明書情報を取得し、<code>status_get_cert_json_ex</code> を通じて各証明書の有効期限や OCSP 状態を JSON にマッピングします。 2. **ジョブ実行**: <code>md_job_start_run</code> で <code>md_result_t</code> にコールバック（<code>job_result_update</code> 等）を登録します。結果が更新されるたびに、このコールバックがトリガーされ、ログへの追記とストレージへの保存が行われます。 3. **エラー処理**: <code>md_job_end_run</code> でエラーが検出されると、<code>md_job_delay_on_errors</code> が呼び出され、次の実行時刻（<code>next_run</code>）が計算されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>md_json.h</code>: JSON 操作の基盤。</li>
+<li><code>md_store.h</code>: ジョブの永続化先。</li>
+<li><code>md_reg.h</code>: MD レジストリへのアクセス。</li>
+<li><code>md_result.h</code>: ジョブ結果の保持と通知。</li>
+<li><code>apr_time.h</code>, <code>apr_date.h</code>: 時間計算とフォーマット。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/md/mod_md_status.c</code>: 本ファイルの機能を HTTP レスポンスとして公開するためのラッパー。</li>
+<li><code>modules/md/md_reg.c</code>: MD の管理と更新判定ロジックのソース。</li>
+<li><code>modules/md/md_store.c</code>: ファイルシステム上のデータ配置ルール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての JSON オブジェクトとジョブ構造体は、渡された <code>apr_pool_t</code> に依存します。</li>
+<li>**永続化**: ジョブのログは <code>max_log</code>（デフォルト128）で制限されており、古いログは自動的に破棄されます。</li>
+<li>**エラー処理**: <code>md_job_delay_on_errors</code> は、ACME サーバーからの入力関連エラー（設定ミス等）を検知すると、即座に最大遅延（24時間）へ移行する安全策を備えています。</li>
+<li>**未実装/浅い部分**: <code>MD_STATUS_WITH_SCTS</code> マクロは現在 <code>0</code> に設定されており、証明書の SCT（Signed Certificate Timestamps）情報は出力されません。これは将来的な拡張用です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_status_c__md_job_json_seems_valid.html" target="wiki-view">`md_job_json_seems_valid`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__job_loadj.html" target="wiki-view">`job_loadj`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__status_get_cert_json_ex.html" target="wiki-view">`status_get_cert_json_ex`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__get_cert_count.html" target="wiki-view">`get_cert_count`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__get_cert_name.html" target="wiki-view">`get_cert_name`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__status_get_certs_json.html" target="wiki-view">`status_get_certs_json`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__get_staging_certs_json.html" target="wiki-view">`get_staging_certs_json`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__status_get_md_json.html" target="wiki-view">`status_get_md_json`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__md_status_get_md_json.html" target="wiki-view">`md_status_get_md_json`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__md_status_get_json.html" target="wiki-view">`md_status_get_json`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__log_find_ctx.html" target="wiki-view">`log_find_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_status_c__md_job_result_ctx.html" target="wiki-view">`md_job_result_ctx`</a></li>
+</ul></body></html>

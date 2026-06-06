@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_acme_drive.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_acme_drive.c</h1>
+<h2>概要</h2>
+<p><code>md_acme_drive.c</code> は、ACME プロトコルを用いた証明書管理の実行エンジンです。管理対象ドメイン（MD）の証明書発行、更新、および証明書チェーンの取得プロセスを制御します。<code>mod_md</code> サブシステムにおいて、ACME プロトコル特有の複雑な状態遷移とネットワーク通信を抽象化する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> モジュール内において、<code>md_acme_drive.h</code> で定義された <code>md_acme_driver_t</code> を中心に、ACME プロトコルの具体的な実行ロジックを実装します。<code>md_acme.c</code> がプロトコルの低レベルな通信を扱うのに対し、本ファイルは「証明書更新のライフサイクル」という高レベルなビジネスロジックを管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**アカウント管理**: ACME アカウントのステージング、検証、および新規登録。</li>
+<li>**証明書発行フロー**: CSR の生成、CA への提出、および証明書発行のポーリング。</li>
+<li>**チェーン取得**: 証明書チェーンの再帰的な取得と検証。</li>
+<li>**ステージング管理**: 更新プロセス中のデータ（鍵、証明書、注文情報）を <code>MD_SG_STAGING</code> グループで管理し、成功時に永続化する。</li>
+<li>**プロトコル統合**: <code>md_proto_t</code> インターフェースを実装し、<code>mod_md</code> からの呼び出しに応答する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>アカウント・証明書ライフサイクル</h3>
+<ul>
+<li><code>md_acme_drive_set_acct</code>: アカウントの選択または新規作成を行い、ステージング領域に保存する。</li>
+<li><code>md_acme_drive_setup_cred_chain</code>: 秘密鍵の生成、CSR の作成、および CA への注文提出を行う。</li>
+<li><code>md_acme_drive_cert_poll</code>: 発行された証明書をポーリングで取得する。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>use_staged_acct</code> / <code>save_acct_staged</code>: アカウント情報のステージング領域への読み書き。</li>
+<li><code>ad_chain_retrieve</code>: 証明書チェーンの取得を管理するメインループ。</li>
+<li><code>acme_renew</code>: 証明書更新のメインエントリーポイント。</li>
+<li><code>acme_preload</code>: ステージング領域から本番領域へデータを移行する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>acme_driver_init</code> が呼ばれ、サポートするチャレンジ（HTTP, TLS-ALPN, DNS）を決定する。 2. **更新開始**: <code>acme_renew</code> が呼ばれ、ステージング領域を初期化。CA の選択とアカウントの準備を行う。 3. **注文実行**: <code>md_acme_drive_setup_cred_chain</code> が CSR を送信し、ACME 注文を確定させる。 4. **ポーリングと取得**: <code>md_acme_drive_cert_poll</code> で証明書を取得し、<code>ad_chain_retrieve</code> でチェーンを補完する。 5. **検証と保存**: <code>md_check_cert_and_pkey</code> で整合性を確認し、<code>acme_preload</code> を経由して最終的なストアへ保存する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_</code> 系ライブラリ（メモリプール、ハッシュ、テーブル、URI 操作）</li>
+<li><code>md_acme.h</code>, <code>md_acme_acct.h</code>, <code>md_acme_order.h</code>: ACME プロトコル固有のデータ構造と通信。</li>
+<li><code>md_store.h</code>: ステージング領域および永続化ストレージへのアクセス。</li>
+<li><code>md_crypt.h</code>: 鍵生成および証明書検証。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_acmev2_drive.c</code>: ACMEv2 固有の駆動ロジック。</li>
+<li><code>mod_md_drive.c</code>: <code>mod_md</code> における証明書駆動の全体的なオーケストレーション。</li>
+<li><code>md_acme.c</code>: ACME 通信の低レベル実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての操作は <code>d-&gt;p</code>（リクエストプール）または <code>acme-&gt;p</code> を使用します。ライフタイムは <code>md_proto_driver_t</code> の生存期間に依存します。</li>
+<li>**エラー処理**: <code>md_result_t</code> を通じてエラー詳細とアクティビティを記録します。<code>goto leave</code> パターンによるクリーンアップが徹底されています。</li>
+<li>**制約**: ACMEv1 はサポート外であり、ACMEv2 への依存が前提です。</li>
+<li>**未実装/浅い部分**: <code>acme_get_ari</code>（ARI: ACME Renewal Information）は実装されていますが、CA 側のサポート状況に強く依存するため、環境によっては機能しない可能性があります。</li>
+<li>**不変条件**: <code>MD_SG_STAGING</code> グループ内のデータは、<code>acme_preload</code> が成功するまで本番環境には影響を与えません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__use_staged_acct.html" target="wiki-view">`use_staged_acct`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__save_acct_staged.html" target="wiki-view">`save_acct_staged`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__md_acme_drive_set_acct.html" target="wiki-view">`md_acme_drive_set_acct`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__get_up_link.html" target="wiki-view">`get_up_link`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__add_http_certs.html" target="wiki-view">`add_http_certs`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__on_add_cert.html" target="wiki-view">`on_add_cert`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__get_cert.html" target="wiki-view">`get_cert`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__md_acme_drive_cert_poll.html" target="wiki-view">`md_acme_drive_cert_poll`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__on_init_csr_req.html" target="wiki-view">`on_init_csr_req`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__csr_req.html" target="wiki-view">`csr_req`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__md_acme_drive_setup_cred_chain.html" target="wiki-view">`md_acme_drive_setup_cred_chain`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_drive_c__acme_get_ari.html" target="wiki-view">`acme_get_ari`</a></li>
+</ul></body></html>

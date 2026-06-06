@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_http.c:81</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/HTTPS プロキシリクエストにおける URL の正規化および解析を行う。ホスト、ポート、パス、クエリ文字列を分解し、プロキシ転送用の内部形式（<code>proxy:scheme://host:port/path?query</code>）へ変換する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_http_canon(request_rec *r, char *url)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>url</code>: 正規化対象の URL 文字列。</li>
+<li>**出力**: </li>
+<li>成功時は <code>OK</code> を返し、<code>r-&gt;filename</code> に正規化されたプロキシ URL を格納する。</li>
+<li>失敗時は <code>DECLINED</code> または <code>HTTP_BAD_REQUEST</code>、<code>HTTP_FORBIDDEN</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>get_url_scheme</code> によりスキームが特定可能であること。</li>
+<li>リバースプロキシの場合、<code>proxy-nocanon</code> または <code>proxy-noencode</code> ノートの設定により、パスのエンコード挙動が制御される。</li>
+<li>IPv6 リテラルアドレスが含まれる場合、角括弧 <code>[]</code> で囲まれる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **スキーム判定**: <code>get_url_scheme</code> でスキームと SSL の有無を判定。 2. **ネットワーク位置解析**: <code>ap_proxy_canon_netloc</code> でホストとポートを抽出。 3. **パスとクエリの処理**:</p>
+<ul>
+<li><code>PROXYREQ_REVERSE</code> の場合: <code>proxy-nocanon</code> があればそのまま、なければ <code>ap_proxy_canonenc_ex</code> でパスをエンコード。</li>
+<li><code>PROXYREQ_PROXY</code> の場合: パスをそのまま使用。</li>
+<p>4. **バリデーション**: パスまたはクエリ文字列に制御文字やスペースが含まれる場合は <code>HTTP_FORBIDDEN</code> を返す。 5. **URL 再構築**: 解析結果を連結し、<code>r-&gt;filename</code> に格納。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/proxy/mod_proxy_http.c:2131</code> (フック登録による呼び出し)</li>
+<li><code>modules/mappers/mod_rewrite.c:5092</code> (コードコメントによる言及)</li>
+<li>**呼び出し先**: </li>
+<li><code>get_url_scheme</code></li>
+<li><code>ap_proxy_canon_netloc</code></li>
+<li><code>ap_proxy_canonenc_ex</code></li>
+<li><code>ap_scan_vchar_obstext</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト状態を保持。</li>
+<li><code>core_dir_config</code>: ディレクトリごとの設定（エンコード設定等）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>スキームが不明な場合は <code>DECLINED</code>。</li>
+<li>URL 解析エラー時は <code>HTTP_BAD_REQUEST</code>。</li>
+<li>パスやクエリに不正な文字（制御文字やスペース）が含まれる場合は <code>HTTP_FORBIDDEN</code>。</li>
+<li><code>ap_proxy_canonenc_ex</code> が失敗した場合は <code>HTTP_BAD_REQUEST</code>。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>proxy_hook_canon_handler</code> を通じて登録されており、プロキシ処理の初期段階で実行される。</li>
+<li><code>r-&gt;proxyreq</code> の値に基づき処理が分岐するため、フォワードプロキシとリバースプロキシでの挙動の違いに注意すること。</li>
+<li>IPv6 アドレスの取り扱いにおいて、ポート番号との連結時に括弧の付与が適切に行われているか確認が必要。</li>
 </ul></body></html>

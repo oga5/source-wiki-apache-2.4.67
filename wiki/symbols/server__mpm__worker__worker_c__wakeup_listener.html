@@ -6,22 +6,51 @@
 <li>定義箇所: <code>server/mpm/worker/worker.c:273</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リスナー（<code>listener_thread</code>）がブロッキング状態にある場合に、それを解除して終了処理へ移行させるためのシグナル送信を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void wakeup_listener(void)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>入力: なし（グローバルな状態変数および静的変数に依存）</li>
+<li>出力: なし（副作用としてリスナーの待機状態を解除）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>listener_may_exit</code> フラグが <code>1</code> に設定される。</li>
+<li><code>worker_pollset</code> が有効な場合、<code>apr_pollset_wakeup</code> が呼び出される。</li>
+<li><code>worker_queue_info</code> に対して <code>ap_queue_info_term</code> が呼び出され、ワーカー待ち状態が解除される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>listener_may_exit</code> を <code>1</code> に設定し、終了を指示する。 2. <code>worker_pollset</code> が存在し、かつ <code>listener_is_wakeable</code> が真であれば、<code>apr_pollset_wakeup</code> を実行して <code>poll()</code> を解除する。 3. <code>ap_queue_info_term</code> を呼び出し、ワーカーを待機しているリスナーを解放する。 4. <code>listener_os_thread</code> が初期化済みであれば、プラットフォームに応じて以下のいずれかを実行し、スレッドへシグナルを送信する。</p>
+<ul>
+<li><code>HAVE_PTHREAD_KILL</code> が定義されている場合: <code>pthread_kill</code> を使用。</li>
+<li>それ以外の場合: <code>kill(ap_my_pid, LISTENER_SIGNAL)</code> を使用。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元（直接的な証拠）:</li>
+<li><code>server/mpm/worker/worker.c:322</code></li>
+<li><code>server/mpm/worker/worker.c:1061</code></li>
+<li>呼び出し元（可能性のある参照）:</li>
+<li><code>server/mpm/event/event.c:636</code></li>
+<li><code>server/mpm/event/event.c:2577</code></li>
+<li>呼び出し先:</li>
+<li><code>apr_pollset_wakeup</code></li>
+<li><code>ap_queue_info_term</code></li>
+<li><code>pthread_kill</code> または <code>kill</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>worker_pollset</code>: リスナーが監視するソケットセット。</li>
+<li><code>worker_queue_info</code>: リスナーとワーカー間のキュー管理構造。</li>
+<li><code>listener_os_thread</code>: リスナーのスレッド識別子。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>リスナー生成直後で <code>listener_os_thread</code> が未設定の場合、シグナル送信処理をスキップして早期リターンする。この際、一部の終了処理が完全に行われない可能性がある旨がソースコード内に注釈されている。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>worker</code> MPM の終了シーケンスにおいて、リスナーを強制的に待機状態から脱出させるために不可欠である。</li>
+<li><code>pthread_kill</code> を使用するプラットフォームと <code>kill</code> を使用するプラットフォームで挙動が分かれるため、シグナルハンドリングの変更時には注意が必要。</li>
 </ul></body></html>

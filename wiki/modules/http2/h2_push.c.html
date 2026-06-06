@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_push.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_push.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 のサーバープッシュ機能（Server Push）を管理するモジュールです。主に、レスポンスヘッダーに含まれる <code>Link</code> ヘッダーの解析によるプッシュ候補の抽出と、重複プッシュを防ぐための「プッシュ日記（Push Diary）」の実装を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> の一部として、HTTP/2 ストリームのライフサイクル中にプッシュすべきリソースを特定し、クライアントへ重複したプッシュを送信しないよう制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**Link ヘッダー解析**: <code>Link</code> ヘッダー（<code>rel=preload</code>）を構文解析し、プッシュ対象の URI やパラメータを抽出する。</li>
+<li>**プッシュ候補の生成**: 抽出された情報に基づき、<code>h2_request</code> オブジェクトを構築する。</li>
+<li>**プッシュ日記（Push Diary）の管理**: 過去にプッシュしたリソースのハッシュ値を保持し、重複プッシュを抑制する。</li>
+<li>**キャッシュダイジェストのエンコード**: Golomb Coded Set (GCS) を用いて、プッシュ日記の内容をバイナリ形式に圧縮・変換する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>Link ヘッダー解析</h3>
+<ul>
+<li><code>link_ctx</code>: 解析状態を保持するコンテキスト構造体。</li>
+<li><code>inspect_link()</code>: <code>Link</code> ヘッダー文字列を走査し、各リンクを解析するエントリポイント。</li>
+<li><code>add_push()</code>: 解析結果からプッシュ条件（<code>preload</code> 等）を検証し、<code>h2_push</code> を生成する。</li>
+</ul>
+<h3>プッシュ日記（Push Diary）</h3>
+<ul>
+<li><code>h2_push_diary</code>: プッシュ済みリソースのハッシュ履歴を保持する構造体。</li>
+<li><code>h2_push_diary_create()</code>: 日記インスタンスの初期化。</li>
+<li><code>h2_push_diary_update()</code>: 新たなプッシュ候補を日記に登録し、重複を確認する。</li>
+<li><code>h2_push_diary_digest_get()</code>: 日記の内容を GCS 形式でシリアライズする。</li>
+</ul>
+<h3>ハッシュ計算</h3>
+<ul>
+<li><code>calc_sha256_hash()</code>: OpenSSL 使用時のハッシュ生成（SHA256）。</li>
+<li><code>calc_apr_hash()</code>: OpenSSL 未使用時のフォールバック（<code>apr_hashfunc_default</code>）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **収集**: <code>h2_push_collect()</code> がレスポンスヘッダーを走査し、<code>link_ctx</code> を用いて <code>Link</code> ヘッダーを解析。 2. **検証**: <code>add_push()</code> が <code>rel=preload</code> を確認し、同一権限（authority）内であることを検証して <code>h2_push</code> を作成。 3. **更新**: <code>h2_push_diary_update()</code> が、生成されたプッシュ候補のハッシュを計算し、日記に存在するか確認。</p>
+<ul>
+<li>存在する場合: <code>move_to_last()</code> で最近使用済みリストの末尾へ移動。</li>
+<li>存在しない場合: <code>h2_push_diary_append()</code> で追加。</li>
+<p>4. **圧縮**: <code>h2_push_diary_digest_get()</code> が日記内のハッシュをソートし、<code>gset_encoder</code> を用いてビットストリームとしてエンコード。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_hash.h</code>, <code>apr_tables.h</code>: データ構造の管理。</li>
+<li><code>http_protocol.h</code>: HTTP ヘッダー処理。</li>
+<li><code>h2_request.h</code>, <code>h2_stream.h</code>: プッシュリクエストの構築とストリーム状態の参照。</li>
+<li><code>openssl/evp.h</code>: (条件付き) 高精度なハッシュ計算。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_push.h</code>: 公開インターフェースとデータ構造の定義。</li>
+<li><code>h2_stream.c</code>: ストリームごとのプッシュポリシーの保持と本モジュールの呼び出し。</li>
+<li><code>h2_session.c</code>: セッション単位でのプッシュ日記の保持。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>link_ctx</code> や <code>h2_push_diary</code> はすべて <code>apr_pool_t</code> を介して管理されます。</li>
+<li>**キャッシュダイジェスト**: 本実装は IETF で廃案となった <code>Cache-Digest</code> ドラフトの概念を継承していますが、現在はクライアントからの値を受け取るのではなく、サーバー側のプッシュ履歴を管理する目的で利用されています。</li>
+<li>**制約**: <code>h2_push_diary</code> は最大サイズ（<code>N</code>）に達すると古いエントリから破棄する LRU 的な挙動をします。</li>
+<li>**未実装/浅い部分**: <code>h2_push_collect</code> 内の <code>TODO</code> にある通り、現在は <code>Link</code> ヘッダーのみがプッシュのソースですが、将来的にフックによる拡張が想定されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_push_c__policy_str.html" target="wiki-view">`policy_str`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__link_ctx.html" target="wiki-view">`link_ctx`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__attr_char.html" target="wiki-view">`attr_char`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__ptoken_char.html" target="wiki-view">`ptoken_char`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__skip_ws.html" target="wiki-view">`skip_ws`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__find_chr.html" target="wiki-view">`find_chr`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__read_chr.html" target="wiki-view">`read_chr`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__mk_str.html" target="wiki-view">`mk_str`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__read_qstring.html" target="wiki-view">`read_qstring`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__read_ptoken.html" target="wiki-view">`read_ptoken`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__h2_push_diary_entry.html" target="wiki-view">`h2_push_diary_entry`</a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__gset_encoder.html" target="wiki-view">`gset_encoder`</a></li>
+</ul></body></html>

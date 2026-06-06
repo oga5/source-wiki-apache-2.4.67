@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/mod_proxy.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/mod_proxy.c</h1>
+<h2>概要</h2>
+<p><code>mod_proxy.c</code> は Apache HTTP Server のプロキシ機能の中核となるモジュールです。リクエストの転送、ロードバランシング、およびプロキシ設定の管理を統括します。このファイルは、プロキシのライフサイクル管理、設定の解析、およびリクエスト処理の各フェーズ（翻訳、修正、ハンドラ実行）を定義する巨大なエントリポイントです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> サブシステムにおける「司令塔」です。個別のプロトコルハンドラ（<code>mod_proxy_http</code>, <code>mod_proxy_ajp</code> 等）やユーティリティ（<code>proxy_util.c</code>）を統合し、Apache のリクエスト処理パイプラインとプロキシロジックを接続します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>ProxyPass</code>, <code>ProxyRemote</code>, <code>BalancerMember</code> などのディレクティブを解析し、サーバーおよびディレクトリごとの設定構造体を構築・マージする。</li>
+<li>**リクエストルーティング**: <code>translate_name</code> フックを通じて、リクエストがプロキシ対象かどうかを判定し、適切なハンドラへ割り当てる。</li>
+<li>**ライフサイクル管理**: プロキシ用ミューテックスの初期化、子プロセスでのワーカー初期化、およびシャットダウン時のリソース解放。</li>
+<li>**プロキシハンドラ**: <code>proxy-server</code> ハンドラを実装し、バックエンドへの接続、ロードバランシング、エラー処理、およびレスポンスの転送を制御する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>proxy_server_conf</code>: サーバー単位のプロキシ設定（ワーカー、バランサー、リモートプロキシリスト等）。</li>
+<li><code>proxy_dir_conf</code>: ディレクトリ単位の設定（<code>ProxyPass</code> エイリアス、エラーオーバーライド設定等）。</li>
+</ul>
+<h3>コマンド・設定関数</h3>
+<ul>
+<li><code>proxy_cmds</code>: Apache の設定ディレクティブを処理するコマンドテーブル。</li>
+<li><code>create_proxy_config</code> / <code>merge_proxy_config</code>: サーバー設定の生成とマージ。</li>
+<li><code>add_pass</code> / <code>add_member</code>: <code>ProxyPass</code> および <code>BalancerMember</code> の解析とワーカー/バランサーの定義。</li>
+</ul>
+<h3>リクエスト処理フック</h3>
+<ul>
+<li><code>proxy_handler</code>: プロキシリクエストのメインハンドラ。</li>
+<li><code>proxy_translate_name</code>: URL を <code>proxy:&lt;URL&gt;</code> 形式に変換し、プロキシ対象としてマークする。</li>
+<li><code>proxy_walk</code>: <code>&lt;Proxy&gt;</code> セクションの設定をリクエストに適用する。</li>
+</ul>
+<h3>外部連携</h3>
+<ul>
+<li><code>proxy_mutex</code>: プロキシの共有リソースを保護するグローバルミューテックス。</li>
+<li><code>proxy_hcmethods[]</code>: ヘルスチェックメソッドの定義テーブル。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <code>proxy_cmds</code> がディレクティブを読み込み、<code>proxy_server_conf</code> にワーカーやバランサーを登録。<code>merge_proxy_config</code> により親サーバーの設定が継承される。 2. **リクエスト翻訳**: <code>proxy_translate_name</code> が URL を解析し、マッチする <code>ProxyPass</code> があれば <code>r-&gt;filename</code> を <code>proxy:...</code> に書き換え、ハンドラを <code>proxy-server</code> に設定。 3. **ハンドラ実行**: <code>proxy_handler</code> が呼び出される。</p>
+<ul>
+<li><code>ap_proxy_pre_request</code> で適切なワーカー/バランサーを選択。</li>
+<li><code>proxy_run_scheme_handler</code> を呼び出し、プロトコル固有のハンドラ（HTTP, AJP等）に処理を委譲。</li>
+<li>失敗時は <code>max_attempts</code> に基づき再試行。</li>
+<p>4. **クリーンアップ**: <code>ap_proxy_post_request</code> を呼び出し、接続の解放や統計情報の更新を行う。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: 公開インターフェースとデータ構造。</li>
+<li><code>proxy_util.h</code>: ユーティリティ関数（ワーカー管理、URL正規化など）。</li>
+<li><code>http_config.h</code>, <code>http_request.h</code>: Apache のリクエスト処理基盤。</li>
+<li><code>apr_global_mutex.h</code>: プロセス間同期。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>proxy_util.c</code>: ワーカーの初期化、共有メモリ管理、URL解析などの低レベル実装。</li>
+<li><code>mod_proxy_http.c</code>, <code>mod_proxy_ajp.c</code>: 具体的なプロトコルハンドラの実装。</li>
+<li><code>mod_proxy_balancer.c</code>: ロードバランシングアルゴリズムの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定構造体は <code>apr_pool_t</code> を使用しており、リクエスト終了時やサーバー再起動時に適切に解放される設計です。</li>
+<li>**共有メモリ**: <code>proxy_worker</code> や <code>proxy_balancer</code> の一部の状態は共有メモリ上に保持されるため、<code>proxy_mutex</code> による排他制御が不可欠です。</li>
+<li>**設計の深さ**: このファイルは「プロキシの枠組み」を提供することに特化しており、具体的なプロトコル処理はフック（<code>scheme_handler</code>）を通じて外部モジュールへ委譲されています。</li>
+<li>**省略箇所**: 本ファイル内の <code>alias_match_servlet</code> などの文字列マッチングロジックは、特定のパスパラメータ処理に特化しており、複雑な正規表現やパス操作を含みます。これらは <code>mod_jk</code> 等の挙動を模倣しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__set_worker_param.html" target="wiki-view">`set_worker_param`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__set_balancer_param.html" target="wiki-view">`set_balancer_param`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__alias_match.html" target="wiki-view">`alias_match`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__alias_match_servlet.html" target="wiki-view">`alias_match_servlet`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_detect.html" target="wiki-view">`proxy_detect`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__ap_proxy_trans_match.html" target="wiki-view">`ap_proxy_trans_match`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_trans.html" target="wiki-view">`proxy_trans`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_pre_translate_name.html" target="wiki-view">`proxy_pre_translate_name`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_translate_name.html" target="wiki-view">`proxy_translate_name`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_walk.html" target="wiki-view">`proxy_walk`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_map_location.html" target="wiki-view">`proxy_map_location`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_fixup.html" target="wiki-view">`proxy_fixup`</a></li>
+</ul></body></html>

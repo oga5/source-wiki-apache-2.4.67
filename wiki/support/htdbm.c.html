@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>support/htdbm.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>support/htdbm.c</h1>
+<h2>概要</h2>
+<p><code>htdbm.c</code> は、Apache HTTP Server が使用する DBM 形式のパスワードデータベースを操作するためのコマンドラインユーティリティです。ユーザーの追加、削除、検証、およびデータベース内容のリスト表示機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールの一部として、サーバー管理者が認証用データベースをオフラインで管理するためのツールを提供します。<code>passwd_common.c</code> と連携し、パスワードハッシュ生成や入力処理の共通ロジックを共有しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**データベース操作**: <code>apr_dbm</code> を介した DBM ファイルの読み書きおよび管理。</li>
+<li>**認証管理**: ユーザー名とパスワードのペアの保存、削除、検証。</li>
+<li>**ハッシュ処理**: <code>passwd_common</code> を利用した多様なハッシュアルゴリズム（MD5, SHA, BCRYPT, CRYPT, Plaintext）の適用。</li>
+<li>**CLI インターフェース**: コマンドライン引数の解析と、対話的または非対話的なパスワード入力処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>htdbm_t</code>: データベース接続、ユーザー情報、コンテキスト、および設定状態を保持するメイン構造体。</li>
+</ul>
+<h3>ライフサイクル・管理</h3>
+<ul>
+<li><code>htdbm_init()</code>: APR プールと <code>htdbm_t</code> 構造体の初期化、シグナルハンドラの登録。</li>
+<li><code>htdbm_terminate()</code>: DBM 接続をクローズし、リソースを解放。</li>
+<li><code>htdbm_open()</code>: 指定された DBM ファイルをモード（読み取り専用/書き込み/作成）に応じて開く。</li>
+</ul>
+<h3>操作・ミューテータ</h3>
+<ul>
+<li><code>htdbm_save()</code>: ユーザー名とハッシュ化されたパスワードを DBM に保存。</li>
+<li><code>htdbm_del()</code>: 指定ユーザーをデータベースから削除。</li>
+<li><code>htdbm_make()</code>: パスワードをハッシュ化し、<code>htdbm_t</code> に格納。</li>
+<li><code>htdbm_verify()</code>: 既存のハッシュと入力パスワードを比較検証。</li>
+<li><code>htdbm_list()</code>: データベース内の全レコードを標準エラーに出力。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>main</code> が <code>htdbm_init</code> を呼び出し、APR 環境と <code>htdbm_t</code> を準備。 2. **引数解析**: <code>apr_getopt</code> を使用してオプションを解析し、<code>parse_common_options</code> で共通設定を適用。 3. **実行モード決定**: <code>cmd</code> フラグ（<code>HTDBM_MAKE</code>, <code>HTDBM_DELETE</code> 等）に基づき、<code>htdbm_open</code> でファイルを開いた後、各操作関数を呼び出す。 4. **データ処理**: <code>htdbm_make</code> が <code>mkhash</code> を呼び出し、結果を <code>htdbm_t</code> に保持。<code>htdbm_save</code> が <code>apr_dbm_store</code> を使用して永続化。 5. **終了**: <code>htdbm_terminate</code> でリソースをクリーンアップし、<code>atexit</code> で登録された <code>terminate</code> が APR を終了させる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>passwd_common.h</code>: パスワードハッシュ生成の共通ロジック。</li>
+<li><code>apr_dbm.h</code>: DBM ファイル操作の抽象化レイヤー。</li>
+<li><code>apr_pools.h</code>: メモリ管理。</li>
+<li><code>apr_getopt.h</code>: コマンドライン引数解析。</li>
+<li><code>apr_md5.h</code>, <code>apr_sha1.h</code>: ハッシュアルゴリズム。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>support/passwd_common.c</code>: パスワード入力の取得やハッシュ生成の具体的な実装。</li>
+<li><code>support/htpasswd.c</code>: テキストファイルベースのパスワード管理ツール（類似の責務を持つ）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリは <code>apr_pool_t</code> によって管理されます。<code>htdbm_t</code> の各フィールドはプールから割り当てられており、明示的な <code>free</code> は不要です。</li>
+<li>**データレイアウト**: DBM 内のデータは <code>username</code> をキーとし、<code>password[:comment]</code> を値として保存されます。<code>\0</code> 終端は保存されないため、<code>apr_datum_t</code> の <code>dsize</code> を常に参照する必要があります。</li>
+<li>**EBCDIC 対応**: <code>APR_CHARSET_EBCDIC</code> が定義されている場合、ハッシュ計算前に文字コード変換が行われます。</li>
+<li>**省略された詳細**: <code>mkhash</code> や <code>parse_common_options</code> などの詳細なハッシュ計算ロジックは <code>passwd_common.c</code> に委譲されており、本ファイルには含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__htdbm_c__htdbm_t.html" target="wiki-view">`htdbm_t`</a></li>
+<li><a href="../symbols/support__htdbm_c__terminate.html" target="wiki-view">`terminate`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_terminate.html" target="wiki-view">`htdbm_terminate`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_interrupted.html" target="wiki-view">`htdbm_interrupted`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_init.html" target="wiki-view">`htdbm_init`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_open.html" target="wiki-view">`htdbm_open`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_save.html" target="wiki-view">`htdbm_save`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_del.html" target="wiki-view">`htdbm_del`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_verify.html" target="wiki-view">`htdbm_verify`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_list.html" target="wiki-view">`htdbm_list`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_valid_username.html" target="wiki-view">`htdbm_valid_username`</a></li>
+<li><a href="../symbols/support__htdbm_c__htdbm_usage.html" target="wiki-view">`htdbm_usage`</a></li>
+</ul></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_request.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_request.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 のリクエスト表現 (<code>h2_request</code>) を Apache HTTP Server のネイティブなリクエスト構造体 (<code>request_rec</code>) へ変換・構築するためのブリッジ層です。HTTP/2 のストリームから受け取ったヘッダーや擬似ヘッダーを解析し、Apache のリクエスト処理パイプラインに適合する形式へ変換する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> において、HTTP/2 プロトコル層と Apache のコアリクエスト処理エンジンを接続する重要なコンポーネントです。HTTP/2 のストリーム状態を Apache の <code>request_rec</code> にマッピングすることで、既存のモジュール（認証、アクセス制御、コンテンツ生成など）が HTTP/2 リクエストを透過的に扱えるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト構築**: <code>h2_request</code> オブジェクトの生成、クローン、および初期化。</li>
+<li>**ヘッダー変換**: HTTP/2 の擬似ヘッダー（<code>:method</code>, <code>:path</code> 等）を Apache の <code>request_rec</code> 構造体へマッピング。</li>
+<li>**プロトコル適合**: HTTP/2 特有の制約（<code>CONNECT</code> メソッドの扱い、<code>Host</code> ヘッダーの補完）を Apache のリクエスト処理フローに統合。</li>
+<li>**エラーハンドリング**: 不正なリクエストに対する <code>ap_die</code> を用いたエラー応答の生成と、リソースのクリーンアップ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト生成・管理</h3>
+<ul>
+<li><code>h2_request_create</code>: 新規 <code>h2_request</code> オブジェクトのメモリ確保と初期化。</li>
+<li><code>h2_request_rcreate</code>: 既存の <code>request_rec</code> から <code>h2_request</code> を生成する変換関数。</li>
+<li><code>h2_request_clone</code>: <code>h2_request</code> のディープコピーを作成。</li>
+</ul>
+<h3>ヘッダー処理</h3>
+<ul>
+<li><code>h2_request_add_header</code>: HTTP/2 ヘッダーフレームの各行を処理し、擬似ヘッダーを解析・格納。</li>
+<li><code>h2_request_end_headers</code>: ヘッダー受信完了後の <code>Host</code> ヘッダー補完や検証を行う。</li>
+</ul>
+<h3>Apache 統合</h3>
+<ul>
+<li><code>h2_create_request_rec</code>: <code>h2_request</code> を基に Apache の <code>request_rec</code> を構築し、リクエスト処理パイプラインへ投入する。</li>
+<li><code>my_ap_create_request</code>: Apache のバージョンが古い場合に、手動で <code>request_rec</code> を初期化するフォールバック関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>h2_request_create</code> で構造体を確保し、<code>h2_request_add_header</code> で逐次ヘッダーを蓄積します。 2. **変換**: <code>h2_create_request_rec</code> が呼び出されると、<code>ap_create_request</code> を経由して <code>request_rec</code> を作成します。 3. **ヘッダー注入**: <code>assign_headers</code> が <code>h2_request</code> のヘッダーを <code>request_rec-&gt;headers_in</code> にコピーし、<code>Host</code> ヘッダーの整合性を調整します。 4. **パイプライン投入**: <code>ap_run_pre_read_request</code> や <code>ap_post_read_request</code> を呼び出し、Apache の標準的なリクエスト処理フックを起動します。 5. **終了処理**: エラー発生時は <code>die</code> ラベルへジャンプし、<code>ap_die</code> でエラー応答を生成後、<code>EOR</code> (End of Request) バケットを挿入してリクエストを終了します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_table_t</code> (ヘッダー管理)</li>
+<li><code>request_rec</code>, <code>conn_rec</code> (Apache コア構造体)</li>
+<li><code>h2_private.h</code>, <code>h2_request.h</code> (内部定義)</li>
+<li><code>http_protocol.h</code>, <code>http_request.h</code> (Apache リクエスト処理 API)</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_stream.c</code>: ストリームの状態管理と <code>h2_request</code> のライフサイクル管理。</li>
+<li><code>h2_headers.c</code>: HTTP/2 ヘッダーの圧縮・展開ロジック。</li>
+<li><code>h2_session.c</code>: セッションレベルでのリクエスト処理のオーケストレーション。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのオブジェクトは <code>apr_pool_t</code> に紐付いており、リクエスト終了時に自動的に解放されます。</li>
+<li>**擬似ヘッダー**: HTTP/2 の擬似ヘッダーは <code>h2_request</code> 内で個別のフィールドとして保持され、<code>request_rec</code> 構築時に標準的な HTTP ヘッダーへ変換されます。</li>
+<li>**互換性**: <code>AP_MODULE_MAGIC_AT_LEAST</code> マクロを使用して、Apache のバージョンによる <code>ap_create_request</code> の挙動の違いを吸収しています。</li>
+<li>**制約**: <code>h2_request_add_header</code> は擬似ヘッダーがリクエストの先頭に来ることを期待しており、順序違反はエラーとして扱われます。</li>
+<li>**省略箇所**: <code>h2_request</code> の内部構造体定義そのものは <code>h2_request.h</code> にあるため、本ファイルでは操作ロジックに集中しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_request_create.html" target="wiki-view">`h2_request_create`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h1_ctx.html" target="wiki-view">`h1_ctx`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__set_h1_header.html" target="wiki-view">`set_h1_header`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_request_rcreate.html" target="wiki-view">`h2_request_rcreate`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_request_add_header.html" target="wiki-view">`h2_request_add_header`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_request_end_headers.html" target="wiki-view">`h2_request_end_headers`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_request_clone.html" target="wiki-view">`h2_request_clone`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__my_ap_create_request.html" target="wiki-view">`my_ap_create_request`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_request_create_bucket.html" target="wiki-view">`h2_request_create_bucket`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__assign_headers.html" target="wiki-view">`assign_headers`</a></li>
+<li><a href="../../symbols/modules__http2__h2_request_c__h2_create_request_rec.html" target="wiki-view">`h2_create_request_rec`</a></li>
+</ul></body></html>

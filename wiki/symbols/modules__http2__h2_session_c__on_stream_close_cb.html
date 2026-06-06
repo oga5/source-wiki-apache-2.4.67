@@ -6,22 +6,55 @@
 <li>定義箇所: <code>modules/http2/h2_session.c:264</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 ストリームが終了した際に、<code>nghttp2</code> ライブラリから通知を受け取り、関連する内部リソースのクリーンアップとエラー処理を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int on_stream_close_cb(nghttp2_session *ngh2, int32_t stream_id,
+                              uint32_t error_code, void *userp)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>ngh2</code>: <code>nghttp2_session</code> へのポインタ（未使用）。</li>
+<li><code>stream_id</code>: 終了したストリームの ID。</li>
+<li><code>error_code</code>: ストリーム終了理由を示すエラーコード（0 は正常終了）。</li>
+<li><code>userp</code>: <code>h2_session</code> 構造体へのポインタ。</li>
+<li>**出力**:</li>
+<li>常に <code>0</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>userp</code> は有効な <code>h2_session</code> 構造体を指している必要がある。</li>
+<li><code>get_stream</code> を通じて、指定された <code>stream_id</code> に対応する <code>h2_stream</code> が取得可能であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>userp</code> から <code>h2_session</code> を取得する。 2. <code>get_stream</code> を呼び出し、対象の <code>h2_stream</code> を検索する。 3. ストリームが存在する場合:</p>
+<ul>
+<li><code>error_code</code> が 0 以外（エラー発生）であれば、ログを出力する。</li>
+<li><code>h2_stream_rst</code> を呼び出し、ストリームをリセット状態にする。</li>
+<li><code>h2_mplx_c1_client_rst</code> を呼び出し、多重化器に対してクライアント側でのリセットを通知する。</li>
+<p>4. 処理を終了し <code>0</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>nghttp2</code> ライブラリのコールバック機構（<code>modules/http2/h2_session.c:728</code> にて <code>NGH2_SET_CALLBACK</code> を通じて登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>get_stream</code></li>
+<li><code>ap_log_cerror</code></li>
+<li><code>h2_protocol_err_description</code></li>
+<li><code>h2_stream_rst</code></li>
+<li><code>h2_mplx_c1_client_rst</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>h2_session</code>: セッション状態を保持するメイン構造体。</li>
+<li><code>h2_stream</code>: 個別の HTTP/2 ストリーム状態を管理する構造体。</li>
+<li><code>nghttp2_session</code>: <code>nghttp2</code> ライブラリのセッションオブジェクト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>get_stream</code> が <code>NULL</code> を返した場合（ストリームが見つからない場合）、エラーログ出力やリセット処理はスキップされ、何も行わずに終了する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>nghttp2</code> のコールバックとして登録されるため、シグネチャの変更は <code>nghttp2</code> の仕様に準拠する必要がある。</li>
+<li><code>error_code</code> が 0 の場合、ログ出力やリセット処理は行われないため、正常終了時のクリーンアップ処理が必要な場合は別途考慮が必要。</li>
 </ul></body></html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/aaa/mod_auth_digest.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/aaa/mod_auth_digest.c</h1>
+<h2>概要</h2>
+<p><code>mod_auth_digest</code> は、HTTP Digest 認証（RFC 2617）を実装する Apache HTTP Server モジュールです。パスワードを平文で送信せず、MD5 ハッシュとサーバー側で発行する「nonce（ナンス）」を使用して認証を行います。共有メモリ（SHM）を利用したクライアント追跡、リプレイ攻撃防止のための nonce カウント（nc）チェック、および認証成功後の <code>Authentication-Info</code> ヘッダー生成を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムにおける認証プロバイダーの一つです。<code>mod_auth_basic</code> が単純な Base64 エンコードによる認証を行うのに対し、本モジュールはよりセキュアなチャレンジ・レスポンス方式を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**認証プロセスの管理**: <code>check_authn</code> フックを通じた Digest 認証の検証。</li>
+<li>**共有メモリ管理**: クライアント状態（nonce カウント、opaque 値）を保持するための <code>apr_shm</code> および <code>apr_rmm</code> の管理。</li>
+<li>**Nonce 生成と検証**: 時間ベースの nonce 生成と、リプレイ攻撃を防ぐための検証ロジック。</li>
+<li>**ヘッダー処理**: <code>Authorization</code> ヘッダーのパースと、<code>WWW-Authenticate</code> / <code>Authentication-Info</code> ヘッダーの生成。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>digest_config_rec</code>: ディレクトリごとの設定（realm, qop リスト, nonce 寿命, 認証プロバイダー等）を保持。</li>
+</ul>
+<h3>クライアント管理</h3>
+<ul>
+<li><code>client_entry</code>: 共有メモリ上のクライアント状態（nonce カウント、最後に使用した nonce）。</li>
+<li><code>client_list</code>: ハッシュテーブル構造。<code>client_shm</code> 上に配置され、クライアントの追跡に使用。</li>
+<li><code>client_shm</code> / <code>client_rmm</code>: 共有メモリセグメントとメモリ管理ハンドル。</li>
+</ul>
+<h3>ヘッダー処理</h3>
+<ul>
+<li><code>digest_header_rec</code>: パースされた <code>Authorization</code> ヘッダーの内容を保持。</li>
+<li><code>get_digest_rec()</code>: ヘッダー文字列を解析し、構造体にマッピングする。</li>
+</ul>
+<h3>認証ロジック</h3>
+<ul>
+<li><code>authenticate_digest_user()</code>: 認証のメインフック。ヘッダー検証、ハッシュ照合、nonce チェックを統合。</li>
+<li><code>get_hash()</code>: 設定された認証プロバイダーを介して、realm に紐づくパスワードハッシュを取得。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>initialize_module</code> および <code>initialize_child</code> で共有メモリとグローバルミューテックスをセットアップ。 2. **リクエスト受信**: <code>parse_hdr_and_update_nc</code> が <code>post_read_request</code> フックで動作し、<code>Authorization</code> ヘッダーをパースして nonce カウントをインクリメント。 3. **認証検証**: <code>authenticate_digest_user</code> が呼ばれ、以下の順で検証：</p>
+<ul>
+<li>ヘッダーの妥当性確認。</li>
+<li>URI の整合性チェック。</li>
+<li><code>get_hash</code> によるプロバイダーからのハッシュ取得。</li>
+<li><code>new_digest</code> / <code>old_digest</code> によるレスポンスハッシュの計算と照合。</li>
+<li><code>check_nonce</code> による有効期限とリプレイ攻撃のチェック。</li>
+<p>4. **レスポンス**: 認証失敗時は <code>note_digest_auth_failure</code> で <code>WWW-Authenticate</code> を生成。成功時は <code>add_auth_info</code> で <code>Authentication-Info</code> を付与。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_shm.h</code>, <code>apr_rmm.h</code>: 共有メモリ管理。</li>
+<li><code>apr_global_mutex.h</code>: プロセス間同期。</li>
+<li><code>util_md5.h</code>: MD5 ハッシュ計算。</li>
+<li><code>mod_auth.h</code>: 認証フックの定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/aaa/mod_auth_basic.c</code>: 比較対象となる認証モジュール。</li>
+<li><code>modules/aaa/mod_authn_core.c</code>: 認証プロバイダーの基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: 共有メモリ上のデータは <code>apr_rmm</code> を介して管理されます。<code>gc()</code> 関数がメモリ不足時に古いエントリを削除する LRU 的な挙動をとります。</li>
+<li>**制約**: <code>qop=auth-int</code> や <code>MD5-sess</code> は未実装です。</li>
+<li>**エッジケース**: <code>AuthDigestEnableQueryStringHack</code> は MSIE のバグ対応用です。</li>
+<li>**注意点**: 共有メモリを使用するため、マルチプロセス環境での同期（<code>client_lock</code>）が必須です。共有メモリが利用できない環境では、nonce カウントチェックなどの一部機能が制限されます。</li>
+<li>**省略箇所**: 本ファイルは非常に長いため、詳細なハッシュ計算アルゴリズムの細部や、URI パースの複雑なエッジケース処理は省略しています。これらは RFC 2617 に準拠しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__digest_config_rec.html" target="wiki-view">`digest_config_rec`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__client_entry.html" target="wiki-view">`client_entry`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__hash_table.html" target="wiki-view">`hash_table`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__hdr_sts.html" target="wiki-view">`hdr_sts`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__digest_header_rec.html" target="wiki-view">`digest_header_rec`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__time_rec.html" target="wiki-view">`time_rec`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__cleanup_tables.html" target="wiki-view">`cleanup_tables`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__log_error_and_cleanup.html" target="wiki-view">`log_error_and_cleanup`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__rmm_malloc.html" target="wiki-view">`rmm_malloc`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__rmm_free.html" target="wiki-view">`rmm_free`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__initialize_tables.html" target="wiki-view">`initialize_tables`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_digest_c__pre_init.html" target="wiki-view">`pre_init`</a></li>
+</ul></body></html>

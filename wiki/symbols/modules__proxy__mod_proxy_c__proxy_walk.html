@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy.c:1059</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストの URL に基づいて <code>&lt;Proxy&gt;</code> セクションで定義された設定を検索し、現在のリクエスト設定（<code>r-&gt;per_dir_config</code>）にマージして適用する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int proxy_walk(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報。<code>r-&gt;filename</code> に <code>proxy:</code> 接頭辞が付与された URL が格納されていることを想定）。</li>
+<li>**出力**: <code>int</code>（常に <code>OK</code> を返す）。副作用として <code>r-&gt;per_dir_config</code> が更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;filename</code> は <code>proxy:</code> で始まる文字列である必要がある。</li>
+<li><code>sconf-&gt;sec_proxy</code> に格納された設定エントリが順次評価される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. サーバー設定から <code>&lt;Proxy&gt;</code> セクションのリストを取得する。 2. 各セクションの設定（<code>entry_proxy</code>）に対し、以下のいずれかの方法でマッチングを行う。</p>
+<ul>
+<li>**正規表現マッチ**: <code>entry_proxy-&gt;r</code> が定義されている場合、<code>ap_regexec</code> を実行。マッチした場合はキャプチャグループを <code>r-&gt;subprocess_env</code> に設定する。</li>
+<li>**文字列/fnmatch**: <code>entry_proxy-&gt;p</code> を使用し、<code>p_is_fnmatch</code> フラグに応じて <code>apr_fnmatch</code> または <code>strncmp</code> で比較する。</li>
+<p>3. マッチした設定を <code>ap_merge_per_dir_configs</code> を用いて現在の <code>r-&gt;per_dir_config</code> に累積的にマージする。 4. 処理終了後、一時的に作成した正規表現用プール（<code>rxpool</code>）を解放する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/proxy/mod_proxy.c</code> 内の <code>map_to_storage</code> フック（<code>directory_walk</code>/<code>file_walk</code> の代わりとして）。</li>
+<li><code>modules/proxy/mod_proxy.c:1145</code>。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_module_config</code></li>
+<li><code>apr_pool_create</code> / <code>apr_pool_destroy</code></li>
+<li><code>ap_regexec</code></li>
+<li><code>ap_merge_per_dir_configs</code></li>
+<li><code>apr_fnmatch</code></li>
+<li><code>apr_table_setn</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_server_conf</code>: サーバー単位のプロキシ設定。</li>
+<li><code>proxy_dir_conf</code>: ディレクトリ単位（<code>&lt;Proxy&gt;</code> セクション）の設定。</li>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>マッチングに失敗したセクションはスキップされ、次のセクションの評価へ進む。</li>
+<li>正規表現マッチング時にキャプチャグループが存在する場合、一時的なメモリプール <code>rxpool</code> を生成する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>r-&gt;filename</code> の先頭 6 文字（<code>proxy:</code>）をスキップしてマッチングを行っているため、URL の正規化状態に依存する。</li>
+<li><code>XXX</code> コメントにある通り、URI の正規化や大文字小文字を区別しないマッチングの扱いについては今後の検討課題である。</li>
 </ul></body></html>

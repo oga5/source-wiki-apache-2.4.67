@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_session.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_session.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 セッションのライフサイクル管理とプロトコル処理の核となる実装です。<code>conn_rec</code>（メイン接続）をラップし、<code>nghttp2</code> ライブラリを介してクライアントとのフレームの送受信、ストリームの多重化、および優先順位制御を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおける「セッション層」です。<code>h2_mplx</code>（多重化器）と連携してリクエストをワーカーに振り分け、<code>h2_c1_io</code> を通じて物理的なネットワーク I/O を抽象化します。</p>
+<h2>責務</h2>
+<ul>
+<li>**セッション管理**: HTTP/2 接続の初期化、状態遷移（<code>INIT</code> から <code>DONE</code> まで）、および終了処理。</li>
+<li>**プロトコル制御**: <code>nghttp2</code> コールバックの定義と実行、フレーム（HEADERS, DATA, SETTINGS, GOAWAY 等）の解釈とディスパッチ。</li>
+<li>**ストリーム管理**: ストリームの生成、優先順位付け（<code>spri_cmp</code>）、およびリセット処理。</li>
+<li>**I/O 調整**: フロー制御、パディングの挿入、および接続のアイドル状態監視。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>セッションライフサイクル</h3>
+<ul>
+<li><code>h2_session_create</code>: セッション構造体の初期化、<code>nghttp2</code> セッションの構築、コールバックの登録。</li>
+<li><code>h2_session_start</code>: <code>SETTINGS</code> フレームの送信と <code>h2c</code> アップグレード処理。</li>
+<li><code>h2_session_process</code>: メインループ。I/O 処理、イベントディスパッチ、状態遷移を駆動。</li>
+<li><code>session_cleanup</code>: リソース解放と <code>nghttp2</code> セッションの破棄。</li>
+</ul>
+<h3>イベントディスパッチ</h3>
+<ul>
+<li><code>h2_session_dispatch_event</code>: セッション状態（<code>h2_session_state</code>）に基づいたイベント処理のルーティング。</li>
+<li><code>h2_session_event</code>: 外部からのイベント投入口。</li>
+</ul>
+<h3>nghttp2 コールバック（主要なもの）</h3>
+<ul>
+<li><code>send_cb</code>: <code>nghttp2</code> からの送信データを <code>h2_c1_io</code> へ渡す。</li>
+<li><code>on_frame_recv_cb</code>: 受信フレームの型に応じた処理（HEADERS, DATA, RST_STREAM 等）。</li>
+<li><code>on_data_chunk_recv_cb</code>: ストリームごとのデータチャンク受信処理。</li>
+<li><code>select_padding_cb</code>: セキュリティ向上のためのパディング量決定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <code>h2_session_process</code> が <code>h2_c1_read</code> を呼び出し、<code>nghttp2_session_mem_recv</code> を通じてフレームを解析。 2. **処理**: <code>on_frame_recv_cb</code> がフレームを識別し、<code>h2_stream</code> 関連の操作（<code>h2_stream_recv_frame</code> 等）を呼び出す。 3. **多重化**: <code>h2_mplx_c1_process</code> を介して、準備が整ったストリームをワーカーへスケジューリング。 4. **出力**: <code>h2_session_send</code> が <code>nghttp2_session_send</code> を呼び出し、<code>send_cb</code> を経由して <code>h2_c1_io</code> にデータを書き出す。 5. **状態遷移**: <code>transit()</code> 関数が <code>h2_session_state</code> を更新し、<code>h2_session_dispatch_event</code> がエラーやタイムアウト時の終了処理を制御。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>nghttp2</code>: プロトコル解析の基盤。</li>
+<li><code>h2_mplx.h</code>: ストリーム多重化とワーカー管理。</li>
+<li><code>h2_c1_io.h</code>: 接続レベルの I/O フィルタリング。</li>
+<li><code>h2_stream.h</code>: 個別の HTTP/2 ストリーム管理。</li>
+<li><code>apr_pool_t</code>: セッションおよびストリームのメモリ管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_session.h</code>: 公開インターフェース定義。</li>
+<li><code>h2_mplx.c</code>: ストリームの実行とリソース共有のロジック。</li>
+<li><code>h2_stream.c</code>: ストリーム状態とリクエストデータの保持。</li>
+<li><code>mod_http2.c</code>: Apache HTTP Server へのフック登録。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_session</code> は自身の <code>pool</code> を持ち、セッション終了時に <code>apr_pool_destroy</code> で一括解放されます。ストリームはセッションのサブプールを使用します。</li>
+<li>**状態遷移**: <code>h2_session_state</code> は <code>IDLE</code>（待機）、<code>BUSY</code>（処理中）、<code>WAIT</code>（フロー制御待ち）などの状態を持ち、<code>h2_session_process</code> 内の <code>switch</code> 文で厳密に管理されています。</li>
+<li>**フロー制御**: <code>h2_send_flow_blocked</code> は接続およびストリームのウィンドウサイズを監視し、送信停止が必要かを判断します。</li>
+<li>**省略箇所**: <code>h2_push_diary</code> の詳細なアルゴリズムや、<code>h2_workers</code> のスレッド管理の詳細は本ファイルでは抽象化されており、各専用モジュールに委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_session_c__h2_session_status_from_apr_status.html" target="wiki-view">`h2_session_status_from_apr_status`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__get_stream.html" target="wiki-view">`get_stream`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__h2_session_event.html" target="wiki-view">`h2_session_event`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__rst_unprocessed_stream.html" target="wiki-view">`rst_unprocessed_stream`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__cleanup_unprocessed_streams.html" target="wiki-view">`cleanup_unprocessed_streams`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__h2_session_open_stream.html" target="wiki-view">`h2_session_open_stream`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__spri_cmp.html" target="wiki-view">`spri_cmp`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__stream_pri_cmp.html" target="wiki-view">`stream_pri_cmp`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__send_cb.html" target="wiki-view">`send_cb`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__on_invalid_frame_recv_cb.html" target="wiki-view">`on_invalid_frame_recv_cb`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__on_data_chunk_recv_cb.html" target="wiki-view">`on_data_chunk_recv_cb`</a></li>
+<li><a href="../../symbols/modules__http2__h2_session_c__on_stream_close_cb.html" target="wiki-view">`on_stream_close_cb`</a></li>
+</ul></body></html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/ssl_scache.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/ssl_scache.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、<code>mod_ssl</code> における SSL セッションキャッシュおよび OCSP ステープリングキャッシュの抽象化レイヤーを提供します。Apache HTTP Server の <code>socache</code> (Shared Object Cache) プロバイダーをラップし、SSL セッションの永続化と取得を統一的なインターフェースで管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> のエンジンがセッションを保存・復元する際の仲介役です。具体的なキャッシュ実装（shmcb, dbm, memcache 等）に依存せず、<code>SSLModConfigRec</code> に格納されたプロバイダーを介して操作を委譲します。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュのライフサイクル管理**: サーバー起動時の初期化 (<code>init</code>) および終了時の破棄 (<code>kill</code>)。</li>
+<li>**セッションのシリアライズ/デシリアライズ**: OpenSSL の <code>SSL_SESSION</code> 構造体と、キャッシュに保存可能なバイナリ形式（DER）の相互変換。</li>
+<li>**スレッドセーフティの保証**: プロバイダーがスレッドセーフでない場合に、<code>ssl_mutex</code> を用いた排他制御を自動的に適用。</li>
+<li>**ステータス表示**: <code>mod_status</code> と連携し、キャッシュの利用状況をサーバー管理画面に出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ssl_scache_init</code> / <code>ssl_scache_kill</code>: キャッシュプロバイダーの初期化とクリーンアップ。</li>
+<li><code>ssl_scache_store</code> / <code>ssl_scache_retrieve</code>: セッションの保存と取得。内部で <code>i2d_SSL_SESSION</code> / <code>d2i_SSL_SESSION</code> を使用。</li>
+<li><code>ssl_scache_remove</code>: キャッシュからのセッション削除。</li>
+<li><code>ssl_ext_status_hook</code>: <code>mod_status</code> 用のフック関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: <code>post_config</code> 時に呼ばれ、設定された <code>socache</code> プロバイダーを <code>init</code> します。 2.  **保存**: <code>ssl_scache_store</code> が呼ばれると、<code>i2d_SSL_SESSION</code> でセッションを DER 形式に変換し、プロバイダーの <code>store</code> メソッドを呼び出します。 3.  **取得**: <code>ssl_scache_retrieve</code> が呼ばれると、プロバイダーからバイナリを取得し、<code>d2i_SSL_SESSION</code> で OpenSSL 構造体に復元します。 4.  **排他制御**: <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> フラグが立っている場合、操作の前後で <code>ssl_mutex_on</code>/<code>off</code> が実行されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: <code>mod_ssl</code> 内部の共有構造体およびマクロ定義。</li>
+<li><code>mod_status.h</code>: <code>mod_status</code> へのフック登録用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/ssl/ssl_engine_init.c</code>: <code>ssl_scache_init</code> が呼び出されるコンテキスト。</li>
+<li><code>modules/ssl/ssl_engine_mutex.c</code>: 排他制御の実装詳細。</li>
+<li><code>include/ap_socache.h</code>: <code>socache</code> プロバイダーのインターフェース定義（Apache HTTP Server コア）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルはキャッシュの「抽象化」のみを行っており、実際の保存先（共有メモリやディスク）のロジックは <code>socache</code> プロバイダー側にあります。</li>
+<li><code>ssl_scache_store</code> でのシリアライズ時に <code>MODSSL_SESSION_MAX_DER</code> を超えるセッションはエラーとして破棄されます。</li>
+<li><code>ssl_scache_init</code> 内の <code>AP_SQ_MS_CREATE_PRE_CONFIG</code> チェックは、設定読み込みの二重実行を回避するための定型的なガードです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_scache_init.html" target="wiki-view">`ssl_scache_init`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_scache_kill.html" target="wiki-view">`ssl_scache_kill`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_scache_store.html" target="wiki-view">`ssl_scache_store`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_scache_retrieve.html" target="wiki-view">`ssl_scache_retrieve`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_scache_remove.html" target="wiki-view">`ssl_scache_remove`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_ext_status_hook.html" target="wiki-view">`ssl_ext_status_hook`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_scache_c__ssl_scache_status_register.html" target="wiki-view">`ssl_scache_status_register`</a></li>
+</ul></body></html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_ws.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_ws.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 上での WebSocket (RFC 8441) をサポートするための変換レイヤーです。HTTP/2 の <code>CONNECT</code> メソッドを内部的な HTTP/1.1 形式の <code>GET</code> リクエストに書き換え、WebSocket ハンドシェイクの整合性を検証するフィルタを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおいて、HTTP/2 ストリームを WebSocket 接続として扱うためのブリッジとして機能します。主に <code>h2_c2</code>（子接続）のコンテキストで動作し、プロトコル変換とレスポンスのインターセプトを担当します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト変換**: HTTP/2 の <code>CONNECT</code> メソッドを、バックエンドが処理可能な <code>GET</code> + <code>Upgrade</code> ヘッダー付きリクエストへ変換。</li>
+<li>**ハンドシェイク検証**: <code>Sec-WebSocket-Accept</code> ヘッダーを生成・検証し、WebSocket 接続の成否を判定。</li>
+<li>**レスポンスフィルタリング**: <code>H2_C2_WS_OUT</code> フィルタを通じて、不正なレスポンスを <code>502 Bad Gateway</code> に変換し、成功時には <code>101 Switching Protocols</code> を <code>200 OK</code> に変換して透過させる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト変換・フック</h3>
+<ul>
+<li><code>h2_ws_rewrite_request</code>: <code>CONNECT</code> リクエストを WebSocket 用の <code>GET</code> リクエストに変換し、出力フィルタを挿入するメイン関数。</li>
+<li><code>h2_ws_register_hooks</code>: <code>post_read_request</code> フックおよび出力フィルタ <code>H2_C2_WS_OUT</code> を登録。</li>
+</ul>
+<h3>フィルタコンテキストと状態</h3>
+<ul>
+<li><code>struct ws_filter_ctx</code>: フィルタの実行状態（Accept キー、レスポンス完了フラグ、ボディ上書きフラグ）を保持する構造体。</li>
+<li><code>h2_c2_ws_filter_out</code>: レスポンスバケットを検査し、WebSocket ハンドシェイクの結果に応じてレスポンスを書き換える出力フィルタ。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>gen_ws_accept</code>: RFC 6455 に基づき、<code>Sec-WebSocket-Key</code> から <code>Sec-WebSocket-Accept</code> を生成する SHA-1 ハッシュ関数。</li>
+<li><code>make_valid_resp</code> / <code>make_invalid_resp</code>: フィルタ内でレスポンスを差し替える際に使用するバケット生成関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト書き換え**: <code>h2_ws_rewrite_request</code> が呼び出されると、リクエストをクローンし、<code>Upgrade</code> ヘッダーを追加。<code>Sec-WebSocket-Key</code> を生成し、出力フィルタ <code>H2_C2_WS_OUT</code> を <code>H2_C2_NET_OUT</code> の直前に挿入。 2. **レスポンス検査**: <code>H2_C2_WS_OUT</code> フィルタがレスポンスバケットを捕捉。<code>ws_handle_resp</code> が <code>Sec-WebSocket-Accept</code> を検証。 3. **レスポンス変換**:</p>
+<ul>
+<li>検証成功時: <code>101</code> を <code>200</code> に変換。</li>
+<li>検証失敗時: <code>502</code> を生成し、以降のボディを破棄（<code>override_body</code> フラグをセット）。</li>
+<p>4. **終了処理**: <code>ws_post_read</code> フックが、アップグレードされた接続が WebSocket をサポートしているか確認し、未サポートなら <code>501 Not Implemented</code> を返す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_sha1.h</code>: WebSocket キーのハッシュ計算に使用。</li>
+<li><code>h2_conn_ctx.h</code>: ストリームごとの接続コンテキスト（<code>is_upgrade</code> フラグ等）の管理。</li>
+<li><code>http_protocol.h</code> / <code>util_filter.h</code>: Apache HTTPD のフィルタおよびプロトコル処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_ws.h</code>: 公開インターフェース定義。</li>
+<li><code>h2_c2_filter.c</code>: <code>H2_C2_NET_OUT</code> フィルタが定義されており、本フィルタの挿入位置の基準となる。</li>
+<li><code>h2_conn_ctx.h</code>: 接続状態の共有に使用。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: フィルタコンテキストや変換後のリクエストは、すべて <code>c2-&gt;pool</code>（子接続のプール）を使用して割り当てられており、接続終了時に自動解放されます。</li>
+<li>**制約**: <code>H2_USE_WEBSOCKETS</code> マクロが定義されていない場合、本モジュールは NOP（何もしない）として動作します。</li>
+<li>**エッジケース**: <code>101</code> レスポンスが返された際、<code>Sec-WebSocket-Accept</code> が欠落している場合や不一致の場合は、セキュリティ上の理由から <code>502</code> を返して接続を終了させます。</li>
+<li>**省略箇所**: 本ファイルは WebSocket のデータフレーム転送そのものではなく、あくまで「ハンドシェイクの変換」に特化しています。実際のデータ転送は HTTP/2 のストリームフレームとして透過的に処理されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_ws_c__ws_filter_ctx.html" target="wiki-view">`ws_filter_ctx`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__gen_ws_accept.html" target="wiki-view">`gen_ws_accept`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__h2_ws_rewrite_request.html" target="wiki-view">`h2_ws_rewrite_request`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__make_valid_resp.html" target="wiki-view">`make_valid_resp`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__make_invalid_resp.html" target="wiki-view">`make_invalid_resp`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__ws_handle_resp.html" target="wiki-view">`ws_handle_resp`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__ws_post_read.html" target="wiki-view">`ws_post_read`</a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__h2_ws_register_hooks.html" target="wiki-view">`h2_ws_register_hooks`</a></li>
+</ul></body></html>

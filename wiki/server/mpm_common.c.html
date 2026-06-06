@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm_common.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm_common.c</h1>
+<h2>概要</h2>
+<p><code>server/mpm_common.c</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）間で共有される共通機能、設定ディレクティブ、およびライフサイクル管理ロジックを実装するファイルです。特定のプラットフォームに依存せず、マルチプロセスサーバー全般で必要とされるユーティリティを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール内において、各 MPM（<code>worker</code>, <code>event</code>, <code>prefork</code> 等）が共通して利用する「基盤」として機能します。MPM 固有のロジックを各実装から分離し、設定の標準化とコードの重複排除を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**MPM 共通設定の管理**: <code>PidFile</code>, <code>MaxConnectionsPerChild</code>, <code>CoreDumpDirectory</code> 等のグローバル設定のパースと保持。</li>
+<li>**プロセスライフサイクル管理**: 子プロセスの終了監視、世代（Generation）管理、および終了時のフック実行。</li>
+<li>**OS 抽象化ユーティリティ**: ユーザー名/グループ名の ID 変換、ソケットオプション（TCP_NODELAY）の制御。</li>
+<li>**MPM フックの定義**: MPM 関連の拡張ポイント（<code>monitor</code>, <code>child_status</code>, <code>drop_privileges</code> 等）の定義と実装。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定変数 (AP_DECLARE_DATA)</h3>
+<ul>
+<li><code>ap_pid_fname</code>: PID ファイルのパス。</li>
+<li><code>ap_max_requests_per_child</code>: 子プロセスが終了するまでのリクエスト上限数。</li>
+<li><code>ap_coredump_dir</code>: コアダンプ出力先ディレクトリ。</li>
+<li><code>ap_thread_stacksize</code>: スレッドスタックサイズ。</li>
+</ul>
+<h3>プロセス管理・フック</h3>
+<ul>
+<li><code>ap_wait_or_timeout()</code>: 子プロセスの終了を待機し、定期的に <code>monitor</code> フックを呼び出す。</li>
+<li><code>ap_core_child_status()</code>: 子プロセスの状態変化を追跡し、世代ごとの終了処理を管理する。</li>
+<li><code>ap_mpm_register_timed_callback()</code>: タイマーベースのコールバック登録用ラッパー。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>ap_uname2id()</code>, <code>ap_gname2id()</code>: 名前から UID/GID への変換。</li>
+<li><code>ap_sock_disable_nagle()</code>: TCP_NODELAY を設定し、Nagle アルゴリズムを無効化。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**設定フロー**: <code>mpm_common_pre_config()</code> が起動時に呼ばれ、各設定変数をデフォルト値で初期化します。その後、<code>ap_mpm_set_*</code> 系関数が設定ファイルを読み込む際に値を更新します。</li>
+<li>**プロセス監視フロー**: <code>ap_wait_or_timeout()</code> はメインループ内で呼び出され、<code>apr_proc_wait_all_procs</code> を非ブロックで実行します。一定回数ごとに <code>ap_run_monitor()</code> を実行し、サーバーの健全性を維持します。</li>
+<li>**世代管理フロー**: <code>mpm_gen_info_t</code> 構造体と <code>APR_RING</code> を使用して、プロセス世代ごとのアクティブ数を追跡します。<code>ap_core_child_status()</code> が <code>MPM_CHILD_EXITED</code> を検知すると、アクティブ数が 0 になった時点で <code>end_gen()</code> を呼び出し、世代終了フックを発火させます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr</code> 系ライブラリ（プロセス、スレッド、文字列、ソケット操作）</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_core.h</code>（サーバーコア機能）</li>
+<li><code>scoreboard.h</code>（プロセス状態の共有メモリ管理）</li>
+<li><code>pwd.h</code>, <code>grp.h</code>, <code>unistd.h</code>（OS ユーザー/グループ管理）</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>include/mpm_common.h</code>: 本ファイルの公開ヘッダー。</li>
+<li><code>server/mpm_unix.c</code>: Unix 特有の MPM 処理。</li>
+<li><code>server/scoreboard.c</code>: プロセス状態の永続化と参照。</li>
+<li><code>server/listen.c</code>: ソケットのリスニング管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>geninfo</code> などの管理構造体は <code>s-&gt;process-&gt;pool</code>（プロセス生存期間）に割り当てられており、サーバー終了まで生存します。</li>
+<li>**制約事項**: <code>gen_head_init</code> 変数による初期化判定など、一部に古い設計の名残が見られます。</li>
+<li>**注意点**: <code>ap_wait_or_timeout</code> 内の <code>apr_sleep</code> は、子プロセスが終了していない場合に 1 秒間ブロッキングします。高負荷環境での挙動に影響を与える可能性があるため注意してください。</li>
+<li>**省略範囲**: 本ファイルは MPM の「共通基盤」であるため、特定の MPM（<code>event</code> 等）に深く依存する複雑なキューイングやスレッドプール管理ロジックは含まれていません。これらは各 MPM 実装側に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__mpm_common_c__mpm_gen_info_t.html" target="wiki-view">`mpm_gen_info_t`</a></li>
+<li><a href="../symbols/server__mpm_common_c__mpm_common_pre_config.html" target="wiki-view">`mpm_common_pre_config`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_wait_or_timeout.html" target="wiki-view">`ap_wait_or_timeout`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_sock_disable_nagle.html" target="wiki-view">`ap_sock_disable_nagle`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_uname2id.html" target="wiki-view">`ap_uname2id`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_gname2id.html" target="wiki-view">`ap_gname2id`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_mpm_set_pidfile.html" target="wiki-view">`ap_mpm_set_pidfile`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_mpm_dump_pidfile.html" target="wiki-view">`ap_mpm_dump_pidfile`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_mpm_set_max_requests.html" target="wiki-view">`ap_mpm_set_max_requests`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_mpm_set_coredumpdir.html" target="wiki-view">`ap_mpm_set_coredumpdir`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_mpm_set_graceful_shutdown.html" target="wiki-view">`ap_mpm_set_graceful_shutdown`</a></li>
+<li><a href="../symbols/server__mpm_common_c__ap_check_mpm.html" target="wiki-view">`ap_check_mpm`</a></li>
+</ul></body></html>

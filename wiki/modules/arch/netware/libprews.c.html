@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/arch/netware/libprews.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/arch/netware/libprews.c</h1>
+<h2>概要</h2>
+<p>NetWare NLM (NetWare Loadable Module) として動作する Apache モジュールのライフサイクル管理を行うための補助ライブラリです。標準的な <code>main()</code> 関数を使用せずにモジュールを初期化・終了させることで、ロード時間の短縮とメモリフットプリントの削減を実現します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/arch/netware</code> サブシステムにおいて、OS レベルの初期化フックを提供します。他のモジュール（<code>mod_netware.c</code> 等）が Apache のモジュールとして機能する以前の、NLM としての基盤的なセットアップを担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**NLM ライフサイクル管理**: モジュールのロード時およびアンロード時のエントリーポイントを提供。</li>
+<li>**Winsock 初期化**: <code>USE_WINSOCK</code> が定義されている場合、ネットワークスタック（Winsock）の起動と終了を管理。</li>
+<li>**アンロード可否判定**: モジュールが安全にアンロード可能かどうかのチェック。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>_NonAppStart</code>: NLM ロード時に呼び出される初期化関数。Winsock の初期化を行います。</li>
+<li><code>_NonAppStop</code>: NLM アンロード時に呼び出される終了関数。Winsock のリソース解放を行います。</li>
+<li><code>_NonAppCheckUnload</code>: モジュールのアンロード可否を判定する関数。現在は常に成功（0）を返します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ロード時**: NLM ローダーが <code>_NonAppStart</code> を呼び出します。引数は多数ありますが、本ファイルでは主に <code>USE_WINSOCK</code> 定義下での <code>WSAStartup</code> 実行に利用されます。 2. **実行中**: モジュールはメモリ上に常駐し、Winsock が利用可能な状態となります。 3. **アンロード時**: NLM ローダーが <code>_NonAppCheckUnload</code> で確認を行い、その後 <code>_NonAppStop</code> を呼び出して <code>WSACleanup</code> を実行し、ネットワークリソースを解放します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>netware.h</code>: NetWare OS の基本定義。</li>
+<li><code>novsock2.h</code>: NetWare 環境における Winsock 2 API 定義（<code>USE_WINSOCK</code> 定義時）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_netware.c</code>: 本ファイルが提供する基盤上で動作する、Apache モジュールとしてのメインロジック。</li>
+<li><code>mod_nw_ssl.c</code>: NetWare 環境特有の SSL 処理を行うモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは、Apache モジュール特有の <code>module</code> 構造体とは直接関係ありません。あくまで NetWare OS 上での NLM の挙動を最適化するためのラッパーです。</li>
+<li><code>pragma unused</code> が多用されていますが、これは NLM の標準的なインターフェース仕様に合わせつつ、実際には使用しない引数に対するコンパイラ警告を抑制するためのものです。</li>
+<li>独自の NetWare モジュールを開発する際、標準的な Apache モジュールの枠組み以外で OS レベルのクリーンアップが必要な場合は、このパターンを拡張して利用することが推奨されます。</li>
+</ul></body></html>

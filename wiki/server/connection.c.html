@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/connection.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/connection.c</h1>
+<h2>概要</h2>
+<p>HTTP 接続のライフサイクル管理を担うファイルです。接続の確立から、プロトコル処理の実行、そして終了時の「リンガリング・クローズ（lingering close）」処理までを定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールにおいて、ネットワーク接続と Apache の内部表現（<code>conn_rec</code>）を橋渡しする中心的な役割を果たします。MPM（Multi-Processing Module）が受け取ったソケットを、Apache のフィルタチェーンやプロトコルハンドラへ引き渡すためのインターフェースを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続フックの管理**: 接続の生成、処理、終了前後のフックポイントを提供し、モジュールが接続状態に介入できるようにする。</li>
+<li>**リンガリング・クローズの実装**: クライアントとの通信終了時に、TCP の RST パケットによるデータ欠損を防ぐため、残存データの読み込みと正常な終了処理を行う。</li>
+<li>**接続のフラッシュとシャットダウン**: <code>EOC</code>（End Of Connection）バケットを挿入し、フィルタチェーンを介して接続を安全に閉じる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ap_process_connection</code>: 接続処理のメインエントリポイント。バーチャルホストの特定と接続フックの実行を行う。</li>
+<li><code>ap_lingering_close</code>: 接続を閉じる際の最終処理。タイムアウトを設けつつ、クライアントからの残存データを読み捨てることで TCP の正常終了を保証する。</li>
+<li><code>ap_shutdown_conn</code>: 接続に対してフラッシュと EOC バケットを送信し、出力フィルタをクリーンアップする。</li>
+<li><code>APR_HOOK_...</code>: 接続の各フェーズ（<code>pre_connection</code>, <code>process_connection</code> 等）を拡張可能にするためのフック定義。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **開始**: <code>ap_process_connection</code> が呼ばれ、<code>ap_pre_connection</code> フックを経て <code>ap_run_process_connection</code> が実行されます。 2. **処理**: プロトコルハンドラがリクエストを処理します。 3. **終了**: 接続終了時、<code>ap_lingering_close</code> が呼び出されます。 4. **リンガリング**:</p>
+<ul>
+<li><code>ap_start_lingering_close</code> で書き込み側をシャットダウン（FIN 送信）。</li>
+<li><code>do-while</code> ループでソケットから残存データを読み込みます。</li>
+<li><code>MAX_SECS_TO_LINGER</code>（デフォルト30秒）または <code>SECONDS_TO_LINGER</code>（2秒）のタイムアウトまで待機し、最終的に <code>apr_socket_close</code> でソケットを解放します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_connection.h</code>: 接続管理の基本構造体と定義。</li>
+<li><code>apr_network_io.h</code> (間接的): ソケット操作。</li>
+<li><code>util_filter.h</code>: フィルタチェーンを通じたデータ送信。</li>
+<li><code>scoreboard.h</code>: 接続状態の追跡。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/protocol.c</code>: <code>ap_run_process_connection</code> の実体やプロトコルレベルの処理。</li>
+<li><code>server/core_filters.c</code>: フィルタチェーンの具体的な動作。</li>
+<li><code>server/listen.c</code>: ソケットのリスニングと接続の受け入れ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**リンガリングの重要性**: このファイルで最も複雑なのは <code>ap_lingering_close</code> です。これは HTTP の仕様上、サーバーが先に接続を閉じるとクライアントがまだ送信中のデータを破棄してしまうリスクがあるため、TCP レベルでの整合性を保つための「お作法」です。</li>
+<li>**フックの活用**: 独自のプロトコルや接続監視モジュールを作成する場合、ここで定義されているフック（<code>pre_connection</code> 等）が主要な拡張ポイントとなります。</li>
+<li>**デバッグ**: 接続が途中で切れる、あるいは終了処理が遅い場合は、<code>ap_lingering_close</code> 内のタイムアウト設定や <code>short-lingering-close</code> ノートの有無を確認してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__connection_c__ap_flush_conn.html" target="wiki-view">`ap_flush_conn`</a></li>
+<li><a href="../symbols/server__connection_c__ap_prep_lingering_close.html" target="wiki-view">`ap_prep_lingering_close`</a></li>
+<li><a href="../symbols/server__connection_c__ap_start_lingering_close.html" target="wiki-view">`ap_start_lingering_close`</a></li>
+<li><a href="../symbols/server__connection_c__ap_lingering_close.html" target="wiki-view">`ap_lingering_close`</a></li>
+<li><a href="../symbols/server__connection_c__ap_process_connection.html" target="wiki-view">`ap_process_connection`</a></li>
+</ul></body></html>

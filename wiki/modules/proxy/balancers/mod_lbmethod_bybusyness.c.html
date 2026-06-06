@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/balancers/mod_lbmethod_bybusyness.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/proxy/balancers/mod_lbmethod_bybusyness.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_proxy</code> におけるロードバランシング手法の一つ、「bybusyness（負荷ベース）」を実装するモジュールです。各ワーカーの現在の「忙しさ（busy数）」を基準に、最も負荷の低いワーカーへリクエストを振り分けます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のロードバランサー機能に対するプラグインとして動作します。<code>PROXY_LBMETHOD</code> プロバイダーとして登録され、<code>mod_proxy</code> がリクエストを転送する際の「最適なワーカーを選択するアルゴリズム」を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ワーカー選定ロジックの提供**: 現在の <code>busy</code> 数が最小のワーカーを特定する。</li>
+<li>**負荷状態の管理**: ワーカーごとの <code>lbstatus</code>（重み付け）と <code>busy</code> カウントの更新。</li>
+<li>**ライフサイクル管理**: ロードバランサーの初期化時における <code>mod_proxy</code> 依存関係の解決と、プロバイダーとしての登録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>is_best_bybusyness</code>: 比較関数。<code>busy</code> 数を最優先し、同数の場合は <code>lbstatus</code>（重み）を考慮して比較します。</li>
+<li><code>find_best_bybusyness</code>: <code>mod_proxy</code> から呼び出されるメインの選定関数。</li>
+<li><code>bybusyness</code>: <code>proxy_balancer_method</code> 構造体。このアルゴリズムの各フック（選定、リセット等）を定義します。</li>
+<li><code>ap_proxy_balancer_get_best_worker_fn</code>: <code>mod_proxy</code> から提供される、ワーカー反復処理用のオプション関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hook</code> により <code>bybusyness</code> メソッドが登録されます。<code>post_config</code> フックで <code>mod_proxy</code> のコア関数を取得します。 2. **選定フロー**:</p>
+<ul>
+<li><code>find_best_bybusyness</code> が呼び出されると、<code>ap_proxy_balancer_get_best_worker_fn</code> を介して全ワーカーを走査します。</li>
+<li>各ワーカーに対し <code>is_best_bybusyness</code> が適用され、<code>busy</code> 数が最小のワーカーが選ばれます。</li>
+<li>選定後、<code>lbstatus</code> が更新され、次の選定に備えます。</li>
+<p>3. **リセット**: <code>reset</code> 関数により、全ワーカーの <code>lbstatus</code> と <code>busy</code> カウントがゼロに初期化されます。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシ機能の基本構造体（<code>proxy_worker</code>, <code>proxy_balancer</code> 等）。</li>
+<li><code>scoreboard.h</code>: サーバーの稼働状況管理。</li>
+<li><code>ap_mpm.h</code>: MPM（マルチプロセッシングモジュール）の状態確認。</li>
+<li><code>ap_hooks.h</code>: Apache のフックシステム。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_proxy.c</code>: ロードバランシングの基盤となるメインモジュール。</li>
+<li><code>mod_lbmethod_byrequests.c</code> / <code>mod_lbmethod_bytraffic.c</code>: 他のロードバランシングアルゴリズムの実装例。これらと比較することで、選定ロジックの差異を理解できます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは <code>mod_proxy</code> がロードされていることを前提としています。<code>post_config</code> でのチェックは、モジュール読み込み順序に依存するエラーを防ぐための重要なガードです。</li>
+<li><code>busy</code> 数は <code>scoreboard</code> を介して管理されるため、マルチプロセス環境下での正確な負荷分散が可能です。</li>
+<li><code>age</code> 関数は現在空実装ですが、将来的な拡張や特定の統計処理のために予約されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__is_best_bybusyness.html" target="wiki-view">`is_best_bybusyness`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__find_best_bybusyness.html" target="wiki-view">`find_best_bybusyness`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__reset.html" target="wiki-view">`reset`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__age.html" target="wiki-view">`age`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__lbmethod_bybusyness_post_config.html" target="wiki-view">`lbmethod_bybusyness_post_config`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__register_hook.html" target="wiki-view">`register_hook`</a></li>
+</ul></body></html>

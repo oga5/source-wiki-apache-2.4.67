@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/main/props.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/main/props.c</h1>
+<h2>概要</h2>
+<p>WebDAV プロパティデータベース（<code>propdb</code>）のハンドリングを担う中心的なファイルです。リポジトリ非依存のプロパティ管理、ライブプロパティ（<code>liveprop</code>）とデッドプロパティ（<code>deadprop</code>）の統合、および <code>PROPPATCH</code> 操作のトランザクション管理（検証・実行・コミット・ロールバック）を実装しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> のプロパティサブシステムの中核です。<code>liveprop.c</code> で定義されるライブプロパティプロバイダーと、DBM ベースのデッドプロパティストレージを抽象化し、リクエスト処理層に対して統一されたインターフェースを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロパティデータベース管理**: <code>dav_propdb</code> 構造体のライフサイクル管理（オープン、クローズ、遅延初期化）。</li>
+<li>**プロパティ解決**: ライブプロパティとコアプロパティ（<code>DAV:</code> 名前空間）の検索と解決。</li>
+<li>**XML 変換**: プロパティ値の XML 出力生成と名前空間（<code>xmlns</code>）の管理。</li>
+<li>**トランザクション処理**: <code>PROPPATCH</code> に伴う検証、実行、ロールバックの各フェーズの制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データベース管理</h3>
+<ul>
+<li><code>dav_propdb</code>: プロパティ操作のコンテキストを保持する主要構造体。</li>
+<li><code>dav_open_propdb</code> / <code>dav_popen_propdb</code>: <code>propdb</code> の初期化。DB アクセスは遅延評価（<code>deferred</code>）される。</li>
+<li><code>dav_close_propdb</code>: リソースの解放とサブリクエストの破棄。</li>
+</ul>
+<h3>プロパティ解決・挿入</h3>
+<ul>
+<li><code>dav_find_liveprop</code>: XML 要素からライブプロパティプロバイダーを特定し、<code>priv</code> にキャッシュする。</li>
+<li><code>dav_insert_liveprop</code> / <code>dav_insert_coreprop</code>: プロパティ値を XML 形式で出力バッファに挿入する。</li>
+<li><code>dav_get_allprops</code> / <code>dav_get_props</code>: <code>PROPFIND</code> リクエストに対するプロパティ一覧の生成。</li>
+</ul>
+<h3>トランザクション（PROPPATCH）</h3>
+<ul>
+<li><code>dav_prop_validate</code>: 操作の妥当性確認と、必要に応じた DB のオープン。</li>
+<li><code>dav_prop_exec</code>: プロパティの更新または削除の実行。</li>
+<li><code>dav_prop_commit</code> / <code>dav_prop_rollback</code>: トランザクションの確定または失敗時の復旧。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>dav_popen_propdb</code> でコンテキストを作成。DB オープンは <code>deferred</code> フラグにより、実際にプロパティが必要になるまで先送りされます。 2. **解決**: <code>dav_find_liveprop</code> がライブプロパティプロバイダーを検索し、見つからない場合はデッドプロパティとして扱います。 3. **出力**: <code>dav_get_props</code> は、ライブプロパティとデッドプロパティをマージし、<code>dav_xmlns_info</code> を用いて名前空間の競合を解決しながら XML を構築します。 4. **更新**: <code>PROPPATCH</code> 時には <code>validate</code> -&gt; <code>exec</code> -&gt; <code>commit/rollback</code> の順で呼び出され、<code>dav_rollback_item</code> を介して失敗時の状態復旧を保証します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_dav.h</code>: DAV の主要なフックとデータ構造。</li>
+<li><code>apr_strings.h</code>, <code>apr_want.h</code>: 文字列操作と標準型。</li>
+<li><code>http_log.h</code>, <code>http_request.h</code>: Apache HTTPD のリクエスト処理とログ出力。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>liveprop.c</code>: ライブプロパティプロバイダーの登録と実行フック。</li>
+<li><code>std_liveprop.c</code>: 標準的なライブプロパティの実装。</li>
+<li><code>util.c</code>: XML 名前空間管理やユーティリティ関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>dav_propdb</code> はリクエストプール（<code>r-&gt;pool</code>）または指定されたプールを使用します。サブリクエスト（<code>subreq</code>）は <code>dav_close_propdb</code> で明示的に破棄する必要があります。</li>
+<li>**名前空間**: プロパティ値内の名前空間は <code>ns&lt;index&gt;</code> 形式に変換されます。クライアントは特定のプレフィックスに依存してはなりません。</li>
+<li>**制約**: <code>DAV_DISABLE_WRITABLE_PROPS</code> が有効な場合、一部のコアプロパティは書き込み不可となります。</li>
+<li>**未実装・浅い部分**: 名前空間の「ガベージコレクション」は未実装であり、将来的な課題としてコメントされています。また、<code>PROPPATCH</code> のエラーハンドリングにおいて、一部の複雑なケースでエラーの伝播が不完全な箇所があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_propdb.html" target="wiki-view">`dav_propdb`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_rollback_item.html" target="wiki-view">`dav_rollback_item`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_find_liveprop_provider.html" target="wiki-view">`dav_find_liveprop_provider`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_find_liveprop.html" target="wiki-view">`dav_find_liveprop`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_rw_liveprop.html" target="wiki-view">`dav_rw_liveprop`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_insert_coreprop.html" target="wiki-view">`dav_insert_coreprop`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_insert_liveprop.html" target="wiki-view">`dav_insert_liveprop`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_insert_xmlns.html" target="wiki-view">`dav_insert_xmlns`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_get_allprops.html" target="wiki-view">`dav_get_allprops`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_get_props.html" target="wiki-view">`dav_get_props`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_get_liveprop_supported.html" target="wiki-view">`dav_get_liveprop_supported`</a></li>
+<li><a href="../../../symbols/modules__dav__main__props_c__dav_get_liveprop_element.html" target="wiki-view">`dav_get_liveprop_element`</a></li>
+</ul></body></html>

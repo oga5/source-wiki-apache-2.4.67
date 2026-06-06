@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_jws.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_jws.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、ACMEプロトコル等で使用される **JWS (JSON Web Signature)** の生成および関連する鍵情報の処理を実装しています。RSA署名およびHMAC署名を用いたメッセージの構築を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、暗号化ユーティリティ（<code>md_crypt</code>）とJSON操作（<code>md_json</code>）を橋渡しし、ACMEサーバーとの通信に必要な署名済みメッセージ形式を生成する層です。</p>
+<h2>責務</h2>
+<ul>
+<li>**JWK (JSON Web Key) の生成**: 公開鍵からACMEで要求されるJWK構造を作成する。</li>
+<li>**JWS 署名生成**: ペイロードと保護ヘッダーを結合し、Base64URLエンコード後に署名を付与する。</li>
+<li>**鍵の指紋 (Thumbprint) 計算**: RFC 8555 に準拠した公開鍵のハッシュ値を算出する。</li>
+<li>**HMAC 署名**: 共有鍵を用いたメッセージ認証コードの生成。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>md_jws_sign</code>: RSA鍵を使用してJWSメッセージを構築する主要関数。</li>
+<li><code>md_jws_get_jwk</code>: 公開鍵からJWK JSONオブジェクトを生成する。</li>
+<li><code>md_jws_pkey_thumb</code>: 公開鍵の正規化されたJSON表現からSHA-256指紋を計算する。</li>
+<li><code>md_jws_hmac</code>: HMAC-SHA256を用いた署名生成を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **署名生成フロー**:</p>
+<ul>
+<li><code>prot_fields</code> (JSON) に <code>alg</code> (RS256/HS256) を追加。</li>
+<li><code>key_id</code> が未指定の場合、<code>md_jws_get_jwk</code> を呼び出し <code>jwk</code> フィールドをヘッダーに埋め込む。</li>
+<li>ヘッダーとペイロードをそれぞれ Base64URL エンコードし、<code>header.payload</code> 形式の文字列を作成。</li>
+<li><code>md_crypt</code> を介して署名を行い、最終的な JSON オブジェクトを構築する。</li>
+<p>2.  **指紋計算フロー**:</p>
+<li>公開鍵の <code>e</code> と <code>n</code> を取得し、特定の順序で JSON 文字列化する。</li>
+<li>その文字列に対して SHA-256 ダイジェストを計算し、Base64URL エンコードする。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_lib.h</code>, <code>apr_strings.h</code>, <code>apr_tables.h</code>, <code>apr_buckets.h</code>: APR基本ユーティリティ。</li>
+<li><code>md_crypt.h</code>: 署名およびハッシュ計算の低レイヤー処理。</li>
+<li><code>md_json.h</code>: JSON構造の構築とシリアライズ。</li>
+<li><code>md_util.h</code>: Base64URLエンコード等の補助関数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_crypt.c</code>: 本ファイルが呼び出す署名アルゴリズムの実装。</li>
+<li><code>md_acme.c</code>: 本ファイルで生成されたJWSメッセージを実際に送信する上位モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**順序の重要性**: <code>md_jws_pkey_thumb</code> で生成される文字列は、JSONのキー順序や空白が厳密に定義されています。指紋計算の際は、この関数が返す形式がRFC 8555の要件を満たしていることに依存しています。</li>
+<li>**メモリ管理**: すべての関数は <code>apr_pool_t</code> を引数に取り、生成される JSON オブジェクトや文字列はプールによって管理されます。</li>
+<li>**エラーハンドリング**: 署名プロセスで失敗した場合は <code>APR_SUCCESS</code> 以外のステータスが返され、<code>pmsg</code> は <code>NULL</code> に設定されます。呼び出し側での戻り値チェックが必須です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_jws_c__md_jws_get_jwk.html" target="wiki-view">`md_jws_get_jwk`</a></li>
+<li><a href="../../symbols/modules__md__md_jws_c__md_jws_sign.html" target="wiki-view">`md_jws_sign`</a></li>
+<li><a href="../../symbols/modules__md__md_jws_c__md_jws_pkey_thumb.html" target="wiki-view">`md_jws_pkey_thumb`</a></li>
+<li><a href="../../symbols/modules__md__md_jws_c__md_jws_hmac.html" target="wiki-view">`md_jws_hmac`</a></li>
+</ul></body></html>

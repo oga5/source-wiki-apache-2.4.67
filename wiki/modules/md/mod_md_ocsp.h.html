@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/mod_md_ocsp.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/mod_md_ocsp.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における OCSP Stapling（証明書失効状態の検証結果をサーバーが代理で提供する機能）を管理するためのヘッダーファイルです。<code>mod_md</code> が管理する証明書に対して、OCSP レスポンスの取得と提供を統合します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> サブシステムの一部として、サーバー設定と SSL/TLS レイヤーの橋渡しを行います。<code>mod_md_ocsp.c</code> と対になり、<code>mod_ssl</code> が必要とする OCSP ステータス情報の供給元として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ステータスの初期化**: 証明書チェーンを解析し、OCSP 照会に必要な情報を準備する。</li>
+<li>**ステータスの提供**: <code>mod_ssl</code> からの要求に応じて、キャッシュされた OCSP レスポンスをコールバック経由で渡す。</li>
+<li>**バックグラウンド監視**: ウォッチドッグプロセスを起動し、OCSP レスポンスの定期的な更新を管理する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>md_ocsp_prime_status</code>: 証明書 PEM データから OCSP 照会用の初期状態を構築します。</li>
+<li><code>md_ocsp_provide_status</code>: 接続時に <code>mod_ssl</code> へ OCSP レスポンスを供給するためのインターフェースです。</li>
+<li><code>md_ocsp_start_watching</code>: OCSP レスポンスの更新を自動化するウォッチドッグを起動します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_ocsp_prime_status</code> がサーバー起動時や設定読み込み時に呼ばれ、証明書チェーンを解析して <code>md_ocsp_prime</code> を呼び出します。 2. **監視**: <code>md_ocsp_start_watching</code> により、バックグラウンドで OCSP レスポンスの有効期限を監視し、必要に応じて再取得を行います。 3. **提供**: クライアントからの TLS ハンドシェイク時、<code>mod_ssl</code> が <code>md_ocsp_provide_status</code> を呼び出し、メモリ上の OCSP レスポンスをコピーしてクライアントへ送信します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_ssl.h</code>: Apache HTTP Server のコアおよび SSL 関連の型定義。</li>
+<li><code>apr_*.h</code>: Apache Portable Runtime によるメモリ管理および時間管理。</li>
+<li><code>mod_watchdog.h</code>: バックグラウンドタスク実行のための基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/md/md_ocsp.c</code>: OCSP レスポンスの取得ロジックやキャッシュ管理の実装。</li>
+<li><code>modules/md/mod_md_ocsp.c</code>: 本ヘッダーで宣言された関数の実装および <code>mod_ssl</code> との統合ロジック。</li>
+<li><code>modules/md/md_crypt.h</code>: 証明書解析や暗号化関連のユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>mod_ssl</code> の OCSP コールバック機構を利用しています。</li>
+<li><code>md_ocsp_provide_status</code> は、<code>mod_ssl</code> が提供する <code>ap_ssl_ocsp_copy_resp</code> 型のコールバックと密接に連携するため、実装を読む際は <code>mod_ssl</code> の該当インターフェース定義を併せて参照することをお勧めします。</li>
+<li>OCSP Stapling が有効な場合、<code>mod_md</code> は証明書の更新サイクルに合わせて自動的に OCSP レスポンスを更新します。</li>
+</ul></body></html>

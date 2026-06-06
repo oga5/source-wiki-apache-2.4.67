@@ -6,22 +6,53 @@
 <li>定義箇所: <code>server/mpm/event/event.c:3776</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の起動および再起動時に、Event MPM 関連の設定値（<code>ServerLimit</code>, <code>ThreadLimit</code>, <code>ThreadsPerChild</code>, <code>MaxRequestWorkers</code>, <code>StartServers</code>, <code>MinSpareThreads</code>）が妥当な範囲内にあるか検証し、必要に応じて自動補正を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int event_check_config(apr_pool_t *p, apr_pool_t *plog,
+                              apr_pool_t *ptemp, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>, <code>plog</code>, <code>ptemp</code>: APR プール。</li>
+<li><code>s</code>: 現在のサーバー設定レコード。</li>
+<li>**出力**:</li>
+<li>常に <code>OK</code> を返す。設定値の補正はグローバル変数への直接代入によって行われる。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained</code> グローバル構造体が初期化されていること。</li>
+<li><code>ServerLimit</code> および <code>ThreadLimit</code> は、再起動時に変更できない（初回起動時の値が保持される）。</li>
+<li><code>MaxRequestWorkers</code> は <code>ThreadsPerChild</code> の整数倍である必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **起動判定**: <code>retained-&gt;mpm-&gt;module_loads</code> を確認し、初回起動時のみ <code>startup</code> フラグを立てる（ログ出力の形式を制御するため）。 2. **制限値の検証**:</p>
+<ul>
+<li><code>ServerLimit</code>, <code>ThreadLimit</code> がコンパイル時の最大値を超えていれば補正し、1未満であれば1に補正する。</li>
+<li>再起動時に <code>ServerLimit</code> や <code>ThreadLimit</code> が変更されていた場合、警告を出して元の値に強制的に戻す。</li>
+<p>3. **スレッド・プロセス数の整合性チェック**:</p>
+<li><code>ThreadsPerChild</code> が <code>ThreadLimit</code> を超えないよう調整。</li>
+<li><code>MaxRequestWorkers</code> が <code>ThreadsPerChild</code> 未満であれば引き上げる。</li>
+<li><code>MaxRequestWorkers</code> を <code>ThreadsPerChild</code> の倍数に切り下げる。</li>
+<li><code>active_daemons_limit</code>（必要サーバー数）が <code>ServerLimit</code> を超えないよう調整。</li>
+<p>4. **最小値の保証**: <code>StartServers</code> および <code>MinSpareThreads</code> が 1 未満の場合、1 に補正する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_check_config</code> を介して Apache 設定フェーズから呼び出される（<code>server/mpm/event/event.c:4006</code>）。</li>
+<li>**呼び出し先**: <code>ap_log_error</code>（エラーログ出力用）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: サーバー設定情報。</li>
+<li><code>retained</code>: MPM のライフサイクルをまたいで保持されるデータ構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>設定値が許容範囲外の場合、エラー終了はせず、警告ログを出力した上で安全な値へ自動補正する。</li>
+<li>再起動時の設定変更は無視され、初回起動時の値が優先される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は設定の整合性を保つためのガードレールとして機能する。新しい MPM 設定パラメータを追加する際は、ここで同様の境界チェックを行うこと。</li>
+<li><code>startup</code> フラグはコンソールへの出力有無を制御するため、ログメッセージの重要度に応じて適切に使い分けること。</li>
 </ul></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/util_expr_eval.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/util_expr_eval.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の式評価エンジン（<code>ap_expr</code>）の実行時評価ロジックを担うソースファイルです。構文解析された抽象構文木（AST）を走査し、リクエストコンテキストに基づいて文字列や真偽値を算出します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、設定ファイルやリクエスト処理中に動的に評価される条件式（例: <code>&lt;If&gt;</code> ディレクティブ、<code>RewriteCond</code> 等）のバックエンドを提供します。<code>util_expr_parse.c</code> が生成した AST を受け取り、実行時の値を解決します。</p>
+<h2>責務</h2>
+<ul>
+<li>**AST 評価**: 演算子（論理、比較、正規表現）およびオペランド（変数、関数呼び出し）の再帰的評価。</li>
+<li>**コンテキスト管理**: <code>ap_expr_eval_ctx_t</code> を通じたリクエスト、接続、サーバー情報へのアクセスと、評価結果のキャッシュ。</li>
+<li>**プロバイダー・ディスパッチ**: 変数や関数名から実際の C 関数へのマッピングと実行。</li>
+<li>**セキュリティ制限**: ファイルシステム操作など、制限されたコンテキストでの関数実行の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>評価エンジン（コア）</h3>
+<ul>
+<li><code>ap_expr_exec_ctx</code>: 式評価のメインエントリーポイント。コンテキストを初期化し、結果を算出する。</li>
+<li><code>ap_expr_eval</code>: AST を再帰的に走査し、論理演算（AND/OR/NOT）を解決する。</li>
+<li><code>ap_expr_eval_word</code>: 文字列や変数、関数呼び出しの結果を解決する。</li>
+</ul>
+<h3>プロバイダー・ディスパッチ</h3>
+<ul>
+<li><code>core_expr_lookup</code>: 登録された変数や関数を検索するフック関数。</li>
+<li><code>var_providers</code> / <code>string_func_providers</code>: 利用可能な変数や関数の定義テーブル。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>inc_rec</code>: 再帰呼び出しの深さを監視し、スタックオーバーフローを防止する。</li>
+<li><code>strcmplex</code>: SSL 互換性のための文字列比較関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_expr_exec_ctx</code> が呼び出され、<code>ap_expr_eval_ctx_t</code> にリクエスト情報がセットされる。 2. **再帰的評価**: <code>ap_expr_eval</code> が AST のルートノードから開始。論理演算子は <code>inc_rec</code> で深さをチェックしつつ、子ノードを評価。 3. **値の解決**: オペランド（<code>op_Var</code>, <code>op_StringFuncCall</code> 等）に到達すると、対応する関数（<code>request_var_fn</code> 等）が呼び出され、<code>request_rec</code> から値を取得。 4. **結果の返却**: 最終的な真偽値または文字列が呼び出し元に返される。エラー発生時は <code>ctx-&gt;err</code> にメッセージが格納される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>util_expr_private.h</code>: AST ノード定義やコンテキスト構造体。</li>
+<li><code>httpd.h</code>, <code>http_request.h</code>: <code>request_rec</code> 等のコア構造体。</li>
+<li><code>apr_lib.h</code>, <code>apr_strings.h</code>: メモリ管理および文字列操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_expr_parse.c</code>: 式の構文解析と AST の構築。</li>
+<li><code>server/util_expr_scan.c</code>: 字句解析（スキャナ）。</li>
+<li><code>server/util_expr_private.h</code>: 内部共有のデータ構造と型定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 評価中に生成される文字列は、すべて <code>ctx-&gt;p</code>（リクエストプール）から割り当てられます。</li>
+<li>**再帰制限**: <code>AP_EXPR_MAX_RECURSION</code>（20）により、複雑すぎる式は評価を中断します。</li>
+<li>**SSL 互換性**: <code>ssl_expr_eval_comp</code> など、歴史的な <code>mod_ssl</code> の挙動を維持するためのコードが含まれています。</li>
+<li>**省略された詳細**: 正規表現のコンパイル処理は <code>util_pcre.c</code> に委譲されており、本ファイルは実行（<code>ap_regexec</code>）のみを扱います。</li>
+<li>**注意点**: <code>req_table_func</code> 等の関数は、リクエストヘッダーの <code>Vary</code> ヘッダーを自動的に更新する副作用を持つため、評価タイミングに注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_expr_eval_c__inc_rec.html" target="wiki-view">`inc_rec`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_eval_word.html" target="wiki-view">`ap_expr_eval_word`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_eval_var.html" target="wiki-view">`ap_expr_eval_var`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_eval_re_backref.html" target="wiki-view">`ap_expr_eval_re_backref`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_eval_string_func.html" target="wiki-view">`ap_expr_eval_string_func`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_eval_comp.html" target="wiki-view">`ap_expr_eval_comp`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ssl_expr_eval_comp.html" target="wiki-view">`ssl_expr_eval_comp`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_lookup_default.html" target="wiki-view">`ap_expr_lookup_default`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_parse.html" target="wiki-view">`ap_expr_parse`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__ap_expr_parse_cmd_mi.html" target="wiki-view">`ap_expr_parse_cmd_mi`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__expr_provider_single.html" target="wiki-view">`expr_provider_single`</a></li>
+<li><a href="../symbols/server__util_expr_eval_c__expr_provider_multi.html" target="wiki-view">`expr_provider_multi`</a></li>
+</ul></body></html>

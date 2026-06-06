@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ldap/util_ldap_cache.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ldap/util_ldap_cache.h</h1>
+<h2>概要</h2>
+<p>本ヘッダーファイルは、Apache HTTP Server の LDAP モジュールにおけるキャッシュ機構のデータ構造とインターフェースを定義します。LDAP 検索、比較、DN 比較の結果をメモリ上に保持し、バックエンド LDAP サーバーへの負荷を軽減するための基盤を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/ldap</code> サブシステムにおけるキャッシュ層の定義部です。<code>util_ldap_cache.c</code>（ノード操作の実装）および <code>util_ldap_cache_mgr.c</code>（キャッシュ管理・メモリ管理の実装）と密接に連携し、LDAP 関連のデータ永続化と検索効率化を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュ構造の定義**: URL ごとのキャッシュノードおよび、検索・比較結果を保持するデータ構造の定義。</li>
+<li>**抽象化されたキャッシュ操作**: ハッシュ、比較、コピー、解放、表示を行う関数ポインタ群の定義。</li>
+<li>**メモリ管理の抽象化**: 共有メモリ（SHM）とプロセス内メモリの双方を透過的に扱うためのアロケータインターフェースの提供。</li>
+<li>**統計情報の保持**: キャッシュのヒット率、パージ回数、TTL 管理などの運用メトリクスの保持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>キャッシュ管理構造体</h3>
+<ul>
+<li><code>util_ald_cache_t</code>: キャッシュのメタデータと統計、および操作関数ポインタを保持するメイン構造体。</li>
+<li><code>util_cache_node_t</code>: キャッシュ内の個別のエントリを管理するリンクリスト構造体。</li>
+</ul>
+<h3>キャッシュノード型</h3>
+<ul>
+<li><code>util_url_node_t</code>: LDAP URL をキーとし、検索・比較・DN 比較の各キャッシュを保持するルートノード。</li>
+<li><code>util_search_node_t</code>: ユーザー名ベースの検索結果（DN、パスワード、属性値）を保持。</li>
+<li><code>util_compare_node_t</code>: DN、属性、値をキーとした比較結果を保持。</li>
+<li><code>util_dn_compare_node_t</code>: DN 同士の比較結果を保持。</li>
+</ul>
+<h3>操作関数群</h3>
+<ul>
+<li><code>util_ald_cache_fetch/insert/remove</code>: キャッシュに対する基本的な CRUD 操作。</li>
+<li><code>util_ald_alloc/free/strdup</code>: キャッシュ専用のメモリ管理関数（SHM 対応）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>util_ald_create_cache</code> により、特定のデータ型に対するハッシュ関数や比較関数を登録したキャッシュインスタンスが生成されます。 2. **検索**: <code>util_ald_cache_fetch</code> が呼び出されると、登録された <code>hash</code> 関数でインデックスを特定し、<code>compare</code> 関数でペイロードを照合します。 3. **挿入**: キャッシュミス時、<code>copy</code> 関数を介して新しいノードがキャッシュメモリ領域に複製・格納されます。 4. **パージ**: キャッシュが <code>fullmark</code>（3/4 容量）に達すると、<code>util_ald_cache_purge</code> がトリガーされ、TTL 期限切れのノードが解放されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>util_ldap.h</code>: モジュール共通の型定義（<code>util_ldap_state_t</code> 等）を参照。</li>
+<li><code>apr_shm.h</code> / <code>apr_rmm.h</code> (間接的): <code>APR_HAS_SHARED_MEMORY</code> が有効な場合、共有メモリ管理に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>util_ldap_cache.c</code>: 各ノード型（URL, Search, Compare, DN Compare）の具体的なハッシュ・比較・コピー・解放ロジックの実装。</li>
+<li><code>util_ldap_cache_mgr.c</code>: キャッシュのライフサイクル管理、メモリ割り当て、統計表示の実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: キャッシュ内のデータは、<code>util_ald_alloc</code> を使用してキャッシュ専用のメモリ領域（共有メモリまたはヒープ）に確保されます。<code>util_ald_free</code> を通じて明示的に解放する必要があります。</li>
+<li>**共有メモリ**: <code>APR_HAS_SHARED_MEMORY</code> が定義されている場合、キャッシュはプロセス間で共有されます。この際、ポインタの直接参照ではなく、<code>apr_rmm</code>（Relocatable Memory Management）を介したオフセット管理が行われる点に注意してください。</li>
+<li>**制約**: <code>util_url_node_t</code> は、LDAP URL ごとに独立したキャッシュインスタンスを保持する階層構造をとっています。</li>
+<li>**省略された詳細**: 本ファイルはインターフェース定義に特化しており、各ノードのハッシュアルゴリズムの具体的な実装や、共有メモリのロック制御の詳細については <code>util_ldap_cache_mgr.c</code> を参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_cache_node_t.html" target="wiki-view">`util_cache_node_t`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_ald_cache_t.html" target="wiki-view">`util_ald_cache_t`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_ald_cache.html" target="wiki-view">`util_ald_cache`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_url_node_t.html" target="wiki-view">`util_url_node_t`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_compare_subgroup_t.html" target="wiki-view">`util_compare_subgroup_t`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_search_node_t.html" target="wiki-view">`util_search_node_t`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_compare_node_t.html" target="wiki-view">`util_compare_node_t`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_h__util_dn_compare_node_t.html" target="wiki-view">`util_dn_compare_node_t`</a></li>
+</ul></body></html>

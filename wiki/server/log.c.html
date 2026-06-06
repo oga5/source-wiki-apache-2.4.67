@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/log.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/log.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のエラーログ記録およびパイプ経由のログ出力（Piped Logs）を管理する中核モジュールです。ログレベルの判定、フォーマット処理、子プロセスへのログ転送、および PID ファイルの管理を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール群において、ログ出力の抽象化レイヤーを提供します。<code>http_log.h</code> で定義されたインターフェースを実装し、他のモジュールが <code>ap_log_error</code> 等を通じてログを出力する際のバックエンドとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ログ出力制御**: ログレベルに応じたフィルタリングと、標準エラー出力またはファイルへの書き込み。</li>
+<li>**パイプログ管理**: 外部プロセスへのログ転送（ログローテーション等）と、子プロセスのライフサイクル管理。</li>
+<li>**フォーマット処理**: <code>ErrorLogFormat</code> ディレクティブに基づくログ行の構築。</li>
+<li>**プロセス管理**: PID ファイルの生成・削除およびサーバー起動時のコマンドライン記録。</li>
+<li>**フック提供**: ログ生成時の ID 生成や、ログ出力後のカスタム処理のためのフックを提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ログ管理・構造体</h3>
+<ul>
+<li><code>struct piped_log</code>: パイプ経由のログ出力用構造体。プロセス管理とファイル記述子を保持。</li>
+<li><code>ap_default_loglevel</code>: サーバー全体のデフォルトログレベル。</li>
+<li><code>stderr_log</code>: 標準エラー出力にリダイレクトされたログファイル記述子。</li>
+</ul>
+<h3>ログ出力・フォーマット</h3>
+<ul>
+<li><code>ap_log_error_core</code>: ログ出力のメインエントリポイント。フォーマットと書き込みを統括。</li>
+<li><code>do_errorlog_format</code>: <code>ErrorLogFormat</code> に基づく動的なログ行構築。</li>
+<li><code>do_errorlog_default</code>: フォーマット未定義時のデフォルトログ出力。</li>
+<li><code>write_logline</code>: 最終的なファイル書き込みまたは <code>syslog</code> への転送。</li>
+</ul>
+<h3>フック・登録</h3>
+<ul>
+<li><code>ap_register_log_hooks</code>: ログフォーマット用ハンドラ（<code>%t</code>, <code>%L</code> 等）の登録。</li>
+<li><code>ap_run_error_log</code>: ログ出力後に実行されるフック。</li>
+<li><code>ap_run_generate_log_id</code>: ログ ID 生成フック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **エントリ**: <code>ap_log_error</code> 等の関数が <code>log_error_core</code> を呼び出し、ログレベルとコンテキスト（<code>server_rec</code>, <code>conn_rec</code>, <code>request_rec</code>）を渡します。 2. **フィルタリング**: <code>log_error_core</code> 内で、現在のモジュールレベルとログレベルを比較し、出力の可否を決定します。 3. **フォーマット**: <code>do_errorlog_format</code> が <code>apr_array_header_t</code> に格納されたフォーマット定義を走査し、登録されたハンドラ関数を呼び出してバッファを構築します。 4. **出力**: <code>write_logline</code> がバッファをファイルまたは <code>syslog</code> に書き込みます。 5. **パイプ管理**: <code>piped_log_maintenance</code> が <code>apr_proc_other_child_register</code> を通じて子プロセスの死活監視を行い、必要に応じて再起動します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code> 系: APR (Apache Portable Runtime) によるファイル、プロセス、プール、スレッド管理。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: サーバー設定およびリクエスト/コネクション構造体。</li>
+<li><code>http_log.h</code>: ログ関連の公開インターフェース定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>include/http_log.h</code>: ログ出力関数のプロトタイプと定数定義。</li>
+<li><code>server/core.c</code>: <code>ErrorLogFormat</code> 等の設定を保持するコア設定の定義。</li>
+<li><code>modules/loggers/</code>: 各種ログモジュール（<code>mod_log_config</code> 等）の起点。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ログ出力は <code>apr_pool_t</code> を介して行われます。<code>stderr_pool</code> はサーバーの再起動サイクルを跨ぐために特別に管理されています。</li>
+<li>**スレッド安全性**: ログ出力は APR のファイルロックやアトミックな操作に依存していますが、高負荷時のログ書き込みは I/O ボトルネックになり得ます。</li>
+<li>**パイプログの注意点**: <code>AP_HAVE_RELIABLE_PIPED_LOGS</code> が定義されている環境では、子プロセスの異常終了を検知して自動再起動する堅牢な仕組みが働きます。</li>
+<li>**省略された詳細**: <code>syslog</code> 関連の複雑なファシリティマッピングや、プラットフォーム固有の <code>__FILE__</code> パス処理は、可読性を優先して詳細な分岐を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__log_c__TRANS.html" target="wiki-view">`TRANS`</a></li>
+<li><a href="../symbols/server__log_c__read_handle_t.html" target="wiki-view">`read_handle_t`</a></li>
+<li><a href="../symbols/server__log_c__piped_log.html" target="wiki-view">`piped_log`</a></li>
+<li><a href="../symbols/server__log_c__ap_piped_log_read_fd.html" target="wiki-view">`ap_piped_log_read_fd`</a></li>
+<li><a href="../symbols/server__log_c__ap_piped_log_write_fd.html" target="wiki-view">`ap_piped_log_write_fd`</a></li>
+<li><a href="../symbols/server__log_c__close_handle_in_child.html" target="wiki-view">`close_handle_in_child`</a></li>
+<li><a href="../symbols/server__log_c__ap_logs_child_init.html" target="wiki-view">`ap_logs_child_init`</a></li>
+<li><a href="../symbols/server__log_c__ap_open_stderr_log.html" target="wiki-view">`ap_open_stderr_log`</a></li>
+<li><a href="../symbols/server__log_c__ap_replace_stderr_log.html" target="wiki-view">`ap_replace_stderr_log`</a></li>
+<li><a href="../symbols/server__log_c__log_child_errfn.html" target="wiki-view">`log_child_errfn`</a></li>
+<li><a href="../symbols/server__log_c__log_child.html" target="wiki-view">`log_child`</a></li>
+<li><a href="../symbols/server__log_c__open_error_log.html" target="wiki-view">`open_error_log`</a></li>
+</ul></body></html>

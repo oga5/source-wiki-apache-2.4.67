@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/mod_ssl.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/mod_ssl.c</h1>
+<h2>概要</h2>
+<p><code>mod_ssl.c</code> は Apache HTTP Server の SSL/TLS モジュールのエントリポイントです。Apache のモジュール構造を定義し、設定ディレクティブの登録、フックの初期化、および接続ライフサイクル管理の起点を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> サブシステムにおける「司令塔」として機能します。具体的な暗号化処理や I/O 操作は <code>ssl_engine_*.c</code> に委譲し、本ファイルはそれらを Apache のリクエスト処理パイプラインに統合する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>command_rec</code> を通じて、サーバー、ディレクトリ、プロキシごとの SSL 設定ディレクティブを定義・登録。</li>
+<li>**ライフサイクル管理**: モジュールの初期化 (<code>pre_config</code>, <code>post_config</code>)、子プロセス初期化、および終了時のクリーンアップ。</li>
+<li>**接続フック**: 接続確立時 (<code>pre_connection</code>) および処理時 (<code>process_connection</code>) の SSL コンテキストの初期化とハンドシェイクのトリガー。</li>
+<li>**プロバイダ登録**: <code>mod_proxy</code> との連携や、認証プロバイダ (<code>ssl</code>, <code>ssl-verify-client</code>) の登録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>モジュール定義</h3>
+<ul>
+<li><code>ssl_module</code>: Apache に登録される <code>module</code> 構造体。設定の作成・マージ関数、コマンドテーブル、フック登録関数を保持。</li>
+</ul>
+<h3>設定ディレクティブ (マクロ)</h3>
+<ul>
+<li><code>SSL_CMD_ALL</code>, <code>SSL_CMD_SRV</code>, <code>SSL_CMD_PXY</code>, <code>SSL_CMD_DIR</code>: 設定ディレクティブを簡潔に定義するためのヘルパーマクロ。</li>
+</ul>
+<h3>接続管理</h3>
+<ul>
+<li><code>ssl_init_connection_ctx</code>: <code>conn_rec</code> に紐づく <code>SSLConnRec</code> を生成・取得し、設定を適用する。</li>
+<li><code>ssl_init_ssl_connection</code>: OpenSSL の <code>SSL</code> オブジェクトを生成し、接続にバインドする。</li>
+<li><code>ssl_hook_pre_connection</code>: 接続開始時に SSL エンジンを有効化し、ハンドシェイクの準備を行う。</li>
+</ul>
+<h3>ライフサイクル・フック</h3>
+<ul>
+<li><code>ssl_register_hooks</code>: Apache の各フェーズ（接続、設定、認証など）にコールバックを登録。</li>
+<li><code>ssl_hook_pre_config</code>: OpenSSL ライブラリの初期化、エラー文字列のロード、エンジン登録を実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ssl_register_hooks</code> が起動時に呼ばれ、各フックを登録。<code>ssl_hook_pre_config</code> で OpenSSL ライブラリを初期化。 2. **接続確立**: <code>ssl_hook_pre_connection</code> が呼ばれ、<code>ssl_init_connection_ctx</code> で設定を読み込み、<code>ssl_init_ssl_connection</code> で <code>SSL</code> オブジェクトを生成。 3. **ハンドシェイク**: <code>ssl_hook_process_connection</code> が <code>AP_MODE_INIT</code> モードで入力を読み込むことで、OpenSSL のハンドシェイクをトリガーする。 4. **リクエスト処理**: <code>ssl_hook_http_scheme</code> 等がリクエスト時に呼ばれ、現在の接続が TLS かどうかを判定する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: モジュール内部の共有構造体と型定義。</li>
+<li><code>http_config.h</code>: Apache 設定 API。</li>
+<li><code>mod_proxy.h</code>: プロキシ機能との連携用。</li>
+<li><code>util_mutex.h</code>: セッションキャッシュ等の排他制御用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_engine_init.c</code>: モジュールの初期化ロジックの詳細。</li>
+<li><code>ssl_engine_io.c</code>: 実際の SSL フィルタ処理とデータ転送。</li>
+<li><code>ssl_engine_config.c</code>: 設定構造体の作成とマージロジック。</li>
+<li><code>mod_ssl.h</code>: 他モジュールから利用可能な公開関数（<code>ssl_var_lookup</code> 等）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>conn_rec</code> や <code>request_rec</code> のプール (<code>pool</code>) を使用してメモリを管理しています。<code>ssl_init_connection_ctx</code> で生成される <code>SSLConnRec</code> は接続の生存期間中保持されます。</li>
+<li>**OpenSSL バージョン**: OpenSSL 1.1.0 以降とそれ以前のバージョンで初期化・終了処理が大きく異なるため、<code>#if</code> による条件分岐が多用されています。</li>
+<li>**省略された詳細**: 本ファイルはインターフェース層であるため、具体的な暗号化アルゴリズムの選択や証明書の検証ロジックは <code>ssl_engine_kernel.c</code> 等に委譲されており、本ファイルには含まれていません。</li>
+<li>**注意点**: <code>modssl_running_statically</code> は、モジュールが静的にリンクされているか動的にロードされているかを判定し、OpenSSL のクリーンアップ挙動を制御するために使用されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__modssl_is_prelinked.html" target="wiki-view">`modssl_is_prelinked`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_cleanup_pre_config.html" target="wiki-view">`ssl_cleanup_pre_config`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_hook_pre_config.html" target="wiki-view">`ssl_hook_pre_config`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_init_connection_ctx.html" target="wiki-view">`ssl_init_connection_ctx`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_engine_status.html" target="wiki-view">`ssl_engine_status`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_hook_ssl_bind_outgoing.html" target="wiki-view">`ssl_hook_ssl_bind_outgoing`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_init_ssl_connection.html" target="wiki-view">`ssl_init_ssl_connection`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_hook_http_scheme.html" target="wiki-view">`ssl_hook_http_scheme`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_hook_default_port.html" target="wiki-view">`ssl_hook_default_port`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_hook_pre_connection.html" target="wiki-view">`ssl_hook_pre_connection`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_hook_process_connection.html" target="wiki-view">`ssl_hook_process_connection`</a></li>
+<li><a href="../../symbols/modules__ssl__mod_ssl_c__ssl_register_hooks.html" target="wiki-view">`ssl_register_hooks`</a></li>
+</ul></body></html>

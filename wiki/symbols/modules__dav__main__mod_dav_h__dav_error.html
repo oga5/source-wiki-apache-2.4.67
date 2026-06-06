@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/dav/main/mod_dav.h:121</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>WebDAV 操作中に発生したエラー状態を保持および伝播するためのスタック構造体です。複数のエラーを連結して管理し、最終的に HTTP レスポンスへ変換することを可能にします。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct dav_error {
+    int status;
+    int error_id;
+    const char *desc;
+    apr_status_t aprerr;
+    const char *namespace;
+    const char *tagname;
+    struct dav_error *prev;
+    const char *childtags;
+} dav_error;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>dav_new_error</code> 等の関数を介して各フィールドが初期化されます。</li>
+<li>**出力**: <code>dav_handle_err()</code> 関数に渡され、HTTP ステータスコードおよび XML レスポンスボディとしてクライアントへ返されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>status</code> が 0 の場合、エラーは発生していないとみなされます。</li>
+<li><code>prev</code> フィールドにより、エラーのスタック（連結リスト）を構成できます。</li>
+<li><code>aprerr</code> は APR 関連のエラーコード、または成功を示す <code>APR_SUCCESS</code> (0) を保持します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>WebDAV プロバイダーの各フック関数は、処理の失敗時に <code>dav_error</code> 構造体へのポインタを返します。</li>
+<li><code>dav_handle_err()</code> は、この構造体を解析し、適切な HTTP ステータスコードを設定して、エラー詳細を XML 形式でレスポンスに書き出します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/fs/dbm.c</code> 内の <code>dav_fs_dbm_error</code>、<code>dav_dbm_open</code>、<code>dav_dbm_fetch</code> 等のプロバイダー実装関数が、エラー発生時に本構造体を生成して返します。</li>
+<li>**呼び出し先**: <code>mod_dav</code> のメインハンドラ（<code>mod_dav.c</code>）が、フックから返された <code>dav_error</code> を受け取り、<code>dav_handle_err()</code> を呼び出して処理を完結させます。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>dav_response</code>: エラー発生時のマルチステータスレスポンス生成に関連します。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>メモリ不足により <code>dav_error</code> 自体の割り当てに失敗する可能性があります。</li>
+<li><code>prev</code> を介したスタックの深さが過度になった場合、エラー処理の再帰的な走査でスタックオーバーフローのリスクがある可能性があります（ただし、一般的な WebDAV 操作では発生しにくい）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>include/ap_mmn.h</code> の記録によれば、バージョン 2.3.4-dev で <code>apr_status_t</code> を使用するようにインターフェースが変更され、2.4.24-dev で <code>childtags</code> フィールドが追加されました。ABI 互換性に注意してください。</li>
 </ul></body></html>

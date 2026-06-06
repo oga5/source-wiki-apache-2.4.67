@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_acme.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_acme.h</h1>
+<h2>概要</h2>
+<p><code>md_acme.h</code> は、ACME (Automated Certificate Management Environment) プロトコルを Apache HTTP Server の <code>mod_md</code> モジュール内で実装するための中心的なインターフェースです。ACME サーバーとの通信、アカウント管理、およびリクエストのライフサイクルを定義します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおける ACME プロトコル層の基盤です。このヘッダーは、ACME サーバーとの対話に必要なデータ構造と、非同期的なリクエスト処理のためのコールバック型を定義し、上位のドライブロジック（<code>md_acme_drive.c</code> 等）と下位の HTTP/JWS 通信層を仲介します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ACME サーバー状態管理**: サーバーのディレクトリ情報、バージョン（v1/v2）、および認証状態の保持。</li>
+<li>**アカウント管理**: ACME アカウントのロード、保存、利用規約（ToS）の同意管理。</li>
+<li>**リクエスト抽象化**: HTTP POST/GET リクエストの構築、JWS 署名、およびレスポンス処理のコールバックベースのディスパッチ。</li>
+<li>**エラーハンドリング**: ACME プロトコル固有のエラーコードと Apache ステータスコードの変換。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>サーバーと状態管理</h3>
+<ul>
+<li><code>md_acme_t</code>: ACME サーバーインスタンスを保持するメイン構造体。サーバーURL、アカウント情報、APIエンドポイント（v1/v2）、および通信用 HTTP ハンドルを管理。</li>
+<li><code>md_acme_state_t</code>: ACME プロセスの進行状況（登録済み、検証済み、証明書取得済みなど）を示す列挙型。</li>
+</ul>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>md_acme_req_t</code>: 個別の ACME リクエストのコンテキスト。リクエストのメソッド、JSON ペイロード、レスポンスヘッダー、およびコールバック関数を保持。</li>
+<li><code>md_acme_post_fn</code> / <code>md_acme_POST</code>: ACME サーバーへの POST リクエストを送信し、結果をコールバックで処理する主要なディスパッチ関数。</li>
+<li><code>md_acme_req_init_cb</code> 等: リクエストの初期化、JSON レスポンス処理、エラー処理のためのコールバック型定義。</li>
+</ul>
+<h3>アカウント管理</h3>
+<ul>
+<li><code>md_acme_use_acct</code> / <code>md_acme_save_acct</code>: ローカルストアと ACME インスタンス間でのアカウントデータの同期。</li>
+<li><code>md_acme_agree</code> / <code>md_acme_check_agreement</code>: ToS 同意の検証と更新。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_acme_create</code> でインスタンスを生成し、<code>md_acme_setup</code> でサーバーのディレクトリ情報を取得して <code>md_acme_t</code> を初期化します。 2. **リクエスト実行**: <code>md_acme_POST</code> が呼び出されると、<code>md_acme_req_t</code> が生成されます。<code>on_init</code> コールバックでペイロードが準備され、JWS 署名を経て送信されます。 3. **レスポンス処理**: HTTP レスポンス受信後、<code>on_json</code> または <code>on_res</code> コールバックが呼び出され、結果が <code>md_result_t</code> に格納されます。 4. **エラー変換**: <code>md_acme_problem_is_input_related</code> により、ACME サーバーからのエラーが設定ミスによるものか、一時的なサーバーエラーかを判定します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pool_t</code>, <code>apr_hash_t</code>, <code>apr_table_t</code>: Apache Portable Runtime によるメモリ管理とデータ構造。</li>
+<li><code>md_json.h</code>: ACME プロトコルで多用される JSON メッセージの処理。</li>
+<li><code>md_http.h</code>: 低レベルの HTTP 通信。</li>
+<li><code>md_jws.h</code>: ACME リクエストに必要な JWS 署名生成。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_acme.c</code>: 本ヘッダーで定義されたエラー判定ロジックの実装。</li>
+<li><code>md_acme_acct.c</code>: アカウントの永続化と管理の詳細。</li>
+<li><code>md_acme_authz.c</code>: ドメイン検証（チャレンジ）フロー。</li>
+<li><code>md_acme_order.c</code>: 証明書発行オーダーの管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>md_acme_t</code> および <code>md_acme_req_t</code> は、関連付けられた <code>apr_pool_t</code> の生存期間に依存します。リクエスト処理中のメモリリークを防ぐため、コールバック内での適切なプール利用が求められます。</li>
+<li>**スレッド安全性**: 本モジュールは Apache のリクエスト処理コンテキスト内で動作することを前提としており、グローバルな状態変更には注意が必要です。</li>
+<li>**省略された詳細**: 本ヘッダーはインターフェース定義に集中しており、JWS 署名の具体的な暗号化アルゴリズムや、HTTP 通信の再試行ロジックの詳細は <code>md_jws.c</code> や <code>md_http.c</code> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_h__md_acme_state_t.html" target="wiki-view">`md_acme_state_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__md_acme_t.html" target="wiki-view">`md_acme_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__md_acme_req_t.html" target="wiki-view">`md_acme_req_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__md_http_response_t.html" target="wiki-view">`md_http_response_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__md_json_t.html" target="wiki-view">`md_json_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__md_result_t.html" target="wiki-view">`md_result_t`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__md_acme_req_err_cb.html" target="wiki-view">`md_acme_req_err_cb`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_h__apr_array_header_t.html" target="wiki-view">`apr_array_header_t`</a></li>
+</ul></body></html>

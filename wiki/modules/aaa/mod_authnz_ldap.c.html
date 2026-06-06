@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/aaa/mod_authnz_ldap.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/aaa/mod_authnz_ldap.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の LDAP 認証・認可モジュールです。<code>mod_ldap</code> (util_ldap) が提供するキャッシュ機能と接続管理を利用し、LDAP ディレクトリに対する認証（パスワード照合）および認可（ユーザー、グループ、DN、属性、フィルタによる制限）を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムにおいて、外部 LDAP サーバーを認証・認可のバックエンドとして統合する役割を担います。<code>mod_authn_core</code> や <code>mod_authz_core</code> が定義するプロバイダーインターフェースを実装し、HTTP リクエストの認証・認可フェーズで呼び出されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**認証**: LDAP バインドによるユーザー資格情報の検証。</li>
+<li>**認可**: LDAP 検索や比較操作を用いたアクセス制御（<code>require</code> ディレクティブの処理）。</li>
+<li>**設定管理**: <code>AuthLDAPURL</code> 等のディレクティブを通じた LDAP 接続パラメータの保持と、ディレクトリごとの設定管理。</li>
+<li>**環境変数設定**: 認可成功時に LDAP 属性をリクエスト環境変数へマッピング。</li>
+<li>**文字コード変換**: <code>charset.conv</code> ファイルに基づくパスワードやユーザー名の UTF-8 変換。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>authn_ldap_config_t</code>: ディレクトリごとの設定（URL、ホスト、DN、フィルタ、グループ属性など）を保持。</li>
+<li><code>authn_ldap_request_t</code>: リクエスト単位のコンテキスト（DN、ユーザー名、パスワード、検索結果属性）。</li>
+</ul>
+<h3>プロバイダー関数</h3>
+<ul>
+<li><code>authn_ldap_check_password</code>: 認証フェーズのメインエントリ。</li>
+<li><code>ldapuser_check_authorization</code> / <code>ldapgroup_check_authorization</code>: 各種認可プロバイダーの実装。</li>
+</ul>
+<h3>ユーティリティ・ヘルパー</h3>
+<ul>
+<li><code>authn_ldap_build_filter</code>: LDAP 検索フィルタの動的構築とメタ文字のエスケープ。</li>
+<li><code>get_connection_for_authz</code>: 認可フェーズで使用する LDAP 接続の取得（ユーザー資格情報でのバインド対応）。</li>
+<li><code>set_request_vars</code>: LDAP 属性を <code>subprocess_env</code> に展開。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> で認証・認可プロバイダーを登録し、<code>ImportULDAPOptFn</code> で <code>mod_ldap</code> の関数ポインタを取得。 2. **認証フロー**: <code>authn_ldap_check_password</code> が呼ばれると、<code>authn_ldap_build_filter</code> でフィルタを作成し、<code>util_ldap_cache_checkuserid</code> で LDAP サーバーへ問い合わせる。成功時は <code>authn_ldap_request_t</code> をリクエストコンテキストに保存。 3. **認可フロー**: <code>ldap*_check_authorization</code> 関数群が呼ばれる。認証済みでない場合は <code>util_ldap_cache_getuserdn</code> で DN を特定し、その後 <code>util_ldap_cache_compare</code> 等を用いてアクセス権を判定する。 4. **接続管理**: <code>apr_pool_cleanup_register</code> を使用し、リクエスト終了時に LDAP 接続を確実にクローズする。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>util_ldap.h</code>: LDAP 接続管理およびキャッシュ機能の基盤。</li>
+<li><code>mod_auth.h</code>: 認証・認可プロバイダーのインターフェース定義。</li>
+<li><code>apr_xlate.h</code>: 文字コード変換用。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: Apache モジュール基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/ldap/util_ldap.c</code>: 本モジュールが依存する LDAP 接続プールおよびキャッシュの実装。</li>
+<li><code>modules/aaa/mod_authn_core.c</code>: 認証プロバイダーのディスパッチャ。</li>
+<li><code>modules/aaa/mod_authz_core.c</code>: 認可プロバイダーのディスパッチャ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定は <code>dir_config</code> プール、リクエスト単位のデータは <code>request_rec-&gt;pool</code> で管理されます。</li>
+<li>**スレッド安全性**: <code>authn_ldap_config_t</code> 内の <code>lock</code> は、マルチスレッド環境での設定更新時に使用されます。</li>
+<li>**制約**: <code>mod_ldap</code> がロードされていない場合、<code>post_config</code> フックでエラーを返し起動を停止します。</li>
+<li>**省略された詳細**: LDAP フィルタの複雑なエスケープ処理や、<code>mod_ldap</code> 内部のキャッシュアルゴリズムの詳細は本ファイルには含まれていません。これらは <code>util_ldap</code> 側に委譲されています。</li>
+<li>**注意点**: <code>AuthLDAPInitialBindAsUser</code> を有効にする場合、ユーザーのパスワードが LDAP バインドに使用されるため、セキュリティ要件を十分に検討してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_config_t.html" target="wiki-view">`authn_ldap_config_t`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_request_t.html" target="wiki-view">`authn_ldap_request_t`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__auth_ldap_phase.html" target="wiki-view">`auth_ldap_phase`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__auth_ldap_optype.html" target="wiki-view">`auth_ldap_optype`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__derive_codepage_from_lang.html" target="wiki-view">`derive_codepage_from_lang`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__get_conv_set.html" target="wiki-view">`get_conv_set`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_xlate_password.html" target="wiki-view">`authn_ldap_xlate_password`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_build_filter.html" target="wiki-view">`authn_ldap_build_filter`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__create_authnz_ldap_dir_config.html" target="wiki-view">`create_authnz_ldap_dir_config`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__authnz_ldap_cleanup_connection_close.html" target="wiki-view">`authnz_ldap_cleanup_connection_close`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__set_request_vars.html" target="wiki-view">`set_request_vars`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authnz_ldap_c__ImportULDAPOptFn.html" target="wiki-view">`ImportULDAPOptFn`</a></li>
+</ul></body></html>

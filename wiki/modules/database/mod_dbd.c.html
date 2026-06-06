@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/database/mod_dbd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/database/mod_dbd.c</h1>
+<h2>概要</h2>
+<p><code>mod_dbd.c</code> は、Apache HTTP Server におけるデータベース接続管理の基盤を提供するモジュールです。APR (Apache Portable Runtime) の <code>apr_dbd</code> フレームワークをラップし、接続プーリング、SQL 文の事前準備、およびリクエスト/コネクション単位のライフサイクル管理を実装します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の他のモジュール（<code>mod_authn_dbd</code> など）がデータベースへアクセスするための共通インターフェースを提供します。設定フェーズで定義されたデータベース接続設定を保持し、実行時にスレッドセーフな接続プール（<code>apr_reslist</code>）を介して接続を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>DBDriver</code> や <code>DBDParams</code> などのディレクティブを解析し、サーバーごとの設定（<code>svr_cfg</code>）を構築・マージする。</li>
+<li>**接続プーリング**: スレッド環境下では <code>apr_reslist</code> を使用し、非スレッド環境では単一の接続を管理する。</li>
+<li>**ライフサイクル管理**: 接続のオープン、クローズ、およびリクエスト/コネクション終了時の自動解放（プールへの返却）を管理する。</li>
+<li>**SQL 準備**: サーバー起動時に SQL 文をプリペアし、各接続にキャッシュする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・構造体</h3>
+<ul>
+<li><code>svr_cfg</code>: サーバーごとの設定コンテナ。<code>dbd_cfg_t</code>（設定値）と <code>dbd_group_t</code>（接続グループ）を保持。</li>
+<li><code>dbd_group_t</code>: 接続プール（<code>apr_reslist</code>）または単一接続を管理するグループ構造体。</li>
+<li><code>ap_dbd_t</code>: データベース接続ハンドル。ドライバ、接続状態、プリペア済みステートメントのハッシュを保持。</li>
+</ul>
+<h3>公開 API (エクスポート関数)</h3>
+<ul>
+<li><code>ap_dbd_open</code>: 接続を明示的に取得する。呼び出し側で <code>ap_dbd_close</code> が必須。</li>
+<li><code>ap_dbd_acquire</code>: リクエスト単位で接続を取得。自動的にリクエスト終了時に解放される。</li>
+<li><code>ap_dbd_cacquire</code>: コネクション単位で接続を取得。</li>
+<li><code>ap_dbd_prepare</code>: SQL 文をプリペアする。</li>
+</ul>
+<h3>内部フック・ハンドラ</h3>
+<ul>
+<li><code>dbd_cmds</code>: 設定ディレクティブの定義。</li>
+<li><code>dbd_post_config</code>: 設定の検証と接続グループの初期化。</li>
+<li><code>dbd_child_init</code>: 子プロセス生成時の接続プール初期化。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <code>dbd_cmds</code> がディレクティブを読み込み、<code>create_dbd_config</code> で設定を初期化。<code>dbd_post_config</code> で設定を統合し、共有可能な <code>dbd_group_t</code> を構築する。 2. **接続取得**: <code>ap_dbd_acquire</code> が呼ばれると、リクエストのプールに接続が既に存在するか確認。なければ <code>ap_dbd_open</code> を呼び出し、<code>dbd_construct</code> で新規接続を作成。 3. **接続構築**: <code>dbd_construct</code> は <code>apr_dbd_open_ex</code> で接続を確立し、<code>dbd_prepared_init</code> で SQL 文をプリペアし、<code>dbd_run_post_connect</code> で初期化 SQL を実行する。 4. **解放**: リクエスト終了時、<code>apr_pool_cleanup_register</code> により登録された <code>dbd_release</code> が呼ばれ、接続がプールへ返却される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_reslist.h</code>: 接続プーリング機能。</li>
+<li><code>apr_dbd.h</code>: データベース抽象化レイヤー。</li>
+<li><code>http_config.h</code>, <code>http_request.h</code>: Apache モジュールフレームワーク。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_dbd.h</code>: 公開 API 定義。</li>
+<li><code>modules/database/mod_authn_dbd.c</code>: 本モジュールを利用する代表的なクライアントモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ap_dbd_t</code> は接続ごとに専用のサブプールを持ち、プリペア済みステートメントもそのサブプールで管理されます。これにより、接続終了時にステートメントも自動的にクリーンアップされます。</li>
+<li>**スレッドセーフ**: <code>APR_HAS_THREADS</code> が定義されている場合、<code>apr_reslist</code> を使用してスレッドセーフなプーリングが行われます。非スレッド環境では単純なポインタ管理となります。</li>
+<li>**注意点**: <code>ap_dbd_acquire</code> はリクエストのライフサイクルに紐付くため、明示的な <code>ap_dbd_close</code> は不要です。逆に <code>ap_dbd_open</code> を使用した場合は、必ず <code>ap_dbd_close</code> を呼び出す必要があります。</li>
+<li>**省略箇所**: ドライバ固有の挙動や、<code>apr_dbd</code> 内部の具体的な SQL 実行ロジックについては、<code>apr_dbd</code> ライブラリ側に依存しているため本ファイルでは詳細を扱っていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_group_t.html" target="wiki-view">`dbd_group_t`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__svr_cfg.html" target="wiki-view">`svr_cfg`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__cmd_parts.html" target="wiki-view">`cmd_parts`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__create_dbd_config.html" target="wiki-view">`create_dbd_config`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__merge_dbd_config.html" target="wiki-view">`merge_dbd_config`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__ap_dbd_sql_init.html" target="wiki-view">`ap_dbd_sql_init`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_param.html" target="wiki-view">`dbd_param`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_init_sql.html" target="wiki-view">`dbd_init_sql`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_query_t.html" target="wiki-view">`dbd_query_t`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_init_sql_init.html" target="wiki-view">`dbd_init_sql_init`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_check.html" target="wiki-view">`dbd_check`</a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_acquire_t.html" target="wiki-view">`dbd_acquire_t`</a></li>
+</ul></body></html>

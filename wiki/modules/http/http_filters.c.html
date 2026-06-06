@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http/http_filters.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http/http_filters.c</h1>
+<h2>概要</h2>
+<p>HTTP プロトコルにおける入力フィルタリング（リクエストボディの解析）および出力フィルタリング（レスポンスヘッダの構築・送信）を担う中核ファイルです。Apache HTTP Server のフィルタチェーンにおいて、HTTP 固有のセマンティクス（チャンク転送、Content-Length 制限、ヘッダの検証）を適用します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> モジュールにおいて、プロトコルレベルのデータ変換と検証を行うゲートキーパーとして機能します。<code>http_protocol.c</code> がリクエストの初期解析を行うのに対し、本ファイルはストリーム処理中のフィルタとして、データがクライアントとハンドラの間を流れる際の整合性を保証します。</p>
+<h2>責務</h2>
+<ul>
+<li>**入力フィルタリング**: <code>ap_http_filter</code> を通じて、チャンク転送のデコード、<code>Content-Length</code> による境界管理、およびリクエストボディのサイズ制限（<code>LimitRequestBody</code>）を強制する。</li>
+<li>**出力ヘッダ処理**: <code>ap_http_header_filter</code> を通じて、レスポンスヘッダの結合、<code>Vary</code> フィールドの正規化、HTTP ステータスラインの検証、およびプロトコルバージョンの決定を行う。</li>
+<li>**クライアントブロック管理**: <code>ap_setup_client_block</code> 等の API を提供し、ハンドラがリクエストボディを安全に読み取れるよう抽象化する。</li>
+<li>**エラーハンドリング**: プロトコル違反やリソース制限超過時に、適切な HTTP エラーレスポンスを生成し、接続を閉じる（Keep-Alive の無効化）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンテキスト構造体</h3>
+<ul>
+<li><code>http_ctx_t</code>: 入力フィルタの状態管理用。現在のボディ解析状態（<code>state</code>）、残りのバイト数、チャンク解析の進捗を保持。</li>
+<li><code>header_struct</code>: ヘッダ送信時に <code>apr_table_do</code> へ渡すためのバッファとプールを保持。</li>
+<li><code>header_filter_ctx</code>: 出力フィルタのヘッダ送信済みフラグを保持。</li>
+</ul>
+<h3>入力フィルタ系</h3>
+<ul>
+<li><code>ap_http_filter</code>: メインの入力フィルタ。<code>apr_bucket_brigade</code> を介してリクエストボディを処理。</li>
+<li><code>parse_chunk_size</code>: チャンクヘッダを解析し、オーバーフローや不正なフォーマットを検出。</li>
+<li><code>read_chunked_trailers</code>: チャンク終了後のトレーラヘッダを読み取り、リクエストヘッダにマージ。</li>
+</ul>
+<h3>出力フィルタ系</h3>
+<ul>
+<li><code>ap_http_header_filter</code>: レスポンスヘッダを構築し、フィルタチェーンの先頭で送信する。</li>
+<li><code>merge_response_headers</code>: <code>headers_out</code> と <code>err_headers_out</code> を統合し、キャッシュ制御や <code>Vary</code> の修正を行う。</li>
+<li><code>basic_http_header</code>: ステータスライン、Date、Server ヘッダを生成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <code>ap_http_filter</code> が <code>ap_get_brigade</code> を呼び出し、下位フィルタからデータを取得。<code>ctx-&gt;state</code> に基づき、チャンク解析または長さ制限付き読み込みを実行。エラー時は <code>bail_out_on_error</code> で接続を終了。 2. **出力**: <code>ap_http_header_filter</code> が呼び出されると、まずヘッダを統合・検証。<code>ctx-&gt;headers_sent</code> が未設定であれば、<code>basic_http_header</code> でヘッダを構築し、<code>ap_pass_brigade</code> で下位へ渡す。その後、必要に応じて <code>CHUNK</code> フィルタを挿入する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットブリゲードによるストリーム処理の基盤。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの管理。</li>
+<li><code>http_protocol.h</code>: プロトコル定義とステータスライン処理。</li>
+<li><code>http_core.h</code>: サーバ設定（<code>LimitRequestBody</code> 等）の取得。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/chunk_filter.c</code>: チャンクエンコーディングの出力フィルタ。</li>
+<li><code>modules/http/http_protocol.c</code>: リクエストの初期解析とハンドラへのディスパッチ。</li>
+<li><code>modules/http/http_core.c</code>: HTTP 関連のコア設定とディレクティブ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_bucket_brigade</code> はリクエストプール（<code>r-&gt;pool</code>）または接続プール（<code>f-&gt;c-&gt;bucket_alloc</code>）を使用します。フィルタ内でバケットを削除・挿入する際は、メモリリークや二重解放に注意してください。</li>
+<li>**状態遷移**: <code>http_ctx_t</code> の <code>state</code> は非常に複雑です。特にチャンク解析中の <code>BODY_CHUNK_CR</code> や <code>BODY_CHUNK_LF</code> などの細かい状態は、RFC 7230 準拠の厳密な解析のために存在します。</li>
+<li>**省略された詳細**: 本ファイルはフィルタのロジックに集中しており、<code>mod_proxy</code> 固有の複雑な挙動や、EBCDIC 環境特有の文字変換処理は詳細を省略しています。これらは <code>apr_xlate</code> 関連の関数呼び出しとして現れます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__http_filters_c__http_ctx_t.html" target="wiki-view">`http_ctx_t`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__bail_out_on_error.html" target="wiki-view">`bail_out_on_error`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__parse_chunk_size.html" target="wiki-view">`parse_chunk_size`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__read_chunked_trailers.html" target="wiki-view">`read_chunked_trailers`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__ap_http_filter.html" target="wiki-view">`ap_http_filter`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__check_header_ctx.html" target="wiki-view">`check_header_ctx`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__check_header.html" target="wiki-view">`check_header`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__check_headers_table.html" target="wiki-view">`check_headers_table`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__header_struct.html" target="wiki-view">`header_struct`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__header_filter_ctx.html" target="wiki-view">`header_filter_ctx`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__ap_get_client_block.html" target="wiki-view">`ap_get_client_block`</a></li>
+<li><a href="../../symbols/modules__http__http_filters_c__outerror_filter_ctx_t.html" target="wiki-view">`outerror_filter_ctx_t`</a></li>
+</ul></body></html>

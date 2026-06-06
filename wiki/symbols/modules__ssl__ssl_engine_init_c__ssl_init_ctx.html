@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_init.c:1375</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>SSL/TLS コンテキスト（<code>SSL_CTX</code>）の構築におけるメインパイプラインとして機能し、プロトコル設定から証明書チェーン、TLS 拡張に至るまでの一連の初期化処理を順次実行します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static apr_status_t ssl_init_ctx(server_rec *s,
+                                 apr_pool_t *p,
+                                 apr_pool_t *ptemp,
+                                 modssl_ctx_t *mctx)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>p</code>: 長期生存するメモリプール。</li>
+<li><code>ptemp</code>: 一時的なメモリプール。</li>
+<li><code>mctx</code>: 初期化対象の <code>modssl_ctx_t</code> 構造体。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理成功時は <code>APR_SUCCESS</code> を返し、いずれかの初期化ステップでエラーが発生した場合はそのエラーコードを返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mctx</code> は呼び出し前に適切に割り当てられている必要があります。</li>
+<li><code>mctx-&gt;pks</code> が設定されている場合、証明書チェーンおよび TLS 拡張の初期化が試行されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>以下の順序で初期化を実行します。いずれかのステップでエラーが発生した場合、即座にそのエラーを返して終了します。</p>
+<p>1. **プロトコル設定**: <code>ssl_init_ctx_protocol</code> を呼び出し、TLS バージョン等を制御。 2. **セッションキャッシュ**: <code>ssl_init_ctx_session_cache</code> を実行。 3. **コールバック**: <code>ssl_init_ctx_callbacks</code> を実行。 4. **検証設定**: <code>ssl_init_ctx_verify</code> を呼び出し、CA 証明書パス等を設定。 5. **暗号スイート**: <code>ssl_init_ctx_cipher_suite</code> を呼び出し、暗号スイートを適用。 6. **CRL**: <code>ssl_init_ctx_crl</code> を実行。 7. **証明書と拡張**: <code>mctx-&gt;pks</code> が存在する場合、<code>ssl_init_ctx_cert_chain</code> を実行し、<code>HAVE_TLSEXT</code> が定義されていれば <code>ssl_init_ctx_tls_extensions</code> を実行。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_engine_init.c:2081</code></li>
+<li><code>modules/ssl/ssl_engine_init.c:2141</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ssl_init_ctx_protocol</code></li>
+<li><code>ssl_init_ctx_session_cache</code></li>
+<li><code>ssl_init_ctx_callbacks</code></li>
+<li><code>ssl_init_ctx_verify</code></li>
+<li><code>ssl_init_ctx_cipher_suite</code></li>
+<li><code>ssl_init_ctx_crl</code></li>
+<li><code>ssl_init_ctx_cert_chain</code></li>
+<li><code>ssl_init_ctx_tls_extensions</code> (条件付き)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>server_rec</code>: Apache サーバー設定構造体。</li>
+<li><code>modssl_ctx_t</code>: SSL モジュール固有のコンテキスト構造体。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>各サブ関数（<code>ssl_init_ctx_*</code>）が <code>APR_SUCCESS</code> 以外の値を返した場合、そのエラーを伝播させて即座に停止します。</li>
+<li><code>mctx-&gt;pks</code> が NULL の場合、証明書チェーンおよび TLS 拡張の初期化はスキップされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は初期化のパイプラインを定義するものであり、個別の設定ロジックは各サブ関数に委譲されています。</li>
+<li><code>HAVE_TLSEXT</code> マクロによる条件付きコンパイルが含まれており、環境によって TLS 拡張の初期化有無が変化します。</li>
+<li>プロキシサポートに関するコメント（<code>XXX: proxy support?</code>）が <code>mctx-&gt;pks</code> ブロック内に存在します。</li>
 </ul></body></html>

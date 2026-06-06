@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/util.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/util.c</h1>
+<h2>概要</h2>
+<p><code>server/util.c</code> は、Apache HTTP Server のコア機能で頻繁に使用される低レベルな文字列操作、パス正規化、設定ファイル解析、およびユーティリティ関数群を保持する汎用ライブラリです。HTTP プロトコル処理や設定読み込みに必要な「泥臭い」処理を抽象化し、一貫したインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>module:server</code> の基盤として、他の多くのソースファイル（<code>config.c</code>, <code>protocol.c</code>, <code>request.c</code> など）から呼び出されるユーティリティ層です。特に、文字列のパターンマッチング、URL のエスケープ処理、設定ファイルの行単位読み込みといった、HTTPD の動作に不可欠な共通処理を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**文字列操作と変換**: 大文字小文字を無視した比較、プレフィックス除去、トークン抽出、HTML/ログ用エスケープ。</li>
+<li>**パスとURIの処理**: パスの正規化（<code>..</code> の解決）、絶対パス判定、URL のアンエスケープ、ディレクトリ操作。</li>
+<li>**設定ファイル解析**: <code>ap_configfile_t</code> を介した設定ファイルの読み込み、行継続の処理、トークン化。</li>
+<li>**HTTP ヘッダー解析**: リスト形式のヘッダー値のパース、トークンリストの抽出、ETag 比較。</li>
+<li>**プロセス・スレッド管理**: スレッドローカルストレージの管理、プロセス間通信の補助。</li>
+<li>**セキュリティ**: タイミング攻撃耐性のある文字列比較、メモリ割り当て失敗時の強制終了処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>文字列・パターンマッチング</h3>
+<ul>
+<li><code>ap_strcmp_match</code>, <code>ap_strcasecmp_match</code>: ワイルドカード（<code>*</code>, <code>?</code>）を含む文字列比較。</li>
+<li><code>ap_strcasestr</code>: 大文字小文字を無視した部分文字列検索。</li>
+<li><code>ap_getword</code>, <code>ap_getword_conf</code>: 区切り文字や引用符を考慮したトークン抽出。</li>
+</ul>
+<h3>パス・URI 処理</h3>
+<ul>
+<li><code>ap_normalize_path</code>: パスの正規化（<code>..</code> や <code>//</code> の解決）。</li>
+<li><code>ap_unescape_url</code>: URL のデコード。</li>
+<li><code>ap_escape_path_segment</code>, <code>ap_escape_urlencoded</code>: URL エンコード。</li>
+</ul>
+<h3>設定ファイル解析</h3>
+<ul>
+<li><code>ap_pcfg_openfile</code>: 設定ファイルを開き、<code>ap_configfile_t</code> を初期化。</li>
+<li><code>ap_cfg_getline</code>: 設定ファイルから1行読み込み、行継続を処理。</li>
+</ul>
+<h3>セキュリティ・ユーティリティ</h3>
+<ul>
+<li><code>ap_memeq_timingsafe</code>, <code>ap_streq_timingsafe</code>: タイミング攻撃を防ぐための定数時間比較関数。</li>
+<li><code>ap_abort_on_oom</code>: メモリ割り当て失敗時にログを出力してプロセスを終了させる。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**設定読み込み**: <code>ap_pcfg_openfile</code> でファイルハンドルをラップし、<code>ap_cfg_getline</code> が内部で <code>cfg_getstr</code> を呼び出してバッファを埋めます。行継続（<code>\</code>）やコメント除去は <code>ap_cfg_getline_core</code> で行われます。</li>
+<li>**URL デコード**: <code>unescape_url</code> がメインのロジックであり、<code>x2c</code>（16進数から文字への変換）を呼び出してインプレースで変換を行います。</li>
+<li>**フォームデータ解析**: <code>ap_parse_form_data</code> は、入力フィルターからバケットブリゲードを読み込み、状態マシン（<code>ap_form_type_t</code>）を用いて <code>application/x-www-form-urlencoded</code> データをパースします。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr_strings.h</code>, <code>apr_lib.h</code>, <code>apr_fnmatch.h</code>, <code>apr_base64.h</code> 等。</li>
+<li>**HTTPD Core**: <code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code>, <code>http_protocol.h</code>。</li>
+<li>**システムヘッダー**: <code>unistd.h</code>, <code>pwd.h</code>, <code>grp.h</code> 等（プラットフォーム依存の機能用）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_regex.c</code>: 正規表現関連のユーティリティ。</li>
+<li><code>server/util_expr_eval.c</code>: 式評価エンジン。</li>
+<li><code>server/gen_test_char.c</code>: <code>test_char.h</code> を生成するツール。</li>
+<li><code>server/config.c</code>: 設定ツリーの構築。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 多くの関数が <code>apr_pool_t</code> を引数に取り、メモリのライフサイクルをプールに依存させています。<code>ap_pregcomp</code> のように、クリーンアップハンドラを登録して自動解放を行う設計が随所に見られます。</li>
+<li>**パフォーマンス**: <code>ucharmap</code> テーブルを用いた大文字小文字変換や、<code>test_char.h</code> による文字種判定など、頻繁に呼ばれる処理は最適化されています。</li>
+<li>**セキュリティ**: <code>ap_normalize_path</code> はセキュリティ上の脆弱性（ディレクトリトラバーサル）を防ぐための重要な関数です。変更時は RFC 3986 等の仕様を十分に確認してください。</li>
+<li>**省略範囲**: <code>ap_varbuf</code> 関連の動的バッファ管理は、大規模な文字列構築を効率化するためのものであり、本ファイル内でも重要な役割を果たしていますが、実装の詳細は <code>util_varbuf.c</code> に委譲されている部分もあります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_c__ap_get_list_item.html" target="wiki-view">`ap_get_list_item`</a></li>
+<li><a href="../symbols/server__util_c__ap_etag_e.html" target="wiki-view">`ap_etag_e`</a></li>
+<li><a href="../symbols/server__util_c__ap_get_token.html" target="wiki-view">`ap_get_token`</a></li>
+<li><a href="../symbols/server__util_c__ap_get_local_host.html" target="wiki-view">`ap_get_local_host`</a></li>
+<li><a href="../symbols/server__util_c__ap_form_type_t.html" target="wiki-view">`ap_form_type_t`</a></li>
+<li><a href="../symbols/server__util_c__ap_varbuf_info.html" target="wiki-view">`ap_varbuf_info`</a></li>
+<li><a href="../symbols/server__util_c__ap_realloc.html" target="wiki-view">`ap_realloc`</a></li>
+<li><a href="../symbols/server__util_c__thread_ctx.html" target="wiki-view">`thread_ctx`</a></li>
+<li><a href="../symbols/server__util_c__ap_get_sload.html" target="wiki-view">`ap_get_sload`</a></li>
+<li><a href="../symbols/server__util_c__ap_get_loadavg.html" target="wiki-view">`ap_get_loadavg`</a></li>
+<li><a href="../symbols/server__util_c__ap_get_exec_line.html" target="wiki-view">`ap_get_exec_line`</a></li>
+<li><a href="../symbols/server__util_c__fnames.html" target="wiki-view">`fnames`</a></li>
+</ul></body></html>

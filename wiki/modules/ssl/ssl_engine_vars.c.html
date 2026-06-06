@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/ssl_engine_vars.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/ssl_engine_vars.c</h1>
+<h2>概要</h2>
+<p><code>ssl_engine_vars.c</code> は、Apache HTTP Server の設定式（<code>ap_expr</code>）やログ設定から SSL/TLS 関連の情報を取得・抽出するための変数ルックアップ機能を提供します。証明書情報、セッション状態、暗号スイートなどの内部状態を文字列として公開するインターフェースです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> の中核となる変数解決エンジンです。他のモジュール（<code>mod_log_config</code> など）が SSL 情報を必要とする際のゲートウェイとして機能し、OpenSSL の複雑なデータ構造を Apache のメモリ管理（<code>apr_pool_t</code>）に適した文字列形式に変換します。</p>
+<h2>責務</h2>
+<ul>
+<li>**変数解決**: <code>SSL_</code> で始まる変数や <code>SSL()</code> 関数に対するリクエストを処理し、適切な値を返す。</li>
+<li>**証明書解析**: X.509 証明書から DN（識別名）、SAN（サブジェクト代替名）、有効期限、シリアル番号などを抽出する。</li>
+<li>**ログ統合**: <code>mod_log_config</code> 用のハンドラを登録し、ログフォーマット文字列（<code>%c</code>, <code>%x</code>）経由での SSL 情報出力をサポートする。</li>
+<li>**OpenSSL 抽象化**: OpenSSL のバージョン差異を吸収し、BIO を介した安全な文字列変換を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>変数解決・登録</h3>
+<ul>
+<li><code>ssl_var_lookup</code>: 公開 API。リクエスト、接続、サーバー情報に基づき変数を解決するメイン関数。</li>
+<li><code>ssl_var_register</code>: モジュール初期化時に <code>ap_expr</code> フックとオプション関数を登録する。</li>
+<li><code>ssl_expr_lookup</code>: <code>ap_expr</code> の構文解析時に SSL 関連の関数や変数を解決するためのフック関数。</li>
+</ul>
+<h3>証明書・セッション抽出</h3>
+<ul>
+<li><code>ssl_var_lookup_ssl</code>: <code>SSLConnRec</code> から SSL 固有の情報を抽出するディスパッチャ。</li>
+<li><code>ssl_var_lookup_ssl_cert</code>: 証明書（X509）から特定の属性（DN, SAN, 有効期限等）を抽出する。</li>
+<li><code>modssl_var_extract_dns</code> / <code>modssl_var_extract_san_entries</code>: 証明書情報をテーブルに一括抽出するユーティリティ。</li>
+</ul>
+<h3>ログハンドラ</h3>
+<ul>
+<li><code>ssl_var_log_config_register</code>: <code>mod_log_config</code> にログハンドラを登録する。</li>
+<li><code>ssl_var_log_handler_c</code> / <code>ssl_var_log_handler_x</code>: ログ出力用の変数解決ハンドラ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト**: <code>ap_expr</code> またはログハンドラが <code>ssl_var_lookup</code> を呼び出す。 2. **解決**:</p>
+<ul>
+<li>リクエスト依存（HTTP ヘッダ等）、接続依存（SSL 状態）、独立（時刻等）の順で検索。</li>
+<li><code>SSL_</code> プレフィックスがある場合、<code>ssl_var_lookup_ssl</code> へ委譲。</li>
+<p>3. **抽出**: <code>ssl_var_lookup_ssl</code> は <code>SSL</code> オブジェクトから証明書を取得し、<code>ssl_var_lookup_ssl_cert</code> 等のヘルパーを介して BIO を使用して文字列化する。 4. **メモリ管理**: 全ての戻り値は <code>apr_pool_t</code> 上で確保され、呼び出し元が解放を管理する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: <code>SSLConnRec</code> などの内部構造体定義。</li>
+<li><code>mod_ssl.h</code>: 公開インターフェース。</li>
+<li><code>ap_expr.h</code>: Apache 式評価エンジンとの統合。</li>
+<li><code>apr_time.h</code>: 時刻関連の計算。</li>
+<li><code>mod_log_config.h</code>: ログ出力機能との統合。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_util_ssl.c</code>: OpenSSL の低レベルなラッパー関数群。</li>
+<li><code>ssl_engine_kernel.c</code>: SSL 接続のライフサイクル管理。</li>
+<li><code>mod_ssl.c</code>: モジュールのメインエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ssl_var_lookup</code> は <code>apr_pstrdup</code> を多用します。大量の変数参照が発生する環境ではメモリ消費に注意してください。</li>
+<li>**OpenSSL 依存**: <code>OPENSSL_VERSION_NUMBER</code> による条件分岐が随所にあり、OpenSSL 1.1.x 以降とそれ以前の API 差異を吸収しています。</li>
+<li>**証明書ライフサイクル**: <code>SSL_get_peer_certificate</code> は参照カウントを増やすため、必ず <code>X509_free</code> が対になるよう設計されています。<code>SSL_get_certificate</code> は参照カウントを増やさないため、解放は不要です。</li>
+<li>**未実装・浅い部分**: <code>ssl_var_lookup_ssl_cert_dn_rec</code> に含まれない特定の証明書拡張フィールドの抽出は、汎用的な <code>ssl_ext_list</code> を介して行う必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_get_effective_config.html" target="wiki-view">`ssl_get_effective_config`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_conn_is_ssl.html" target="wiki-view">`ssl_conn_is_ssl`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__expr_peer_ext_list_fn.html" target="wiki-view">`expr_peer_ext_list_fn`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__expr_var_fn.html" target="wiki-view">`expr_var_fn`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__expr_func_fn.html" target="wiki-view">`expr_func_fn`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_expr_lookup.html" target="wiki-view">`ssl_expr_lookup`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_register.html" target="wiki-view">`ssl_var_register`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup.html" target="wiki-view">`ssl_var_lookup`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl.html" target="wiki-view">`ssl_var_lookup_ssl`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert_dn_oneline.html" target="wiki-view">`ssl_var_lookup_ssl_cert_dn_oneline`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert.html" target="wiki-view">`ssl_var_lookup_ssl_cert`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert_dn.html" target="wiki-view">`ssl_var_lookup_ssl_cert_dn`</a></li>
+</ul></body></html>

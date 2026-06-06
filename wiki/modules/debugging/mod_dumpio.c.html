@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/debugging/mod_dumpio.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/debugging/mod_dumpio.c</h1>
+<h2>概要</h2>
+<p><code>mod_dumpio.c</code> は、Apache HTTP Server の入出力フィルタチェーンを流れるデータを傍受し、エラーログ（<code>APLOG_TRACE7</code> レベル）へダンプするデバッグ用モジュールです。SSL 復号後および暗号化前の生のデータストリームを可視化するために設計されています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/debugging</code> ディレクトリにおいて、ネットワーク I/O の低レイヤーにおけるデータフローを監視する「スニファー」の役割を果たします。フィルタチェーンの <code>AP_FTYPE_CONNECTION + 3</code> に位置し、SSL フィルタよりも内側で動作します。</p>
+<h2>責務</h2>
+<ul>
+<li>**フィルタ登録**: 入力用 (<code>DUMPIO_IN</code>) および出力用 (<code>DUMPIO_OUT</code>) フィルタを接続フェーズで挿入。</li>
+<li>**データダンプ**: バケット内のデータを読み取り、ログ出力可能な形式に変換して記録。</li>
+<li>**設定管理**: <code>DumpIOInput</code> および <code>DumpIOOutput</code> ディレクティブによる機能の有効/無効化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理</h3>
+<ul>
+<li><code>dumpio_conf_t</code>: 入出力の有効状態を保持するサーバー設定構造体。</li>
+<li><code>dumpio_create_sconfig</code>: 設定構造体の初期化（メモリ確保）。</li>
+<li><code>dumpio_cmds</code>: <code>DumpIOInput</code> / <code>DumpIOOutput</code> ディレクティブの定義。</li>
+</ul>
+<h3>フィルタ処理</h3>
+<ul>
+<li><code>dumpio_input_filter</code>: 入力ストリームを傍受し、<code>ap_get_brigade</code> を呼び出した後にデータをダンプ。</li>
+<li><code>dumpio_output_filter</code>: 出力ストリームを傍受し、データをダンプした後に <code>ap_pass_brigade</code> で後続へ渡す。</li>
+<li><code>dumpit</code>: 共通のダンプ処理関数。バケットの内容を読み取り、ログ出力を行う。</li>
+</ul>
+<h3>フックと登録</h3>
+<ul>
+<li><code>dumpio_register_hooks</code>: フィルタの登録と <code>pre_connection</code> フックの設定。</li>
+<li><code>dumpio_pre_conn</code>: 接続開始時に設定に基づきフィルタをチェーンに追加。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>dumpio_pre_conn</code> が接続ごとに呼び出され、設定が有効であればフィルタをチェーンに挿入します。 2. **入力フロー**: <code>dumpio_input_filter</code> が <code>ap_get_brigade</code> を実行し、取得したバケット群を <code>dumpit</code> に渡してログ出力します。 3. **出力フロー**: <code>dumpio_output_filter</code> がバケット群を走査し、<code>dumpit</code> でログ出力した後、<code>ap_pass_brigade</code> で後続のフィルタへデータを渡します。 4. **ダンプ処理**: <code>dumpit</code> は <code>apr_bucket_read</code> を使用してデータを取得します。EBCDIC 環境では文字コード変換を行い、それ以外ではバイナリデータをそのままログ出力します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_connection.h</code>, <code>http_config.h</code>: Apache コアおよび接続管理。</li>
+<li><code>http_core.h</code>, <code>http_log.h</code>: ログ出力およびコア機能。</li>
+<li><code>apr_strings.h</code>: 文字列操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>util_filter.h</code>: フィルタチェーンの仕組みを理解するために参照。</li>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲードの操作（<code>apr_bucket_read</code> 等）の理解に必須。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**パフォーマンス**: 非常に大量のログを出力するため、本番環境での有効化は推奨されません。<code>APLOG_TRACE7</code> レベルで動作するため、ログレベル設定に注意してください。</li>
+<li>**メモリ**: <code>dumpit</code> 内で <code>apr_bucket_read</code> を使用しており、バケットの読み取り時にメモリが確保される場合があります。</li>
+<li>**制限事項**: ソース内のコメントにある通り、バイナリデータ内の <code>\0</code>（ヌル文字）の扱いには課題があり、ログ出力時にエスケープ処理が不完全な場合があります。</li>
+<li>**省略箇所**: <code>dumpit</code> 内の EBCDIC 変換ロジックは、特定のプラットフォームでのみ有効なため、一般的な環境では無視されます。また、フィルタの挿入位置（<code>AP_FTYPE_CONNECTION + 3</code>）は、SSL フィルタとの順序関係を意図的に制御しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_conf_t.html" target="wiki-view">`dumpio_conf_t`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpit.html" target="wiki-view">`dumpit`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_input_filter.html" target="wiki-view">`dumpio_input_filter`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_output_filter.html" target="wiki-view">`dumpio_output_filter`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_pre_conn.html" target="wiki-view">`dumpio_pre_conn`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_register_hooks.html" target="wiki-view">`dumpio_register_hooks`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_create_sconfig.html" target="wiki-view">`dumpio_create_sconfig`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_enable_input.html" target="wiki-view">`dumpio_enable_input`</a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_enable_output.html" target="wiki-view">`dumpio_enable_output`</a></li>
+</ul></body></html>

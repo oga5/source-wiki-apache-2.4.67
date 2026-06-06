@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_ident.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_ident.c</h1>
+<h2>概要</h2>
+<p><code>mod_ident</code> は、RFC 1413 (IDENT プロトコル) に基づき、リモートホストの ident デーモンに対して接続ユーザー名の照会を行う Apache HTTP Server モジュールです。この情報は認証目的には使用すべきではなく、主にログ記録用として提供されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> ディレクトリに属し、接続に関連するメタデータ（リモートユーザー名）を外部ソースから取得する役割を担います。他のモジュールから <code>ap_ident_lookup</code> を呼び出せるよう、オプション関数として公開されています。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>IdentityCheck</code> および <code>IdentityCheckTimeout</code> ディレクティブによる動作制御とタイムアウト設定の管理。</li>
+<li>**ネットワーク通信**: RFC 1413 準拠のソケット通信（接続、クエリ送信、レスポンス受信）。</li>
+<li>**データ変換**: プロトコル上の ASCII/EBCDIC 変換およびレスポンスのパース。</li>
+<li>**ライフサイクル管理**: リクエストごとの設定マージと、接続終了時のクリーンアップ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理</h3>
+<ul>
+<li><code>ident_config_rec</code>: モジュール固有の設定構造体。<code>do_rfc1413</code>（有効フラグ）と <code>timeout</code> を保持。</li>
+<li><code>create_ident_dir_config</code> / <code>merge_ident_dir_config</code>: 設定の初期化およびディレクトリ階層間でのマージ処理。</li>
+<li><code>ident_cmds</code>: <code>IdentityCheck</code> および <code>IdentityCheckTimeout</code> を定義するコマンドテーブル。</li>
+</ul>
+<h3>ネットワーク・クエリ処理</h3>
+<ul>
+<li><code>rfc1413_connect</code>: 指定されたタイムアウトでリモートの 113 番ポートへ接続を確立する。</li>
+<li><code>rfc1413_query</code>: クエリを送信し、レスポンスを読み取って <code>conn-&gt;remote_logname</code> を更新する。</li>
+</ul>
+<h3>公開インターフェース</h3>
+<ul>
+<li><code>ap_ident_lookup</code>: 他モジュールから呼び出されるメインのエントリポイント。設定を確認し、クエリ処理をディスパッチする。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **トリガー**: 他モジュールが <code>ap_ident_lookup</code> を呼び出す。 2. **設定確認**: <code>ap_get_module_config</code> で現在のディレクトリ設定を取得。無効であれば即座に終了。 3. **接続**: <code>rfc1413_connect</code> が <code>apr_socket_t</code> を作成し、リモートの 113 番ポートへ接続。 4. **通信**: <code>rfc1413_query</code> が <code>conn</code> からポート情報を取得し、<code>\r\n</code> で終端されたクエリを送信。 5. **解析**: レスポンスを読み取り、<code>sscanf</code> でフォーマットを検証。成功時に <code>conn-&gt;remote_logname</code> を <code>apr_pstrdup</code> でプールに割り当てる。 6. **終了**: 失敗時は <code>FROM_UNKNOWN</code> (&quot;unknown&quot;) を設定し、ソケットを閉じる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: ソケット通信用。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: Apache モジュール基盤。</li>
+<li><code>util_ebcdic.h</code>: EBCDIC 環境でのプロトコル変換用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/metadata/mod_remoteip.c</code>: 接続元の IP 情報を扱う関連モジュール。</li>
+<li><code>include/http_config.h</code>: <code>ap_get_module_config</code> 等の定義元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>conn-&gt;remote_logname</code> は <code>conn-&gt;pool</code> を使用して割り当てられます。リクエスト終了時に自動的に解放されます。</li>
+<li>**パフォーマンス**: IDENT 照会はネットワーク I/O を伴うため、非常に低速です。本番環境での使用には注意が必要です。</li>
+<li>**制約**: <code>sscanf</code> によるパースは固定長 (<code>RFC1413_USERLEN</code>) に依存しており、バッファオーバーフローを防ぐために厳密なサイズ指定が行われています。</li>
+<li>**省略箇所**: 本ドキュメントでは、<code>ap_xlate_proto_to_ascii</code> 等のプラットフォーム依存の変換関数の内部実装詳細は省略しています。これらは主に EBCDIC 互換性のためのラッパーです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__ident_config_rec.html" target="wiki-view">`ident_config_rec`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__rfc1413_connect.html" target="wiki-view">`rfc1413_connect`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__rfc1413_query.html" target="wiki-view">`rfc1413_query`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__set_idcheck.html" target="wiki-view">`set_idcheck`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__set_timeout.html" target="wiki-view">`set_timeout`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__create_ident_dir_config.html" target="wiki-view">`create_ident_dir_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__merge_ident_dir_config.html" target="wiki-view">`merge_ident_dir_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__ap_ident_lookup.html" target="wiki-view">`ap_ident_lookup`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_ident_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

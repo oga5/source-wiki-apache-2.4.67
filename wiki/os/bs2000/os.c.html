@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>os/bs2000/os.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>os/bs2000/os.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、BS2000（OSD/POSIX）環境における Apache HTTP Server のプロセス生成およびユーザー権限管理を抽象化する OS 固有の実装を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>os/bs2000</code> モジュールの一部として、標準的な Unix の <code>fork()</code> では不十分な BS2000 特有のジョブ環境切り替え（<code>ufork()</code>）をラップし、サーバーが適切な権限で動作するためのブリッジとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス生成の抽象化**: 実行モード（デバッグか通常か）や現在の権限に基づき、適切なプロセス生成手法（<code>fork()</code> または <code>ufork()</code>）を選択する。</li>
+<li>**ジョブ環境の初期化**: CGI スクリプトなどが BS2000 ネイティブコマンドを実行する際に必要な、ユーザー ID に基づくジョブ環境の切り替え準備を行う。</li>
+<li>**プラットフォーム固有の制約管理**: 特権ユーザー（uid=0）での実行時と非特権ユーザーでの実行時で、プロセス生成の挙動を制御する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>bs2_ForkType</code>: プロセス生成手法を決定するための列挙型（<code>noFORK</code>, <code>FORK</code>, <code>UFORK</code>）。</li>
+<li><code>os_forktype()</code>: 現在の実行環境に基づき、最適な <code>bs2_ForkType</code> を判定・キャッシュする関数。</li>
+<li><code>os_fork()</code>: <code>os_forktype</code> の結果に基づき、実際のプロセス生成を行うラッパー関数。</li>
+<li><code>os_init_job_environment()</code>: ユーザー切り替え時のジョブ環境設定を管理する関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>os_forktype()</code> が最初に呼び出された際、<code>one_process</code> フラグと <code>getuid()</code> の結果から <code>forktype</code> を静的変数にキャッシュします。 2. **プロセス生成**: <code>os_fork()</code> が呼び出されると、キャッシュされた <code>forktype</code> を参照します。</p>
+<ul>
+<li><code>bs2_FORK</code>: 標準の <code>fork()</code> を実行。</li>
+<li><code>bs2_UFORK</code>: ユーザー名を大文字に変換し、BS2000 特有の <code>ufork()</code> を実行してユーザー ID を切り替えます。</li>
+<p>3. **エラーハンドリング**: <code>ufork()</code> 失敗時（<code>EPERM</code> 等）にはログを出力し、サーバーを緊急停止させます。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>os.h</code>: プラットフォーム定義およびプロトタイプ宣言。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code>: Apache のコア機能およびログ出力用。</li>
+<li><code>apr_lib.h</code>: 文字列操作ユーティリティ（<code>apr_cpystrn</code> 等）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>os/bs2000/os.h</code>: 本ファイルのプロトタイプ宣言およびプラットフォーム定義。</li>
+<li><code>os/bs2000/ebcdic.c</code>: BS2000 環境特有の文字コード変換処理。</li>
+<li><code>os/unix/os.h</code>: Unix 共通の OS 定義（本ファイルが依存するベース）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>_OSD_POSIX</code> マクロが定義されている環境でのみ有効です。それ以外の環境では <code>bs2000_os_is_not_here()</code> という空の関数のみが定義されます。</li>
+<li><code>ufork()</code> は BS2000 におけるユーザー ID 切り替えを伴う特殊なプロセス生成関数です。ユーザー名の大文字変換など、OS 固有の制約が実装に含まれている点に注意してください。</li>
+<li>デバッグモード（<code>one_process</code>）での実行時は、特権ユーザーでの起動を避けるためのチェックが行われます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/os__bs2000__os_c__bs2_ForkType.html" target="wiki-view">`bs2_ForkType`</a></li>
+<li><a href="../../symbols/os__bs2000__os_c__os_forktype.html" target="wiki-view">`os_forktype`</a></li>
+<li><a href="../../symbols/os__bs2000__os_c__os_init_job_environment.html" target="wiki-view">`os_init_job_environment`</a></li>
+<li><a href="../../symbols/os__bs2000__os_c__os_fork.html" target="wiki-view">`os_fork`</a></li>
+<li><a href="../../symbols/os__bs2000__os_c__bs2000_os_is_not_here.html" target="wiki-view">`bs2000_os_is_not_here`</a></li>
+</ul></body></html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_env.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_env.c</h1>
+<h2>概要</h2>
+<p><code>mod_env</code> は、Apache HTTP Server の CGI 環境変数（<code>subprocess_env</code>）を制御するためのモジュールです。設定ファイル（<code>.htaccess</code> や <code>httpd.conf</code>）を通じて、OS の環境変数を引き継いだり、任意の値を設定・削除したりする機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムの一部として、リクエスト処理の初期段階（<code>fixups</code> フック）で環境変数を注入する役割を担います。他のモジュールが CGI 実行時に参照する <code>request_rec-&gt;subprocess_env</code> テーブルを構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリ単位の設定（<code>env_dir_config_rec</code>）の作成とマージ。</li>
+<li>**ディレクティブ処理**: <code>PassEnv</code>（OS環境変数の取り込み）、<code>SetEnv</code>（変数の設定）、<code>UnsetEnv</code>（変数の削除）の解析と適用。</li>
+<li>**環境変数注入**: リクエスト処理の <code>fixups</code> フェーズにおいて、設定された変数を <code>subprocess_env</code> にオーバーレイする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>env_dir_config_rec</code>: ディレクトリごとの設定を保持。<code>vars</code>（設定済み変数）と <code>unsetenv</code>（削除対象変数）の2つの <code>apr_table_t</code> を管理。</li>
+</ul>
+<h3>ディレクティブハンドラ</h3>
+<ul>
+<li><code>add_env_module_vars_passed</code>: <code>PassEnv</code> を処理。<code>getenv()</code> で OS 環境変数を取得し、設定テーブルにコピー。</li>
+<li><code>add_env_module_vars_set</code>: <code>SetEnv</code> を処理。キーと値をテーブルに登録。不正な <code>=</code> 記号の混入を警告。</li>
+<li><code>add_env_module_vars_unset</code>: <code>UnsetEnv</code> を処理。<code>unsetenv</code> テーブルに記録し、現在の設定テーブルからも削除。</li>
+</ul>
+<h3>フックとライフサイクル</h3>
+<ul>
+<li><code>create_env_dir_config</code>: 設定構造体の初期化。</li>
+<li><code>merge_env_dir_configs</code>: 親ディレクトリの設定と子ディレクトリの設定をマージ。<code>UnsetEnv</code> を優先的に適用するロジックを含む。</li>
+<li><code>fixup_env_module</code>: <code>fixups</code> フックで呼び出され、<code>subprocess_env</code> に変数を追加。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定時**: <code>env_module_cmds</code> で定義されたディレクティブが解析され、<code>env_dir_config_rec</code> に格納されます。 2. **マージ時**: <code>merge_env_dir_configs</code> が呼び出され、親の設定をベースに、子の <code>UnsetEnv</code> を適用し、その後に子の <code>SetEnv</code> を上書きします。 3. **リクエスト時**: <code>fixup_env_module</code> がリクエストごとに実行されます。<code>apr_table_overlay</code> を使用して、設定された変数をリクエスト固有の <code>subprocess_env</code> テーブルにマージします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <code>apr.h</code>: 文字列操作および APR 基本型。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache モジュール API、設定管理、リクエスト処理用。</li>
+<li><code>http_log.h</code>: エラーログ出力用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/metadata/mod_setenvif.c</code>: 条件付きで環境変数を設定するモジュール。<code>mod_env</code> と併用されることが多い。</li>
+<li><code>server/util_script.c</code>: <code>subprocess_env</code> を実際に CGI プロセスへ渡す処理が含まれる。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定構造体およびテーブルは、Apache のプール（<code>apr_pool_t</code>）によって管理されます。リクエスト終了時に自動的に解放されます。</li>
+<li>**マージの順序**: <code>merge_env_dir_configs</code> は、<code>UnsetEnv</code> を先に処理してから <code>SetEnv</code> を適用します。これにより、同じディレクトリ階層内での設定順序に関わらず、意図した結果が得られるよう設計されています。</li>
+<li>**エッジケース**: <code>PassEnv</code> で指定した環境変数が OS 上に存在しない場合、警告ログが出力されますが、処理は継続されます。</li>
+<li>**制限**: <code>SetEnv</code> で変数名に <code>=</code> を含めることは非推奨であり、警告が出力されます。これは設定ミスを防ぐための仕様です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_env_c__env_dir_config_rec.html" target="wiki-view">`env_dir_config_rec`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__create_env_dir_config.html" target="wiki-view">`create_env_dir_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__merge_env_dir_configs.html" target="wiki-view">`merge_env_dir_configs`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__add_env_module_vars_passed.html" target="wiki-view">`add_env_module_vars_passed`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__add_env_module_vars_set.html" target="wiki-view">`add_env_module_vars_set`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__add_env_module_vars_unset.html" target="wiki-view">`add_env_module_vars_unset`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__fixup_env_module.html" target="wiki-view">`fixup_env_module`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_env_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

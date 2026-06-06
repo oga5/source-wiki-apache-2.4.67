@@ -6,22 +6,46 @@
 <li>定義箇所: <code>support/ab.c:540</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP接続の状態（<code>connect_state_e</code>）を更新し、対応するポーリングイベントを <code>apr_pollset_t</code> に反映させる。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void set_conn_state(struct connection *c, connect_state_e new_state)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>c</code>: 更新対象の接続構造体（<code>struct connection *</code>）。</li>
+<li><code>new_state</code>: 遷移先の接続状態（<code>connect_state_e</code>）。</li>
+<li>**出力**: なし（<code>void</code>）。副作用として <code>c-&gt;state</code> が更新され、<code>set_polled_events</code> を通じてポーリング設定が変更される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>new_state</code> は <code>connect_state_e</code> で定義された有効な値であること。</li>
+<li><code>c</code> は有効な接続構造体へのポインタであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 状態に応じたポーリングイベントのマップ（<code>events_by_state</code>）を参照する。</p>
+<ul>
+<li><code>STATE_UNCONNECTED</code>: 0（イベントなし）</li>
+<li><code>STATE_CONNECTING</code>: <code>APR_POLLOUT</code></li>
+<li><code>STATE_CONNECTED</code>: <code>APR_POLLIN</code></li>
+<li><code>STATE_READ</code>: <code>APR_POLLIN</code></li>
+<p>2. <code>c-&gt;state</code> を <code>new_state</code> に更新する。 3. <code>set_polled_events(c, events_by_state[new_state])</code> を呼び出し、APRのポーリング設定を同期する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>support/ab.c</code> 内の各所（行: 249, 922, 1478, 1483, 1504, 1552, 1707, 1829, 2079, 2091）。</li>
+<li>**呼び出し先**: <code>set_polled_events</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>struct connection</code>: 接続状態を保持する構造体。</li>
+<li><code>connect_state_e</code>: 接続のライフサイクルを定義する列挙型。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>new_state</code> が <code>events_by_state</code> 配列の範囲外である場合、未定義の動作を引き起こす可能性がある。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>STATE_CONNECTED</code> 状態では本来ポーリングを行わない設計意図があるが、<code>events_by_state</code> では <code>APR_POLLIN</code> が割り当てられている。これは <code>STATE_READ</code> への遷移を見越した設定である。</li>
+<li>状態遷移のロジックを変更する場合は、<code>events_by_state</code> 配列のインデックスと <code>connect_state_e</code> の定義順序が一致していることを確認すること。</li>
 </ul></body></html>

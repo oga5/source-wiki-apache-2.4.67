@@ -6,22 +6,59 @@
 <li>定義箇所: <code>include/http_core.h:394</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストのライフサイクル全体を通じて保持される、リクエストごとの一時的な状態を管理するための構造体です。バケットブリゲード、作業用データ、カスタムレスポンス情報、およびコンテキスト情報を保持します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    struct apr_bucket_brigade *bb;
+    void **notes;
+    char **response_code_strings;
+    const char *document_root;
+    const char *context_document_root;
+    const char *context_prefix;
+    int deliver_script;
+    int suppress_charset;
+} core_request_config;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ap_get_core_module_config(r-&gt;request_config)</code> を介してリクエスト構造体から取得されます。</li>
+<li>**出力**: フィルタチェーン（<code>ap_core_input_filter</code> / <code>ap_core_output_filter</code>）やハンドラが、この構造体内のメンバ（<code>bb</code> や <code>document_root</code> 等）を参照・更新します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>本構造体はリクエストプール（<code>r-&gt;pool</code>）から割り当てられます。</li>
+<li><code>notes</code> 配列は、初期化時に <code>ap_register_request_note()</code> を使用して要素を登録し、<code>ap_get_request_note()</code> でアクセスする必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**バケット管理**: <code>bb</code> は <code>getline</code> による先読みや、リクエストボディの残りを保持するために使用されます。</li>
+<li>**コンテキスト管理**: <code>context_document_root</code> および <code>context_prefix</code> は、<code>mod_alias</code> や <code>mod_userdir</code> などのモジュールによって設定され、リソースの物理パスと URI プレフィックスを管理します。</li>
+<li>**スクリプト処理**: <code>deliver_script</code> フラグが有効な場合、<code>default_handler</code> は GET 以外のメソッドであってもスクリプトファイルとして処理を継続します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元（参照元）**:</li>
+<li><code>modules/generators/mod_cgid.c</code></li>
+<li><code>modules/http/http_filters.c</code></li>
+<li><code>modules/http/http_protocol.c</code></li>
+<li><code>server/core.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_get_core_module_config()</code> (設定取得)</li>
+<li><code>ap_custom_response()</code> (カスタムレスポンス文字列の登録)</li>
+<li><code>ap_get_request_note()</code> / <code>ap_register_request_note()</code> (作業用データの管理)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_bucket_brigade</code>: フィルタチェーン間でのデータ転送用。</li>
+<li><code>request_rec</code>: リクエストの基本構造体。</li>
+<li><code>core_dir_config</code>: ディレクトリ単位の設定（本構造体で見つからない場合のフォールバック先）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>response_code_strings</code> が NULL の場合、<code>core_dir_config</code> を参照する必要があります。</li>
+<li><code>notes</code> 配列へのアクセス時に ID が正しく登録されていない場合、予期せぬ動作を引き起こす可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体はリクエスト処理の基盤であり、フィルタチェーンの挙動に直結します。</li>
+<li><code>document_root</code> メンバは、mass vhosting モジュールとの互換性のために存在しますが、可能な限り <code>context_*</code> 情報を優先して使用してください。</li>
 </ul></body></html>

@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_balancer.c:340</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ロードバランサアルゴリズム（<code>lbmethod</code>）を使用して、リクエストを処理するのに最適なバックエンドワーカーを特定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static proxy_worker *find_best_worker(proxy_balancer *balancer, request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>balancer</code>: 負荷分散対象の <code>proxy_balancer</code> 構造体。</li>
+<li><code>r</code>: 現在のリクエストを保持する <code>request_rec</code> 構造体。</li>
+<li>**出力**:</li>
+<li>成功時: 選択された <code>proxy_worker</code> へのポインタ。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>マルチスレッド環境下では、<code>PROXY_THREAD_LOCK</code> による排他制御が必須である。</li>
+<li>選択されたワーカーの <code>elected</code> カウンタは、関数内でインクリメントされる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **排他制御**: <code>balancer</code> に対してスレッドロックを取得する。 2. **ワーカー選択**: <code>balancer-&gt;lbmethod-&gt;finder</code> を呼び出し、アルゴリズムに基づきワーカーを特定する。 3. **統計更新**: ワーカーが特定された場合、その <code>elected</code> カウンタをインクリメントする。 4. **ロック解除**: スレッドロックを解放する。 5. **再試行ロジック**: ワーカーが取得できず、かつ <code>balancer-&gt;s-&gt;timeout</code> が設定されている場合、タイムアウト時間まで再帰的に <code>find_best_worker</code> を呼び出し、ワーカーの空きを待機する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/proxy/mod_proxy_balancer.c</code> 内の <code>proxy_balancer_pre_request</code>（直接の呼び出し）。</li>
+<li><code>find_best_worker</code> 自身（タイムアウト時の再帰呼び出し）。</li>
+<li>**呼び出し先**:</li>
+<li><code>balancer-&gt;lbmethod-&gt;finder</code>: 登録された負荷分散アルゴリズムの実行。</li>
+<li><code>apr_sleep</code>: タイムアウト待機時のスリープ処理。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_balancer</code>: バランサの状態と設定を保持。</li>
+<li><code>proxy_worker</code>: 個別のバックエンドワーカーの状態を保持。</li>
+<li><code>request_rec</code>: Apache のリクエスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ロック失敗**: スレッドロックの取得に失敗した場合、エラーログを出力して <code>NULL</code> を返す。</li>
+<li>**ワーカー不在**: すべてのワーカーがエラー状態または無効な場合、<code>NULL</code> を返す。</li>
+<li>**タイムアウト**: <code>timeout</code> が設定されている場合、ループ内で再試行を行うが、最終的にワーカーが見つからなければ <code>NULL</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>タイムアウト時の再帰呼び出しにおいて、無限ループを避けるため一時的に <code>balancer-&gt;s-&gt;timeout</code> を 0 に設定する処理が含まれている。</li>
+<li>共有メモリ（<code>slotmem</code>）を介したプロセス間同期が行われるため、ロックの整合性に注意すること。</li>
 </ul></body></html>

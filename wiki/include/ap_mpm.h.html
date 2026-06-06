@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/ap_mpm.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/ap_mpm.h</h1>
+<h2>概要</h2>
+<p><code>ap_mpm.h</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）の抽象化レイヤーを定義するヘッダーファイルです。OS とのインターフェースを抽象化し、接続の分配、プロセス/スレッドの管理、およびサーバーのライフサイクル制御を担います。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache コア（<code>APACHE_CORE</code>）の一部として、<code>http_main</code> と各 MPM 実装（worker, event, prefork 等）を繋ぐブリッジの役割を果たします。MPM はこのヘッダーで定義されたフックやクエリインターフェースを通じて、サーバーの動作状態をコアに通知します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ライフサイクル管理**: サーバーの起動、停止、再起動の制御。</li>
+<li>**接続分配の抽象化**: OS レベルのプロセス/スレッドモデルを隠蔽し、<code>ap_process_connection</code> を介した接続処理の提供。</li>
+<li>**状態監視**: MPM の動作状態（スレッド/フォークの可否、現在の状態）の照会機能。</li>
+<li>**イベント通知**: 子プロセスの状態変化や、世代交代（generation）の追跡。</li>
+<li>**特権プロセス管理**: 特定の権限でプロセスを生成するユーティリティの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル・フック</h3>
+<ul>
+<li><code>AP_DECLARE_HOOK(int, mpm, ...)</code>: MPM のメインループを実行するフック。</li>
+<li><code>AP_DECLARE_HOOK(void, child_status, ...)</code>: 子プロセスの状態変化（開始、終了、スロット喪失）を通知。</li>
+<li><code>AP_DECLARE_HOOK(void, end_generation, ...)</code>: 特定の世代の全プロセス終了を通知。</li>
+</ul>
+<h3>MPM クエリインターフェース</h3>
+<ul>
+<li><code>ap_mpm_query(int query_code, int *result)</code>: MPM の能力（スレッド/フォークの有無）や現在の設定値（最大スレッド数、状態など）を取得。</li>
+<li><code>AP_MPMQ_*</code>: クエリ用の定数群。<code>AP_MPMQ_IS_THREADED</code>, <code>AP_MPMQ_MPM_STATE</code> など。</li>
+</ul>
+<h3>プロセス管理</h3>
+<ul>
+<li><code>ap_os_create_privileged_process(...)</code>: 権限を伴うプロセス生成。</li>
+<li><code>ap_mpm_register_timed_callback(...)</code>: 非同期タイマーコールバックの登録（Event MPM 等で利用）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>http_main</code> が <code>mpm</code> フックを呼び出し、MPM が制御権を握ります。 2. **接続処理**: 接続が到着すると、MPM は <code>ap_process_connection</code> を呼び出します。将来的に非同期処理が導入された場合、MPM は接続を保持し、スレッドを跨いで処理を継続する可能性があります。 3. **状態照会**: 他のモジュールは <code>ap_mpm_query</code> を通じて MPM の現在の設定や状態を動的に取得します。 4. **終了処理**: 停止要求時、MPM はプロセスを終了させ、<code>apr_pool_t</code> に登録されたクリーンアップハンドラを呼び出します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_thread_proc.h</code>: プロセスおよびスレッド制御のプリミティブ。</li>
+<li><code>httpd.h</code>: Apache の基本データ構造（<code>server_rec</code>, <code>request_rec</code> 等）。</li>
+<li><code>scoreboard.h</code>: プロセス/スレッドの状態を共有メモリ上で追跡するための構造。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mpm_common.h</code>: 複数の MPM で共通して利用される補助関数群。</li>
+<li><code>scoreboard.h</code>: MPM がプロセス状態を記録するために使用する共有メモリ構造の定義。</li>
+<li><code>http_main.c</code>: MPM を起動し、サーバーのメインループを管理する実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: MPM は <code>pchild</code> プールを管理しており、非正常終了時にはこのプールが破棄され、登録されたクリーンアップが実行されます。</li>
+<li>**シグナル**: MPM は <code>SIGUSR1</code> 等のシグナルを予約する場合があります。ユーザーコードはシグナルハンドラの設定に注意が必要です。</li>
+<li>**非同期性**: 将来的な非同期接続処理を見据えた設計となっており、<code>ap_process_connection</code> が必ずしも同期的に完了するとは限らない点に注意してください。</li>
+<li>**省略された詳細**: 本ファイルはインターフェース定義に特化しており、具体的な MPM 実装（<code>server/mpm/</code> 配下の各ディレクトリ）のロジックは含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__ap_mpm_h__ap_mpm_callback_fn_t.html" target="wiki-view">`ap_mpm_callback_fn_t`</a></li>
+<li><a href="../symbols/include__ap_mpm_h__mpm_child_status.html" target="wiki-view">`mpm_child_status`</a></li>
+<li><a href="../symbols/include__ap_mpm_h__ap_exception_info_t.html" target="wiki-view">`ap_exception_info_t`</a></li>
+</ul></body></html>

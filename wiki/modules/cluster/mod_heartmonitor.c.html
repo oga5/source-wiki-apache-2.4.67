@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cluster/mod_heartmonitor.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cluster/mod_heartmonitor.c</h1>
+<h2>概要</h2>
+<p><code>mod_heartmonitor</code> は、バックエンドサーバーから送信されるハートビート信号（UDP マルチキャストまたは HTTP POST）を監視し、サーバーの稼働状況（busy/ready 状態）を収集・集約する Apache HTTP Server モジュールです。収集したデータは、共有メモリ（<code>slotmem</code>）またはファイルシステム上のファイルに永続化され、ロードバランサー等の他モジュールが参照可能な状態を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/cluster</code> サブシステムにおいて、本モジュールは「監視者」として機能します。<code>mod_heartbeat</code> が送信する情報を集約し、<code>mod_lbmethod_heartbeat</code> 等のロードバランサーが動的にバックエンドの負荷を判断するためのデータソースを構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**監視と収集**: UDP マルチキャストソケットのリスニング、または HTTP ハンドラ経由でのハートビート情報の受信。</li>
+<li>**データ永続化**: 収集したサーバー状態を <code>slotmem</code>（共有メモリ）またはファイルに書き出し、更新する。</li>
+<li>**ライフサイクル管理**: <code>mod_watchdog</code> を利用したバックグラウンドでの監視タスクの実行と、サーバー起動・停止時のリソース管理。</li>
+<li>**設定管理**: <code>HeartbeatListen</code> 等のディレクティブを通じた監視対象アドレスや保存先の設定。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンテキストと状態</h3>
+<ul>
+<li><code>hm_ctx_t</code>: モジュールのサーバー単位の設定と実行時状態を保持する構造体。</li>
+<li><code>hm_server_t</code>: 個々のバックエンドサーバーの稼働状態（IP, ポート, busy/ready 数, 最終確認時刻）。</li>
+<li><code>slotmem</code> / <code>storage</code>: 共有メモリプロバイダーへの参照。</li>
+</ul>
+<h3>ライフサイクルとフック</h3>
+<ul>
+<li><code>hm_post_config</code>: モジュールの初期化、<code>mod_watchdog</code> の登録、共有メモリの確保を行う。</li>
+<li><code>hm_watchdog_callback</code>: <code>mod_watchdog</code> から呼び出されるメインループ。ソケットのポーリングと統計情報の定期更新を担当。</li>
+<li><code>hm_handler</code>: HTTP POST 経由でハートビートを受け取るためのハンドラ。</li>
+</ul>
+<h3>データ更新・変換</h3>
+<ul>
+<li><code>hm_update_stats</code> / <code>hm_update_stat</code>: 共有メモリまたはファイルへの書き込みを抽象化するディスパッチャ。</li>
+<li><code>qs_to_table</code>: クエリ文字列形式のハートビートメッセージを <code>apr_table_t</code> に変換するユーティリティ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>hm_post_config</code> が <code>mod_watchdog</code> を取得し、<code>hm_watchdog_callback</code> を登録します。 2. **監視ループ**: <code>hm_watchdog_callback</code> 内で <code>apr_poll</code> を使用し、UDP ソケットからの入力を待機します。 3. **メッセージ処理**: <code>hm_recv</code> がパケットを受信し、<code>hm_processmsg</code> が内容を解析して <code>hm_server_t</code> を更新（または新規作成）します。 4. **永続化**: <code>hm_watchdog_callback</code> の RUNNING 状態において、<code>hm_update_stats</code> が定期的に呼び出され、ハッシュテーブル内の全サーバー情報を <code>slotmem</code> またはファイルへフラッシュします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_watchdog.h</code>: バックグラウンドタスクの実行。</li>
+<li><code>ap_slotmem.h</code>: 共有メモリによるプロセス間通信。</li>
+<li><code>heartbeat.h</code>: 共通定義。</li>
+<li><code>apr_socket.h</code> / <code>apr_poll.h</code>: UDP 通信とイベント駆動の待機。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_heartbeat.c</code>: ハートビート信号を送信する側のモジュール。</li>
+<li><code>mod_lbmethod_heartbeat.c</code>: 本モジュールが書き出した情報を読み取り、ロードバランシングに利用するモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>hm_ctx_t</code> はサーバーごとの設定を保持し、<code>apr_pool_t</code> を使用してライフサイクルを管理しています。<code>hm_get_server</code> で生成されるサーバー情報は <code>ctx-&gt;p</code> プールに割り当てられます。</li>
+<li>**排他制御**: <code>slotmem</code> の操作において、<code>grab</code>/<code>put</code> を使用した簡易的な更新が行われていますが、複雑なロック機構は <code>slotmem</code> プロバイダーに依存しています。</li>
+<li>**制限事項**: <code>HeartbeatMaxServers</code> が 0 の場合はファイルベースのストレージが使用されますが、ファイル更新時は一時ファイルを作成してリネームするアトミックな更新を行っています。</li>
+<li>**未実装・課題**: <code>HM_UPDATE_SEC</code> は現在マクロ定義ですが、実行時設定への移行が TODO とされています。また、一部のロギングやエラー処理は開発用コードが残っている箇所があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_server_t.html" target="wiki-view">`hm_server_t`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_ctx_t.html" target="wiki-view">`hm_ctx_t`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_slot_server_ctx_t.html" target="wiki-view">`hm_slot_server_ctx_t`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_listen.html" target="wiki-view">`hm_listen`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__qs_to_table.html" target="wiki-view">`qs_to_table`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_update.html" target="wiki-view">`hm_update`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_readid.html" target="wiki-view">`hm_readid`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_slotmem_update_stat.html" target="wiki-view">`hm_slotmem_update_stat`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_update_stat.html" target="wiki-view">`hm_update_stat`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_update_stats.html" target="wiki-view">`hm_update_stats`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_get_server.html" target="wiki-view">`hm_get_server`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartmonitor_c__hm_create_config.html" target="wiki-view">`hm_create_config`</a></li>
+</ul></body></html>

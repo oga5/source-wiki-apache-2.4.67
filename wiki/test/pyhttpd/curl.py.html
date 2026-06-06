@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/pyhttpd/curl.py.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>test/pyhttpd/curl.py</h1>
+<h2>概要</h2>
+<p><code>curl.py</code> は、<code>curl</code> コマンドをサブプロセスとして起動し、HTTP 通信のストリーミングやテストを行うためのラッパーモジュールです。主にテスト環境下で、非同期的なデータ送受信や、通信タイミングの検証を行うために使用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/pyhttpd</code> サブシステムにおいて、外部コマンド <code>curl</code> を利用した統合テストの実行エンジンとして機能します。<code>env.py</code> が提供する環境設定に基づき、テスト対象のサーバーに対して柔軟なリクエスト送信とレスポンス解析を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li><code>curl</code> プロセスのライフサイクル管理（起動、データ送信、終了処理）。</li>
+<li>標準出力および標準エラー出力の非同期キャプチャ。</li>
+<li>送信データと受信データの整合性検証。</li>
+<li><code>stutter_check</code> による、通信の遅延（スタッター）特性の測定とアサーション。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>CurlPiper</code>: 本ファイルのメインクラス。<code>curl</code> プロセスをラップし、ストリームベースの通信を制御します。</li>
+<li><code>CurlPiper.start()</code>: <code>curl</code> プロセスを起動し、出力監視用のスレッドを開始します。</li>
+<li><code>CurlPiper.send()</code>: プロセスの標準入力へデータを書き込みます。</li>
+<li><code>CurlPiper.stutter_check()</code>: データを分割して送信し、各チャンクの受信タイミングが期待通りか検証します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>HttpdTestEnv</code> を受け取り、対象 URL を設定します。 2. **起動**: <code>start()</code> で <code>subprocess.Popen</code> を呼び出し、<code>stdout</code>/<code>stderr</code> を読み取るためのスレッドを生成します。 3. **通信**: <code>send()</code> を通じてデータをパイプに流し込みます。 4. **終了**: <code>close()</code> で入力を閉じ、スレッドの終了を待機し、<code>env.curl_parse_headerfile</code> を介してレスポンスを解析します。 5. **検証**: <code>stutter_check()</code> では、<code>stderr</code> に出力されるトレースログ（<code>--trace-ascii</code>）を正規表現で解析し、受信時刻の差分を計算して遅延を検証します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>subprocess</code>: <code>curl</code> プロセスの実行に使用。</li>
+<li><code>threading.Thread</code>: 出力ストリームの非同期読み取りに使用。</li>
+<li><code>re</code>: <code>curl</code> のトレースログ解析に使用。</li>
+<li><code>datetime</code>, <code>time</code>: 通信タイミングの計算と待機に使用。</li>
+<li><code>test.pyhttpd.env.HttpdTestEnv</code>: テスト環境設定の取得に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/pyhttpd/env.py</code>: <code>curl</code> の引数生成やヘッダーファイルの解析ロジックが含まれており、本クラスの動作の基盤となっています。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本クラスは <code>bufsize=0</code> でプロセスを起動しているため、リアルタイムなデータ送受信が可能です。</li>
+<li><code>stutter_check</code> メソッドは、通信の「間隔」を検証する特殊なテスト用ロジックです。25% の許容誤差（leeway）がハードコードされている点に注意してください。</li>
+<li><code>_end()</code> メソッドは例外発生時にもプロセスを確実にクリーンアップするように設計されています。</li>
+</ul></body></html>

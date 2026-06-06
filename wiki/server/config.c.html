@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/config.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/config.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の設定管理およびモジュールライフサイクル管理の中核を担うファイルです。設定ファイルのパース、モジュールの動的ロード、設定ベクトルのマージ、およびサーバーの初期化プロセスを統括します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールにおける「設定のエンジン」です。<code>http_config.h</code> で定義されたインターフェースを実装し、他のモジュールが提供する設定コマンドを統合して、サーバー全体の構成を構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**モジュール管理**: モジュールのロード、登録、削除、およびフックの管理。</li>
+<li>**設定パース**: 設定ファイル（<code>httpd.conf</code> や <code>.htaccess</code>）の読み込みとツリー構造への変換。</li>
+<li>**設定ベクトル管理**: モジュールごとの設定データ（ディレクトリ、サーバー、リクエスト単位）の作成、マージ、保持。</li>
+<li>**コマンドディスパッチ**: 設定ファイル内のディレクティブを対応するモジュールのハンドラへ振り分け。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>モジュール・フック管理</h3>
+<ul>
+<li><code>ap_top_module</code>: ロード済みモジュールリストの先頭。</li>
+<li><code>ap_add_module()</code> / <code>ap_remove_module()</code>: モジュールの動的追加・削除。</li>
+<li><code>ap_register_hooks()</code>: モジュールのフック関数を登録。</li>
+</ul>
+<h3>設定ベクトル・マージ</h3>
+<ul>
+<li><code>ap_merge_per_dir_configs()</code>: ディレクトリ設定のマージ（継承）。</li>
+<li><code>create_default_per_dir_config()</code>: デフォルトのディレクトリ設定を作成。</li>
+<li><code>merger_func_cache</code>: マージ関数をキャッシュし、高速なアクセスを実現。</li>
+</ul>
+<h3>設定パース・実行</h3>
+<ul>
+<li><code>ap_build_config()</code>: 設定ファイルを読み込み、<code>ap_directive_t</code> ツリーを構築。</li>
+<li><code>ap_walk_config()</code>: 構築されたツリーを走査し、各ディレクティブを実行。</li>
+<li><code>invoke_cmd()</code>: 特定のディレクティブに対応するモジュールのコマンド関数を呼び出す。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: <code>ap_setup_prelinked_modules()</code> が静的モジュールを登録し、設定ベクトル領域を確保。 2.  **パース**: <code>ap_process_resource_config()</code> がファイルを開き、<code>ap_build_config()</code> が行単位でディレクティブを解析。 3.  **ツリー構築**: <code>ap_build_config_sub()</code> がディレクティブを <code>ap_directive_t</code> ノードとしてツリーに追加。 4.  **実行**: <code>ap_walk_config()</code> がツリーを再帰的に走査し、<code>invoke_cmd()</code> を介して各モジュールの設定関数を起動。 5.  **マージ**: リクエスト処理時やサーバー起動時に、<code>ap_merge_per_dir_configs()</code> が階層的な設定をマージして最終的な設定を決定。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_strings.h</code>: APR（Apache Portable Runtime）によるメモリ管理と文字列操作。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: サーバーの基本構造と設定インターフェース。</li>
+<li><code>util_cfgtree.h</code>: 設定ツリー構造の定義。</li>
+<li><code>http_log.h</code>: 設定エラーのログ出力。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_cfgtree.c</code>: 設定ツリーのノード操作関数群。</li>
+<li><code>server/core.c</code>: コアモジュール固有の設定コマンドの実装。</li>
+<li><code>include/http_config.h</code>: 本ファイルで実装されている関数の宣言。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定データは主に <code>apr_pool_t</code> を使用して管理されます。ライフサイクルはサーバーの起動・再起動サイクルに依存します。</li>
+<li>**パフォーマンス**: <code>merger_func_cache</code> は、モジュールリストを毎回辿るコストを避けるための最適化です。</li>
+<li>**制約**: <code>conf_vector_length</code> は動的モジュールのロード数に影響されます。<code>DYNAMIC_MODULE_LIMIT</code> を超える場合は再コンパイルが必要です。</li>
+<li>**省略**: 本ファイル内の <code>ap_hook_*</code> マクロ展開や、詳細なエラーハンドリングのロジックは、コードの可読性を優先して詳細な解説を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__config_c__request_rec.html" target="wiki-view">`request_rec`</a></li>
+<li><a href="../symbols/server__config_c__apr_pool_t.html" target="wiki-view">`apr_pool_t`</a></li>
+<li><a href="../symbols/server__config_c__create_empty_config.html" target="wiki-view">`create_empty_config`</a></li>
+<li><a href="../symbols/server__config_c__ap_create_request_config.html" target="wiki-view">`ap_create_request_config`</a></li>
+<li><a href="../symbols/server__config_c__ap_create_conn_config.html" target="wiki-view">`ap_create_conn_config`</a></li>
+<li><a href="../symbols/server__config_c__ap_create_per_dir_config.html" target="wiki-view">`ap_create_per_dir_config`</a></li>
+<li><a href="../symbols/server__config_c__ap_mod_list.html" target="wiki-view">`ap_mod_list`</a></li>
+<li><a href="../symbols/server__config_c__ap_mod_list_struct.html" target="wiki-view">`ap_mod_list_struct`</a></li>
+<li><a href="../symbols/server__config_c__ap_reset_module_loglevels.html" target="wiki-view">`ap_reset_module_loglevels`</a></li>
+<li><a href="../symbols/server__config_c__arr_elts_param_t.html" target="wiki-view">`arr_elts_param_t`</a></li>
+<li><a href="../symbols/server__config_c__configs.html" target="wiki-view">`configs`</a></li>
+<li><a href="../symbols/server__config_c__ap_init_virtual_host.html" target="wiki-view">`ap_init_virtual_host`</a></li>
+</ul></body></html>

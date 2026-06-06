@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/time-sem.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>test/time-sem.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、HTTPサーバー（<code>http_main.c</code> 等）で使用される各種排他制御（セマフォ）メカニズムのパフォーマンスを測定・比較するためのベンチマークツールです。異なるアーキテクチャやOS環境下でのロック方式の効率性を評価するために設計されています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test</code> モジュール内で、プロセス間同期のプリミティブを検証する役割を担います。特定のコンパイルオプション（<code>-D</code>）を切り替えることで、環境に応じた最適なロック方式を選択するための実験場として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ロック方式の抽象化**: <code>fcntl</code>, <code>flock</code>, <code>SysV sem</code>, <code>pthread mutex</code>, <code>uslock</code> といった複数の同期手法を同一のインターフェース（<code>accept_mutex_*</code>）でラップする。</li>
+<li>**共有メモリ管理**: プロセス間で共有されるカウンタを保持するための共有メモリ領域を確保・管理する。</li>
+<li>**ベンチマーク実行**: 指定された数の子プロセスと反復回数に基づき、ロックの獲得・解放のオーバーヘッドを計測する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>インターフェース（抽象化レイヤー）</h3>
+<ul>
+<li><code>accept_mutex_init()</code>: ロックの初期化。</li>
+<li><code>accept_mutex_child_init()</code>: 子プロセスごとのロック初期化（必要な場合）。</li>
+<li><code>accept_mutex_on()</code> / <code>accept_mutex_off()</code>: ロックの獲得と解放。</li>
+<li><code>accept_mutex_cleanup()</code>: リソースの破棄（ファイル削除等）。</li>
+</ul>
+<h3>共有メモリ管理</h3>
+<ul>
+<li><code>get_shared_mem(size)</code>: <code>mmap</code> または <code>shmget/shmat</code> を使用して共有メモリを割り当てる。</li>
+</ul>
+<h3>制御フロー用マクロ</h3>
+<ul>
+<li><code>YIELD</code>: <code>sched_yield()</code> または <code>select()</code> を用いた擬似的なスレッド/プロセス譲渡。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>main</code> が <code>get_shared_mem</code> で共有カウンタを確保し、<code>accept_mutex_init</code> でロックを準備する。 2. **プロセス生成**: 親プロセスがロックを保持した状態で <code>fork()</code> を繰り返す。これにより、全子プロセスが生成されるまで処理が開始されないように制御する。 3. **計測ループ**:</p>
+<ul>
+<li>子プロセスは <code>accept_mutex_on</code> でロックを獲得し、共有カウンタをインクリメント後、<code>YIELD</code> を挟んで <code>accept_mutex_off</code> で解放する。</li>
+<li>親プロセスは全子プロセスの終了を <code>wait()</code> で待機する。</li>
+<p>4. **集計**: 終了時刻から開始時刻を差し引き、経過時間を標準出力する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li>**同期**: <code>fcntl.h</code>, <code>sys/file.h</code>, <code>sys/sem.h</code>, <code>pthread.h</code>, <code>ulocks.h</code></li>
+<li>**メモリ**: <code>sys/mman.h</code>, <code>sys/shm.h</code></li>
+<li>**システム**: <code>sys/time.h</code>, <code>unistd.h</code>, <code>signal.h</code>, <code>sys/wait.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>http_main.c</code>: 本ファイルで検証されるロック方式が実際に組み込まれるメインサーバーコード。</li>
+<li><code>test/test_limits.c</code>: システムリソース制限を確認する関連テスト。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: 共有メモリは <code>mmap</code> または <code>shmget</code> で確保され、プロセス終了時にカーネルによって解放されるか、<code>shmctl(IPC_RMID)</code> で明示的に破棄されます。</li>
+<li>**移植性**: <code>NO_SEM_UNDO</code> や <code>NEED_UNION_SEMUN</code> などの定義は、Solaris 等の特定のOS環境における制限を回避するためのものです。</li>
+<li>**注意点**: 本コードはベンチマーク専用であり、エラーハンドリングは <code>exit(1)</code> による即時終了が基本です。</li>
+<li>**省略された詳細**: <code>MOVEBREAK</code> 関連のコードは、古いSysV系OSでのメモリ配置問題を回避するための特殊なハックであり、現代のシステムではほぼ不要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/test__time-sem_c__accept_mutex_child_init.html" target="wiki-view">`accept_mutex_child_init`</a></li>
+<li><a href="../symbols/test__time-sem_c__accept_mutex_cleanup.html" target="wiki-view">`accept_mutex_cleanup`</a></li>
+<li><a href="../symbols/test__time-sem_c__accept_mutex_init.html" target="wiki-view">`accept_mutex_init`</a></li>
+<li><a href="../symbols/test__time-sem_c__accept_mutex_on.html" target="wiki-view">`accept_mutex_on`</a></li>
+<li><a href="../symbols/test__time-sem_c__accept_mutex_off.html" target="wiki-view">`accept_mutex_off`</a></li>
+<li><a href="../symbols/test__time-sem_c__get_shared_mem.html" target="wiki-view">`get_shared_mem`</a></li>
+<li><a href="../symbols/test__time-sem_c__main.html" target="wiki-view">`main`</a></li>
+</ul></body></html>

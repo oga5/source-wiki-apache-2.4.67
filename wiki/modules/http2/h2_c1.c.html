@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c1.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c1.c</h1>
+<h2>概要</h2>
+<p><code>h2_c1.c</code> は、Apache HTTP Server における HTTP/2 プロトコル処理の「プライマリ接続（C1）」を管理する中心的なモジュールです。クライアントから直接接続されたコネクションを監視し、HTTP/2 へのアップグレードまたは直接検出（H2Direct）を行い、セッションのライフサイクルを制御します。</p>
+<h2>モジュール内での役割</h2>
+<p>HTTP/2 サブシステムにおける「フロントエンド」として機能します。<code>h2_session.c</code> がプロトコルロジックを担うのに対し、本ファイルは Apache の <code>conn_rec</code>（接続レコード）と HTTP/2 セッションを橋渡しし、MPM（Multi-Processing Module）の接続状態管理と統合します。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続の初期化と検出**: HTTP/1.1 接続からのプロトコル切り替え（Upgrade）や、マジックトークンによる直接検出（H2Direct）の実行。</li>
+<li>**ライフサイクル管理**: <code>h2_session</code> の生成、実行、および終了処理。</li>
+<li>**MPM 統合**: 非同期 MPM（Event MPM 等）と同期 MPM の両方に対応した接続状態（<code>CONN_STATE</code>）の遷移管理。</li>
+<li>**リソース管理**: ワーカープール（<code>h2_workers</code>）の初期化とシャットダウン。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><code>h2_c1_child_init</code>: 子プロセス起動時にワーカープールと設定を初期化。</li>
+<li><code>h2_c1_child_stopping</code>: プロセス終了時のワーカーリソース解放。</li>
+<li><code>h2_c1_setup</code>: <code>h2_session</code> を生成し、接続コンテキストに割り当て。<code>reqtimeout</code> フィルタの除去を行う。</li>
+</ul>
+<h3>接続処理・フック</h3>
+<ul>
+<li><code>h2_c1_hook_process_connection</code>: <code>process_connection</code> フックの本体。HTTP/2 への切り替え判定とセッション実行のトリガー。</li>
+<li><code>h2_c1_run</code>: セッションのメインループ。MPM の状態に応じて読み取り待ちや書き込み完了状態へ遷移させる。</li>
+<li><code>h2_c1_pre_close</code>: 接続終了直前の GOAWAY 送信等のクリーンアップ。</li>
+</ul>
+<h3>判定・設定</h3>
+<ul>
+<li><code>h2_c1_allows_direct</code>: H2Direct 設定とプロトコル適合性の確認。</li>
+<li><code>h2_c1_can_upgrade</code>: Upgrade ヘッダーによるプロトコル切り替えの可否判定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **接続フック**: <code>h2_c1_hook_process_connection</code> が呼ばれ、<code>AP_MODE_SPECULATIVE</code> で 24 バイトを先読みし、HTTP/2 マジックトークンを検証。 2. **セッション生成**: 検出成功時、<code>h2_c1_setup</code> が呼ばれ、<code>h2_session</code> オブジェクトが生成される。 3. **メインループ**: <code>h2_c1_run</code> が <code>h2_session_process</code> を呼び出し、HTTP/2 フレームを処理。 4. **状態遷移**: <code>h2_session</code> の状態（<code>H2_SESSION_ST_*</code>）に基づき、<code>c-&gt;cs-&gt;state</code> を <code>CONN_STATE_ASYNC_WAITIO</code> や <code>CONN_STATE_WRITE_COMPLETION</code> に設定し、MPM に制御を戻す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>h2_session.h</code>, <code>h2_workers.h</code>: セッションロジックと並列処理基盤。</li>
+<li><code>h2_conn_ctx.h</code>: 接続ごとの HTTP/2 コンテキスト管理。</li>
+<li><code>http_connection.h</code>, <code>http_protocol.h</code>: Apache コアの接続・プロトコル制御 API。</li>
+<li><code>ap_mpm.h</code>: MPM 固有の動作（非同期 I/O 等）のクエリ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_session.c</code>: HTTP/2 セッションの内部状態遷移とフレーム処理。</li>
+<li><code>h2_c2.c</code>: HTTP/2 ストリームごとのバックエンド処理（C2）。</li>
+<li><code>h2_conn_ctx.c</code>: 接続コンテキストのデータ構造定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_session</code> は接続プール（<code>c-&gt;pool</code>）に関連付けられ、接続の終了とともに解放されます。</li>
+<li>**制約**: <code>reqtimeout</code> フィルタは HTTP/1.1 専用であるため、HTTP/2 確立時に明示的に除去されます。</li>
+<li>**非同期 MPM**: <code>async_mpm</code> フラグにより、Event MPM などの非同期 I/O をサポートする MPM と、従来の Prefork/Worker MPM での挙動を切り替えています。</li>
+<li>**注意点**: <code>h2_c1_run</code> 内の <code>CONN_STATE_ASYNC_WAITIO</code> への遷移は、PR 63534 に関連する複雑な互換性処理を含んでおり、MPM の動作に強く依存します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_child_init.html" target="wiki-view">`h2_c1_child_init`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_child_stopping.html" target="wiki-view">`h2_c1_child_stopping`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_setup.html" target="wiki-view">`h2_c1_setup`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_run.html" target="wiki-view">`h2_c1_run`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_pre_close.html" target="wiki-view">`h2_c1_pre_close`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_allows_direct.html" target="wiki-view">`h2_c1_allows_direct`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_can_upgrade.html" target="wiki-view">`h2_c1_can_upgrade`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_hook_process_connection.html" target="wiki-view">`h2_c1_hook_process_connection`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_hook_pre_close.html" target="wiki-view">`h2_c1_hook_pre_close`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_c__h2_c1_register_hooks.html" target="wiki-view">`h2_c1_register_hooks`</a></li>
+</ul></body></html>

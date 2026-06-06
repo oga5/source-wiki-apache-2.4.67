@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/ssl_engine_log.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/ssl_engine_log.c</h1>
+<h2>概要</h2>
+<p><code>ssl_engine_log.c</code> は、<code>mod_ssl</code> における診断情報の出力とエラーハンドリングを抽象化するロギング施設です。OpenSSL のエラーキューを Apache のログシステムへ統合し、特に X.509 証明書に関連する複雑なエラーメッセージを整形して出力する機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> の他のコンポーネントが OpenSSL の低レベルなエラーを直接扱うのではなく、本ファイルの関数を介してログを出力することで、一貫したエラーフォーマットと、一般的なエラーに対するヒント（アノテーション）の付与を実現しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**OpenSSL エラーの変換**: OpenSSL のエラーキューを読み取り、Apache のログレベルに合わせて整形・出力する。</li>
+<li>**エラーアノテーション**: よくある SSL エラーパターンに対し、原因究明に役立つ補足説明を自動付与する。</li>
+<li>**証明書情報の詳細出力**: X.509 証明書に関連するエラー発生時に、サブジェクト、発行者、シリアル番号、有効期限などのメタデータをログに埋め込む。</li>
+<li>**ログ出力の抽象化**: <code>server_rec</code>, <code>conn_rec</code>, <code>request_rec</code> の各コンテキストに応じた適切なログ出力関数の提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>エラーアノテーション</h3>
+<ul>
+<li><code>ssl_log_annotate</code>: エラー文字列のパターンと、それに対応する説明文を保持する静的配列。</li>
+<li><code>ssl_log_annotation()</code>: エラー文字列を受け取り、一致するアノテーションを返すヘルパー。</li>
+</ul>
+<h3>OpenSSL エラー処理</h3>
+<ul>
+<li><code>modssl_ERR_peek_error_data()</code>: OpenSSL バージョン差異（1.1.x vs 3.0+）を吸収し、エラー情報を取得するインライン関数。</li>
+<li><code>ssl_log_ssl_error()</code>: OpenSSL エラーキューを走査し、アノテーションを付与してログ出力するメイン関数。</li>
+</ul>
+<h3>証明書エラーロギング</h3>
+<ul>
+<li><code>ssl_log_cert_error()</code>: 証明書情報を <code>BIO</code> を介して文字列化し、ログメッセージに結合する内部関数。</li>
+<li><code>ssl_log_xerror</code>, <code>ssl_log_cxerror</code>, <code>ssl_log_rxerror</code>: それぞれ <code>server</code>, <code>connection</code>, <code>request</code> コンテキストに対応した公開ラッパー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **SSL エラー出力**: <code>ssl_log_ssl_error</code> が <code>modssl_ERR_peek_error_data</code> をループで呼び出し、OpenSSL のエラーキューを空になるまで処理します。各エラーに対し <code>ssl_log_annotation</code> でヒントを検索し、<code>ap_log_error</code> で出力します。 2. **証明書エラー出力**: <code>ssl_log_xerror</code> 等のラッパーが <code>va_list</code> を作成し、<code>ssl_log_cert_error</code> を呼び出します。 3. **証明書情報の整形**: <code>ssl_log_cert_error</code> 内で <code>BIO_s_mem()</code> を使用し、X.509 証明書の各フィールドを一時的なメモリバッファに書き出します。その後、元のメッセージと結合して <code>ap_log_*error</code> に渡します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: <code>mod_ssl</code> の内部構造体定義および <code>modssl_X509_NAME_to_string</code> などのユーティリティ関数へのアクセス。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_util_ssl.c</code>: 証明書情報の文字列化（<code>modssl_X509_NAME_to_string</code>）など、証明書操作の基盤。</li>
+<li><code>mod_ssl.c</code>: モジュールの初期化と設定。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ssl_log_cert_error</code> 内での証明書情報の文字列化には、呼び出し元から渡された <code>apr_pool_t</code> を使用します。<code>BIO</code> は関数内で生成・解放されます。</li>
+<li>**OpenSSL 3.0 対応**: <code>modssl_ERR_peek_error_data</code> は OpenSSL 3.0 での API 変更を隠蔽するための重要な互換レイヤーです。</li>
+<li>**制限事項**: <code>ssl_log_cert_error</code> 内の <code>maxdnlen</code> 計算は、ログ行の最大長（<code>HUGE_STRING_LEN</code>）を考慮した安全な設計になっています。</li>
+<li>**省略された詳細**: 本ファイルはロギングに特化しており、SSL ハンドシェイクや暗号化通信のロジックは含みません。また、ログ出力のパフォーマンスへの影響を最小限にするため、<code>APLOG_IS_LEVEL</code> による事前チェックが行われています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_log_annotation.html" target="wiki-view">`ssl_log_annotation`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_die.html" target="wiki-view">`ssl_die`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__modssl_ERR_peek_error_data.html" target="wiki-view">`modssl_ERR_peek_error_data`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_log_ssl_error.html" target="wiki-view">`ssl_log_ssl_error`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_log_cert_error.html" target="wiki-view">`ssl_log_cert_error`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_log_xerror.html" target="wiki-view">`ssl_log_xerror`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_log_cxerror.html" target="wiki-view">`ssl_log_cxerror`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_log_c__ssl_log_rxerror.html" target="wiki-view">`ssl_log_rxerror`</a></li>
+</ul></body></html>

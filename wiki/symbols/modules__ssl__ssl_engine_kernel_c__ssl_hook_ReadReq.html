@@ -6,22 +6,49 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_kernel.c:132</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエスト処理の初期段階（ReadReq フェーズ）において、SSL 接続の検証、SNI ポリシーの適用、およびリクエストと SSL コンテキストの紐付けを行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_hook_ReadReq(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （現在の HTTP リクエスト構造体）</li>
+<li>**出力**: <code>int</code> （Apache のステータスコード。成功時は <code>DECLINED</code>、エラー時は <code>HTTP_BAD_REQUEST</code>、<code>HTTP_FORBIDDEN</code>、<code>HTTP_SERVICE_UNAVAILABLE</code>、<code>HTTP_MISDIRECTED_REQUEST</code> を返す）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>sslconn</code>（<code>SSLConnRec</code>）が接続またはマスター接続から取得可能であること。</li>
+<li><code>sslconn-&gt;service_unavailable</code> が設定されている場合、リクエストは拒否される。</li>
+<li><code>sslconn-&gt;non_ssl_request</code> が <code>NON_SSL_SET_ERROR_MSG</code> の場合、平文 HTTP を SSL ポートで受信したと判断し、エラーを返す。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **接続コンテキストの取得**: 現在のリクエストまたはマスター接続から <code>SSLConnRec</code> を特定する。 2. **状態チェック**: サービス利用不可状態や、平文 HTTP 誤送信のチェックを行い、該当すれば即座にエラーを返す。 3. **SNI 検証**: <code>HAVE_TLSEXT</code> が有効な場合、初期リクエストに対して以下を実行する。</p>
+<ul>
+<li>SNI でホスト名が提供されているが HTTP リクエストにホスト名がない場合のチェック。</li>
+<li><code>strict_sni_vhost_check</code> が有効な場合の SNI ホスト名欠落チェック。</li>
+<li><code>ssl_check_vhost_sni_policy</code> による SSL 設定の互換性検証。</li>
+<p>4. **紐付け**: <code>modssl_set_app_data2</code> を使用して、OpenSSL の <code>SSL</code> オブジェクトに現在の <code>request_rec</code> を登録する。 5. **環境設定**: <code>ssl_configure_env</code> を呼び出し、SSL 関連の環境変数を設定する。 6. **終了**: 処理を継続するため <code>DECLINED</code> を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/mod_ssl.c</code> の <code>ap_hook_post_read_request</code> に登録されている。</li>
+<li>**呼び出し先**: <code>ssl_check_vhost_sni_policy</code>（SNI ポリシー検証）、<code>ssl_configure_env</code>（環境変数設定）、<code>modssl_set_app_data2</code>（OpenSSL へのデータ格納）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: HTTP リクエスト情報。</li>
+<li><code>SSLSrvConfigRec</code>: サーバー単位の SSL 設定。</li>
+<li><code>SSLConnRec</code>: 接続単位の SSL 状態管理構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**HTTP_SERVICE_UNAVAILABLE**: SSL プロパティが不完全な場合。</li>
+<li>**HTTP_BAD_REQUEST**: 平文 HTTP を SSL ポートで受信した場合、または SNI ホスト名と HTTP ホスト名の不整合。</li>
+<li>**HTTP_FORBIDDEN**: SNI が必須の環境で SNI が提供されなかった場合。</li>
+<li>**HTTP_MISDIRECTED_REQUEST**: SNI ポリシーによる互換性チェックに失敗した場合。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>post_read_request</code> フックとして動作する。</li>
+<li><code>HAVE_TLSEXT</code> 定義の有無により SNI 関連のロジックが条件付きでコンパイルされる。</li>
+<li><code>sslconn-&gt;non_ssl_request</code> のリセット処理は、エラー発生後の状態遷移を制御する重要な箇所である。</li>
 </ul></body></html>

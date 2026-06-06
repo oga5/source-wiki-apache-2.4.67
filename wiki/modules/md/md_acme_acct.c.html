@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_acme_acct.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_acme_acct.c</h1>
+<h2>概要</h2>
+<p>ACME プロトコルにおけるアカウントの管理、永続化、およびサーバーとの同期を担当するモジュールです。ACME アカウントの作成、更新、利用規約（ToS）への同意、およびアカウントの無効化を制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ACME サーバーとクライアント（Apache HTTP Server）を結びつける認証情報のライフサイクルを管理します。<code>md_store</code> を介してディスク上のアカウント情報（JSON）と秘密鍵（PEM）を管理し、<code>md_acme</code> の上位ロジックにアカウント状態を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**アカウントの永続化**: アカウント情報（JSON）と秘密鍵（PEM）の読み書き。</li>
+<li>**サーバー同期**: ACME サーバーに対するアカウント情報の更新および新規登録。</li>
+<li>**検索と照合**: 特定のドメイン（MD）や URL に適合するアカウントの検索と検証。</li>
+<li>**EAB（External Account Binding）**: 外部アカウントバインディングの署名と検証。</li>
+<li>**利用規約管理**: サーバーが要求する ToS への同意状態の追跡と更新。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>アカウント管理</h3>
+<ul>
+<li><code>md_acme_acct_t</code>: アカウント情報を保持する主要構造体。</li>
+<li><code>md_acme_acct_save</code> / <code>md_acme_acct_load</code>: <code>md_store</code> を用いたアカウントの永続化操作。</li>
+<li><code>md_acme_acct_register</code>: 新規アカウントの作成とサーバーへの登録。</li>
+<li><code>md_acme_acct_update</code>: サーバーから最新のアカウント情報を取得し同期。</li>
+</ul>
+<h3>検索・照合</h3>
+<ul>
+<li><code>md_acme_find_acct_for_md</code>: 指定されたドメインに最適なアカウントを検索。</li>
+<li><code>md_acme_acct_matches_md</code>: アカウントが特定のドメインの要件（CA URL、EAB 設定）を満たすか判定。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>md_acme_acct_to_json</code> / <code>md_acme_acct_from_json</code>: アカウント構造体と JSON 間のシリアライズ。</li>
+<li><code>md_acme_agree</code>: サーバーに対して ToS 同意を通知。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **検索**: <code>md_acme_find_acct_for_md</code> が <code>md_store_iter</code> を呼び出し、<code>find_acct</code> コールバックで候補を走査。 2. **検証**: <code>acct_find_and_verify</code> が見つかったアカウントに対して <code>md_acme_acct_validate</code> を実行し、サーバー側での有効性を確認。 3. **更新**: <code>md_acme_POST</code> を経由して ACME サーバーと通信。<code>on_init_acct_upd</code> でリクエストを初期化し、<code>acct_upd</code> でレスポンスを解析して <code>md_acme_acct_t</code> を更新。 4. **EAB**: <code>get_eab</code> が JWS 署名を用いて外部アカウントバインディングを計算し、登録リクエストに付与。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_</code> 系: メモリ管理（プール）、ファイル操作、ハッシュ、配列。</li>
+<li><code>md_store.h</code>: アカウント情報の永続化ストレージ。</li>
+<li><code>md_acme.h</code>: ACME プロトコル通信の基盤。</li>
+<li><code>md_json.h</code> / <code>md_jws.h</code>: ACME サーバーとの通信データ形式と署名。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_store.c</code>: アカウントデータが保存される物理的な場所。</li>
+<li><code>md_acme.c</code>: 本モジュールが利用する低レベルの ACME 通信ロジック。</li>
+<li><code>md_acme_acct.h</code>: 構造体定義と公開 API。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての操作は <code>apr_pool_t</code> に依存しており、ライフサイクルは呼び出し元のプールに紐付きます。</li>
+<li>**エラー処理**: <code>APR_EAGAIN</code> はアカウントの再検証や再試行が必要な場合に頻繁に使用されます。</li>
+<li>**永続化の不変条件**: アカウント ID は <code>ACME-&lt;servername&gt;-&lt;index&gt;</code> の形式で生成され、<code>account.json</code> と <code>account.pem</code> がペアで管理されます。</li>
+<li>**制限事項**: 本ファイルは ACME プロトコルのアカウント管理に特化しており、証明書発行の注文（Order）ロジックは <code>md_acme_order.c</code> に分離されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__acct_make.html" target="wiki-view">`acct_make`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__mk_acct_id.html" target="wiki-view">`mk_acct_id`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__mk_acct_pattern.html" target="wiki-view">`mk_acct_pattern`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__acct_st_from_str.html" target="wiki-view">`acct_st_from_str`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__md_acme_acct_to_json.html" target="wiki-view">`md_acme_acct_to_json`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__md_acme_acct_from_json.html" target="wiki-view">`md_acme_acct_from_json`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__md_acme_acct_save.html" target="wiki-view">`md_acme_acct_save`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__md_acme_acct_load.html" target="wiki-view">`md_acme_acct_load`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__md_acme_acct_matches_url.html" target="wiki-view">`md_acme_acct_matches_url`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__md_acme_acct_matches_md.html" target="wiki-view">`md_acme_acct_matches_md`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__find_ctx.html" target="wiki-view">`find_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_acme_acct_c__acct_ctx_t.html" target="wiki-view">`acct_ctx_t`</a></li>
+</ul></body></html>

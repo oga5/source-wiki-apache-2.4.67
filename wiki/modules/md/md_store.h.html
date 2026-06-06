@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_store.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_store.h</h1>
+<h2>概要</h2>
+<p><code>md_store.h</code> は、Apache HTTP Server のマネージド・ドメイン（MD）機能におけるデータ永続化層の抽象インターフェースを定義します。ドメイン設定、証明書、秘密鍵、ACME アカウント情報などのリソースを、グループ・ドメイン名・アスペクトの3階層キーで管理するための仕組みを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおけるデータアクセスの「抽象レイヤー」です。具体的なストレージ実装（ファイルシステムなど）からロジックを分離し、上位モジュールがストレージの物理的な場所や形式を意識せずにデータを操作できるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**抽象化**: <code>md_store_t</code> 構造体による関数ポインタの定義を通じ、ストレージ操作のインターフェースを統一する。</li>
+<li>**データ管理**: 証明書や鍵などの型（<code>md_store_vtype_t</code>）と、用途別のグループ（<code>md_store_group_t</code>）を定義し、一貫したアクセスルールを強制する。</li>
+<li>**ライフサイクル管理**: データのロード、保存、削除、移動、および更新時刻の比較といった基本操作の提供。</li>
+<li>**排他制御**: グローバルロック機能による、複数プロセス間でのデータ整合性の保護。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>md_store_t</code>: ストレージ操作を抽象化した構造体。実装（<code>md_store_fs.c</code> など）はこの構造体を初期化して使用する。</li>
+<li><code>md_store_group_t</code>: データの用途区分（<code>MD_SG_DOMAINS</code>, <code>MD_SG_ACCOUNTS</code> など）。セキュリティやアクセス制限の境界となる。</li>
+<li><code>md_store_vtype_t</code>: データの型定義。JSON、PEM証明書、秘密鍵などを区別し、適切なシリアライズ/デシリアライズを支援する。</li>
+<li><code>md_store_load</code> / <code>md_store_save</code>: 汎用的なデータ入出力関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 実装側が <code>md_store_t</code> の各関数ポインタを実装し、システム起動時に登録する。 2. **アクセス**: 上位モジュールが <code>md_store_load</code> などのラッパー関数を呼び出す。 3. **ディスパッチ**: ラッパー関数は <code>md_store_t</code> 内の関数ポインタを経由して、具体的なストレージ実装（例：ファイルシステム操作）を呼び出す。 4. **データ変換**: <code>vtype</code> に基づき、メモリ上の構造体とストレージ上の形式（JSONやPEM）の相互変換が行われる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_lib.h</code>, <code>apr_hash.h</code> 等の Apache Portable Runtime (APR) ライブラリ。</li>
+<li><code>md.h</code>: 基本的なドメイン定義。</li>
+<li><code>md_json.h</code>: JSON 形式のデータ操作。</li>
+<li><code>md_crypt.h</code>: 暗号化関連の定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_store.c</code>: <code>md_store.h</code> で定義されたインターフェースのラッパー実装。</li>
+<li><code>md_store_fs.c</code>: ファイルシステムを用いた具体的なストレージ実装。</li>
+<li><code>md_reg.c</code>: <code>md_store</code> を利用してドメイン登録情報を管理する上位モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**グループの重要性**: <code>MD_SG_DOMAINS</code> や <code>MD_SG_ARCHIVE</code> などのグループは、httpd の起動フェーズによってアクセス権限が異なる場合があります。実装や利用時には注意してください。</li>
+<li>**拡張性**: 新しいストレージバックエンド（データベースなど）を追加する場合は、<code>md_store_t</code> の関数ポインタを実装するだけで済みます。</li>
+<li>**メモリ管理**: すべてのロード操作は <code>apr_pool_t</code> を介して行われます。メモリリークを防ぐため、適切なプールライフサイクルを維持してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_store_h__md_store_t.html" target="wiki-view">`md_store_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_h__md_store_vtype_t.html" target="wiki-view">`md_store_vtype_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_h__md_store_group_t.html" target="wiki-view">`md_store_group_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_h__apr_pool_t.html" target="wiki-view">`apr_pool_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_h__md_credentials_t.html" target="wiki-view">`md_credentials_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_h__apr_time_t.html" target="wiki-view">`apr_time_t`</a></li>
+</ul></body></html>

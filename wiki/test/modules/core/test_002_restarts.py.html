@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/core/test_002_restarts.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>test/modules/core/test_002_restarts.py</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server のプロセス管理（MPM）における再起動およびリロード時の子プロセス生成・終了挙動を検証するテストスイートです。<code>h2load</code> を用いた負荷環境下で、サーバーの動的なスケーリングと世代交代が正しく行われるかをログ解析を通じて確認します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/core</code> モジュールの一部として、サーバーのコア機能である「プロセスライフサイクル管理」の堅牢性を検証します。他のテストがエンコーディング等の静的な検証を行うのに対し、本ファイルは時間経過を伴う動的な状態遷移を扱います。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷生成**: <code>Loader</code> クラスによる並列リクエストの実行。</li>
+<li>**ログ解析**: <code>ChildDynamics</code> クラスによる <code>error_log</code> からのプロセス生成・終了イベントの抽出と時系列解析。</li>
+<li>**ライフサイクル検証**: 設定変更やリロードに伴う子プロセスの世代交代（Generation）が期待通りに行われるかの検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>Loader</code>: <code>h2load</code> をラップし、バックグラウンドで負荷をかけ続けるためのヘルパークラス。</li>
+<li><code>ChildDynamics</code>: ログファイルをパースし、正規表現を用いて子プロセスの PID、世代、アクション（started/stopped）を抽出する解析器。</li>
+<li><code>TestRestarts</code>: <code>pytest</code> クラス。<code>STRESS_TEST</code> 環境変数と <code>h2load</code> のバージョンチェックを前提条件として実行されます。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>HttpdConf</code> を用いて、少ないスレッド数でプロセスが頻繁に生成されるようなタイトな設定を投入します。 2. **負荷開始**: <code>Loader</code> が別スレッドで起動し、CGI スクリプトに対してリクエストを送信します。 3. **動的監視**: <code>ChildDynamics</code> がログを読み込み、初期状態（世代0）のプロセス生成を検知します。 4. **リロード検証**: <code>env.apache_reload()</code> を実行後、一定時間待機し、世代0のプロセスが停止し、新しい世代のプロセスが生成されているかをログから照合します。 5. **終了**: <code>loader.join()</code> で負荷を終了させ、最終的なプロセス停止を確認します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>os</code>, <code>re</code>, <code>time</code>, <code>threading</code>: 標準ライブラリ。</li>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>.env.CoreTestEnv</code>: テスト環境の抽象化。</li>
+<li><code>pyhttpd.conf.HttpdConf</code>: Apache 設定生成用ユーティリティ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/modules/core/env.py</code>: テスト環境の基盤設定。</li>
+<li><code>test/modules/core/conftest.py</code>: テスト実行に必要なフィクスチャ定義。</li>
+<li><code>pyhttpd</code> パッケージ: Apache 制御用の基盤ライブラリ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**タイミング依存**: 本テストは <code>time.sleep()</code> を使用しており、環境負荷によってはテストが不安定になる可能性があります。</li>
+<li>**ログ解析の前提**: <code>ChildDynamics</code> は <code>mpm_event</code> のログフォーマットに強く依存しています。ログ出力形式が変更された場合、正規表現の修正が必要です。</li>
+<li>**実行条件**: <code>STRESS_TEST</code> 環境変数が設定されていない場合、テストはスキップされます。CI環境で実行する際は注意してください。</li>
+</ul></body></html>

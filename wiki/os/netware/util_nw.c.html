@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>os/netware/util_nw.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>os/netware/util_nw.c</h1>
+<h2>概要</h2>
+<p>NetWare 環境における Apache HTTP Server のライフサイクル管理およびプロセス制御をサポートするユーティリティファイルです。主に NLM (NetWare Loadable Module) としての起動・終了処理と、OS レベルのイベント通知機構とのブリッジを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>os/netware</code> サブシステムの一部として、Apache のコア機能と NetWare OS 特有の API を接続します。特に、サーバーのシャットダウンイベントの捕捉や、特権プロセス生成の抽象化を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**NLM ライフサイクル管理**: <code>_NonAppStart</code> および <code>_NonAppCheckUnload</code> を通じて、モジュールのロード・アンロード時のフックを提供します。</li>
+<li>**イベント通知**: NetWare の <code>EVENT_DOWN_SERVER</code> を監視し、サーバー停止時に適切なクリーンアップ処理を実行します。</li>
+<li>**プロセス抽象化**: <code>ap_os_create_privileged_process</code> を提供し、プラットフォーム固有のプロセス生成を Apache の標準的な <code>apr_proc_create</code> にマッピングします。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>_NonAppStart</code>: NLM 起動時に呼び出されるエントリーポイント。イベント通知の登録と終了ハンドラのセットアップを行います。</li>
+<li><code>ap_down_server_cb</code>: サーバー停止イベント発生時に実行されるコールバック関数。</li>
+<li><code>ap_cb_destroy</code>: モジュール終了時にリソース（イベント通知やインターフェース）を解放するクリーンアップ関数。</li>
+<li><code>ap_os_create_privileged_process</code>: 特権プロセス生成のためのラッパー関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **起動時**: <code>_NonAppStart</code> が OS から呼び出され、<code>AllocateResourceTag</code> でリソースを確保します。<code>RegisterForEventNotification</code> を使用して <code>EVENT_DOWN_SERVER</code> を購読し、終了ハンドラを <code>NXVmRegisterExitHandler</code> で登録します。 2.  **実行中**: サーバーが停止シグナルを受け取ると、<code>ap_down_server_cb</code> がトリガーされ、<code>nlmUnloadSignaled</code> を呼び出して終了処理を開始します。 3.  **終了時**: <code>ap_cb_destroy</code> が呼び出され、<code>UnRegisterEventNotification</code> でイベント購読を解除し、<code>NX_UNWRAP_INTERFACE</code> でインターフェース参照を解放します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_log.h</code>, <code>ap_mpm.h</code>: Apache HTTP Server のコア定義。</li>
+<li><code>netware.h</code>, <code>nks/netware.h</code>, <code>nks/vm.h</code>: NetWare Kernel Services (NKS) および NetWare OS 特有のシステム API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>os/netware/os.h</code>: NetWare 用の OS 抽象化定義。</li>
+<li><code>os/netware/modules.c</code>: NetWare 上でのモジュール構成管理。</li>
+<li><code>apr_proc_create</code> (APR): <code>ap_os_create_privileged_process</code> の内部で呼び出されるプロセス生成関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは NetWare 特有の NLM 構造に強く依存しています。<code>#pragma unused</code> を多用しているのは、NLM の標準的なエントリーポイントシグネチャに合わせるためです。</li>
+<li><code>ref</code> や <code>dum</code> といった変数は、NetWare のインターフェースラッパー（<code>NX_WRAP_INTERFACE</code>）で使用される一時的な参照保持用です。</li>
+<li>NetWare 環境以外ではコンパイルされないことを前提としています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_os_create_privileged_process.html" target="wiki-view">`ap_os_create_privileged_process`</a></li>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_down_server_cb.html" target="wiki-view">`ap_down_server_cb`</a></li>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_dummy_cb.html" target="wiki-view">`ap_dummy_cb`</a></li>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_cb_destroy.html" target="wiki-view">`ap_cb_destroy`</a></li>
+</ul></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm/worker/worker.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>server/mpm/worker/worker.c</h1>
+<h2>概要</h2>
+<p><code>worker.c</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）である <code>worker</code> の実装です。各子プロセスが複数のスレッドを生成し、各スレッドが単一の接続を処理するハイブリッドなマルチプロセス・マルチスレッドモデルを提供します。従来のプロセスベースの MPM が抱えていた、スレッド間での <code>accept</code> 競合やクリーンな終了処理の困難さを解決するために設計されています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server/mpm/worker</code> モジュールの中核であり、プロセス管理、スレッド生成、リスナーとワーカー間の接続受け渡し、およびシグナル処理を担います。<code>mpm_common.h</code> や <code>mpm_fdqueue.h</code> などの共通ライブラリを利用し、OS 固有のプロセス・スレッド制御を抽象化します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: <code>fork</code> による子プロセスの生成と、スコアボードを用いた死活監視。</li>
+<li>**スレッド管理**: リスナー用スレッドと、リクエスト処理用ワーカープールスレッドの生成・管理。</li>
+<li>**接続の受け渡し**: リスナーが受け取ったソケットを <code>fd_queue</code> を介してワーカーへ引き渡す。</li>
+<li>**ライフサイクル制御**: 設定の検証、 graceful/ungraceful な再起動・終了処理、およびリソースのクリーンアップ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・状態管理</h3>
+<ul>
+<li><code>threads_per_child</code>, <code>server_limit</code>, <code>thread_limit</code>: MPM の動作を規定する主要な制限値。</li>
+<li><code>retained</code>: モジュール再読み込み時にも保持されるデータ構造（世代管理や spawn レートなど）。</li>
+<li><code>worker_queue</code>, <code>worker_queue_info</code>: リスナーとワーカー間でソケットをやり取りするためのキュー。</li>
+</ul>
+<h3>スレッド・プロセス制御</h3>
+<ul>
+<li><code>listener_thread</code>: リスナー専用スレッド。<code>apr_pollset</code> を用いて複数のリスニングソケットを監視。</li>
+<li><code>worker_thread</code>: ワーカー用スレッド。キューからソケットを取り出し、<code>process_socket</code> を呼び出す。</li>
+<li><code>make_child</code>: 新規子プロセスを生成し、<code>child_main</code> を実行する。</li>
+<li><code>signal_threads</code>: 終了モード（Graceful/Ungraceful）に応じてスレッドへシグナルを送信。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>wakeup_listener</code>: リスナーをブロッキングから解除するためのシグナル送信。</li>
+<li><code>close_worker_sockets</code>: 強制終了時に全ワーカーのソケットを閉じる。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>worker_run</code> がメインループを開始。<code>startup_children</code> が初期プロセスを生成。 2. **リスナー**: <code>listener_thread</code> が <code>apr_pollset</code> で接続を待機。接続を受け取ると <code>ap_queue_push_socket</code> でキューに投入。 3. **ワーカー**: <code>worker_thread</code> が <code>ap_queue_pop_socket</code> で接続を取得し、<code>process_socket</code> で <code>ap_process_connection</code> を実行。 4. **終了処理**: <code>signal_threads</code> が呼ばれると、リスナーとワーカーが終了フラグを検知し、<code>join_workers</code> でスレッドが回収される。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr_thread_proc.h</code>, <code>apr_poll.h</code>, <code>apr_proc_mutex.h</code> 等による OS 抽象化。</li>
+<li>**Apache Core**: <code>httpd.h</code>, <code>http_connection.h</code>, <code>scoreboard.h</code> 等によるサーバー状態管理。</li>
+<li>**MPM 共通**: <code>mpm_common.h</code>, <code>mpm_fdqueue.h</code> によるキュー管理とプロセス管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/mpm/worker/mpm_default.h</code>: デフォルトの制限値定義。</li>
+<li><code>server/mpm/event/event.c</code>: <code>worker</code> と類似のアーキテクチャを持つが、Keep-Alive 接続を専用スレッドで処理する発展版。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>pconf</code>（設定用）、<code>pchild</code>（子プロセス生存期間）、<code>pruntime</code>（スレッド生存期間）の各プールが厳密に使い分けられています。特に <code>pruntime</code> は、リスナーとワーカーが共有するリソースの生存期間を管理するために重要です。</li>
+<li>**エッジケース**: <code>worker_thread</code> 内で <code>apr_queue_pop_socket</code> が中断されるケース（<code>EINTR</code>）や、<code>listener_thread</code> が <code>poll</code> 中にシグナルで起こされるケースなど、非同期的な終了処理が複雑に実装されています。</li>
+<li>**制限事項**: <code>ServerLimit</code> や <code>ThreadLimit</code> は再起動を跨いで変更できません。これはスコアボードのメモリレイアウトが固定されるためです。</li>
+<li>**省略箇所**: <code>ap_mpm_podx</code> 関連のパイプ通信の詳細や、<code>scoreboard</code> の詳細な更新ロジックは、MPM 共通ライブラリに依存しているため、本ファイルでは呼び出し側に焦点を当てています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_retained_data.html" target="wiki-view">`worker_retained_data`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_child_bucket.html" target="wiki-view">`worker_child_bucket`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__proc_info.html" target="wiki-view">`proc_info`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__thread_starter.html" target="wiki-view">`thread_starter`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__close_worker_sockets.html" target="wiki-view">`close_worker_sockets`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__wakeup_listener.html" target="wiki-view">`wakeup_listener`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__signal_threads.html" target="wiki-view">`signal_threads`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_query.html" target="wiki-view">`worker_query`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_note_child_killed.html" target="wiki-view">`worker_note_child_killed`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_note_child_started.html" target="wiki-view">`worker_note_child_started`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_get_name.html" target="wiki-view">`worker_get_name`</a></li>
+<li><a href="../../../symbols/server__mpm__worker__worker_c__worker_check_config.html" target="wiki-view">`worker_check_config`</a></li>
+</ul></body></html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/lock/locks.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/lock/locks.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_dav</code> における汎用的なロック管理実装を提供します。DBM（Database Manager）を利用して、リソースに対する直接ロックおよび間接ロックの永続化、検索、更新、削除を行うためのフック関数群を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> のロックプロバイダインターフェース（<code>dav_hooks_locks</code>）を実装するバックエンドです。<code>mod_dav_lock.c</code> がモジュールのエントリポイントとして機能するのに対し、本ファイルはロックデータベースの物理的な読み書きとデータ構造のシリアライズを担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**DBM 管理**: ロックデータベースの遅延オープンおよびクローズ。</li>
+<li>**データ永続化**: ロック情報をバイナリ形式で DBM にシリアライズ/デシリアライズ。</li>
+<li>**ロック操作**: ロックの作成、検索、削除、およびタイムアウトによる期限切れロックの自動クリーンアップ。</li>
+<li>**間接ロック解決**: 親コレクションから継承された間接ロックの追跡と解決。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>dav_lockdb_private</code>: DBM ハンドルとリクエストコンテキストを保持する内部構造体。</li>
+<li><code>dav_lock_discovery</code>: 直接ロックの情報を保持するリスト構造。</li>
+<li><code>dav_lock_indirect</code>: 間接ロック（継承ロック）の情報を保持するリスト構造。</li>
+<li><code>dav_locktoken</code>: ロックを一意に識別するための UUID ラッパー。</li>
+</ul>
+<h3>フック実装 (dav_hooks_locks_generic)</h3>
+<ul>
+<li><code>dav_generic_open_lockdb</code>: ロック DB を初期化し、<code>dav_lockdb</code> を構築。</li>
+<li><code>dav_generic_get_locks</code>: リソースに関連付けられた全ロックを取得。</li>
+<li><code>dav_generic_append_locks</code>: 新規ロックをデータベースに追加。</li>
+<li><code>dav_generic_refresh_locks</code>: 既存ロックのタイムアウトを更新。</li>
+</ul>
+<h3>内部ユーティリティ</h3>
+<ul>
+<li><code>dav_generic_save_lock_record</code>: メモリ上のロックリストを DBM に書き込み。</li>
+<li><code>dav_generic_load_lock_record</code>: DBM からロックリストを読み込み、期限切れを排除。</li>
+<li><code>dav_generic_resolve</code>: 間接ロックが参照する親の直接ロックを解決。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>dav_generic_open_lockdb</code> が呼ばれると、DBM ハンドルは即座に開かれず、<code>opened</code> フラグで管理されます。実際の I/O は <code>dav_generic_really_open_lockdb</code> が呼ばれた時に発生します。 2. **読み込み**: <code>dav_generic_load_lock_record</code> が DBM からデータを取得し、<code>dav_lock_discovery</code> または <code>dav_lock_indirect</code> のリストを構築します。この際、<code>time(NULL)</code> と比較して期限切れのロックはリストから除外されます。 3. **書き込み**: <code>dav_generic_save_lock_record</code> は、リストをバイナリバッファにシリアライズします。直接ロックは <code>DAV_LOCK_DIRECT</code>、間接ロックは <code>DAV_LOCK_INDIRECT</code> というプレフィックスを付与して連結します。 4. **解決**: 間接ロックの操作時、<code>dav_generic_resolve</code> が再帰的に親リソースのロックレコードを読み込み、トークンの一致を確認します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_dbm.h</code> (間接的): DBM 操作用。</li>
+<li><code>mod_dav.h</code>: DAV プロバイダインターフェース定義。</li>
+<li><code>locks.h</code>: 共通ヘッダー。</li>
+<li><code>httpd.h</code>: サーバーコンテキストおよびログ出力用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/dav/lock/locks.h</code>: ロック DB パス取得関数の宣言。</li>
+<li><code>modules/dav/lock/mod_dav_lock.c</code>: 本実装を <code>mod_dav</code> に登録するモジュール本体。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのロック構造体は <code>request_rec</code> のプールから割り当てられます。リクエスト終了時に自動的に解放されます。</li>
+<li>**データレイアウト**: DBM 内のデータは構造体パッキングを考慮したバイナリ列です。<code>dav_size_direct</code> 等の計算ロジックと、<code>dav_generic_load_lock_record</code> 内のオフセット計算は密結合しており、変更時は注意が必要です。</li>
+<li>**制約**: <code>DAV_GETLOCKS_COMPLETE</code> は未実装です。また、ロック DB が読み取り専用で開かれている場合、期限切れロックの自動削除（<code>need_save</code>）はスキップされます。</li>
+<li>**設計上の注意**: <code>###</code> で始まるコメントは、将来的な拡張やリファクタリングの余地（特にエラーハンドリングの強化やメモリ効率の改善）を示唆しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_locktoken.html" target="wiki-view">`dav_locktoken`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_discovery_fixed.html" target="wiki-view">`dav_lock_discovery_fixed`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_discovery.html" target="wiki-view">`dav_lock_discovery`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_indirect.html" target="wiki-view">`dav_lock_indirect`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lockdb_private.html" target="wiki-view">`dav_lockdb_private`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lockdb_combined.html" target="wiki-view">`dav_lockdb_combined`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_private.html" target="wiki-view">`dav_lock_private`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_combined.html" target="wiki-view">`dav_lock_combined`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_dbm_new_error.html" target="wiki-view">`dav_generic_dbm_new_error`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_alloc_lock.html" target="wiki-view">`dav_generic_alloc_lock`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_parse_locktoken.html" target="wiki-view">`dav_generic_parse_locktoken`</a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_format_locktoken.html" target="wiki-view">`dav_generic_format_locktoken`</a></li>
+</ul></body></html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/core_filters.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/core_filters.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のコアネットワークフィルタを実装するファイルです。クライアントとのソケット通信における入力（リクエスト読み込み）および出力（レスポンス送信）の低レイヤー処理を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、<code>util_filter.c</code> が提供するフィルタフレームワーク上で動作する「コアフィルタ」を提供します。HTTP プロトコル層と OS のソケット層を仲介する最下位のフィルタとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**入力フィルタ (<code>ap_core_input_filter</code>)**: ソケットからのバイトストリームを <code>apr_bucket_brigade</code> に変換し、HTTP リクエストの読み込みモード（行単位、バイト単位、スペック読み込み等）に応じたデータ供給を行う。</li>
+<li>**出力フィルタ (<code>ap_core_output_filter</code>)**: バッファリングされたレスポンスデータをソケットへ書き出す。<code>writev</code> や <code>sendfile</code> を活用した効率的なデータ転送と、フロー制御（閾値によるフラッシュ）を管理する。</li>
+<li>**リソース管理**: 接続ごとのコンテキスト (<code>core_output_filter_ctx_t</code>) の保持、バッファの生存期間管理、およびソケットの非ブロッキング制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタコンテキスト</h3>
+<ul>
+<li><code>core_output_filter_ctx</code>: 出力フィルタの永続状態。バッファリングされたブリゲード、書き込み用 <code>iovec</code> 配列、および遅延書き込み用プールを保持。</li>
+</ul>
+<h3>入力フィルタ処理</h3>
+<ul>
+<li><code>ap_core_input_filter</code>: 入力フィルタのメインエントリポイント。<code>AP_MODE_GETLINE</code> や <code>AP_MODE_READBYTES</code> 等のモードに応じたデータ抽出を行う。</li>
+</ul>
+<h3>出力フィルタ処理</h3>
+<ul>
+<li><code>ap_core_output_filter</code>: 出力フィルタのメインエントリポイント。ブリゲードをソケットへ書き出す。</li>
+<li><code>should_send_brigade</code>: 書き込みのフラッシュタイミングを決定するヒューリスティック関数。</li>
+<li><code>send_brigade_nonblocking</code>: ブリゲード内のバケットを走査し、<code>writev</code> または <code>sendfile</code> を呼び出す。</li>
+<li><code>writev_nonblocking</code>: <code>apr_socket_sendv</code> を使用した非ブロッキング書き込み。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>BRIGADE_NORMALIZE</code>: ブリゲード内の長さ 0 のバケットを削除し、処理を簡略化するマクロ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <code>ap_core_input_filter</code> は <code>ctx-&gt;b</code> にソケットから読み込んだデータを蓄積し、要求されたモードに応じて <code>apr_brigade_split_line</code> や <code>apr_brigade_partition</code> を用いてデータを切り出し、呼び出し元へ渡す。 2. **出力**: <code>ap_core_output_filter</code> は <code>should_send_brigade</code> でフラッシュの必要性を判断。必要であれば <code>send_brigade_nonblocking</code> を呼び出し、バケットの種類に応じて <code>writev</code> または <code>sendfile</code> を選択してソケットへ転送する。 3. **フロー制御**: <code>writev_nonblocking</code> は書き込みが完了したバケットを順次削除し、部分的に書き込まれたバケットは <code>apr_bucket_split</code> で分割して残りを保持する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットブリゲード操作の基盤。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの定義。</li>
+<li><code>http_core.h</code>, <code>http_connection.h</code>: コア設定および接続構造体。</li>
+<li><code>apr_socket_t</code> (APR): 低レイヤーのネットワーク I/O。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_filter.c</code>: フィルタチェーンの管理ロジック。</li>
+<li><code>server/core.c</code>: コアモジュールの設定と初期化。</li>
+<li><code>modules/loggers/mod_logio.c</code>: <code>ap__logio_add_bytes_out</code> を介したトラフィック統計の連携先。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>core_output_filter_ctx</code> 内の <code>deferred_write_pool</code> は、パイプライン化されたリクエストのバッファリングに使用されます。リクエスト終了時に <code>apr_pool_clear</code> されるため、生存期間に注意が必要です。</li>
+<li>**非ブロッキング**: このフィルタは基本的に非ブロッキング I/O を前提としています。<code>EAGAIN</code> が発生した場合の再試行ロジックが <code>ap_core_output_filter</code> 内に実装されています。</li>
+<li>**省略された詳細**: <code>sendfile</code> のプラットフォーム依存の最適化や、EBCDIC 変換に関する詳細は、コードの可読性を優先し、主要なフローに焦点を当てて説明を省略しています。</li>
+<li>**注意点**: <code>BRIGADE_NORMALIZE</code> はメタデータバケットを保持しつつ、空のデータバケットのみを削除する点に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__core_filters_c__core_output_filter_ctx.html" target="wiki-view">`core_output_filter_ctx`</a></li>
+<li><a href="../symbols/server__core_filters_c__ap_core_input_filter.html" target="wiki-view">`ap_core_input_filter`</a></li>
+<li><a href="../symbols/server__core_filters_c__should_send_brigade.html" target="wiki-view">`should_send_brigade`</a></li>
+<li><a href="../symbols/server__core_filters_c__ap_core_output_filter.html" target="wiki-view">`ap_core_output_filter`</a></li>
+<li><a href="../symbols/server__core_filters_c__setaside_remaining_output.html" target="wiki-view">`setaside_remaining_output`</a></li>
+<li><a href="../symbols/server__core_filters_c__is_in_memory_bucket.html" target="wiki-view">`is_in_memory_bucket`</a></li>
+<li><a href="../symbols/server__core_filters_c__can_sendfile_bucket.html" target="wiki-view">`can_sendfile_bucket`</a></li>
+<li><a href="../symbols/server__core_filters_c__sock_nopush.html" target="wiki-view">`sock_nopush`</a></li>
+<li><a href="../symbols/server__core_filters_c__send_brigade_nonblocking.html" target="wiki-view">`send_brigade_nonblocking`</a></li>
+<li><a href="../symbols/server__core_filters_c__writev_nonblocking.html" target="wiki-view">`writev_nonblocking`</a></li>
+<li><a href="../symbols/server__core_filters_c__sendfile_nonblocking.html" target="wiki-view">`sendfile_nonblocking`</a></li>
+</ul></body></html>

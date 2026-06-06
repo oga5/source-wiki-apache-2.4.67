@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm/winnt/nt_eventlog.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>server/mpm/winnt/nt_eventlog.c</h1>
+<h2>概要</h2>
+<p>Windows環境において、Apacheの標準エラー出力（stderr）をWindowsイベントログへリダイレクトするためのユーティリティです。サービスとして実行される際、コンソールを持たないプロセスから出力されるエラーメッセージを、Windowsのイベントビューアで確認可能にします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server/mpm/winnt</code> モジュールの一部として、主にサービス起動時のエラーハンドリングを担います。標準的なログファイルへの書き出しが困難な初期段階や、サービス特有のログ出力要件を満たすためのブリッジとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**パイプの構築**: <code>stderr</code> をキャプチャするための匿名パイプを作成し、プロセス標準の <code>stderr</code> をそのパイプへリダイレクトする。</li>
+<li>**イベントログへの転送**: 専用スレッドでパイプを監視し、受信した文字列を <code>ReportEvent</code> API を介してWindowsイベントログへ書き出す。</li>
+<li>**レジストリ設定**: イベントログのソースとしてApacheを登録し、メッセージ定義（<code>netmsg.dll</code>）を適切に設定する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>mpm_nt_eventlog_stderr_open</code>: サービス起動時に呼び出され、パイプと監視スレッドを初期化するエントリポイント。</li>
+<li><code>service_stderr_thread</code>: パイプを読み取り、イベントログへ変換するバックグラウンドスレッド。</li>
+<li><code>mpm_nt_eventlog_stderr_flush</code>: サービス終了時にパイプをクローズし、スレッドの終了を待機するクリーンアップ関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: <code>mpm_nt_eventlog_stderr_open</code> がパイプを作成し、<code>service_stderr_thread</code> を起動。<code>stderr</code> をパイプの書き込み端へ <code>dup2</code> する。 2.  **監視**: <code>service_stderr_thread</code> は <code>ReadFile</code> でパイプをブロック読み取りし、改行コードを区切りとしてメッセージをバッファリングする。 3.  **転送**: バッファが埋まるか改行を検知すると、<code>ReportEvent</code> を呼び出し、Windowsイベントログへメッセージを送信する。 4.  **終了**: <code>mpm_nt_eventlog_stderr_flush</code> が呼ばれると、パイプが閉じられ、スレッドが終了処理を行う。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_log.h</code>: Apacheの基本定義とログ出力基盤。</li>
+<li><code>mpm_winnt.h</code>: MPM WinNT固有の定義。</li>
+<li><code>ap_regkey.h</code>: Windowsレジストリ操作用API。</li>
+<li><code>apr_portable.h</code>, <code>apr_strings.h</code>: APRのポータブルなファイル操作および文字列処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>service.c</code>: Windowsサービスとしてのライフサイクル管理。本ファイルはこのサービス起動プロセスから呼び出される。</li>
+<li><code>mpm_winnt.c</code>: MPMのメインループ。ログ出力の初期化タイミングを制御する。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**スレッド同期**: <code>stderr_ready</code> イベントを使用して、スレッドが完全に起動しイベントソースの登録が完了するまでメインスレッドを待機させています。</li>
+<li>**メッセージDLL**: イベントログのメッセージ定義には <code>netmsg.dll</code> を流用しています。これはApache専用のメッセージファイルを作成するコストを避けるための実装です。</li>
+<li>**注意点**: この実装は <code>stderr</code> をパイプへ差し替えるため、他のモジュールが <code>stderr</code> を直接操作する場合に競合や予期せぬ挙動を引き起こす可能性があります。必ずサービス起動の初期段階で呼び出される必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__winnt__nt_eventlog_c__service_stderr_thread.html" target="wiki-view">`service_stderr_thread`</a></li>
+<li><a href="../../../symbols/server__mpm__winnt__nt_eventlog_c__mpm_nt_eventlog_stderr_flush.html" target="wiki-view">`mpm_nt_eventlog_stderr_flush`</a></li>
+<li><a href="../../../symbols/server__mpm__winnt__nt_eventlog_c__mpm_nt_eventlog_stderr_open.html" target="wiki-view">`mpm_nt_eventlog_stderr_open`</a></li>
+</ul></body></html>

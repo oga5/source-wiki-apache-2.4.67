@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/arch/win32/mod_isapi.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/arch/win32/mod_isapi.c</h1>
+<h2>概要</h2>
+<p><code>mod_isapi.c</code> は、Apache HTTP Server 上で Microsoft ISAPI (Internet Server Application) 拡張を動作させるための実装です。ISAPI 2.0 仕様の大部分をサポートし、IIS 5.0 相当の拡張機能の一部も提供します。このモジュールは、Windows 環境におけるレガシーな動的コンテンツ実行環境を Apache に統合する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/arch/win32</code> サブシステムの一部として、Apache のリクエスト処理パイプラインに「ISAPI ハンドラ」を挿入します。外部の <code>.dll</code> ファイルを動的にロードし、Apache の <code>request_rec</code> を ISAPI の <code>EXTENSION_CONTROL_BLOCK</code> (ECB) に変換して、ISAPI 拡張が期待するインターフェースをエミュレートします。</p>
+<h2>責務</h2>
+<ul>
+<li>**ISAPI ライフサイクル管理**: DLL のロード、キャッシュ、アンロード、および <code>GetExtensionVersion</code> / <code>HttpExtensionProc</code> の呼び出し。</li>
+<li>**リクエスト変換**: Apache の環境変数やリクエストデータを ISAPI 形式へマッピング。</li>
+<li>**コールバック実装**: <code>GetServerVariable</code>, <code>WriteClient</code>, <code>ReadClient</code>, <code>ServerSupportFunction</code> の提供。</li>
+<li>**非同期エミュレーション**: <code>fake_async</code> 設定による、同期的な Apache パイプライン上での非同期 I/O の擬似的な実現。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・管理構造体</h3>
+<ul>
+<li><code>isapi_dir_conf</code>: ディレクトリごとの設定（バッファサイズ、ログ設定、非同期エミュレーションの有効化など）。</li>
+<li><code>isapi_loaded</code>: ロードされた DLL のハンドル、関数ポインタ、およびロード状態を保持するキャッシュ構造体。</li>
+<li><code>isapi_global_conf</code>: ロード済みモジュールを管理するグローバルハッシュテーブルと排他制御用ミューテックス。</li>
+</ul>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>isapi_cid</code>: 「Connection ID」。リクエスト処理中の状態（ECB、リクエスト情報、完了通知用ミューテックス）を保持するコンテキスト。</li>
+<li><code>isapi_handler</code>: Apache のハンドラフック。リクエストを受け取り、ISAPI 拡張を呼び出すメインエントリーポイント。</li>
+</ul>
+<h3>コールバック関数群</h3>
+<ul>
+<li><code>regfnGetServerVariable</code>: 環境変数の取得。</li>
+<li><code>regfnReadClient</code>: クライアントからのデータ読み込み。</li>
+<li><code>regfnWriteClient</code>: クライアントへのデータ書き込み（ヘッダー解析を含む）。</li>
+<li><code>regfnServerSupportFunction</code>: ISAPI 拡張からの制御リクエスト（リダイレクト、パス変換、ログ出力など）の処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>isapi_pre_config</code> でグローバルキャッシュプールとハッシュテーブルを初期化。 2. **ロード**: <code>isapi_lookup</code> が DLL を検索。未ロードの場合、<code>isapi_load</code> で <code>apr_dso_load</code> を行い、必要なエントリポイントを解決。 3. **リクエスト処理**:</p>
+<ul>
+<li><code>isapi_handler</code> が <code>isapi_cid</code> を作成し、Apache のリクエストデータを ECB にコピー。</li>
+<li><code>HttpExtensionProc</code> を呼び出し、拡張に制御を渡す。</li>
+<li>拡張が <code>ServerSupportFunction</code> を呼び出すと、<code>regfnServerSupportFunction</code> がリクエストを解析し、Apache の API（<code>ap_pass_brigade</code> 等）へ変換。</li>
+<p>4. **終了**: <code>HSE_REQ_DONE_WITH_SESSION</code> または <code>HttpExtensionProc</code> の戻り値により、リクエストの完了を判定。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_isapi.h</code>: ISAPI 構造体定義。</li>
+<li><code>apr_dso.h</code>: DLL 動的ロード。</li>
+<li><code>apr_hash.h</code>, <code>apr_thread_mutex.h</code>: キャッシュ管理。</li>
+<li><code>httpd.h</code>, <code>http_protocol.h</code>: Apache リクエスト処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/arch/win32/mod_isapi.h</code>: ISAPI 構造体定義の参照先。</li>
+<li><code>modules/arch/win32/mod_win32.c</code>: Windows 固有の他の機能（<code>mod_win32</code>）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>isapi_cid</code> や <code>EXTENSION_CONTROL_BLOCK</code> はリクエストプール (<code>r-&gt;pool</code>) 上に割り当てられ、リクエスト終了時に自動解放されます。</li>
+<li>**非同期エミュレーション**: <code>fake_async</code> は実験的な機能です。本来非同期であるべき ISAPI の呼び出しを、ミューテックスを用いて同期的に待機させるため、高負荷時にはスレッド枯渇のリスクがあります。</li>
+<li>**未実装**: Microsoft 固有の非同期 I/O 拡張の多くは、Apache のアーキテクチャと一対一で対応しないため、意図的に未実装または警告ログ出力のみとなっています。</li>
+<li>**スレッド安全性**: <code>isapi_loaded</code> 構造体は <code>apr_thread_rwlock_t</code> を使用して、複数スレッドからの同時ロードを制御しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_dir_conf.html" target="wiki-view">`isapi_dir_conf`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_loaded.html" target="wiki-view">`isapi_loaded`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__create_isapi_dir_config.html" target="wiki-view">`create_isapi_dir_config`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__merge_isapi_dir_configs.html" target="wiki-view">`merge_isapi_dir_configs`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_cmd_cachefile.html" target="wiki-view">`isapi_cmd_cachefile`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_global_conf.html" target="wiki-view">`isapi_global_conf`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_unload.html" target="wiki-view">`isapi_unload`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__cleanup_isapi.html" target="wiki-view">`cleanup_isapi`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_load.html" target="wiki-view">`isapi_load`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_lookup.html" target="wiki-view">`isapi_lookup`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__isapi_cid.html" target="wiki-view">`isapi_cid`</a></li>
+<li><a href="../../../symbols/modules__arch__win32__mod_isapi_c__send_response_header.html" target="wiki-view">`send_response_header`</a></li>
+</ul></body></html>

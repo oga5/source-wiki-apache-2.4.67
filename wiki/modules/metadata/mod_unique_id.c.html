@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_unique_id.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_unique_id.c</h1>
+<h2>概要</h2>
+<p><code>mod_unique_id</code> は、Apache HTTP Server の各リクエストに対して、システム全体で一意となる識別子（<code>UNIQUE_ID</code>）を生成するモジュールです。この識別子は、ログ記録やリクエスト追跡、分散環境でのセッション管理などに利用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> ディレクトリに属し、リクエスト処理の初期段階で環境変数 <code>UNIQUE_ID</code> を設定します。他のモジュールがこの値を参照することで、リクエストのライフサイクル全体を通じた一貫した追跡が可能になります。</p>
+<h2>責務</h2>
+<ul>
+<li>**一意性の保証**: タイムスタンプ、プロセス/スレッド情報、乱数（PRNG）を組み合わせ、クラスタ環境や複数プロセス環境でも衝突しにくいIDを生成する。</li>
+<li>**URLセーフなエンコーディング**: 生成したバイナリデータを <code>[A-Za-z0-9@-_]</code> の文字セットでエンコードし、URLに含めても安全な形式に変換する。</li>
+<li>**ライフサイクル管理**: リクエストの開始時にIDを生成し、内部リダイレクト時にもIDを維持する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>unique_id_rec</code>: ID生成の元となる構造体。タイムスタンプ、乱数ルート、カウンタ、スレッドIDで構成される。</li>
+<li><code>gen_unique_id()</code>: <code>unique_id_rec</code> を構築し、UUエンコードを施して文字列を返すコア関数。</li>
+<li><code>set_unique_id()</code>: <code>post_read_request</code> フックで呼ばれ、環境変数 <code>UNIQUE_ID</code> を設定する。</li>
+<li><code>generate_log_id()</code>: エラーログ生成時にIDが必要な場合、既存のIDを再利用または新規生成する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>unique_id_global_init</code> で構造体のオフセットを計算し、<code>unique_id_child_init</code> でプロセス固有の乱数ルートを生成する。 2. **生成**: <code>gen_unique_id</code> が呼ばれると、現在の時刻、接続ID、カウンタを構造体に詰め、パディングを除去したバイナリを生成する。 3. **エンコード**: バイナリデータをカスタムのUUエンコードアルゴリズムで24文字の文字列に変換する。 4. **注入**: <code>set_unique_id</code> がリクエストの <code>subprocess_env</code> に値を格納し、後続のモジュールが利用可能にする。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_want.h</code>, <code>apr_general.h</code>: APRの基本機能とバイト順序変換。</li>
+<li><code>apr_atomic.h</code>: スレッドセーフなカウンタ操作。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code>: ApacheのコアAPIおよびフック定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/metadata/mod_headers.c</code>: 生成された <code>UNIQUE_ID</code> をHTTPヘッダーとして出力する場合の参考。</li>
+<li><code>server/util_expr_eval.c</code>: ログフォーマット等で <code>%{UNIQUE_ID}e</code> を評価する際の仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**不透明なトークン**: このIDは内部構造が将来変更される可能性があるため、他のアプリケーションは中身を解析せず、不透明な文字列として扱うべきです。</li>
+<li>**スレッド安全性**: カウンタのインクリメントには <code>apr_atomic_inc32</code> を使用しており、マルチスレッド環境での競合を考慮しています。</li>
+<li>**パフォーマンス**: <code>cur_unique_id</code> の更新はキャッシュ効率を考慮した設計が求められており、コード内の <code>XXX</code> コメントにある通り、さらなる最適化の余地が議論されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__unique_id_rec.html" target="wiki-view">`unique_id_rec`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__unique_id_global_init.html" target="wiki-view">`unique_id_global_init`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__unique_id_child_init.html" target="wiki-view">`unique_id_child_init`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__gen_unique_id.html" target="wiki-view">`gen_unique_id`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__generate_log_id.html" target="wiki-view">`generate_log_id`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__set_unique_id.html" target="wiki-view">`set_unique_id`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

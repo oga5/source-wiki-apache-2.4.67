@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_store_fs.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_store_fs.c</h1>
+<h2>概要</h2>
+<p><code>md_store_fs.c</code> は、<code>md_store_t</code> インターフェースのファイルシステムベースの実装を提供します。ACME プロトコルに関連する証明書、秘密鍵、アカウント情報、およびチャレンジデータを、ローカルファイルシステム上のディレクトリ構造として永続化・管理する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおけるデータ永続化層のバックエンドです。<code>md_store.h</code> で定義された抽象的なストレージ操作を、実際のファイル操作（読み込み、書き込み、移動、ロック）に変換します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ストレージの初期化と移行**: ストアディレクトリの作成、権限設定、およびバージョン管理（v1.0 からの移行など）を行います。</li>
+<li>**ファイル操作の抽象化**: <code>md_store_group_t</code> に基づくディレクトリ階層の自動生成と、適切なファイルパーミッションの適用。</li>
+<li>**データ保護**: 秘密鍵の暗号化（必要に応じて）と、ファイルシステムレベルでのアクセス制御（<code>perms_t</code> によるグループ別権限管理）。</li>
+<li>**ライフサイクル管理**: データの保存、読み込み、削除、およびアーカイブ（移動）操作の実行。</li>
+<li>**排他制御**: <code>store.lock</code> ファイルを用いたグローバルなファイルシステムロックの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>構造体</h3>
+<ul>
+<li><code>md_store_fs_t</code>: ストレージの状態を保持するメイン構造体。ベースパス、パーミッション設定、暗号化キー、イベントコールバック、グローバルロックを管理します。</li>
+<li><code>perms_t</code>: ディレクトリとファイルのパーミッション設定を保持するヘルパー構造体。</li>
+</ul>
+<h3>初期化・設定</h3>
+<ul>
+<li><code>md_store_fs_init</code>: ストレージの初期化と <code>md_store_t</code> インターフェースのバインド。</li>
+<li><code>md_store_fs_default_perms_set</code> / <code>md_store_fs_group_perms_set</code>: グループ単位でのパーミッション動的設定。</li>
+<li><code>md_store_fs_set_event_cb</code>: ファイル作成や移動時に呼び出されるイベントコールバックの登録。</li>
+</ul>
+<h3>内部操作（静的関数）</h3>
+<ul>
+<li><code>fs_load</code> / <code>fs_save</code>: データの読み書き。<code>md_json_t</code> や <code>md_cert_t</code> などの型に応じたシリアライズ/デシリアライズを実行。</li>
+<li><code>fs_move</code> / <code>fs_rename</code>: ディレクトリ構造の変更。アーカイブ機能を含みます。</li>
+<li><code>fs_lock_global</code> / <code>fs_unlock_global</code>: <code>apr_file_lock</code> を用いた排他制御。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**初期化フロー**: <code>md_store_fs_init</code> が呼ばれると、ディレクトリの存在確認を行い、<code>setup_store_file</code> を通じて <code>md_store.json</code>（メタデータ）を読み込みます。バージョンが古い場合は <code>upgrade_from_1_0</code> 等でデータ構造をマイグレーションします。</li>
+<li>**データアクセスフロー**: <code>md_util_pool_vdo</code> を介して、可変長引数（<code>va_list</code>）で渡された操作を <code>pfs_</code> 接頭辞を持つ関数へディスパッチします。これにより、プール管理とエラーハンドリングを統一しています。</li>
+<li>**パス解決**: <code>fs_get_fname</code> および <code>fs_get_dname</code> が、グループ名と名前からファイルシステム上の絶対パスを生成します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: ファイルI/O (<code>apr_file_io.h</code>)、ファイル情報 (<code>apr_file_info.h</code>)、ハッシュ、文字列操作、ディレクトリ操作に使用。</li>
+<li>**内部モジュール**: <code>md_json.h</code> (メタデータ管理)、<code>md_crypt.h</code> (鍵管理)、<code>md_store.h</code> (インターフェース定義)、<code>md_util.h</code> (パス操作・ファイルユーティリティ)。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/md/md_store.h</code>: 実装すべきインターフェースの定義。</li>
+<li><code>modules/md/md_store.c</code>: ストレージの抽象化層。</li>
+<li><code>modules/md/md_json.c</code>: JSON 形式のデータ永続化の詳細。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての操作は <code>apr_pool_t</code> を使用しており、ライフサイクルはプールに依存します。<code>ptemp</code>（一時プール）は、パス生成や一時的なファイル操作に多用されます。</li>
+<li>**排他制御**: <code>fs_lock_global</code> は <code>APR_FLOCK_EXCLUSIVE</code> を使用します。高負荷環境ではロックの競合に注意してください。</li>
+<li>**暗号化**: 秘密鍵は <code>md_store_fs_t</code> 内の <code>key</code> を使用して暗号化されます。<code>plain_pkey</code> 配列で指定されたグループ（チャレンジ等）は暗号化されません。</li>
+<li>**未実装/浅い部分**: <code>WIN32</code> 環境におけるディレクトリ操作の挙動が一部分岐しており、プラットフォーム依存の複雑さがあります。また、<code>fs_iterate</code> 等の走査系関数は、ファイルシステム上の全ファイルを再帰的に探索するため、大規模なストアではパフォーマンスに影響を与える可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_store_fs_c__perms_t.html" target="wiki-view">`perms_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__md_store_fs_t.html" target="wiki-view">`md_store_fs_t`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__init_store_file.html" target="wiki-view">`init_store_file`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__rename_pkey.html" target="wiki-view">`rename_pkey`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__mk_pubcert.html" target="wiki-view">`mk_pubcert`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__upgrade_from_1_0.html" target="wiki-view">`upgrade_from_1_0`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__read_store_file.html" target="wiki-view">`read_store_file`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__setup_store_file.html" target="wiki-view">`setup_store_file`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__fs_get_fname.html" target="wiki-view">`fs_get_fname`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__fs_get_dname.html" target="wiki-view">`fs_get_dname`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__fs_get_modified.html" target="wiki-view">`fs_get_modified`</a></li>
+<li><a href="../../symbols/modules__md__md_store_fs_c__inspect_ctx.html" target="wiki-view">`inspect_ctx`</a></li>
+</ul></body></html>

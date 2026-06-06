@@ -6,22 +6,54 @@
 <li>定義箇所: <code>modules/cache/mod_cache.c:809</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP レスポンスをキャッシュストレージへ保存するためのフィルタ処理を実行します。レスポンスのキャッシュ可能性を判定し、条件を満たす場合にストレージへの書き込みを制御します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t cache_save_filter(ap_filter_t *f, apr_bucket_brigade *in)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>f</code>: 現在のフィルタコンテキスト。<code>f-&gt;ctx</code> に <code>cache_request_rec</code> が格納されていることを前提とする。</li>
+<li><code>in</code>: 送信されるデータを含むバケットブリゲード。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（<code>APR_SUCCESS</code> またはエラーコード）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>f-&gt;ctx</code> が <code>cache_request_rec</code> として初期化されていること。初期化されていない場合、本フィルタは自身を削除し、データをそのまま通過させる。</li>
+<li><code>cache-&gt;in_checked</code> が真であれば、既にキャッシュ可能性の判定が完了しており、<code>cache_save_store</code> へ処理を委譲する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化チェック**: <code>cache</code> コンテキストが存在しない場合、フィルタを解除して終了する。 2. **ブロック状態確認**: <code>cache-&gt;block_response</code> が真であれば、既にレスポンスが送信済みとみなし、入力を無視して <code>APR_SUCCESS</code> を返す。 3. **キャッシュ可能性判定**:</p>
+<ul>
+<li><code>cache-&gt;in_checked</code> が偽の場合、レスポンスヘッダー（<code>Expires</code>, <code>Last-Modified</code>, <code>Etag</code>, <code>Cache-Control</code> 等）を解析する。</li>
+<li>RFC 2616 に基づき、ステータスコードやヘッダー情報からキャッシュの可否を判定する。</li>
+<li><code>dconf-&gt;stale_on_error</code> が有効な場合、エラー発生時に古いキャッシュを再利用する処理を行う。</li>
+<p>4. **ストレージへの書き込み**: 判定の結果、キャッシュ可能と判断された場合、<code>cache_save_store</code> を呼び出してデータをストレージへ流し込む。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: フィルタチェーン（<code>modules/cache/mod_cache.c:2647</code>, <code>2657</code> に参照の可能性あり）。</li>
+<li>**呼び出し先**: </li>
+<li><code>cache_save_store</code>（キャッシュ保存処理）</li>
+<li><code>ap_pass_brigade</code>（フィルタチェーンの次段へのデータ転送）</li>
+<li><code>cache_run_cache_status</code>（キャッシュ状態の通知）</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_request_rec</code>: リクエストごとのキャッシュ状態を保持。</li>
+<li><code>cache_server_conf</code>: サーバー全体の設定。</li>
+<li><code>cache_dir_conf</code>: ディレクトリ単位の設定。</li>
+<li><code>cache_control_t</code>: <code>Cache-Control</code> ヘッダーの解析結果。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**キャッシュ無効**: 設定やヘッダー（<code>no-store</code>, <code>private</code> 等）によりキャッシュ不可と判断された場合、フィルタはデータを通過させる。</li>
+<li>**エラー時**: <code>stale_on_error</code> 設定がない場合、エラーレスポンスはキャッシュされない。</li>
+<li>**不正なヘッダー**: <code>Expires</code> 等が不正な形式の場合、キャッシュ対象外となる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>CACHE_SAVE</code> フィルタのメインエントリです。</li>
+<li>キャッシュ可能性の判定ロジックは RFC 2616 に準拠していますが、複雑な条件分岐が含まれるため、修正時は <code>cache_control_t</code> の解析結果と <code>dconf</code> の設定値の整合性に注意してください。</li>
+<li><code>cache_save_store</code> への移行タイミング（<code>in_checked</code> フラグ）がキャッシュフローの要となります。</li>
 </ul></body></html>

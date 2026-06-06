@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/provider.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/provider.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における「プロバイダー」メカニズムの中核を担うソースファイルです。モジュール間で機能（プロバイダー）を動的に登録・検索するための汎用的なレジストリ機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、特定の機能実装を分離し、疎結合なプラグインアーキテクチャを実現するための基盤を提供します。認証、認可、フィルタなど、複数の実装が競合または共存する機能の管理に利用されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロバイダーの登録**: <code>group</code>, <code>name</code>, <code>version</code> をキーとして、任意の関数ポインタやデータ構造をグローバルなハッシュテーブルに格納します。</li>
+<li>**プロバイダーの検索**: 指定されたキーに基づき、登録済みのプロバイダーを高速に取得します。</li>
+<li>**メタデータの管理**: 登録されているプロバイダーのグループ名やバージョンの一覧を動的に提供します。</li>
+<li>**リソース管理**: プロセス終了時にハッシュテーブルをクリーンアップするためのフックを管理します。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>global_providers</code>: プロバイダーの実体（関数ポインタ等）を保持する階層型ハッシュテーブル。</li>
+<li><code>global_providers_names</code>: プロバイダーのメタデータ（グループ名やバージョン）を逆引きするためのハッシュテーブル。</li>
+<li><code>ap_register_provider</code>: プロバイダーを登録する公開 API。</li>
+<li><code>ap_lookup_provider</code>: 特定のプロバイダーを取得する公開 API。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: 初めて <code>ap_register_provider</code> が呼ばれた際、<code>apr_pool_cleanup_register</code> を使用してグローバルなハッシュテーブルの初期化とクリーンアップ設定が行われます。 2.  **登録**: 3階層のハッシュ（グループ → 名前 → バージョン）にプロバイダーを格納します。同時に、検索効率化のために <code>global_providers_names</code> にも情報を複製します。 3.  **検索**: <code>ap_lookup_provider</code> は、提供されたキーをハッシュテーブルで辿り、該当するポインタを返します。 4.  **一覧取得**: <code>ap_list_provider_names</code> や <code>ap_list_provider_groups</code> は、ハッシュテーブルをイテレートし、結果を <code>apr_array_header_t</code> に詰め替えて返却します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pools.h</code>: メモリ管理（プール）用。</li>
+<li><code>apr_hash.h</code>: プロバイダー管理用ハッシュテーブル。</li>
+<li><code>apr_tables.h</code>: 一覧取得時の配列管理。</li>
+<li><code>apr_strings.h</code>: 文字列操作。</li>
+<li><code>ap_provider.h</code>: プロバイダー関連の型定義とインターフェース。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>include/ap_provider.h</code>: このファイルで実装されている関数のプロトタイプ宣言と、プロバイダーのデータ構造定義が含まれています。</li>
+<li>各モジュール（<code>modules/</code> 配下）: 実際に <code>ap_register_provider</code> を呼び出して機能を登録する側です。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**スレッドセーフティ**: この実装は Apache の起動時（設定読み込みフェーズ）に登録が行われることを前提としています。実行時の動的な登録・削除は想定されていないため、マルチスレッド環境での実行時変更には注意が必要です。</li>
+<li>**ハッシュ構造**: 3階層のハッシュ構造になっているため、検索時は <code>group</code> → <code>name</code> → <code>version</code> の順でキーを特定する必要があります。</li>
+<li>**メモリ管理**: 登録に使用するプールは、通常はサーバーのライフサイクルに紐付いたものが渡されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__provider_c__cleanup_global_providers.html" target="wiki-view">`cleanup_global_providers`</a></li>
+<li><a href="../symbols/server__provider_c__ap_register_provider.html" target="wiki-view">`ap_register_provider`</a></li>
+<li><a href="../symbols/server__provider_c__ap_lookup_provider.html" target="wiki-view">`ap_lookup_provider`</a></li>
+<li><a href="../symbols/server__provider_c__ap_list_provider_names.html" target="wiki-view">`ap_list_provider_names`</a></li>
+<li><a href="../symbols/server__provider_c__ap_list_provider_groups.html" target="wiki-view">`ap_list_provider_groups`</a></li>
+</ul></body></html>

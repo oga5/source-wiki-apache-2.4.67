@@ -6,22 +6,41 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_kernel.c:1350</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>CGI や SSI などの後続処理で使用される環境変数（<code>subprocess_env</code>）に対し、SSL/TLS 接続に関連するメタデータを注入します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ssl_hook_Fixup(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（現在のリクエスト情報）</li>
+<li>**出力**: <code>int</code>（常に <code>DECLINED</code> を返して後続のフックへ処理を継続する）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>modssl_request_is_tls(r, &amp;sslconn)</code> が真であること。TLS 接続でない場合、本関数は即座に <code>DECLINED</code> を返します。</li>
+<li><code>r-&gt;subprocess_env</code> が有効であること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **HTTPS フラグ設定**: <code>HTTPS</code> 環境変数を <code>&quot;on&quot;</code> に設定します。 2. **SNI 情報の注入**: <code>HAVE_TLSEXT</code> が定義されている場合、SNI で指定されたサーバー名を <code>SSL_TLS_SNI</code> に設定します。 3. **標準 SSL 変数の抽出**: ディレクトリ設定 <code>SSL_OPT_STDENVVARS</code> が有効な場合、DNS 情報や SAN エントリ、および <code>ssl_hook_Fixup_vars</code> に定義された変数群を環境変数へ追加します。 4. **証明書データの抽出**: ディレクトリ設定 <code>SSL_OPT_EXPORTCERTDATA</code> が有効な場合、サーバー証明書、クライアント証明書、およびクライアント証明書チェーンを環境変数へ追加します。 5. **再ネゴシエーション情報の記録**: <code>SSL_get_secure_renegotiation_support</code> が利用可能な場合、セキュア再ネゴシエーションのサポート状況を <code>r-&gt;notes</code> に記録します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/mod_ssl.c</code> において <code>ap_hook_fixups</code> に登録されており、Apache の Fixup フェーズで呼び出されます。</li>
+<li>**呼び出し先**: <code>ssl_var_lookup</code>（変数取得）、<code>modssl_var_extract_dns</code>、<code>modssl_var_extract_san_entries</code>、OpenSSL API（<code>SSL_get_servername</code>, <code>SSL_get_peer_cert_chain</code> 等）。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SSLDirConfigRec</code>: ディレクトリ単位の設定（<code>SSL_OPT_*</code> フラグを含む）。</li>
+<li><code>SSLConnRec</code>: SSL 接続状態を保持する構造体。</li>
+<li><code>request_rec</code>: Apache のリクエスト構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>TLS 接続でない場合は何も行わず <code>DECLINED</code> を返します。</li>
+<li>各種変数取得関数が空の値を返した場合、環境変数へのセットはスキップされます。</li>
+<li>証明書チェーンが存在しない場合、チェーン情報の抽出は行われません。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は環境変数を設定するのみであり、リクエストの成否を決定するものではありません。</li>
+<li><code>SSL_OPT_EXPORTCERTDATA</code> を有効にすると環境変数が肥大化するため、パフォーマンスへの影響を考慮する必要があります。</li>
+<li><code>ssl_hook_Fixup_vars</code> 配列の定義内容が、注入される変数のリストを決定します。</li>
 </ul></body></html>

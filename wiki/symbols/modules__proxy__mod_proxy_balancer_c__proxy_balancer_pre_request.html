@@ -6,22 +6,57 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_balancer.c:473</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のプロキシリクエスト処理において、ロードバランサ経由のルーティングを決定し、適切なバックエンドワーカーを選択・設定する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int proxy_balancer_pre_request(proxy_worker **worker,
+                               proxy_balancer **balancer,
+                               request_rec *r,
+                               proxy_server_conf *conf, char **url);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>worker</code>: 選択されたワーカーを格納するポインタ。</li>
+<li><code>balancer</code>: 対象のバランサ構造体（未指定の場合は URL から検索）。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>conf</code>: プロキシサーバー設定。</li>
+<li><code>url</code>: リクエスト対象の URL（<code>balancer://</code> スキーム）。</li>
+<li>**出力**:</li>
+<li>成功時: <code>OK</code> または <code>balancer_fixup</code> の戻り値。</li>
+<li>失敗時: <code>DECLINED</code>（対象外）、<code>HTTP_SERVICE_UNAVAILABLE</code>（ワーカー不在またはエラー）。</li>
+<li><code>worker</code> および <code>url</code> は、選択されたワーカーの情報に基づいて更新される。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>url</code> が <code>balancer://</code> で始まる必要がある。</li>
+<li>マルチスレッド環境下では <code>PROXY_THREAD_LOCK</code> による排他制御が必須。</li>
+<li>選択されたワーカーの <code>busy</code> カウントは、リクエスト終了時に <code>decrement_busy_count</code> で自動的に減算されるよう登録される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **バランサ特定**: <code>balancer</code> が未指定の場合、URL からバランサを検索する。 2. **排他制御**: スレッドセーフなアクセスを確保するため、バランサをロックする。 3. **状態更新**: <code>force_recovery</code> でエラー状態のワーカーを復旧させ、<code>ap_proxy_sync_balancer</code> でメンバーリストを同期する。 4. **ワーカー選択**:</p>
+<ul>
+<li><code>find_session_route</code> を呼び出し、スティッキーセッション情報に基づくワーカーを優先的に検索する。</li>
+<li>セッションルートが見つからない場合、<code>find_best_worker</code> を使用して負荷分散アルゴリズムに基づきワーカーを決定する。</li>
+<p>5. **環境変数設定**: <code>BALANCER_NAME</code>, <code>BALANCER_WORKER_NAME</code> 等の情報をリクエスト環境変数に追加する。 6. **URL 書き換え**: <code>balancer_fixup</code> を呼び出し、<code>balancer://</code> URL を実際のワーカーのスキーム・ホスト・ポートに変換する。 7. **終了処理**: ロックを解除し、結果を返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>proxy_hook_pre_request</code> フック（<code>modules/proxy/mod_proxy_balancer.c:2064</code>）。</li>
+<li>**呼び出し先**: <code>ap_proxy_get_balancer</code>, <code>force_recovery</code>, <code>ap_proxy_sync_balancer</code>, <code>find_session_route</code>, <code>find_best_worker</code>, <code>balancer_fixup</code>, <code>decrement_busy_count</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_balancer</code>: ロードバランサの状態とワーカーリストを保持。</li>
+<li><code>proxy_worker</code>: 個別のバックエンドワーカーの状態（<code>lbstatus</code>, <code>lbfactor</code>, <code>busy</code> 等）。</li>
+<li><code>request_rec</code>: リクエスト固有のコンテキストと環境変数テーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ワーカー不在**: バランサに登録されたワーカーがすべてエラー状態、またはワーカーが存在しない場合 <code>HTTP_SERVICE_UNAVAILABLE</code> を返す。</li>
+<li>**ロック失敗**: スレッドロックが取得できない場合、<code>DECLINED</code> を返す。</li>
+<li>**ルート不一致**: スティッキーセッションで指定されたルートが現在のバランサに存在しない場合、エラーログを出力し <code>HTTP_SERVICE_UNAVAILABLE</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>balancer_fixup</code> の戻り値が最終的なリクエストの成否に直結するため、変更時は注意が必要。</li>
+<li>スレッドロックの取得・解放は <code>APR_HAS_THREADS</code> マクロで囲まれており、非スレッド環境との互換性が考慮されている。</li>
 </ul></body></html>

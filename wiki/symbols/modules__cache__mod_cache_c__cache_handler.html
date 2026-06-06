@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/cache/mod_cache.c:393</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストに対するキャッシュの検索、保存、または無効化を制御するメインハンドラ。<code>mod_cache</code> のポリシーエンジンとして、リクエストのキャッシュ可能性を判定し、適切なフィルタをフィルタチェーンに挿入する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int cache_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> (現在のリクエスト情報)</li>
+<li>**出力**: <code>int</code> (Apache ステータスコード: <code>OK</code>, <code>DECLINED</code> 等)</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_server_conf</code> の <code>quick</code> 設定が有効な場合、本関数は即座に <code>DECLINED</code> を返す。</li>
+<li>キャッシュプロバイダーが取得できない場合、処理を継続せず <code>DECLINED</code> を返す。</li>
+<li>メモリ割り当ては <code>r-&gt;pool</code> を使用し、リクエスト終了時に自動解放される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: リクエストごとの設定構造体 <code>cache_request_rec</code> を初期化。 2. **メソッド判定**:</p>
+<ul>
+<li><code>PUT/POST/DELETE</code>: <code>cache_invalidate_filter</code> を挿入し、キャッシュ無効化を予約して <code>DECLINED</code> を返す。</li>
+<li><code>GET</code>: キャッシュ検索へ進む。</li>
+<li>その他: キャッシュ対象外として <code>DECLINED</code> を返す。</li>
+<p>3. **キャッシュ検索 (<code>cache_select</code>)**:</p>
+<li>**ミス**: <code>cache_try_lock</code> で排他制御を試み、成功すれば <code>cache_save_filter</code> を挿入して <code>DECLINED</code> を返す。</li>
+<li>**ヒット**: <code>cache_out_filter</code> を挿入し、既存のフィルタスタックを整理した上でキャッシュからレスポンスを送信し <code>OK</code> を返す。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>ap_hook_handler</code> により登録され、Apache のハンドラフェーズで呼び出される。</li>
+<li>**呼び出し先**: </li>
+<li><code>cache_get_providers</code>, <code>cache_select</code>, <code>cache_try_lock</code>, <code>cache_replace_filter</code>, <code>cache_get_filter</code>, <code>cache_run_cache_status</code></li>
+<li><code>ap_add_output_filter_handle</code>, <code>ap_remove_output_filter</code>, <code>ap_pass_brigade_fchk</code> 等の Apache API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_request_rec</code>: リクエストごとのキャッシュ状態を保持。</li>
+<li><code>cache_server_conf</code>: サーバー全体の設定。</li>
+<li><code>cache_provider_list</code>: 利用可能なキャッシュプロバイダーのリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_try_lock</code> が失敗した場合（他リクエストが既にキャッシュ更新中の場合）、キャッシュ保存を行わずバックエンドへリクエストを流す。</li>
+<li><code>ap_meets_conditions</code> による条件付きリクエストの検証に失敗した場合、そのステータスを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>quick</code> ハンドラが無効な場合にのみ動作する。</li>
+<li><code>cache_replace_filter</code> を使用して、管理者が指定した <code>CACHE</code> フィルタ位置に動的に <code>CACHE_SAVE</code> または <code>CACHE_OUT</code> フィルタを挿入する仕組みを持つ。</li>
+<li>サブリクエスト (<code>r-&gt;main</code>) の有無によって、使用するフィルタハンドルを切り替える必要がある。</li>
 </ul></body></html>

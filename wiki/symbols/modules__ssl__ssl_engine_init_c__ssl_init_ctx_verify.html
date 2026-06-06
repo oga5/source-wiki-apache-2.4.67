@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_init.c:1051</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>SSL コンテキスト（<code>SSL_CTX</code>）に対して、クライアント認証モード、検証深度、および信頼する CA 証明書リストを設定します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ssl_init_ctx_verify(server_rec *s,
+                                 apr_pool_t *p,
+                                 apr_pool_t *ptemp,
+                                 modssl_ctx_t *mctx)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>p</code>: メインプール。</li>
+<li><code>ptemp</code>: 一時的な割り当て用プール。</li>
+<li><code>mctx</code>: SSL コンテキスト設定を保持する <code>modssl_ctx_t</code> 構造体。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: 正常終了。</li>
+<li><code>ssl_die()</code> の戻り値: 設定失敗時（プロセス終了を伴う）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mctx-&gt;ssl_ctx</code> が初期化済みであること。</li>
+<li><code>mctx-&gt;auth.verify_mode</code> が <code>SSL_CVERIFY_UNSET</code> の場合、内部で <code>SSL_CVERIFY_NONE</code> に補完される。</li>
+<li><code>mctx-&gt;auth.verify_depth</code> が <code>UNSET</code> の場合、デフォルト値 <code>1</code> が適用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **検証モードの設定**: <code>mctx-&gt;auth.verify_mode</code> に応じて OpenSSL の検証フラグ（<code>SSL_VERIFY_PEER_STRICT</code> または <code>SSL_VERIFY_PEER</code>）を決定し、<code>SSL_CTX_set_verify</code> を呼び出してコールバック関数 <code>ssl_callback_SSLVerify</code> を登録する。 2. **CA 証明書パスの構成**: <code>ca_cert_file</code> または <code>ca_cert_path</code> が指定されている場合、<code>modssl_CTX_load_verify_locations</code> を使用して OpenSSL に読み込ませる。失敗時は <code>ssl_die</code> を呼び出す。 3. **クライアント CA リストの構築**: <code>ssl_init_FindCAList</code> を呼び出し、サーバーがクライアントに要求する CA リストを取得する。リストが空の場合は <code>ssl_die</code> を呼び出す。 4. **リストの適用**: <code>SSL_CTX_set_client_CA_list</code> を使用して、構築したリストをコンテキストに設定する。 5. **警告ログ**: 検証モードが <code>REQUIRE</code> であるにもかかわらず、設定された CA リストが空である場合は警告をログ出力する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_init.c:1390</code>（<code>ssl_init_ctx</code> 内から呼び出される）。</li>
+<li>**呼び出し先**:</li>
+<li><code>SSL_CTX_set_verify</code></li>
+<li><code>modssl_CTX_load_verify_locations</code></li>
+<li><code>ssl_init_FindCAList</code></li>
+<li><code>SSL_CTX_set_client_CA_list</code></li>
+<li><code>SSL_CTX_get_client_CA_list</code></li>
+<li><code>ssl_die</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>modssl_ctx_t</code>: SSL 設定を保持する主要構造体。</li>
+<li><code>SSL_CTX</code>: OpenSSL の SSL コンテキスト。</li>
+<li><code>X509_NAME</code>: CA 名のスタック。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**検証場所の読み込み失敗**: <code>modssl_CTX_load_verify_locations</code> が失敗した場合、<code>ssl_die</code> によりサーバー起動が停止する。</li>
+<li>**CA リストの欠如**: CA 証明書が指定されているにもかかわらず、有効な CA 名が抽出できない場合、<code>ssl_die</code> によりサーバー起動が停止する。</li>
+<li>**設定不整合**: <code>REQUIRE</code> モードで CA リストが空の場合、エラーではなく警告ログが出力される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>ssl_init_ctx</code> パイプラインの一部として実行されます。</li>
+<li><code>ptemp</code> プールは <code>ssl_init_FindCAList</code> 内での一時的なメモリ確保に使用されます。</li>
+<li><code>modssl_CTX_load_verify_locations</code> は OpenSSL のバージョン差異を吸収するラッパー関数です。</li>
 </ul></body></html>

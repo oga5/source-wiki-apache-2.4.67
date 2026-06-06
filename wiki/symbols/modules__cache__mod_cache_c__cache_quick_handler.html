@@ -6,22 +6,60 @@
 <li>定義箇所: <code>modules/cache/mod_cache.c:83</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のクイックハンドラフェーズにおいて、キャッシュのヒット判定、レスポンスの提供、またはキャッシュ保存のためのフィルタ挿入を行うメインエントリポイント。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int cache_quick_handler(request_rec *r, int lookup)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>lookup</code>: キャッシュの存在確認のみを行うか（真）否か（偽）を示すフラグ。</li>
+<li>**出力**:</li>
+<li><code>OK</code>: キャッシュヒット時、またはルックアップ成功時。</li>
+<li><code>DECLINED</code>: キャッシュ対象外、キャッシュミス、または処理を後続のハンドラに委譲する場合。</li>
+<li><code>HTTP_*</code> ステータスコード: エラー発生時。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_module</code> の設定において <code>quick</code> が有効であること。</li>
+<li>リクエストが <code>Authorization</code> ヘッダーを含まないこと（認証済みリクエストはキャッシュ対象外）。</li>
+<li>メモリ割り当てはすべて <code>r-&gt;pool</code> に紐付いていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: キャッシュ設定を確認し、<code>cache_request_rec</code> を初期化。 2. **メソッド判定**:</p>
+<ul>
+<li><code>PUT/POST/DELETE</code>: <code>cache_invalidate_filter</code> を挿入し <code>DECLINED</code> を返す。</li>
+<li><code>GET</code>: キャッシュ検索へ進む。</li>
+<li>その他: <code>DECLINED</code> を返す。</li>
+<p>3. **キャッシュ検索 (<code>cache_select</code>)**:</p>
+<li>**ミス**: <code>cache_try_lock</code> で排他制御を試み、成功すれば <code>CACHE_SAVE</code> および <code>CACHE_REMOVE_URL</code> フィルタを挿入。</li>
+<li>**ヒット**: <code>cache_run_cache_status</code> でヒットを記録し、条件付きリクエスト（<code>If-Modified-Since</code> 等）を検証。</li>
+<p>4. **レスポンス提供**:</p>
+<li><code>lookup</code> が偽の場合、<code>CACHE_OUT</code> フィルタを挿入し、既存のフィルタスタックを整理してレスポンスを送信。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache の <code>quick_handler</code> フック（<code>ap_hook_quick_handler</code> により登録）。</li>
+<li>**呼び出し先**:</li>
+<li><code>cache_get_providers</code>, <code>cache_select</code>, <code>cache_try_lock</code>, <code>cache_run_cache_status</code></li>
+<li><code>ap_add_output_filter_handle</code> (各種フィルタの挿入)</li>
+<li><code>ap_pass_brigade_fchk</code> (レスポンス送信)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache_server_conf</code>: サーバー単位のキャッシュ設定。</li>
+<li><code>cache_request_rec</code>: リクエストごとのキャッシュ状態管理。</li>
+<li><code>cache_provider_list</code>: 利用可能なキャッシュストレージプロバイダーのリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**ロック競合**: <code>cache_try_lock</code> が失敗した場合、キャッシュ保存をスキップし、バックエンドへリクエストを透過させる。</li>
+<li>**ルックアップモード**: <code>lookup</code> が真の場合、コンテンツの提供は行わず、キャッシュの有無のみを判定して終了する。</li>
+<li>**フィルタ順序**: <code>CACHE_OUT</code> フィルタ挿入時に、それ以前のフィルタをすべて削除し、キャッシュからのレスポンスが正しく処理されるようスタックを再構築する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>mod_cache</code> の最前線で動作するため、パフォーマンスへの影響が大きい。</li>
+<li><code>r-&gt;main</code> をチェックしてサブクエストか否かを判別し、適切なフィルタハンドルを選択している点に注意。</li>
+<li>キャッシュキー生成やストレージの物理的な読み書きは、<code>cache_storage.c</code> および各プロバイダーモジュールに委譲されている。</li>
 </ul></body></html>

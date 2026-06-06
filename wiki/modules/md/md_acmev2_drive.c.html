@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_acmev2_drive.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_acmev2_drive.c</h1>
+<h2>概要</h2>
+<p>ACMEv2 プロトコルを用いた証明書の更新プロセスを管理するドライバ実装です。ACME サーバーとの対話を通じて、注文（Order）の作成から検証、証明書の取得までの一連のライフサイクルを制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ACMEv2 固有の更新ロジックをカプセル化しています。<code>md_acme_drive.c</code> が提供する汎用的な ACME ドライバ機能を利用しつつ、ACMEv2 特有の注文状態遷移（Pending, Ready, Valid 等）を処理する上位レイヤーとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**注文のライフサイクル管理**: ステージング領域からの注文読み込み、またはサーバーへの新規注文登録。</li>
+<li>**状態遷移の監視**: 注文のステータスを定期的に確認し、検証（Challenge）の進行や証明書発行の準備状況を追跡。</li>
+<li>**エラーリカバリ**: 注文が無効化された場合やドメイン構成の不一致が発生した際の、注文の破棄と再試行。</li>
+<li>**証明書取得の調整**: サーバー側で注文が <code>READY</code> 状態になった際の証明書チェーン構築のトリガー。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>md_acmev2_drive_renew</code>: 本ファイルのメインエントリーポイント。証明書更新の全プロセスを統括します。</li>
+<li><code>ad_setup_order</code>: 既存の注文をロードするか、サーバーへ新規注文を登録する内部関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_acmev2_drive_renew</code> が呼び出され、アカウント設定を確認します。 2. **注文の準備**: <code>ad_setup_order</code> により、ローカルの <code>STAGING</code> 領域から注文を復元するか、サーバーへ新規作成します。 3. **検証フェーズ**: <code>md_acme_order_start_challenges</code> および <code>md_acme_order_monitor_authzs</code> を通じて、ドメインの所有権確認（HTTP/TLS-ALPN 等）を進行させます。 4. **完了フェーズ**: 注文が <code>READY</code> になると証明書チェーンを構築し、最終的に <code>VALID</code> 状態になるまで待機して証明書を取得します。 5. **例外処理**: 途中で注文が <code>INVALID</code> になった場合は、ローカルの注文データをパージし、必要に応じて再試行します。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_lib.h</code>, <code>apr_strings.h</code>, <code>apr_buckets.h</code>, <code>apr_hash.h</code>, <code>apr_uri.h</code></li>
+<li>**MD コア**: <code>md.h</code>, <code>md_crypt.h</code>, <code>md_json.h</code>, <code>md_jws.h</code>, <code>md_http.h</code>, <code>md_log.h</code>, <code>md_result.h</code>, <code>md_reg.h</code>, <code>md_store.h</code>, <code>md_util.h</code></li>
+<li>**ACME 関連**: <code>md_acme.h</code>, <code>md_acme_acct.h</code>, <code>md_acme_authz.h</code>, <code>md_acme_order.h</code>, <code>md_acme_drive.h</code>, <code>md_acmev2_drive.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_acme_order.c</code>: 注文の具体的な API 操作（登録、更新、監視）を実装。</li>
+<li><code>md_acme_drive.c</code>: アカウント管理や資格情報チェーンの構築など、ドライバ共通の基盤機能。</li>
+<li><code>mod_md_drive.c</code>: 本モジュールを呼び出す上位の Apache モジュールインターフェース。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは ACMEv2 のステートマシンを実装しています。デバッグ時は <code>md_result_t</code> に記録されるアクティビティログを確認すると、どの段階で停止しているか把握しやすいです。</li>
+<li><code>ad_setup_order</code> 内の <code>ari_cert_id</code> 処理は、ACME Renewal Information (ARI) に対応しており、証明書更新の最適化を試みます。</li>
+<li>注文の再試行ロジック（<code>retry</code> ラベル）は、ドメイン構成変更などでサーバー側から <code>EINVAL</code> が返された場合の自動復旧を目的としています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acmev2_drive_c__ad_setup_order.html" target="wiki-view">`ad_setup_order`</a></li>
+<li><a href="../../symbols/modules__md__md_acmev2_drive_c__md_acmev2_drive_renew.html" target="wiki-view">`md_acmev2_drive_renew`</a></li>
+</ul></body></html>

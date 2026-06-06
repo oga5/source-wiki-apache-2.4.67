@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_setenvif.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_setenvif.c</h1>
+<h2>概要</h2>
+<p><code>mod_setenvif</code> は、HTTP リクエストヘッダやリクエスト属性（IPアドレス、URI等）を正規表現や式で評価し、その結果に基づいて環境変数を設定・解除する Apache モジュールです。設定の柔軟性を高めるため、サーバー全体およびディレクトリ単位の両方で構成可能です。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムの一部として、リクエスト処理の初期段階で環境変数を注入し、後続のモジュール（<code>mod_rewrite</code> や CGI など）が利用可能なコンテキストを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>SetEnvIf</code> 系のディレクティブを解析し、正規表現や式をコンパイルして <code>sei_entry</code> 構造体に格納する。</li>
+<li>**リクエスト評価**: <code>post_read_request</code> および <code>header_parser</code> フックでリクエストを検査し、条件に合致した場合に <code>subprocess_env</code> テーブルを更新する。</li>
+<li>**最適化**: 連続する同一ヘッダに対する評価の重複排除や、単純文字列マッチングの高速化（<code>apr_strmatch</code>）を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>sei_entry</code>: 個別の条件ルール。正規表現、コンパイル済みパターン、対象環境変数、特殊属性フラグを保持。</li>
+<li><code>sei_cfg_rec</code>: <code>sei_entry</code> の配列を保持するコンテナ。</li>
+</ul>
+<h3>設定・登録関数</h3>
+<ul>
+<li><code>create_setenvif_config</code>: 設定レコードの初期化。</li>
+<li><code>merge_setenvif_config</code>: サーバー設定とディレクトリ設定の結合。</li>
+<li><code>add_setenvif_core</code>: <code>SetEnvIf</code> 系ディレクティブの共通処理。正規表現のコンパイルと <code>sei_entry</code> への登録を行う。</li>
+</ul>
+<h3>評価・実行関数</h3>
+<ul>
+<li><code>match_headers</code>: モジュールのメインロジック。リクエスト情報を取得し、全ルールを順次評価する。</li>
+<li><code>is_header_regex</code>: ヘッダ名が正規表現を含むか判定する。</li>
+<li><code>non_regex_pattern</code>: 正規表現を含まない単純文字列を抽出し、<code>apr_strmatch</code> 用に最適化する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **構成フェーズ**: <code>add_setenvif_core</code> がディレクティブを解析。正規表現は <code>ap_pregcomp</code> でコンパイルされ、単純文字列は <code>apr_strmatch_precompile</code> で最適化される。 2. **実行フェーズ**: <code>match_headers</code> が <code>post_read_request</code> と <code>header_parser</code> で呼び出される。</p>
+<ul>
+<li>最初の呼び出しで <code>SEI_MAGIC_HEIRLOOM</code> を用いてフェーズを識別。</li>
+<li><code>sei_entry</code> を順次走査し、<code>val</code>（ヘッダ値や特殊属性）を取得。</li>
+<li><code>apr_strmatch</code> または <code>ap_regexec</code> でマッチングを行い、成功時に <code>apr_table_setn</code> で <code>subprocess_env</code> を更新。</li>
+<li>正規表現の置換が必要な場合は <code>ap_pregsub</code> を使用。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strmatch.h</code>: 高速な文字列検索。</li>
+<li><code>http_config.h</code>, <code>http_core.h</code>: モジュール設定およびディレクティブ処理。</li>
+<li><code>http_protocol.h</code>: リクエスト情報の取得。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_headers.c</code>: 環境変数ではなく、HTTP レスポンスヘッダの操作を行う類似モジュール。</li>
+<li><code>mod_env.c</code>: 環境変数の静的な設定を行うモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定データは <code>cmd-&gt;pool</code> に割り当てられ、リクエスト処理中の動的メモリは <code>r-&gt;pool</code> を使用します。</li>
+<li>**パフォーマンス**: 同一ヘッダに対する連続したルールは、ポインタ比較によってヘッダ値の取得をスキップする最適化が施されています。</li>
+<li>**制約**: <code>SetEnvIf</code> はリクエスト処理の非常に早い段階で実行されるため、後続のモジュールが動的に生成したヘッダには反応できない場合があります。</li>
+<li>**未実装・浅い部分**: <code>ap_expr</code> の評価は <code>ap_expr_exec_re</code> に委譲されており、式評価の詳細なロジックはこのファイルには含まれません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__special.html" target="wiki-view">`special`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__sei_entry.html" target="wiki-view">`sei_entry`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__sei_cfg_rec.html" target="wiki-view">`sei_cfg_rec`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__create_setenvif_config.html" target="wiki-view">`create_setenvif_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__create_setenvif_config_svr.html" target="wiki-view">`create_setenvif_config_svr`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__create_setenvif_config_dir.html" target="wiki-view">`create_setenvif_config_dir`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__merge_setenvif_config.html" target="wiki-view">`merge_setenvif_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__is_header_regex.html" target="wiki-view">`is_header_regex`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__non_regex_pattern.html" target="wiki-view">`non_regex_pattern`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__add_envvars.html" target="wiki-view">`add_envvars`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__add_setenvif_core.html" target="wiki-view">`add_setenvif_core`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__add_setenvif.html" target="wiki-view">`add_setenvif`</a></li>
+</ul></body></html>

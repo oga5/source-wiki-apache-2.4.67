@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c2.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c2.h</h1>
+<h2>概要</h2>
+<p><code>h2_c2.h</code> は、HTTP/2 モジュールにおける「セカンダリ接続（C2）」のライフサイクル管理と実行環境を定義するヘッダーファイルです。C2 は、HTTP/2 ストリームを個別のリクエストとして処理するために生成される擬似的な接続オブジェクトを指します。</p>
+<h2>モジュール内での役割</h2>
+<p>HTTP/2 では、1 つの物理的なクライアント接続（C1）上で複数のストリームが多重化されます。<code>mod_http2</code> は各ストリームを Apache の <code>conn_rec</code> として扱うことで、既存のフィルタチェーンやリクエスト処理ロジックを再利用します。本ファイルは、その C2 接続の生成、破棄、および MPM（Multi-Processing Module）との適合性チェックを担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**MPM 適合性管理**: 現在の MPM が HTTP/2 のセカンダリ接続処理をサポートしているか判定します。</li>
+<li>**C2 ライフサイクル**: ストリームごとの <code>conn_rec</code> の作成、処理開始、および異常終了時のアボート処理を提供します。</li>
+<li>**フック登録**: Apache のリクエスト処理パイプラインに C2 固有のフィルタや処理を組み込むためのエントリーポイントを提供します。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_c2_create</code>: ストリーム用の新しい <code>conn_rec</code> を生成します。</li>
+<li><code>h2_c2_process</code>: 指定されたスレッド上で C2 のリクエスト処理を実行します。</li>
+<li><code>h2_c2_abort</code>: 接続の I/O を強制終了し、関連するバケットビーム（データ転送路）をエラー状態にします。</li>
+<li><code>h2_mpm_supported</code>: 現在のサーバー設定が HTTP/2 の並列処理に適しているかを返します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>h2_c2_child_init</code> が子プロセス起動時に呼ばれ、MPM の環境を確認します。 2. **生成**: ストリームが開始されると <code>h2_c2_create</code> が呼ばれ、C1 に紐付く C2 が作成されます。 3. **処理**: <code>h2_c2_process</code> がワーカープールから呼び出され、リクエストのフィルタチェーンを駆動します。 4. **終了**: 処理完了またはエラー発生時に <code>h2_c2_destroy</code> が呼ばれ、リソースが解放されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>http_core.h</code>: Apache コアの接続・リクエスト構造体定義。</li>
+<li><code>h2.h</code>: HTTP/2 モジュール共通の定数および型定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_c2.c</code>: 本ヘッダーで宣言された関数の実装。MPM 判定ロジックが含まれます。</li>
+<li><code>h2_mplx.c</code>: ストリームとワーカーの多重化（Multiplexing）を管理し、<code>h2_c2_process</code> を呼び出す上位層。</li>
+<li><code>h2_c2_filter.c</code>: C2 上で動作する入出力フィルタの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**C1 vs C2**: C1 はクライアントとの物理接続、C2 はストリームごとの論理接続です。C2 は Apache の標準的な <code>conn_rec</code> を模倣していますが、実際のソケット通信は行わず、<code>h2_bucket_beam</code> を介して C1 とデータをやり取りします。</li>
+<li>**MPM 依存**: <code>prefork</code> のようなシングルスレッドモデルの MPM では、HTTP/2 の並列性が制限されるため、<code>h2_mpm_supported</code> のチェックが重要になります。</li>
+<li>**AP_HAS_RESPONSE_BUCKETS**: 最近の Apache バージョンではレスポンスバケットの扱いが変更されており、条件付きコンパイルによって実装が分岐している点に注意してください。</li>
+</ul></body></html>

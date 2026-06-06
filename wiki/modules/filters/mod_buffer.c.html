@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/mod_buffer.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/mod_buffer.c</h1>
+<h2>概要</h2>
+<p><code>mod_buffer.c</code> は、Apache HTTP Server の入力および出力フィルタスタックにおいて、複数の小さなバケットを大きなバケットに集約（collapse）するためのフィルタモジュールです。ネットワーク I/O の効率化を目的としており、設定されたサイズに達するまでデータをバッファリングします。</p>
+<h2>モジュール内での役割</h2>
+<p>フィルタチェーンの <code>AP_FTYPE_CONTENT_SET</code> 階層に位置し、コンテンツ生成とネットワーク送信の間でバッファリングを行います。主に小さなバケットが頻繁に生成される環境において、システムコール回数を削減し、効率的なデータ転送を支援します。</p>
+<h2>責務</h2>
+<ul>
+<li>**バッファ管理**: <code>BufferSize</code> ディレクティブに基づき、リクエストごとのバッファサイズを管理。</li>
+<li>**出力フィルタリング**: <code>buffer_out_filter</code> を通じて、下流へ渡されるバケットを蓄積し、サイズ超過時またはフラッシュ/EOS時に一括送信。</li>
+<li>**入力フィルタリング**: <code>buffer_in_filter</code> を通じて、上流から読み込んだデータをバッファし、要求されたサイズ分を切り出して提供。</li>
+<li>**設定継承**: ディレクトリ単位の設定（<code>buffer_conf</code>）の作成およびマージ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理</h3>
+<ul>
+<li><code>buffer_conf</code>: ディレクトリ単位の設定構造体。<code>size</code>（バッファ上限）と <code>size_set</code>（設定有無）を保持。</li>
+<li><code>create_buffer_config</code> / <code>merge_buffer_config</code>: 設定の初期化および継承ロジック。</li>
+<li><code>set_buffer_size</code>: <code>BufferSize</code> ディレクティブのバリデーションと設定。</li>
+</ul>
+<h3>フィルタコンテキスト</h3>
+<ul>
+<li><code>buffer_ctx</code>: リクエストごとの実行時状態。<code>bb</code>（メインバッファ）、<code>tmp</code>（入力用一時バッファ）、<code>remaining</code>（残り容量）を保持。</li>
+</ul>
+<h3>フィルタ関数</h3>
+<ul>
+<li><code>buffer_out_filter</code>: 出力チェーン用。<code>f-&gt;r-&gt;main</code>（サブクエスト）の場合はバッファリングをスキップして透過させる。</li>
+<li><code>buffer_in_filter</code>: 入力チェーン用。<code>AP_MODE_READBYTES</code> モード時のみバッファリングを行い、それ以外は透過。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: フィルタが初めて呼ばれた際、リクエストプールから <code>buffer_ctx</code> を確保し、設定を読み込む。 2. **出力フロー**:</p>
+<ul>
+<li>バケットを順次処理し、メタデータ（EOS/Flush）は即座に下流へ渡す。</li>
+<li>データバケットは <code>apr_brigade_write</code> でバッファへコピー。</li>
+<li>バッファが <code>size</code> を超えた場合、<code>ap_pass_brigade</code> で下流へフラッシュ。</li>
+<li>最適化として、既存のヒープバケットであればコピーせずに移動（move）を試みる。</li>
+<p>3. **入力フロー**:</p>
+<li>バッファが空の場合、<code>ap_get_brigade</code> で上流からデータを読み込み、バッファが満杯になるまで蓄積。</li>
+<li>呼び出し元が要求したサイズ分を <code>apr_brigade_partition</code> で切り出し、呼び出し元へ渡す。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲード操作の基盤。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの登録および制御。</li>
+<li><code>http_config.h</code> / <code>httpd.h</code>: モジュール設定およびリクエスト構造体。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/filters/mod_filter.c</code>: フィルタの動的構成に関する上位概念。</li>
+<li><code>include/util_filter.h</code>: フィルタスタックの動作定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>buffer_ctx</code> およびバッファ内のブリゲードはリクエストプール（<code>r-&gt;pool</code>）に紐付いており、リクエスト終了時に自動解放されます。</li>
+<li>**サブクエストの制約**: 出力フィルタはサブクエストに対してはバッファリングを行いません（EOSの判定が困難なため）。</li>
+<li>**パフォーマンス**: ヒープバケットの移動最適化は、バケットサイズが <code>APR_BUCKET_BUFF_SIZE</code> と一致する場合にのみ有効です。</li>
+<li>**未実装/浅い部分**: <code>buffer_out_filter</code> 内の ETag 生成ロジックはコメントアウトされており、現時点では実装されていません。また、入力フィルタは <code>AP_MODE_READBYTES</code> 以外のモード（<code>GETLINE</code> 等）ではバッファリングを行わず透過します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__buffer_conf.html" target="wiki-view">`buffer_conf`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__buffer_ctx.html" target="wiki-view">`buffer_ctx`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__buffer_out_filter.html" target="wiki-view">`buffer_out_filter`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__buffer_in_filter.html" target="wiki-view">`buffer_in_filter`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__create_buffer_config.html" target="wiki-view">`create_buffer_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__merge_buffer_config.html" target="wiki-view">`merge_buffer_config`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__set_buffer_size.html" target="wiki-view">`set_buffer_size`</a></li>
+<li><a href="../../symbols/modules__filters__mod_buffer_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

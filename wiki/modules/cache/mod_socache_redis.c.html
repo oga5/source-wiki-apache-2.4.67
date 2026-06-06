@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cache/mod_socache_redis.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cache/mod_socache_redis.c</h1>
+<h2>概要</h2>
+<p><code>mod_socache_redis.c</code> は、Apache HTTP Server の共有オブジェクトキャッシュ（socache）インターフェースを Redis バックエンドで実装するモジュールです。<code>apr_redis</code> ライブラリを利用して、セッションキャッシュや SSL セッション ID などのデータを Redis クラスターまたは単一サーバーに永続化・共有します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/cache</code> サブシステムにおける「socache プロバイダー」の一つです。<code>mod_socache_shmcb</code>（共有メモリ）や <code>mod_socache_dbm</code> と同等の役割を果たし、<code>ap_socache</code> API を通じて、キャッシュの保存、取得、削除、およびステータス表示機能を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続管理**: <code>apr_redis</code> を用いた Redis サーバー接続プールの初期化と管理。</li>
+<li>**データ変換**: バイナリ形式のキャッシュ ID を Redis キー（名前空間付き）へ変換。</li>
+<li>**キャッシュ操作**: Redis の <code>SETEX</code>（期限付き保存）、<code>GET</code>（取得）、<code>DELETE</code>（削除）の実行。</li>
+<li>**設定管理**: <code>RedisConnPoolTTL</code> および <code>RedisTimeout</code> ディレクティブによる接続パラメータの制御。</li>
+<li>**監視**: <code>mod_status</code> と連携した Redis サーバーの統計情報（メモリ、CPU、ヒット率等）の出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>socache_rd_svr_cfg</code>: サーバーごとの接続設定（TTL, 読み書きタイムアウト）を保持。</li>
+<li><code>ap_socache_instance_t</code>: Redis インスタンスのコンテキスト。接続先サーバーリスト、<code>apr_redis_t</code> ハンドル、名前空間タグを保持。</li>
+</ul>
+<h3>プロバイダー関数 (ap_socache_provider_t)</h3>
+<ul>
+<li><code>socache_rd_create</code>: インスタンスの初期化とサーバーリストの解析。</li>
+<li><code>socache_rd_init</code>: <code>apr_redis</code> オブジェクトの生成と各サーバーの接続設定。</li>
+<li><code>socache_rd_store</code>: <code>apr_redis_setex</code> を使用したデータの保存。</li>
+<li><code>socache_rd_retrieve</code>: <code>apr_redis_getp</code> を使用したデータの取得。</li>
+<li><code>socache_rd_remove</code>: <code>apr_redis_delete</code> を使用したデータの削除。</li>
+<li><code>socache_rd_status</code>: Redis サーバーの統計情報を <code>mod_status</code> ページへ出力。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> が <code>ap_socache</code> プロバイダーとして &quot;redis&quot; を登録。 2. **接続**: <code>socache_rd_init</code> が設定されたサーバーリストを解析し、<code>apr_redis_server_create</code> を経て <code>apr_redis_add_server</code> でプールを構築。 3. **キー生成**: <code>socache_rd_id2key</code> が内部 ID を <code>namespace:hex(id)</code> 形式の文字列に変換。 4. **データアクセス**:</p>
+<ul>
+<li><code>store</code>: <code>expiry</code> から現在の時刻を引いて TTL を算出し、Redis へ送信。</li>
+<li><code>retrieve</code>: <code>apr_redis_getp</code> を呼び出し、結果を <code>dest</code> バッファへコピー。</li>
+<p>5. **終了**: <code>socache_rd_destroy</code> は現在 no-op（何もしない）として実装。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>ap_socache.h</code>: socache プロバイダーインターフェース。</li>
+<li><code>apr_redis.h</code>: Redis クライアントライブラリ（<code>HAVE_APU_REDIS</code> マクロで存在確認）。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: Apache モジュール基盤。</li>
+<li><code>ap_mpm.h</code>: スレッド制限の取得に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cache/mod_cache_socache.c</code>: socache を利用するキャッシュモジュールのフロントエンド。</li>
+<li><code>modules/cache/mod_socache_shmcb.c</code>: 比較対象となる共有メモリベースのプロバイダー。</li>
+<li><code>apr_redis</code>: Apache Portable Runtime (APR) の Redis 拡張ライブラリ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>socache_rd_retrieve</code> 内で <code>apr_redis_getp</code> を使用しており、メモリはリクエストプール（<code>p</code>）から割り当てられます。大量のキャッシュ取得時にはメモリ消費に注意が必要です。</li>
+<li>**制約**: <code>socache_rd_init</code> 内で <code>ctx-&gt;taglen</code> が 16 バイト以下であるという <code>AP_DEBUG_ASSERT</code> が存在します。名前空間の長さには注意してください。</li>
+<li>**未実装**: <code>socache_rd_iterate</code> は <code>APR_ENOTIMPL</code> を返しており、キャッシュの全走査機能は提供されていません。</li>
+<li>**環境要件**: <code>APU_MAJOR_VERSION</code> が 1.6 以上である必要があります。これより古い環境では Redis サポートは無効化されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_svr_cfg.html" target="wiki-view">`socache_rd_svr_cfg`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__ap_socache_instance_t.html" target="wiki-view">`ap_socache_instance_t`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_create.html" target="wiki-view">`socache_rd_create`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_init.html" target="wiki-view">`socache_rd_init`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_destroy.html" target="wiki-view">`socache_rd_destroy`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_id2key.html" target="wiki-view">`socache_rd_id2key`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_store.html" target="wiki-view">`socache_rd_store`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_retrieve.html" target="wiki-view">`socache_rd_retrieve`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_remove.html" target="wiki-view">`socache_rd_remove`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_status.html" target="wiki-view">`socache_rd_status`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__socache_rd_iterate.html" target="wiki-view">`socache_rd_iterate`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_redis_c__create_server_config.html" target="wiki-view">`create_server_config`</a></li>
+</ul></body></html>

@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_time.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_time.c</h1>
+<h2>概要</h2>
+<p><code>md_time.c</code> は、証明書管理（Managed Domain）における時間管理、期間計算、および期間の文字列変換を行うユーティリティモジュールです。ACME プロトコル等で必要となる「有効期間」や「更新までの残り時間」の算出、および人間が読みやすい形式と機械可読な形式の相互変換を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、時間に関連する計算ロジックを抽象化する役割を担います。他のモジュール（<code>md_reg.c</code> や <code>md_acme.c</code> など）が証明書の有効期限や更新タイミングを判定する際の共通基盤として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**期間計算**: 2つの時刻間の重なりや、特定の期間内での残り時間の算出。</li>
+<li>**フォーマット変換**: <code>apr_interval_time_t</code>（期間）と人間が理解可能な文字列（例: &quot;3 days&quot;）の相互変換。</li>
+<li>**パース処理**: RFC3339 形式のタイムスタンプや、設定ファイル等で用いられる期間指定文字列（例: &quot;10d&quot;, &quot;50%&quot;）の解析。</li>
+<li>**スライス管理**: <code>md_timeslice_t</code> を用いた、期間の分割や割合指定による期間生成。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>期間操作 (<code>md_timeperiod_t</code>)</h3>
+<ul>
+<li><code>md_timeperiod_length</code>: 期間の長さを算出。</li>
+<li><code>md_timeperiod_contains</code>: 指定時刻が期間内に含まれるか判定。</li>
+<li><code>md_timeperiod_common</code>: 2つの期間の共通部分を算出。</li>
+<li><code>md_timeperiod_slice_before_end</code>: 期間の終了直前の特定スライスを抽出。</li>
+</ul>
+<h3>期間の変換・パース</h3>
+<ul>
+<li><code>md_duration_print</code> / <code>md_duration_roughly</code>: 期間を人間可読な文字列へ変換。</li>
+<li><code>md_duration_parse</code>: &quot;10d&quot; や &quot;5mi&quot; などの文字列を <code>apr_interval_time_t</code> に変換。</li>
+<li><code>md_time_parse_rfc3339</code>: RFC3339 形式の文字列を <code>apr_time_t</code> に変換。</li>
+</ul>
+<h3>スライス管理 (<code>md_timeslice_t</code>)</h3>
+<ul>
+<li><code>md_timeslice_create</code>: スライス構造体の生成。</li>
+<li><code>md_timeslice_parse</code>: 文字列（絶対時間またはパーセンテージ）からスライスを生成。</li>
+<li><code>md_timeslice_format</code>: スライスを文字列形式へ変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**期間計算**: <code>md_timeperiod_t</code> 構造体（<code>start</code>, <code>end</code>）を引数に取り、算術演算によって期間の長さや重なりを返します。</li>
+<li>**パースフロー**: <code>md_duration_parse</code> は <code>apr_strtoi64</code> で数値を抽出し、続く単位文字（d, h, mi, s, ms）に基づいて <code>apr_time_from_sec</code> 等で正規化します。</li>
+<li>**スライス生成**: <code>md_timeslice_parse</code> は、まず期間としてパースを試み、失敗した場合は <code>percentage_parse</code> を呼び出して割合指定として処理するフォールバック構造を持ちます。</li>
+<li>**RFC3339 パース**: 文字列の固定位置を直接インデックスアクセスして数値化し、<code>apr_time_exp_t</code> を経由して <code>apr_time_exp_gmt_get</code> で <code>apr_time_t</code> に変換します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_time.h</code>: APR の時間管理機能。</li>
+<li><code>apr_strings.h</code>: 文字列操作および <code>apr_psprintf</code>。</li>
+<li><code>md.h</code>: モジュール共通定義。</li>
+<li><code>md_time.h</code>: 本ファイルのインターフェース定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_reg.c</code>: 証明書の登録・更新管理において、本モジュールの期間計算関数を頻繁に利用します。</li>
+<li><code>mod_md_config.c</code>: 設定ファイルから期間指定を読み込む際に <code>md_duration_parse</code> を利用します。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を引数に取る関数は、メモリ確保を APR プールに依存しています。呼び出し側で適切なライフサイクルのプールを渡す必要があります。</li>
+<li>**RFC3339 パースの制限**: <code>md_time_parse_rfc3339</code> は、入力文字列のフォーマットが厳密に固定されていることを前提としています。汎用的なパーサーではないため、入力のバリデーションには注意してください。</li>
+<li>**エラーハンドリング**: <code>md_duration_parse</code> 等は失敗時に <code>APR_EGENERAL</code> や <code>APR_EINVAL</code> を返します。呼び出し側での戻り値チェックが必須です。</li>
+<li>**省略された詳細**: <code>md_time_parse_rfc3339</code> 内のミリ秒（<code>.</code> 以降）の処理は、現在の実装ではスキップされており、秒単位までの精度に限定されています。これは現在のユースケースにおいて十分であるためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_time_c__md_timeperiod_length.html" target="wiki-view">`md_timeperiod_length`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_timeperiod_contains.html" target="wiki-view">`md_timeperiod_contains`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_timeperiod_has_started.html" target="wiki-view">`md_timeperiod_has_started`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_timeperiod_has_ended.html" target="wiki-view">`md_timeperiod_has_ended`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_timeperiod_remaining.html" target="wiki-view">`md_timeperiod_remaining`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_timeperiod_print.html" target="wiki-view">`md_timeperiod_print`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__duration_print.html" target="wiki-view">`duration_print`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_duration_print.html" target="wiki-view">`md_duration_print`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_duration_roughly.html" target="wiki-view">`md_duration_roughly`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__duration_format.html" target="wiki-view">`duration_format`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_duration_format.html" target="wiki-view">`md_duration_format`</a></li>
+<li><a href="../../symbols/modules__md__md_time_c__md_duration_parse.html" target="wiki-view">`md_duration_parse`</a></li>
+</ul></body></html>

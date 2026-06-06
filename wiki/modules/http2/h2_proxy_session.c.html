@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_proxy_session.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_proxy_session.c</h1>
+<h2>概要</h2>
+<p><code>h2_proxy_session.c</code> は、Apache HTTP Server がバックエンドサーバーに対して HTTP/2 プロキシとして振る舞う際のセッション管理を担います。<code>nghttp2</code> ライブラリをラップし、バックエンドとの接続状態、ストリームの多重化、およびプロキシ特有のヘッダー変換やフロー制御を管理する中心的なファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy_http2</code> の中核であり、<code>h2_proxy_session.h</code> で定義されたセッション構造体と、<code>nghttp2</code> のコールバックを仲介します。フロントエンド（クライアント）からのリクエストをバックエンドへ転送し、バックエンドからのレスポンスをフロントエンドへ戻すためのブリッジとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**セッションライフサイクル管理**: 接続の初期化、PING による生存確認、GOAWAY による正常終了、エラー時の強制終了。</li>
+<li>**ストリーム管理**: <code>h2_proxy_stream</code> を用いたリクエスト/レスポンスの追跡、ヘッダーの変換（<code>Via</code> ヘッダーや <code>Location</code> 等の書き換え）。</li>
+<li>**I/O 制御**: <code>nghttp2</code> と Apache のバケットブリゲード間のデータ転送、非同期的なストリームのサスペンド/レジューム制御。</li>
+<li>**イベント駆動状態遷移**: <code>h2_proxys_state</code> に基づく有限オートマトンによるセッション状態の遷移管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>セッション管理</h3>
+<ul>
+<li><code>h2_proxy_session_setup</code>: セッションの初期化と <code>nghttp2</code> コールバックの設定。</li>
+<li><code>h2_proxy_session_process</code>: メインループ。I/O の読み書きと状態遷移を駆動。</li>
+<li><code>dispatch_event</code>: セッションイベント（<code>H2_PROXYS_EV_*</code>）に基づき状態を遷移させる。</li>
+</ul>
+<h3>ストリーム操作</h3>
+<ul>
+<li><code>h2_proxy_stream</code>: ストリームごとの状態、入出力ブリゲード、リクエスト情報を保持する内部構造体。</li>
+<li><code>submit_stream</code>: リクエストをバックエンドへ送信する。</li>
+<li><code>stream_response_data</code>: バックエンドからの DATA フレームを受信し、フロントエンドへ転送するコールバック。</li>
+<li><code>stream_request_data</code>: フロントエンドからのデータを読み取り、バックエンドへ送信するコールバック。</li>
+</ul>
+<h3>PING 制御</h3>
+<ul>
+<li><code>enter_ping_state</code>: 接続の健全性確認（PING）状態への遷移とタイムアウト設定。</li>
+<li><code>ping_ev_frame_received</code>: PING フレーム受信時の状態更新。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>h2_proxy_session_setup</code> で <code>nghttp2</code> セッションを作成し、コールバックを登録。 2. **処理ループ**: <code>h2_proxy_session_process</code> が呼ばれるたびに、<code>send_loop</code> で送信待ちのフレームを処理し、<code>h2_proxy_session_read</code> でバックエンドからの入力を読み込む。 3. **データ転送**:</p>
+<ul>
+<li>リクエスト時: <code>stream_request_data</code> が <code>ap_get_brigade</code> を通じてフロントエンドからデータを読み取り、<code>nghttp2</code> に渡す。</li>
+<li>レスポンス時: <code>stream_response_data</code> が <code>nghttp2</code> からのデータを <code>ap_pass_brigade</code> でフロントエンドへ流す。</li>
+<p>4. **状態遷移**: <code>dispatch_event</code> がイベントを受け取り、<code>transit</code> 関数で <code>session-&gt;state</code> を更新する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>nghttp2/nghttp2.h</code>: HTTP/2 プロトコル処理。</li>
+<li><code>mod_proxy.h</code>: プロキシ機能の基盤。</li>
+<li><code>h2_proxy_util.h</code>: ヘッダー変換やユーティリティ関数。</li>
+<li><code>httpd.h</code>, <code>http_protocol.h</code>: Apache のリクエスト処理基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_proxy_session.h</code>: セッション構造体定義。</li>
+<li><code>h2_proxy_util.c</code>: ヘッダー変換ロジックやブリゲード操作の補助。</li>
+<li><code>mod_proxy_http2.c</code>: このセッションを呼び出すプロキシモジュールのエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: セッションおよびストリームは <code>apr_pool_t</code> で管理されており、セッション終了時に <code>proxy_session_pre_close</code> が呼ばれ、リソースが解放されます。</li>
+<li>**非同期性**: <code>check_suspended</code> 関数は、バックエンドからの応答待ち（100-continue や PING）でサスペンドされたストリームを管理します。</li>
+<li>**注意点**: <code>h2_proxy_session_process</code> は非ブロッキングで設計されていますが、<code>WAIT</code> 状態ではタイムアウト付きのブロッキング読み込みが発生する場合があります。</li>
+<li>**省略箇所**: <code>win_update_ctx</code> 構造体以降のコードは、ウィンドウ更新処理の一部であり、本ファイル内では断片的な定義に留まっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__h2_proxy_stream.html" target="wiki-view">`h2_proxy_stream`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__set_ping_timeout.html" target="wiki-view">`set_ping_timeout`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__unset_ping_timeout.html" target="wiki-view">`unset_ping_timeout`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__enter_ping_state.html" target="wiki-view">`enter_ping_state`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ping_new_session.html" target="wiki-view">`ping_new_session`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ping_reuse_session.html" target="wiki-view">`ping_reuse_session`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ping_ev_frame_received.html" target="wiki-view">`ping_ev_frame_received`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__proxy_session_pre_close.html" target="wiki-view">`proxy_session_pre_close`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ap_proxy_header_reverse_map_fn.html" target="wiki-view">`ap_proxy_header_reverse_map_fn`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ev_init.html" target="wiki-view">`ev_init`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__cleanup_iter_ctx.html" target="wiki-view">`cleanup_iter_ctx`</a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__win_update_ctx.html" target="wiki-view">`win_update_ctx`</a></li>
+</ul></body></html>

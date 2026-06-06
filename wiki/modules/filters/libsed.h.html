@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/libsed.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/libsed.h</h1>
+<h2>概要</h2>
+<p><code>libsed.h</code> は、Apache HTTP Server のフィルタモジュール内で使用される <code>sed</code> ストリームエディタエンジンのコア定義を提供します。このヘッダーは、<code>sed</code> スクリプトのコンパイル（解析）と、その実行（評価）という二つの主要フェーズを分離するためのデータ構造とインターフェースを定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> における <code>sed</code> 関連機能（<code>mod_sed.c</code> 等）の基盤となるライブラリ定義です。<code>sed0.c</code>（コンパイル）および <code>sed1.c</code>（実行）で共有されるデータ構造を定義し、Apache のメモリ管理（<code>apr_pool_t</code>）と統合されたセーフな実行環境を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スクリプトのコンパイル**: <code>sed</code> コマンドを解析し、実行可能な中間表現（<code>sed_reptr_t</code>）へ変換する。</li>
+<li>**実行状態の管理**: 入力バッファ、ホールドスペース、パターンマッチング状態を保持する。</li>
+<li>**抽象化された入出力**: <code>apr_file_t</code> やコールバック関数を通じた、ストリーム指向のデータ処理。</li>
+<li>**メモリ管理**: <code>apr_pool_t</code> を利用したリソースのライフサイクル管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンパイル関連</h3>
+<ul>
+<li><code>sed_commands_t</code>: コンパイルされた <code>sed</code> スクリプト全体を保持する構造体。ラベルテーブル、コマンドリスト、メモリプールを含む。</li>
+<li><code>sed_reptr_t</code>: 個々の <code>sed</code> コマンド（アドレス、正規表現、置換文字列等）を表現するノード。</li>
+<li><code>sed_label_t</code>: <code>sed</code> の分岐先ラベルを管理する構造体。</li>
+</ul>
+<h3>実行関連</h3>
+<ul>
+<li><code>sed_eval_t</code>: 実行時の状態を保持する構造体。パターンバッファ、ホールドスペース、現在行番号、フラグ類を管理する。</li>
+<li><code>sed_err_fn_t</code> / <code>sed_write_fn_t</code>: エラーハンドリングおよび出力処理のためのコールバック関数型。</li>
+</ul>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><code>sed_init_commands</code> / <code>sed_destroy_commands</code>: コンパイル環境の初期化と破棄。</li>
+<li><code>sed_init_eval</code> / <code>sed_destroy_eval</code>: 実行環境の初期化と破棄。</li>
+<li><code>sed_compile_string</code> / <code>sed_compile_file</code>: スクリプトの読み込みと解析。</li>
+<li><code>sed_eval_buffer</code> / <code>sed_eval_file</code>: 実際のストリーム処理の実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **コンパイルフェーズ**: <code>sed_commands_t</code> を初期化し、<code>sed_compile_string</code> または <code>sed_compile_file</code> を呼び出すことで、スクリプトを <code>sed_reptr_t</code> の連結リストに変換します。 2. **実行フェーズ**: <code>sed_eval_t</code> を初期化し、<code>sed_eval_buffer</code> 等にデータを渡します。内部では <code>sed_reptr_t</code> リストを走査し、各行に対してマッチングとコマンド適用を行い、<code>writefn</code> を通じて結果を出力します。 3. **状態遷移**: <code>sed_eval_t</code> 内の <code>linebuf</code>（パターンバッファ）と <code>holdbuf</code>（ホールドスペース）の間でデータが交換され、<code>sed</code> 特有のストリーム処理が進行します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>limits.h</code>: システムの制限値定義。</li>
+<li><code>apr_file_io.h</code>: APR (Apache Portable Runtime) のファイル I/O 抽象化。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/filters/sed0.c</code>: コンパイルロジックの実装。</li>
+<li><code>modules/filters/sed1.c</code>: 実行ロジックの実装。</li>
+<li><code>modules/filters/mod_sed.c</code>: <code>libsed</code> を利用した Apache フィルタモジュールの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: すべての構造体は <code>apr_pool_t</code> に依存しています。<code>sed_destroy_...</code> 関数を呼び出すことで、プールに関連付けられたメモリが解放されます。</li>
+<li>**制限事項**: <code>SED_NLINES</code>, <code>SED_DEPTH</code>, <code>SED_LABSIZE</code> などの定数により、スクリプトの複雑さやネストに上限が設けられています。</li>
+<li>**設計上の注意**: 本ヘッダーは純粋な C インターフェースを提供しており、C++ から利用する場合は <code>extern &quot;C&quot;</code> ブロックが適用されます。</li>
+<li>**省略箇所**: 正規表現エンジンの詳細な実装（<code>regexp.h</code>）については本ファイルでは定義されておらず、外部依存として扱われています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_reptr_t.html" target="wiki-view">`sed_reptr_t`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_reptr_s.html" target="wiki-view">`sed_reptr_s`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_label_t.html" target="wiki-view">`sed_label_t`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_label_s.html" target="wiki-view">`sed_label_s`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_err_fn_t.html" target="wiki-view">`sed_err_fn_t`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__apr_size_t.html" target="wiki-view">`apr_size_t`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_commands_t.html" target="wiki-view">`sed_commands_t`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_commands_s.html" target="wiki-view">`sed_commands_s`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_eval_t.html" target="wiki-view">`sed_eval_t`</a></li>
+<li><a href="../../symbols/modules__filters__libsed_h__sed_eval_s.html" target="wiki-view">`sed_eval_s`</a></li>
+</ul></body></html>

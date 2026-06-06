@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/md/test_702_auto.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>test/modules/md/test_702_auto.py</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_md</code> モジュールにおける「自動駆動（Auto-drive）」機能の統合テストスイートです。ACME プロトコルを用いた証明書の自動取得、更新、および設定変更時の挙動を検証します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/md</code> サブシステムの一部として、<code>mod_md</code> の主要な運用シナリオ（自動更新、チャレンジタイプ、プロキシ設定、ドメイン構成変更など）を網羅するテスト群を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**自動駆動の検証**: <code>MDDriveMode auto</code> 設定下での証明書ライフサイクル管理。</li>
+<li>**チャレンジ検証**: <code>http-01</code> および <code>tls-alpn-01</code> チャレンジの成功・失敗条件の確認。</li>
+<li>**設定変更の追従**: ドメイン追加・削除、VirtualHost 構成変更時の <code>mod_md</code> の整合性維持。</li>
+<li>**エラーハンドリング**: 不正な設定や通信エラー発生時の挙動（503 応答など）の確認。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>テストクラス</h3>
+<ul>
+<li><code>TestAutov2</code>: ACME サーバー環境下で実行されるテストクラス。<code>pytest</code> フィクスチャを用いて Apache の設定と再起動を自動化。</li>
+</ul>
+<h3>フィクスチャ（ライフサイクル管理）</h3>
+<ul>
+<li><code>_class_scope</code>: クラス単位で Apache 設定の初期化、ACME サーバーの起動、ストアのクリアを行う。</li>
+<li><code>_method_scope</code>: 各テストメソッド実行前にストアをクリアし、テスト対象ドメインを準備する。</li>
+</ul>
+<h3>設定・操作ユーティリティ</h3>
+<ul>
+<li><code>MDConf</code>: Apache 設定ファイル（<code>httpd.conf</code>）を動的に生成・インストールするヘルパー。</li>
+<li><code>env</code>: <code>HttpdTestEnv</code> インスタンス。Apache の再起動、ログ監視、証明書ストアの操作、HTTP リクエストの実行を担当。</li>
+<li><code>MDCertUtil</code>: 証明書の解析と検証を行うユーティリティ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>MDConf</code> を使用して <code>httpd.conf</code> を生成し、<code>env.apache_restart()</code> でサーバーを起動。 2. **駆動**: <code>mod_md</code> が設定を読み込み、ACME サーバーと通信して証明書を取得。 3. **待機**: <code>env.await_completion()</code> を呼び出し、証明書取得完了までポーリングを行う。 4. **検証**: <code>env.get_cert()</code> や <code>env.get_md_status()</code> を通じて、期待される証明書がストアに存在し、有効であることを確認。 5. **クリーンアップ**: <code>env.clear_store()</code> により、各テストケースの独立性を保証。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>pyhttpd.certs</code>, <code>pyhttpd.env</code>: Apache テスト環境の基盤ライブラリ。</li>
+<li><code>test.modules.md.md_conf</code>, <code>test.modules.md.md_env</code>: <code>mod_md</code> 専用のテストヘルパー。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/modules/md/md_acme.py</code>: ACME サーバーの制御ロジック。</li>
+<li><code>test/modules/md/md_certs.py</code>: 証明書管理のテストロジック。</li>
+<li><code>test/modules/md/test_740_acme_errors.py</code>: エラーケースのより詳細な検証。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリとライフサイクル**: 各テストは Apache プロセスを再起動するため、実行時間は長めです。<code>env.clear_store()</code> はファイルシステム上の状態をリセットするため、テスト間の副作用を避けるために必須です。</li>
+<li>**エラーログ**: <code>env.httpd_error_log.ignore_recent()</code> は、意図的に発生させたエラー（チャレンジ失敗など）をテスト結果として無視するために使用されています。</li>
+<li>**制限事項**: 一部のテストは <code>mod_ssl</code> 固有の挙動に依存しており、<code>skipif</code> で制御されています。また、DNS 名の長さ制限など、ACME サーバー（Boulder/Pebble）の仕様に依存するエッジケースが含まれています。</li>
+</ul></body></html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_reg.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_reg.h</h1>
+<h2>概要</h2>
+<p><code>md_reg.h</code> は、管理対象ドメイン（Managed Domains: MD）のレジストリを定義するヘッダーファイルです。<code>md_store_t</code> をバックエンドとして、ドメイン設定の永続化、証明書の更新ライフサイクル、およびプロトコルドライバ（ACME等）の統合管理を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおける中心的な管理層です。<code>md_store</code> が物理的なファイル操作を担うのに対し、<code>md_reg</code> はそれらのデータを論理的な「ドメイン」として解釈し、更新の必要性判断や証明書更新のオーケストレーションを行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**レジストリ管理**: MD の登録、検索、更新、削除のインターフェース提供。</li>
+<li>**ライフサイクル制御**: 証明書の更新判定（<code>should_renew</code>）、更新実行（<code>renew</code>）、ステージングからのロード（<code>load_staging</code>）。</li>
+<li>**プロトコル抽象化**: <code>md_proto_t</code> を介した、ACME などの外部プロトコルとの疎結合な連携。</li>
+<li>**整合性維持**: ドメイン名の重複チェック、設定更新時の整合性検証、グローバルロックによる排他制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>レジストリ管理</h3>
+<ul>
+<li><code>md_reg_t</code>: レジストリの不透明なハンドル。設定、ストア、プロトコルドライバへの参照を保持。</li>
+<li><code>md_reg_create()</code>: レジストリの初期化。</li>
+<li><code>md_reg_add()</code>, <code>md_reg_get()</code>, <code>md_reg_find()</code>: MD オブジェクトの CRUD 操作。</li>
+</ul>
+<h3>更新・ライフサイクル</h3>
+<ul>
+<li><code>md_reg_renew()</code>: 証明書更新のメインエントリポイント。</li>
+<li><code>md_reg_load_staging()</code>: ステージング領域から本番領域への証明書適用。</li>
+<li><code>md_reg_should_renew()</code>: 更新が必要かどうかの判定ロジック。</li>
+<li><code>MD_UPD_*</code>: <code>md_reg_update()</code> で使用するビットマスク。設定項目の変更を細かく制御。</li>
+</ul>
+<h3>プロトコルドライバ</h3>
+<ul>
+<li><code>md_proto_t</code>: プロトコル固有の動作（init, renew, preload 等）を定義する構造体。</li>
+<li><code>md_proto_driver_t</code>: 更新実行時のコンテキスト（環境変数、ストア、MD情報など）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_reg_create</code> でストアと紐付けられ、設定が読み込まれる。 2. **更新フロー**:</p>
+<ul>
+<li><code>md_reg_should_renew</code> で更新時期を判定。</li>
+<li><code>md_reg_renew</code> が呼び出されると、対応するプロトコルドライバ（ACME等）が起動。</li>
+<li>プロトコルドライバは <code>md_proto_driver_t</code> を通じて <code>md_store</code> にアクセスし、証明書を <code>STAGING</code> 領域に取得。</li>
+<li><code>md_reg_load_staging</code> により、<code>STAGING</code> から <code>DOMAINS</code> 領域へ証明書が昇格される。</li>
+<p>3. **排他制御**: <code>md_reg_lock_global</code> / <code>unlock_global</code> を使用して、複数プロセス間での競合を防止。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>md_store.h</code>: 永続化層の基盤。</li>
+<li><code>apr_hash.h</code>, <code>apr_pools.h</code>: APR によるメモリ管理とデータ構造。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_reg.c</code>: 本ヘッダーの定義に対する実装。</li>
+<li><code>md_store.h</code>: 物理的なデータ保存先。</li>
+<li><code>md_acme.h</code>: ACME プロトコルによる証明書取得の実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 多くの関数が <code>apr_pool_t *p</code> を引数に取ります。これは APR のメモリプールモデルに従い、呼び出し元でライフサイクルを管理する必要があります。</li>
+<li>**スレッド安全性**: <code>md_reg_t</code> 自体はスレッドセーフではありません。必要に応じて <code>md_reg_lock_global</code> を使用したプロセス間排他制御が必須です。</li>
+<li>**設計の意図**: <code>md_reg</code> は「何をするか（ポリシー）」を決定し、<code>md_store</code> が「どこに保存するか（ストレージ）」を、<code>md_proto</code> が「どうやって取得するか（プロトコル）」を分担する設計になっています。</li>
+<li>**省略箇所**: <code>md_reg_t</code> 構造体の内部フィールド（<code>renew_window</code> 等）の詳細は、実装ファイル <code>md_reg.c</code> に依存するため、本ヘッダーでは抽象化されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_reg_h__md_reg_t.html" target="wiki-view">`md_reg_t`</a></li>
+<li><a href="../../symbols/modules__md__md_reg_h__md_t.html" target="wiki-view">`md_t`</a></li>
+<li><a href="../../symbols/modules__md__md_reg_h__md_proto_t.html" target="wiki-view">`md_proto_t`</a></li>
+<li><a href="../../symbols/modules__md__md_reg_h__md_proto_driver_t.html" target="wiki-view">`md_proto_driver_t`</a></li>
+<li><a href="../../symbols/modules__md__md_reg_h__md_result_t.html" target="wiki-view">`md_result_t`</a></li>
+<li><a href="../../symbols/modules__md__md_reg_h__apr_pool_t.html" target="wiki-view">`apr_pool_t`</a></li>
+<li><a href="../../symbols/modules__md__md_reg_h__apr_time_t.html" target="wiki-view">`apr_time_t`</a></li>
+</ul></body></html>

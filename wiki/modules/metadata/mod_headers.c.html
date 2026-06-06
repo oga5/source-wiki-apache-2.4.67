@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_headers.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_headers.c</h1>
+<h2>概要</h2>
+<p><code>mod_headers.c</code> は、HTTP リクエストおよびレスポンスヘッダーの追加、変更、削除、置換を行う Apache HTTP Server モジュールです。<code>Header</code> および <code>RequestHeader</code> ディレクティブを提供し、正規表現による置換や、環境変数・式（<code>ap_expr</code>）に基づいた条件付き処理をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムにおいて、HTTP メッセージのメタデータ（ヘッダー）を動的に操作する中心的な役割を担います。リクエスト処理の初期段階（<code>post_read_request</code>）からレスポンス送信直前まで、複数のフックポイントでヘッダーを制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>Header</code> / <code>RequestHeader</code> ディレクティブの解析と、ディレクトリ単位の構成保持。</li>
+<li>**ヘッダー操作**: <code>set</code>, <code>add</code>, <code>append</code>, <code>merge</code>, <code>unset</code>, <code>edit</code> などのアクションの実装。</li>
+<li>**動的フォーマット**: <code>%D</code> (duration), <code>%t</code> (time), <code>%e</code> (env) などのタグを解析し、実行時に値を生成。</li>
+<li>**条件付き処理**: <code>env=...</code> や <code>expr=...</code> による、特定の条件下でのみヘッダーを適用するロジックの提供。</li>
+<li>**フィルタリング**: 出力フィルタ（<code>FIXUP_HEADERS_OUT/ERR</code>）を介したレスポンスヘッダーの最終調整。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・データ構造</h3>
+<ul>
+<li><code>headers_conf</code>: ディレクトリごとの設定を保持。<code>fixup_in</code>, <code>fixup_out</code>, <code>fixup_err</code> の各配列に <code>header_entry</code> を格納。</li>
+<li><code>header_entry</code>: 個別のヘッダー操作ルール。アクション、対象ヘッダー名、条件式、正規表現、フォーマットタグ配列を保持。</li>
+<li><code>format_tag</code>: ヘッダー値内の動的要素を処理するための関数ポインタと引数のペア。</li>
+</ul>
+<h3>コマンド・解析</h3>
+<ul>
+<li><code>header_cmd</code>: <code>Header</code> / <code>RequestHeader</code> ディレクティブのメインエントリーポイント。</li>
+<li><code>header_inout_cmd</code>: ディレクティブの引数を解析し、<code>header_entry</code> を構築する内部ロジック。</li>
+<li><code>parse_format_string</code>: ヘッダー値内のフォーマットタグを分解し、<code>format_tag</code> 配列を生成。</li>
+</ul>
+<h3>実行・処理</h3>
+<ul>
+<li><code>do_headers_fixup</code>: ヘッダー操作のコアエンジン。<code>apr_table_t</code> に対して指定されたアクションを適用。</li>
+<li><code>process_tags</code>: <code>format_tag</code> 配列を走査し、動的な値を結合して文字列を生成。</li>
+<li><code>process_regexp</code>: <code>edit</code> アクションのための正規表現置換処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定時**: <code>header_cmd</code> がディレクティブを読み取り、<code>header_entry</code> を <code>headers_conf</code> に蓄積。 2. **リクエスト処理**:</p>
+<ul>
+<li><code>ap_headers_early</code>: <code>post_read_request</code> フックで、<code>early</code> 指定されたヘッダーを即座に処理。</li>
+<li><code>ap_headers_fixup</code>: <code>fixups</code> フックで、リクエストヘッダーを処理。</li>
+<li><code>ap_headers_output_filter</code>: 出力フィルタとして、レスポンスヘッダーを最終調整。</li>
+<p>3. **データフロー**: <code>do_headers_fixup</code> が <code>request_rec</code> 内の <code>headers_in</code> / <code>headers_out</code> / <code>err_headers_out</code> を直接操作します。<code>process_tags</code> は <code>request_rec</code> の情報を参照して値を生成します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache コア API。</li>
+<li><code>apr_hash.h</code>, <code>apr_strings.h</code>, <code>apr_buckets.h</code>: APR ユーティリティ。</li>
+<li><code>ap_expr.h</code>: 式評価エンジン（条件付きヘッダー処理に使用）。</li>
+<li><code>util_filter.h</code>: 出力フィルタの実装に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/metadata/mod_setenvif.c</code>: 環境変数の設定を通じて、本モジュールの条件付き処理と密接に関連。</li>
+<li><code>server/util_expr.c</code>: <code>ap_expr</code> の実装。本モジュールの <code>expr=</code> 構文の基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ割り当ては <code>request_rec-&gt;pool</code> または <code>cmd-&gt;pool</code> を使用しており、リクエスト終了時に自動解放されます。</li>
+<li>**順序の重要性**: <code>Header</code> ディレクティブは設定ファイル内の出現順序に従って適用されます。<code>append</code> や <code>unset</code> の順序には注意が必要です。</li>
+<li>**パフォーマンス**: <code>edit</code> アクション（正規表現）はリクエストごとに実行されるため、多用すると負荷が高まります。</li>
+<li>**制限事項**: <code>header_request_ssl_var</code> など一部のタグは、SSL モジュールが有効でない場合や特定のタイミングでは期待した値を返さない可能性があります。</li>
+<li>**未解決の深掘り**: <code>format_tag_hash</code> の初期化タイミングや、<code>early</code> 処理と通常のフィルタ処理の競合については、<code>httpd</code> のフック実行順序の理解が不可欠です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__hdr_actions.html" target="wiki-view">`hdr_actions`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__request_rec.html" target="wiki-view">`request_rec`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__format_tag.html" target="wiki-view">`format_tag`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__header_entry.html" target="wiki-view">`header_entry`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__echo_do.html" target="wiki-view">`echo_do`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__edit_do.html" target="wiki-view">`edit_do`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__headers_conf.html" target="wiki-view">`headers_conf`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__constant_item.html" target="wiki-view">`constant_item`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__header_request_duration.html" target="wiki-view">`header_request_duration`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__header_request_time.html" target="wiki-view">`header_request_time`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__unwrap_header.html" target="wiki-view">`unwrap_header`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_headers_c__header_request_env_var.html" target="wiki-view">`header_request_env_var`</a></li>
+</ul></body></html>

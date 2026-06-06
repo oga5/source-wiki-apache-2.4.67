@@ -6,22 +6,59 @@
 <li>定義箇所: <code>modules/mappers/mod_rewrite.c:344</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>mod_rewrite</code> における <code>RewriteRule</code> ディレクティブの解析済み設定を保持する構造体です。正規表現パターン、置換文字列、およびルール適用時の動作を制御するフラグやメタデータを格納します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>typedef struct {
+    apr_array_header_t *rewriteconds;
+    char      *pattern;
+    ap_regex_t *regexp;
+    char      *output;
+    int        flags;
+    char      *forced_mimetype;
+    char      *forced_handler;
+    int        forced_responsecode;
+    data_item *env;
+    data_item *cookie;
+    int        skip;
+    int        maxrounds;
+    const char *escapes;
+    const char *noescapes;
+} rewriterule_entry;</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: 設定ファイル（<code>httpd.conf</code> や <code>.htaccess</code>）から読み込まれたルール定義。</li>
+<li>**出力**: <code>apply_rewrite_rule</code> 関数等で参照され、リクエストの書き換え処理（URIの置換、環境変数の設定、MIMEタイプやハンドラの強制変更など）に利用されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>regexp</code> は <code>pattern</code> をコンパイルした結果である必要があります。</li>
+<li><code>rewriteconds</code> は、このルールに先行する <code>RewriteCond</code> のリストを保持します。</li>
+<li>メモリ管理はリクエストプール（<code>r-&gt;pool</code>）に依存します。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apply_rewrite_rule</code> 関数において、リクエスト URI が <code>regexp</code> にマッチした場合、<code>output</code> を用いて置換を実行します。</li>
+<li><code>flags</code> に基づき、リダイレクト、プロキシ転送、または後続ルールのスキップ（<code>skip</code>）などの制御を行います。</li>
+<li><code>[N]</code> フラグ使用時には <code>maxrounds</code> を参照し、無限ループを防止します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>apply_rewrite_rule</code>、<code>do_expand</code>、<code>force_type_handler</code>、およびルールセットを初期化する設定読み込み処理から参照されます。</li>
+<li>**呼び出し先**: 本構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>rewritecond_entry</code>: このルールに付随する条件式。</li>
+<li><code>data_item</code>: 環境変数やクッキーの定義。</li>
+<li><code>rewrite_perdir_conf</code> / <code>rewrite_server_conf</code>: ルールを保持する親の設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>maxrounds</code> を超えるループが発生した場合、書き換え処理は停止します。</li>
+<li>正規表現のコンパイル失敗や、メモリ不足による割り当て失敗が発生する可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>[PT]</code> フラグの扱いや、バックリファレンスのエスケープ処理（<code>escapes</code>, <code>noescapes</code>）は複雑なため、変更時は <code>mod_rewrite.c</code> の適用ロジックを十分に確認してください。</li>
+<li>ルールセットの反復処理において <code>skip</code> フィールドが正しく機能しているか注意が必要です。</li>
 </ul></body></html>

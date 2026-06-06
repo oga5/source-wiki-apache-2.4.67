@@ -6,22 +6,52 @@
 <li>定義箇所: <code>modules/ssl/ssl_engine_init.c:634</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>SSL コンテキスト（<code>SSL_CTX</code>）に対して、SNI（Server Name Indication）、OCSP ステープリング、および TLS-SRP（Secure Remote Password）といった TLS 拡張機能の設定を適用する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_status_t ssl_init_ctx_tls_extensions(server_rec *s,
+                                         apr_pool_t *p,
+                                         apr_pool_t *ptemp,
+                                         modssl_ctx_t *mctx)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>p</code>: 長期生存プール。</li>
+<li><code>ptemp</code>: 一時的なメモリプール。</li>
+<li><code>mctx</code>: 設定情報を含む <code>modssl_ctx_t</code> 構造体。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードまたは <code>ssl_die()</code> によるプロセス終了。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mctx-&gt;ssl_ctx</code> が有効な <code>SSL_CTX</code> オブジェクトを保持していること。</li>
+<li>OpenSSL のバージョンが、使用する拡張機能（特に <code>SSL_CTX_set_client_hello_cb</code>）の要件を満たしていること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **SNI 設定**: <code>ssl_callback_ServerNameIndication</code> をコールバックとして登録し、SNI 処理を有効化する。 2. **ClientHello コールバック**: OpenSSL 1.1.1 以降（かつ LibreSSL 以外）の場合、<code>ssl_callback_ClientHello</code> を設定し、接続初期段階でのプロトコルバージョン制御を可能にする。 3. **OCSP ステープリング**: <code>mctx-&gt;stapling_enabled</code> が有効かつプロキシモードでない場合、<code>modssl_init_stapling</code> を呼び出して初期化する。 4. **TLS-SRP**: <code>mctx-&gt;srp_vfile</code> が指定されている場合、SRP データベースを読み込み、サーバーパラメータ用コールバック <code>ssl_callback_SRPServerParams</code> を登録する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/ssl/ssl_engine_init.c:1408</code> (推測される <code>ssl_init_ctx</code> 内のフロー)</li>
+<li>**呼び出し先**:</li>
+<li><code>SSL_CTX_set_tlsext_servername_callback</code>, <code>SSL_CTX_set_tlsext_servername_arg</code></li>
+<li><code>SSL_CTX_set_client_hello_cb</code> (条件付き)</li>
+<li><code>modssl_init_stapling</code> (条件付き)</li>
+<li><code>SRP_VBASE_new</code>, <code>SRP_VBASE_init</code> (条件付き)</li>
+<li><code>ssl_die</code> (エラー時)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>modssl_ctx_t</code>: SSL 設定を保持する主要な構造体。</li>
+<li><code>server_rec</code>: Apache サーバー設定構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**SNI 設定失敗**: コールバック登録に失敗した場合、<code>ssl_die()</code> を呼び出しサーバー起動を停止する。</li>
+<li>**SRP 初期化失敗**: ファイル読み込みや構造体生成に失敗した場合、<code>ssl_die()</code> を呼び出しサーバー起動を停止する。</li>
+<li>**OCSP 初期化失敗**: <code>modssl_init_stapling</code> がエラーを返した場合、そのエラーコードを伝播させる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>OpenSSL のバージョン依存処理（<code>OPENSSL_VERSION_NUMBER</code>）が含まれているため、ライブラリ更新時には挙動の変化に注意すること。</li>
+<li><code>ssl_die()</code> が呼び出されるとプロセスが終了するため、設定エラーは起動時に即座に検知される。</li>
 </ul></body></html>

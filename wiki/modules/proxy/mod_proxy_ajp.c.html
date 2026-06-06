@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/mod_proxy_ajp.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/mod_proxy_ajp.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のプロキシサブシステムにおいて、AJP (Apache JServ Protocol) v1.3 を用いたバックエンド通信を実装するモジュールです。<code>mod_proxy</code> の拡張として、AJP プロトコル特有のヘッダー処理、リクエスト転送、レスポンス解析、およびコネクション管理を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のハンドラおよびカノニカライザ（URL正規化）として機能します。<code>proxy_hook_scheme_handler</code> および <code>proxy_hook_canon_handler</code> を通じて、<code>ajp://</code> スキームのリクエストを処理する主要なエントリーポイントを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**URL 正規化**: <code>ajp://</code> スキームの構文解析、ホスト/ポートの抽出、パスのエンコーディング処理。</li>
+<li>**リクエスト転送**: AJP プロトコルに基づいたヘッダーおよびボディデータのシリアライズと送信。</li>
+<li>**レスポンス処理**: バックエンドからの AJP メッセージ（ヘッダー、ボディチャンク、終了通知）の解析と、Apache のフィルタチェーンへの変換。</li>
+<li>**コネクション管理**: バックエンドとの接続確立、CPING/CPONG によるヘルスチェック、再利用の判断。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ハンドラ・フック</h3>
+<ul>
+<li><code>proxy_ajp_handler</code>: <code>ajp://</code> スキームのメインハンドラ。コネクションの取得からリクエスト処理までを統括。</li>
+<li><code>proxy_ajp_canon</code>: URL を正規化し、内部的な <code>proxy:ajp://</code> 形式へ変換。</li>
+<li><code>ap_proxy_http_register_hook</code>: モジュールのフックを登録。</li>
+</ul>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>ap_proxy_ajp_request</code>: AJP プロトコルによる通信の核心。ヘッダー送信、ボディのストリーミング、レスポンスのループ処理を行う。</li>
+<li><code>is_idempotent</code>: リクエストが冪等かどうかを判定し、エラー時のリトライ可否を決定。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>get_content_length</code>: リクエストの <code>Content-Length</code> を取得。</li>
+<li><code>METHOD_IDEMPOTENT</code> 系マクロ: 冪等性の判定に使用。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>proxy_ajp_handler</code> が呼び出され、<code>ap_proxy_acquire_connection</code> でバックエンド接続を確保。 2. **接続確立**: <code>ap_proxy_connect_backend</code> でソケットを接続し、必要に応じて <code>ajp_handle_cping_cpong</code> で疎通確認。 3. **リクエスト送信**: <code>ap_proxy_ajp_request</code> が <code>ajp_send_header</code> でヘッダーを送信し、<code>apr_brigade_flatten</code> で入力データを AJP メッセージとしてバックエンドへ転送。 4. **レスポンスループ**: <code>ajp_read_header</code> でバックエンドからのメッセージを読み取り、<code>ajp_parse_type</code> でコマンド種別（ヘッダー、ボディ、終了）を判定。 5. **データ変換**: <code>CMD_AJP13_SEND_BODY_CHUNK</code> を受け取ると、AJP データを Apache の <code>apr_bucket</code> に変換し、<code>ap_pass_brigade</code> でクライアントへ送出。 6. **終了**: <code>CMD_AJP13_END_RESPONSE</code> でリクエストを完了し、コネクションを解放または再利用。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシ共通のデータ構造と API。</li>
+<li><code>ajp.h</code>: AJP プロトコル定義、メッセージ構造体、および低レベル通信関数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ajp_header.c</code>, <code>ajp_link.c</code>, <code>ajp_msg.c</code>: AJP プロトコルの詳細なパケット操作やリンク層の実装。</li>
+<li><code>proxy_util.c</code>: コネクションプール管理や共通のプロキシユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を多用しています。リクエスト終了時に自動解放されるため、長期的なメモリ保持には注意が必要です。</li>
+<li>**エラー処理**: <code>backend_failed</code> や <code>client_failed</code> フラグにより、エラー発生時にコネクションを強制クローズ (<code>conn-&gt;close = 1</code>) して再利用を防ぐ設計になっています。</li>
+<li>**AJP の制約**: AJP プロトコルには明示的なフラッシュメッセージが存在しないため、<code>CMD_AJP13_SEND_BODY_CHUNK</code> 時に <code>apr_poll</code> を用いたタイムアウトベースのフラッシュ（バンドエイド）が実装されています。</li>
+<li>**省略箇所**: 本ファイルはプロトコルの高レベルな制御に集中しており、低レベルなバイトストリーム操作（<code>ajp_msg_t</code> の内部構造など）は <code>ajp_msg.c</code> 等に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_ajp_c__proxy_ajp_canon.html" target="wiki-view">`proxy_ajp_canon`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_ajp_c__is_idempotent.html" target="wiki-view">`is_idempotent`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_ajp_c__get_content_length.html" target="wiki-view">`get_content_length`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_ajp_c__ap_proxy_ajp_request.html" target="wiki-view">`ap_proxy_ajp_request`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_ajp_c__proxy_ajp_handler.html" target="wiki-view">`proxy_ajp_handler`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_ajp_c__ap_proxy_http_register_hook.html" target="wiki-view">`ap_proxy_http_register_hook`</a></li>
+</ul></body></html>

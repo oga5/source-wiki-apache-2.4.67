@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/ssl_util.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/ssl_util.c</h1>
+<h2>概要</h2>
+<p><code>ssl_util.c</code> は、<code>mod_ssl</code> モジュール全体で使用される汎用的なユーティリティ関数群を提供します。仮想ホストの識別、外部プロセスとのパイプ通信、ファイルパスの検証、ASN.1 データのキャッシュ管理、および OpenSSL 1.1 未満の環境におけるスレッドセーフなロック機構の実装が含まれます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> の各エンジン（設定、IO、初期化）が共通して利用する「低レイヤーの補助機能」を提供します。特に、OpenSSL のレガシーなスレッド管理や、Apache のリクエスト処理と SSL 接続状態の橋渡しを行うためのユーティリティとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**仮想ホスト管理**: サーバー名とポートに基づく識別子の生成およびマッチング。</li>
+<li>**プロセス間通信**: 外部コマンドの実行とパイプ経由のデータ読み取り。</li>
+<li>**ファイルシステム検証**: パスが存在するか、ディレクトリか、ファイルか等の属性チェック。</li>
+<li>**ASN.1 キャッシュ**: <code>EVP_PKEY</code> 構造体を DER 形式でハッシュテーブルに永続化・管理。</li>
+<li>**スレッド同期**: OpenSSL の古い API 用のロックコールバックおよびスレッド ID 管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>仮想ホスト・リクエスト識別</h3>
+<ul>
+<li><code>ssl_util_vhostid</code>: サーバー名とポートから一意な ID 文字列を生成。</li>
+<li><code>ssl_util_vhost_matches</code>: <code>ServerName</code> および <code>ServerAlias</code> (ワイルドカード含む) との照合。</li>
+<li><code>modssl_request_is_tls</code>: 現在のリクエストが TLS 経由か判定し、接続コンテキストを返す。</li>
+</ul>
+<h3>プロセス・ファイル操作</h3>
+<ul>
+<li><code>ssl_util_ppopen</code> / <code>ssl_util_ppclose</code>: 外部コマンドのパイプ開閉。</li>
+<li><code>ssl_util_readfilter</code>: 外部コマンドを実行し、その出力を1行読み取る。</li>
+<li><code>ssl_util_path_check</code>: <code>apr_stat</code> を用いたパスの属性検証。</li>
+</ul>
+<h3>ASN.1 キャッシュ管理</h3>
+<ul>
+<li><code>ssl_asn1_table_set</code> / <code>get</code> / <code>unset</code>: <code>EVP_PKEY</code> を DER 形式でハッシュテーブルに格納・取得・削除。</li>
+</ul>
+<h3>スレッド同期 (OpenSSL 1.1 未満)</h3>
+<ul>
+<li><code>ssl_util_thread_setup</code>: OpenSSL のロックコールバックを登録。</li>
+<li><code>ssl_dyn_create_function</code> 等: OpenSSL が内部で使用する動的ロックの管理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**ASN.1 キャッシュ**: <code>ssl_asn1_table_set</code> は <code>i2d_PrivateKey</code> を使用して <code>EVP_PKEY</code> を DER に変換し、プロセス生存期間中保持するために <code>malloc</code> でメモリを確保します。</li>
+<li>**スレッドロック**: <code>ssl_util_thread_setup</code> は <code>apr_pool_cleanup_register</code> を使用して、モジュール終了時に OpenSSL のコールバックを解除するクリーンアップハンドラを登録します。</li>
+<li>**外部コマンド**: <code>ssl_util_readfilter</code> は <code>ssl_util_ppopen</code> で生成されたパイプから1バイトずつ読み込み、改行コードまでをバッファに蓄積します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: モジュール内部の構造体定義 (<code>SSLSrvConfigRec</code>, <code>SSLConnRec</code> 等)。</li>
+<li><code>ap_mpm.h</code>: MPM 固有の機能へのアクセス。</li>
+<li><code>apr_thread_mutex.h</code>: APR レベルのスレッド同期プリミティブ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_engine_init.c</code>: <code>ssl_util_thread_setup</code> を呼び出し、初期化時にスレッド環境を構築する。</li>
+<li><code>ssl_engine_io.c</code>: <code>modssl_request_is_tls</code> を利用して接続の SSL 状態を確認する。</li>
+<li><code>ssl_util_ssl.c</code>: OpenSSL の抽象化レイヤー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>ssl_asn1_table_set</code> で確保される <code>cpData</code> は、プールではなく <code>malloc</code> で確保されます。これはモジュールのリロードを跨いでデータを保持するためです。<code>ssl_asn1_table_unset</code> で適切に <code>free</code> する必要があります。</li>
+<li>**スレッドセーフ**: スレッド関連のコードは <code>MODSSL_USE_OPENSSL_PRE_1_1_API</code> が定義されている場合のみ有効です。OpenSSL 1.1 以降ではこれらのコールバックは不要であり、無視されます。</li>
+<li>**制限事項**: <code>ssl_util_readfilter</code> は <code>MAX_STRING_LEN</code> を超える出力に対しては切り詰めが発生します。また、1バイトずつの読み込みはパフォーマンス上のボトルネックとなる可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_util_vhostid.html" target="wiki-view">`ssl_util_vhostid`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_util_vhost_matches.html" target="wiki-view">`ssl_util_vhost_matches`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__modssl_request_is_tls.html" target="wiki-view">`modssl_request_is_tls`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_util_ppopen.html" target="wiki-view">`ssl_util_ppopen`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_util_ppclose.html" target="wiki-view">`ssl_util_ppclose`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_util_readfilter.html" target="wiki-view">`ssl_util_readfilter`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_util_path_check.html" target="wiki-view">`ssl_util_path_check`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_asn1_table_set.html" target="wiki-view">`ssl_asn1_table_set`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_asn1_table_get.html" target="wiki-view">`ssl_asn1_table_get`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__ssl_asn1_table_unset.html" target="wiki-view">`ssl_asn1_table_unset`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__CRYPTO_dynlock_value.html" target="wiki-view">`CRYPTO_dynlock_value`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_c__PSA.html" target="wiki-view">`PSA`</a></li>
+</ul></body></html>

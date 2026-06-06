@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_core.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_core.c</h1>
+<h2>概要</h2>
+<p><code>md_core.c</code> は、マネージドドメイン（Managed Domain: <code>md_t</code>）のデータ構造を操作するための中心的なユーティリティ群を提供します。ドメインの照合、JSON へのシリアライズ/デシリアライズ、および CA（認証局）情報の管理を担う、モジュール内の基盤ファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、<code>md_t</code> オブジェクトのライフサイクル管理と、ドメイン設定の整合性チェックを行うコアレイヤーです。<code>md_reg.c</code>（登録管理）や <code>md_store.c</code>（永続化）が扱うドメイン情報の「データモデル」としての役割を果たします。</p>
+<h2>責務</h2>
+<ul>
+<li>**ドメイン照合**: 複数のドメインリスト間での重複チェックや包含関係の判定。</li>
+<li>**ライフサイクル管理**: <code>md_t</code> オブジェクトの生成、コピー、クローン。</li>
+<li>**シリアライズ**: <code>md_t</code> 構造体と JSON 形式間の相互変換（公開用 JSON の生成含む）。</li>
+<li>**CA 管理**: 既知の CA URL と名称の相互解決および検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ドメイン操作</h3>
+<ul>
+<li><code>md_contains</code>: 指定ドメインが <code>md_t</code> に含まれるか判定。</li>
+<li><code>md_common_name</code>: 2つの <code>md_t</code> 間で共通するドメイン名を抽出。</li>
+<li><code>md_domains_overlap</code>: 2つの <code>md_t</code> がドメインを共有しているか判定。</li>
+<li><code>md_equal_domains</code>: 2つの <code>md_t</code> のドメインリストが完全に一致するか判定。</li>
+</ul>
+<h3>ライフサイクル・生成</h3>
+<ul>
+<li><code>md_create_empty</code>: <code>apr_pool_t</code> を使用して初期化された空の <code>md_t</code> を作成。</li>
+<li><code>md_copy</code> / <code>md_clone</code>: <code>md_t</code> のディープコピー。<code>clone</code> は設定値の複製を伴う完全な複製。</li>
+</ul>
+<h3>JSON 変換</h3>
+<ul>
+<li><code>md_to_json</code> / <code>md_from_json</code>: <code>md_t</code> と <code>md_json_t</code> 間の変換。</li>
+<li><code>md_to_public_json</code>: EAB（External Account Binding）の HMAC などの機密情報をマスクした JSON を生成。</li>
+</ul>
+<h3>CA 解決</h3>
+<ul>
+<li><code>md_get_ca_name_from_url</code> / <code>md_get_ca_url_from_name</code>: CA 名と URL のマッピング。<code>KNOWN_CAs</code> 配列に基づき解決。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**ドメイン判定**: <code>md_contains</code> が <code>md_array_str_index</code> を呼び出し、一致しない場合は <code>md_dns_domains_match</code> でワイルドカード等の DNS マッチングを試行します。</li>
+<li>**JSON 変換**: <code>md_to_json</code> は <code>md_json_t</code> を作成し、<code>md_t</code> の各フィールドを <code>MD_KEY_*</code> 定数を用いて JSON キーにマッピングします。<code>md_from_json</code> はその逆を行い、<code>apr_pool_t</code> 上で文字列を複製（<code>md_json_dups</code>）します。</li>
+<li>**CA 解決**: <code>md_get_ca_url_from_name</code> は、まず既知の CA 名を検索し、見つからない場合は入力が絶対 URI であるかを <code>md_util_abs_uri_check</code> で検証します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_</code> 系ライブラリ: メモリ管理（pool）、文字列操作、配列操作、URI 解析。</li>
+<li><code>md_json.h</code>: JSON 構造体の操作。</li>
+<li><code>md_util.h</code>: ユーティリティ関数（URI チェック等）。</li>
+<li><code>md.h</code>: <code>md_t</code> 構造体の定義。</li>
+<li><code>md_crypt.h</code>: 暗号化関連の仕様（<code>pks</code> 等）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_reg.c</code>: <code>md_t</code> の登録と検索の管理。</li>
+<li><code>md_store.c</code>: <code>md_t</code> のディスクへの保存と読み込み。</li>
+<li><code>md_json.c</code>: JSON 操作の低レイヤー実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての生成・クローン関数は <code>apr_pool_t</code> を引数に取り、メモリの生存期間はプールに依存します。</li>
+<li>**不変条件**: <code>md_t</code> の <code>domains</code> 配列は、<code>md_array_str_compact</code> によって正規化されていることが期待されます。</li>
+<li>**エッジケース**: <code>md_from_json</code> では、古いフォーマット（単一の CA URL）との互換性を維持するためのロジックが含まれています。</li>
+<li>**省略箇所**: 本ファイルはデータ構造の操作に特化しており、実際の ACME プロトコル通信や証明書の署名処理は含まれていません。これらは <code>md_acme.c</code> や <code>md_crypt.c</code> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_core_c__md_contains.html" target="wiki-view">`md_contains`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_common_name.html" target="wiki-view">`md_common_name`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_domains_overlap.html" target="wiki-view">`md_domains_overlap`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_common_name_count.html" target="wiki-view">`md_common_name_count`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_create_empty.html" target="wiki-view">`md_create_empty`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_get_by_name.html" target="wiki-view">`md_get_by_name`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_get_by_domain.html" target="wiki-view">`md_get_by_domain`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_get_by_dns_overlap.html" target="wiki-view">`md_get_by_dns_overlap`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_create.html" target="wiki-view">`md_create`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_ca_t.html" target="wiki-view">`md_ca_t`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_get_ca_name_from_url.html" target="wiki-view">`md_get_ca_name_from_url`</a></li>
+<li><a href="../../symbols/modules__md__md_core_c__md_get_ca_url_from_name.html" target="wiki-view">`md_get_ca_url_from_name`</a></li>
+</ul></body></html>

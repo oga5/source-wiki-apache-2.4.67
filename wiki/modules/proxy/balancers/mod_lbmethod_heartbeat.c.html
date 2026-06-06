@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/balancers/mod_lbmethod_heartbeat.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/proxy/balancers/mod_lbmethod_heartbeat.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Serverのプロキシ負荷分散モジュールにおいて、外部の「ハートビート」情報に基づいた負荷分散アルゴリズム（<code>lbmethod=heartbeat</code>）を実装するモジュールです。バックエンドサーバーの稼働状況や負荷情報をファイルまたは共有メモリから取得し、動的に最適な転送先を選択します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> の負荷分散機能における拡張メソッドの一つです。<code>mod_heartmonitor</code> が収集したサーバーの健全性情報を利用し、リクエストを振り分けるためのロジックを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷分散ロジック**: 収集された <code>ready</code>（待機中）スレッド数に基づき、確率的に転送先を選択する。</li>
+<li>**データ収集**: <code>mod_heartmonitor</code> が提供する共有メモリ（<code>slotmem</code>）または指定されたファイルから、各バックエンドの負荷状態を読み込む。</li>
+<li>**設定管理**: ハートビート情報の保存先パス（<code>HeartbeatStorage</code>）の管理と設定の継承。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・コンテキスト</h3>
+<ul>
+<li><code>lb_hb_ctx_t</code>: モジュールの設定構造体。ハートビート情報の読み込み元パスを保持。</li>
+<li><code>hb_server_t</code>: 各バックエンドサーバーの負荷状態（<code>busy</code>, <code>ready</code>, <code>seen</code> 等）を保持する内部表現。</li>
+</ul>
+<h3>負荷分散メソッド</h3>
+<ul>
+<li><code>heartbeat</code>: <code>proxy_balancer_method</code> 構造体。<code>find_best_hb</code> をメインの選択関数として登録。</li>
+</ul>
+<h3>データ取得・処理</h3>
+<ul>
+<li><code>read_heartbeats</code>: 共有メモリまたはファイルから情報を読み込むための抽象化関数。</li>
+<li><code>readslot_heartbeats</code> / <code>hm_read</code>: <code>mod_heartmonitor</code> の共有メモリからデータを抽出するコールバック。</li>
+<li><code>readfile_heartbeats</code>: ファイルベースのハートビート情報を解析するパーサー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>lb_hb_init</code> が <code>mod_heartmonitor</code> の共有メモリ（<code>shm</code>）をアタッチし、利用可能かを確認する。 2. **選択処理 (<code>find_best_hb</code>)**:</p>
+<ul>
+<li>リクエスト毎に <code>read_heartbeats</code> を呼び出し、最新の負荷情報を取得。</li>
+<li><code>balancer-&gt;workers</code> を走査し、<code>PROXY_WORKER_IS_USABLE</code> かつ <code>seen</code> が <code>LBM_HEARTBEAT_MAX_LASTSEEN</code> 以内のサーバーを候補リストに追加。</li>
+<li><code>ready</code> スレッド数に応じた重み付けランダム選択（<code>ap_random_pick</code>）を行い、転送先を決定。</li>
+<p>3. **データ解析**: <code>readfile_heartbeats</code> は <code>apr_brigade</code> を使用してファイルを一行ずつ読み込み、<code>argstr_to_table</code> でクエリ文字列を解析して <code>hb_server_t</code> に格納する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシワーカーおよびバランサーの定義。</li>
+<li><code>ap_slotmem.h</code>: 共有メモリへのアクセス用プロバイダー。</li>
+<li><code>heartbeat.h</code>: ハートビート関連の共通定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_heartmonitor.c</code>: ハートビート情報の収集と共有メモリへの書き込みを行うモジュール。</li>
+<li><code>mod_proxy_balancer.c</code>: 本モジュールが提供するメソッドを呼び出すバランサー本体。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>find_best_hb</code> 内ではリクエスト毎に一時的なプール（<code>tpool</code>）を作成し、解析終了後に破棄することでメモリリークを防いでいます。</li>
+<li>**エッジケース**: サーバーが起動直後で <code>busy=0</code> かつ <code>ready</code> が大きい場合、過負荷を防ぐために <code>ready</code> 値を 1/4 に調整するヒューリスティックが組み込まれています。</li>
+<li>**制約**: <code>LBM_HEARTBEAT_MAX_LASTSEEN</code> (10秒) を超えてハートビートが更新されていないサーバーは、生存していないとみなされ選択対象から除外されます。</li>
+<li>**省略箇所**: 本ファイルは負荷分散の「選択ロジック」に特化しており、ハートビート情報の「収集・送信」ロジックは含まれていません。これらは <code>mod_heartmonitor</code> が担当します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__lb_hb_ctx_t.html" target="wiki-view">`lb_hb_ctx_t`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__hb_server_t.html" target="wiki-view">`hb_server_t`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__ctx_servers_t.html" target="wiki-view">`ctx_servers_t`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__argstr_to_table.html" target="wiki-view">`argstr_to_table`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__readfile_heartbeats.html" target="wiki-view">`readfile_heartbeats`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__hm_read.html" target="wiki-view">`hm_read`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__readslot_heartbeats.html" target="wiki-view">`readslot_heartbeats`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__read_heartbeats.html" target="wiki-view">`read_heartbeats`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__find_best_hb.html" target="wiki-view">`find_best_hb`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__reset.html" target="wiki-view">`reset`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__lb_hb_init.html" target="wiki-view">`lb_hb_init`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

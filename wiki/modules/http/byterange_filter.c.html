@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http/byterange_filter.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http/byterange_filter.c</h1>
+<h2>概要</h2>
+<p>HTTP プロトコルにおける <code>Range</code> リクエストを処理し、レスポンスを適切なバイト範囲に切り出す出力フィルタを実装します。Apache HTTP Server のフィルタチェーンの一部として動作し、クライアントが要求した特定のデータ範囲のみを抽出して送信します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> サブシステムにおいて、コンテンツの断片化（Byte-range）を担うフィルタです。<code>http_filters.c</code> などで構築されるフィルタチェーンに挿入され、レスポンスボディが送信される直前に介入します。</p>
+<h2>責務</h2>
+<ul>
+<li>**範囲解析**: <code>Range</code> ヘッダーを解析し、有効なバイト範囲を特定する。</li>
+<li>**バリデーション**: RFC 2616 に基づき、不正な範囲や重複、過剰な範囲指定をチェックし、必要に応じて 416 (Range Not Satisfiable) を返す。</li>
+<li>**コンテンツ変換**: </li>
+<li>単一範囲の場合: <code>Content-Range</code> ヘッダーを付与してデータを送信。</li>
+<li>複数範囲の場合: <code>multipart/byteranges</code> 形式に変換し、境界文字列（boundary）を挿入して送信。</li>
+<li>**フィルタ管理**: 処理対象外のレスポンスやエラー時には、フィルタチェーンから自身を削除して透過的に振る舞う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタ処理</h3>
+<ul>
+<li><code>ap_byterange_filter</code>: フィルタのメインエントリーポイント。<code>ap_filter_t</code> を通じて呼び出され、バケットブリゲードを操作する。</li>
+</ul>
+<h3>範囲解析・管理</h3>
+<ul>
+<li><code>ap_set_byterange</code>: <code>Range</code> ヘッダーを解析し、<code>indexes_t</code> 配列を生成する。重複や逆転のカウントを行い、制限値を超えた場合は処理を中断する。</li>
+<li><code>indexes_t</code>: 範囲の開始位置と終了位置を保持する構造体。</li>
+</ul>
+<h3>バケット操作</h3>
+<ul>
+<li><code>copy_brigade_range</code>: 指定された範囲のバケットを元のブリゲードからコピーし、新しいブリゲードに格納する。バケットの分割（<code>apr_bucket_split</code>）を伴う。</li>
+<li><code>send_416</code>: 範囲指定が不適切な場合に、416 エラーバケットを作成して送信する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_byterange_filter</code> が呼び出され、ブリゲード内の全バケットの長さを計算。EOS（End of Stream）が存在しない場合や長さが不明な場合は、フィルタを削除して終了。 2. **解析**: <code>ap_set_byterange</code> が <code>Range</code> ヘッダーを解析。設定された制限値（<code>max_ranges</code> 等）を超えた場合は、元のブリゲードをそのまま通過させる。 3. **抽出**: <code>copy_brigade_range</code> をループで呼び出し、各範囲に対応するバケットを <code>tmpbb</code> にコピー。 4. **構築**:</p>
+<ul>
+<li>単一範囲なら <code>Content-Range</code> ヘッダーを更新。</li>
+<li>複数範囲なら <code>multipart/byteranges</code> ヘッダーを構築し、各範囲の間に境界文字列を挿入。</li>
+<p>5. **送信**: <code>ap_pass_brigade</code> を通じてフィルタチェーンの下流へデータを渡す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲード操作の基盤。</li>
+<li><code>http_protocol.h</code>, <code>http_core.h</code>: HTTP プロトコル定義およびコア設定へのアクセス。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/http_filters.c</code>: フィルタチェーンの構築と管理。</li>
+<li><code>modules/http/http_protocol.c</code>: HTTP レスポンスの基本処理。</li>
+<li><code>server/util_filter.c</code>: フィルタの登録と実行メカニズム。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>r-&gt;pool</code> を使用してメモリを確保しており、リクエスト終了時に自動解放されます。</li>
+<li>**パフォーマンス**: 範囲が非常に多い場合、<code>copy_brigade_range</code> によるバケットのコピーと分割が発生するため、メモリと CPU のオーバーヘッドが増加します。そのため <code>AP_DEFAULT_MAX_RANGES</code> 等の制限が設けられています。</li>
+<li>**制約**: バケットの長さが不明（<code>-1</code>）な場合、このフィルタは安全のために処理をスキップします。</li>
+<li>**省略箇所**: EBCDIC 変換（<code>util_ebcdic.h</code>）に関連する処理は、プラットフォーム依存の文字コード変換として実装されていますが、本ページでは主要なロジックに焦点を当てています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__byterange_filter_c__indexes_t.html" target="wiki-view">`indexes_t`</a></li>
+<li><a href="../../symbols/modules__http__byterange_filter_c__ap_set_byterange.html" target="wiki-view">`ap_set_byterange`</a></li>
+<li><a href="../../symbols/modules__http__byterange_filter_c__copy_brigade_range.html" target="wiki-view">`copy_brigade_range`</a></li>
+<li><a href="../../symbols/modules__http__byterange_filter_c__send_416.html" target="wiki-view">`send_416`</a></li>
+<li><a href="../../symbols/modules__http__byterange_filter_c__ap_byterange_filter.html" target="wiki-view">`ap_byterange_filter`</a></li>
+</ul></body></html>

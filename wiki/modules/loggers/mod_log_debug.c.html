@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/loggers/mod_log_debug.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/loggers/mod_log_debug.c</h1>
+<h2>概要</h2>
+<p><code>mod_log_debug.c</code> は、Apache HTTP Server のリクエスト処理の各フェーズにおいて、設定された条件に基づきデバッグメッセージをエラーログへ出力するためのモジュールです。<code>LogMessage</code> ディレクティブを通じて、特定のフックポイントで任意の式（<code>ap_expr</code>）を評価し、その結果をログ出力する機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/loggers</code> サブシステムにおいて、本モジュールは「診断・デバッグ支援」の役割を担います。他のロギングモジュール（<code>mod_log_config</code> 等）がアクセスログの記録に特化しているのに対し、本モジュールはリクエスト処理の内部状態を開発者が追跡するための柔軟なフックを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>LogMessage</code> ディレクティブによる設定のパースと、ディレクトリ単位のコンフィグ（<code>log_debug_dirconf</code>）の保持・マージ。</li>
+<li>**式評価**: <code>ap_expr</code> を利用した条件判定およびメッセージ文字列の動的生成。</li>
+<li>**フック実行**: リクエスト処理の主要な 13 個のフェーズ（<code>quick_handler</code> から <code>log_transaction</code> まで）に割り込み、設定されたメッセージをログ出力する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>log_debug_dirconf</code>: ディレクトリ単位の設定を保持。<code>apr_array_header_t</code> を用いて複数の <code>msg_entry</code> を格納する。</li>
+<li><code>msg_entry</code>: 個別の <code>LogMessage</code> 設定。評価対象の式（<code>msg_expr</code>）、条件式（<code>condition</code>）、および対象フック名を保持。</li>
+</ul>
+<h3>設定・ライフサイクル</h3>
+<ul>
+<li><code>log_debug_create_dconf</code>: コンフィグ領域の初期化。</li>
+<li><code>log_debug_merge_dconf</code>: 親ディレクトリと子ディレクトリの設定をマージ（<code>apr_array_append</code> を使用）。</li>
+<li><code>cmd_log_message</code>: <code>LogMessage</code> ディレクティブのハンドラ。式をパースし、引数を検証して <code>msg_entry</code> を生成。</li>
+</ul>
+<h3>実行エンジン</h3>
+<ul>
+<li><code>do_debug_log</code>: 全てのフックから呼び出される共通のロギング関数。条件判定とメッセージ生成、ログ出力を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> により、Apache の各フェーズ（<code>translate_name</code>, <code>fixups</code> 等）に <code>log_debug_*</code> 関数が <code>APR_HOOK_FIRST</code> で登録される。 2. **リクエスト処理**: 各フックが呼ばれると、<code>do_debug_log</code> が現在のリクエストコンテキスト（<code>request_rec</code>）とフック名を引数に実行される。 3. **評価**: <code>do_debug_log</code> は <code>dconf</code> からエントリを走査し、<code>ap_expr_exec</code> で条件を判定。条件が真であれば <code>ap_expr_str_exec</code> でメッセージを生成する。 4. **出力**: 生成されたメッセージは <code>ap_log_rerror</code> を介してエラーログに出力される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code>: Apache コア機能およびロギング API。</li>
+<li><code>ap_expr.h</code>: 式評価エンジン（<code>ap_expr_parse_cmd</code>, <code>ap_expr_exec</code> 等）。</li>
+<li><code>apr_strings.h</code>: 文字列操作およびメモリ管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/loggers/mod_log_config.c</code>: ログフォーマットの定義と出力の標準的な実装。</li>
+<li><code>server/util_expr.c</code>: <code>ap_expr</code> の実装詳細。本モジュールの式評価の基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定データは <code>cmd-&gt;pool</code>（設定用プール）に割り当てられ、リクエスト処理中のメモリは <code>r-&gt;pool</code> を使用します。<code>apr_array_append</code> は新しい配列を生成するため、マージ時のメモリ消費に注意してください。</li>
+<li>**パフォーマンス**: 各フックで <code>ap_expr</code> を評価するため、複雑な式を多用するとリクエスト処理のレイテンシに影響を与える可能性があります。</li>
+<li>**制約**: <code>LogMessage</code> は <code>RSRC_CONF</code> および <code>ACCESS_CONF</code> でのみ有効です。</li>
+<li>**省略された詳細**: <code>ap_expr</code> の構文解析の詳細や、Apache のフックシステムの内部実装については本ファイルでは省略されています。これらは <code>server/</code> 以下のコアコードに依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__msg_entry.html" target="wiki-view">`msg_entry`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_dirconf.html" target="wiki-view">`log_debug_dirconf`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__do_debug_log.html" target="wiki-view">`do_debug_log`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_log_transaction.html" target="wiki-view">`log_debug_log_transaction`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_quick_handler.html" target="wiki-view">`log_debug_quick_handler`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_handler.html" target="wiki-view">`log_debug_handler`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_pre_translate_name.html" target="wiki-view">`log_debug_pre_translate_name`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_translate_name.html" target="wiki-view">`log_debug_translate_name`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_map_to_storage.html" target="wiki-view">`log_debug_map_to_storage`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_fixups.html" target="wiki-view">`log_debug_fixups`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_type_checker.html" target="wiki-view">`log_debug_type_checker`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_debug_c__log_debug_check_access.html" target="wiki-view">`log_debug_check_access`</a></li>
+</ul></body></html>

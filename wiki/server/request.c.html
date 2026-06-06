@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/request.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/request.c</h1>
+<h2>概要</h2>
+<p><code>server/request.c</code> は、Apache HTTP Server におけるリクエスト処理のライフサイクルと、ディレクトリ/ファイル単位の設定マージ（Walk）を管理する中核ファイルです。リクエストの正規化、翻訳、認証、認可、およびサブリクエストの生成といった一連のフェーズを制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>module:server</code> の一部として、HTTP リクエストが接続からハンドラへ渡されるまでの「前処理」を担当します。<code>core</code> モジュールの設定をリクエストのコンテキストに適用し、リクエストのパスに基づいた設定の階層的なマージを最適化する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト処理のオーケストレーション**: <code>ap_process_request_internal</code> を通じて、URI の正規化から認可までの各フェーズを順次実行する。</li>
+<li>**設定の階層的マージ**: <code>&lt;Directory&gt;</code>, <code>&lt;Location&gt;</code>, <code>&lt;Files&gt;</code>, <code>&lt;If&gt;</code> セクションの設定をリクエストパスに従ってマージする。</li>
+<li>**サブリクエスト管理**: サブリクエストの生成、実行、およびメモリ管理（プール破棄）を行う。</li>
+<li>**認証・認可の最適化**: 設定の変更がない場合に、以前の計算結果を再利用するためのキャッシュ機構を提供。</li>
+<li>**シンボリックリンクの制御**: <code>FollowSymLinks</code> や <code>SymLinksIfOwnerMatch</code> に基づくファイルシステムアクセスの検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>ap_process_request_internal</code>: リクエスト処理のメインロジック。URI 正規化、翻訳、アクセス制御、型チェック、修正（fixups）を順次実行。</li>
+<li><code>ap_some_authn_required</code>: 認証が必要かどうかを判定する。</li>
+</ul>
+<h3>設定マージ（Walk）</h3>
+<ul>
+<li><code>ap_directory_walk</code>: ファイルシステムパスに基づき <code>&lt;Directory&gt;</code> 設定をマージ。</li>
+<li><code>ap_location_walk</code>: URI パスに基づき <code>&lt;Location&gt;</code> 設定をマージ。</li>
+<li><code>ap_file_walk</code>: ファイル名に基づき <code>&lt;Files&gt;</code> 設定をマージ。</li>
+<li><code>ap_if_walk</code>: <code>&lt;If&gt;</code> 条件式を評価し設定をマージ。</li>
+<li><code>walk_cache_t</code>: マージ結果をキャッシュし、サブ/リダイレクト時の再計算を回避する構造体。</li>
+</ul>
+<h3>サブリクエスト</h3>
+<ul>
+<li><code>make_sub_request</code>: サブリクエスト用の <code>request_rec</code> を初期化。</li>
+<li><code>ap_sub_req_lookup_uri</code> / <code>ap_sub_req_lookup_file</code>: URI またはファイルパスからサブリクエストを生成。</li>
+<li><code>ap_run_sub_req</code>: サブリクエストを実行し、ハンドラを呼び出す。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_process_request_internal</code> が呼ばれると、URI の正規化が行われる。 2. **Walk フェーズ**: <code>ap_directory_walk</code> 等が呼ばれ、<code>walk_cache_t</code> を介して設定がマージされる。キャッシュが存在すれば、<code>dir_conf_tested</code> を比較して再利用する。 3. **認証・認可**: <code>ap_satisfies</code> に基づき、<code>access_checker</code> や <code>check_user_id</code> などのフックが実行される。 4. **サブリクエスト**: <code>make_sub_request</code> で親リクエストのプールから派生した新しいプールを持つ <code>request_rec</code> が作成され、独立した処理フローが実行される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <code>apr_file_io.h</code>: 文字列操作およびファイル I/O。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache の基本構造体および設定管理。</li>
+<li><code>mod_core.h</code>, <code>mod_auth.h</code>: コアモジュールおよび認証モジュールのインターフェース。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/core.c</code>: <code>core_dir_config</code> の定義および設定マージの基礎ロジック。</li>
+<li><code>server/protocol.c</code>: リクエストの読み込みとプロトコル処理。</li>
+<li><code>server/util_expr_eval.c</code>: <code>&lt;If&gt;</code> 条件式の評価。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: サブリクエストは <code>r-&gt;pool</code> を使用して作成され、<code>ap_destroy_sub_req</code> で明示的に破棄する必要があります。メモリリークを防ぐため、サブリクエスト生成後は必ず破棄してください。</li>
+<li>**キャッシュの重要性**: <code>walk_cache_t</code> はパフォーマンスに直結します。設定の変更頻度が高い環境では、このキャッシュのヒット率が重要になります。</li>
+<li>**注意点**: <code>ap_process_request_internal</code> 内のロジックはセキュリティモデルの根幹です。この関数内の順序を変更すると、認可バイパスなどの脆弱性を生む可能性があるため、慎重な変更が求められます。</li>
+<li>**省略された詳細**: 正規表現のコンパイルや、特定の MPM 固有の最適化については、このファイルでは抽象化されており、各モジュール側の実装に依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__request_c__decl_die.html" target="wiki-view">`decl_die`</a></li>
+<li><a href="../symbols/server__request_c__ap_some_authn_required.html" target="wiki-view">`ap_some_authn_required`</a></li>
+<li><a href="../symbols/server__request_c__walk_location_and_if.html" target="wiki-view">`walk_location_and_if`</a></li>
+<li><a href="../symbols/server__request_c__ap_process_request_internal.html" target="wiki-view">`ap_process_request_internal`</a></li>
+<li><a href="../symbols/server__request_c__walk_walked_t.html" target="wiki-view">`walk_walked_t`</a></li>
+<li><a href="../symbols/server__request_c__walk_cache_t.html" target="wiki-view">`walk_cache_t`</a></li>
+<li><a href="../symbols/server__request_c__prep_walk_cache.html" target="wiki-view">`prep_walk_cache`</a></li>
+<li><a href="../symbols/server__request_c__resolve_symlink.html" target="wiki-view">`resolve_symlink`</a></li>
+<li><a href="../symbols/server__request_c__core_opts_t.html" target="wiki-view">`core_opts_t`</a></li>
+<li><a href="../symbols/server__request_c__core_opts_merge.html" target="wiki-view">`core_opts_merge`</a></li>
+<li><a href="../symbols/server__request_c__ap_directory_walk.html" target="wiki-view">`ap_directory_walk`</a></li>
+<li><a href="../symbols/server__request_c__ap_update_mtime.html" target="wiki-view">`ap_update_mtime`</a></li>
+</ul></body></html>

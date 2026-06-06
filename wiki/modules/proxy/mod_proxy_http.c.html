@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/mod_proxy_http.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/mod_proxy_http.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のプロキシサブシステムにおける HTTP/HTTPS/WS/WSS プロトコルハンドラです。バックエンドサーバーへのリクエスト転送、レスポンスの受信、およびプロキシ特有のヘッダー変換（Via, Warning, Connection 等）を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のスキームハンドラとして登録され、<code>proxy_http_handler</code> を通じてリクエストを処理します。<code>proxy_util.c</code> が提供する汎用的な接続管理やバケット操作ユーティリティに強く依存しており、HTTP 固有のロジック（チャンク転送、ヘッダー正規化、100-Continue 処理）をカプセル化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト正規化**: URL のスキーム判定とホスト/ポート/パスの正規化。</li>
+<li>**リクエスト転送**: クライアントからのリクエストボディをバックエンドへストリーミングまたはスプールして転送。</li>
+<li>**レスポンス処理**: バックエンドからのレスポンスヘッダー解析、ホップバイホップヘッダーの除去、およびレスポンスボディのフィルタリングと転送。</li>
+<li>**プロトコル変換**: HTTP/1.1 へのアップグレードや WebSocket トンネリングのサポート。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト状態管理</h3>
+<ul>
+<li><code>proxy_http_req_t</code>: リクエスト処理中の状態（バックエンド接続、バケットブリゲード、転送メソッド等）を保持する中心的な構造体。</li>
+<li><code>rb_methods</code>: リクエストボディの転送方式（ストリーム、チャンク、スプール）を定義する列挙型。</li>
+</ul>
+<h3>ハンドラとフック</h3>
+<ul>
+<li><code>proxy_http_handler</code>: <code>mod_proxy</code> から呼び出されるメインのエントリポイント。</li>
+<li><code>proxy_http_canon</code>: URL の正規化を行うハンドラ。</li>
+<li><code>ap_proxy_http_register_hook</code>: モジュールの初期化とフック登録。</li>
+</ul>
+<h3>ヘッダー・ボディ処理</h3>
+<ul>
+<li><code>ap_proxy_read_headers</code>: バックエンドからのレスポンスヘッダーを読み取り、<code>r-&gt;headers_out</code> に格納。</li>
+<li><code>stream_reqbody</code>: リクエストボディをバックエンドへ転送するメインループ。</li>
+<li><code>process_proxy_header</code>: <code>ProxyPassReverse</code> 等のルールに基づきヘッダーを変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>proxy_http_handler</code> が接続を確保し、<code>proxy_http_req_t</code> を初期化。 2. **プリフェッチ**: <code>ap_proxy_http_prefetch</code> がリクエストボディを先読みし、転送方式（<code>rb_method</code>）を決定。 3. **接続と送信**: <code>ap_proxy_http_request</code> が <code>stream_reqbody</code> を呼び出し、ヘッダーとボディをバックエンドへ送信。 4. **レスポンス受信**: <code>ap_proxy_http_process_response</code> がバックエンドからのレスポンスを読み取り、フィルタチェーンを通じてクライアントへ転送。 5. **クリーンアップ**: <code>ap_proxy_http_cleanup</code> により接続を解放。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシサブシステムのコア API。</li>
+<li><code>ap_regex.h</code>: <code>Warning</code> ヘッダーの解析用正規表現エンジン。</li>
+<li><code>httpd.h</code>, <code>http_core.h</code>, <code>apr_buckets.h</code>: Apache/APR の基本構造とバケット処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/proxy/proxy_util.c</code>: 接続管理、バケット操作、設定解析の共通基盤。</li>
+<li><code>modules/proxy/mod_proxy.c</code>: プロキシモジュールのメインエントリ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>r-&gt;pool</code> を多用しますが、<code>proxy_http_process_response</code> 内では一時的なバッファやブリゲードのクリーンアップが頻繁に行われます。特に <code>apr_brigade_cleanup</code> を忘れるとメモリリークの原因となります。</li>
+<li>**エッジケース**: <code>100-Continue</code> 処理や <code>Upgrade</code> ヘッダーの扱いは複雑です。特にバックエンドが予期せぬレスポンスを返した場合の <code>backend-&gt;close = 1</code> による接続切断ロジックが重要です。</li>
+<li>**制限事項**: 本ファイルは HTTP 関連のロジックに特化しており、AJP や FCGI 等の他プロトコルは別モジュール（<code>mod_proxy_ajp.c</code> 等）で実装されています。</li>
+<li>**安全性**: <code>process_proxy_header</code> はヘッダーの正規化を行いますが、不正なヘッダーに対する <code>badopt</code> 設定（<code>bad_error</code>, <code>bad_body</code>, <code>bad_ignore</code>）の挙動に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__get_url_scheme.html" target="wiki-view">`get_url_scheme`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__proxy_http_canon.html" target="wiki-view">`proxy_http_canon`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__header_dptr.html" target="wiki-view">`header_dptr`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__clean_warning_headers.html" target="wiki-view">`clean_warning_headers`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__ap_proxy_clean_warnings.html" target="wiki-view">`ap_proxy_clean_warnings`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__add_te_chunked.html" target="wiki-view">`add_te_chunked`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__add_cl.html" target="wiki-view">`add_cl`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__rb_methods.html" target="wiki-view">`rb_methods`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__proxy_http_req_t.html" target="wiki-view">`proxy_http_req_t`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__stream_reqbody.html" target="wiki-view">`stream_reqbody`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__terminate_headers.html" target="wiki-view">`terminate_headers`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_http_c__ap_proxy_header_reverse_map_fn.html" target="wiki-view">`ap_proxy_header_reverse_map_fn`</a></li>
+</ul></body></html>

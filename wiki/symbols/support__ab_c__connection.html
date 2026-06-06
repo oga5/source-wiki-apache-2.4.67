@@ -6,22 +6,64 @@
 <li>定義箇所: <code>support/ab.c:262</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ApacheBench (<code>ab</code>) において、個別の HTTP 接続の状態、ソケット情報、SSL コンテキスト、および統計計測用のタイムスタンプを保持するために使用される構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct connection {
+    apr_pool_t *ctx;
+    apr_socket_t *aprsock;
+    apr_pollfd_t pollfd;
+    int state;
+    apr_size_t read;
+    apr_size_t bread;
+    apr_size_t rwrite, rwrote;
+    apr_size_t length;
+    char cbuff[CBUFFSIZE];
+    int cbx;
+    int keepalive;
+    int gotheader;
+    apr_time_t start, connect, endwrite, beginread, done;
+    int socknum;
+#ifdef USE_SSL
+    SSL *ssl;
+#endif
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ab</code> の実行時に指定された同時接続数に基づき、<code>test()</code> 関数内で動的に配列として確保されます。</li>
+<li>**出力**: 接続のライフサイクルを通じて、ソケットの読み書き状態や統計データが更新されます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx</code> (APR プール) は、接続のライフサイクル全体でメモリ管理に使用されます。</li>
+<li><code>cbuff</code> はサーバーからのレスポンスヘッダーを格納する固定長バッファです。</li>
+<li><code>USE_SSL</code> が定義されている場合、<code>ssl</code> メンバが OpenSSL のセッション管理に使用されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>非同期 I/O モデルにおいて、<code>apr_pollset_t</code> を介してイベント駆動で処理されます。</li>
+<li><code>state</code> メンバにより、接続が <code>UNCONNECTED</code> から <code>READ</code> までのどの段階にあるかを追跡します。</li>
+<li><code>rwrite</code> および <code>rwrote</code> メンバは、<code>EAGAIN</code> が発生した際のリクエスト送信の進捗を保持します。</li>
+<li>各タイムスタンプ（<code>start</code>, <code>connect</code>, <code>endwrite</code>, <code>beginread</code>, <code>done</code>）は、接続の各フェーズの計測に使用されます。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>support/ab.c</code> 内の <code>test()</code>、<code>start_connect()</code>、<code>write_request()</code>、<code>read_connection()</code> 等から参照されます。</li>
+<li>**呼び出し先**: APR (Apache Portable Runtime) のソケットおよびポーリング API を呼び出します。</li>
+<li>**注意**: <code>include/</code> 配下のヘッダーファイルに見られる <code>connection</code> 構造体への言及は、Apache HTTP Server 本体の接続管理に関するものであり、本構造体とは別物です。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>connect_state_e</code>: 接続のライフサイクル状態を定義する列挙型。</li>
+<li><code>data</code>: 個別のリクエストごとの時間計測データを保持する構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>CBUFFSIZE</code> を超えるヘッダー受信時の挙動は、バッファオーバーフローを防ぐための実装に依存します。</li>
+<li><code>apr_socket_t</code> の操作において、ネットワークエラーやタイムアウトが発生した場合、<code>state</code> の遷移と <code>close_connection()</code> によるクリーンアップが必要です。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は <code>ab</code> 専用であり、サーバー本体の接続管理構造体と混同しないよう注意してください。</li>
+<li>メモリは <code>ctx</code> プールに紐付いているため、接続終了時には適切にプールを管理する必要があります。</li>
+<li>SSL 関連のコードは OpenSSL のバージョン依存が強いため、変更時はビルド環境の OpenSSL バージョンを確認してください。</li>
 </ul></body></html>

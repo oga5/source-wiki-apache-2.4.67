@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_cern_meta.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_cern_meta.c</h1>
+<h2>概要</h2>
+<p><code>mod_cern_meta.c</code> は、CERN HTTPD のメタファイルセマンティクスをエミュレートする Apache HTTP Server モジュールです。リクエストされたファイルに関連付けられた「メタファイル」を読み込み、その内容を HTTP レスポンスヘッダーに追加します。主に <code>Expires</code> ヘッダーの制御や、カスタム MIME ヘッダーの付与に使用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムの一部として、リクエスト処理の <code>fixups</code> フェーズで動作します。他のヘッダー操作モジュール（<code>mod_headers</code> 等）と異なり、ファイルシステム上の外部ファイルからヘッダー情報を注入する点が特徴です。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリ単位でのメタファイル処理の有効化、メタファイル格納ディレクトリ名、およびファイルサフィックスの構成。</li>
+<li>**メタデータ注入**: リクエストされたファイルに対応するメタファイルを検索し、その内容を解析してレスポンスヘッダーへ反映する。</li>
+<li>**エラーハンドリング**: メタファイルが存在しない場合は透過的に処理を継続（<code>DECLINED</code>）し、ファイルが破損している場合はログを出力してエラーを返す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体と管理</h3>
+<ul>
+<li><code>cern_meta_dir_config</code>: ディレクトリごとの設定（メタディレクトリ名、サフィックス、有効フラグ）を保持する構造体。</li>
+<li><code>create_cern_meta_dir_config</code> / <code>merge_cern_meta_dir_configs</code>: 設定の初期化および親ディレクトリからの継承・マージ処理。</li>
+<li><code>cern_meta_cmds</code>: <code>MetaFiles</code>, <code>MetaDir</code>, <code>MetaSuffix</code> ディレクティブを定義するコマンドテーブル。</li>
+</ul>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>add_cern_meta_data</code>: <code>fixups</code> フックのメイン関数。メタファイルのパスを構築し、存在確認後に <code>scan_meta_file</code> を呼び出す。</li>
+<li><code>scan_meta_file</code>: メタファイルを開き、行単位で解析して <code>r-&gt;headers_out</code> にヘッダーをマージする。<code>Content-type</code> や <code>Status</code> の特殊処理も行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック**: <code>register_hooks</code> により <code>add_cern_meta_data</code> が <code>fixups</code> フェーズで登録される。 2. **パス構築**: <code>add_cern_meta_data</code> が現在のリクエストパスからメタファイルのパス（例: <code>dir/.web/file.html.meta</code>）を生成する。 3. **検証**: <code>ap_sub_req_lookup_file</code> を使用してメタファイルへのアクセス権限を検証する。 4. **解析**: <code>scan_meta_file</code> がファイルを読み込み、<code>:</code> を区切り文字としてヘッダー名と値を分離。<code>apr_table_t</code> を介してレスポンスヘッダーへ追加する。 5. **終了**: ファイルハンドルをクローズし、処理を完了する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache コア API。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作およびメモリ管理。</li>
+<li><code>util_script.h</code>: スクリプトヘッダー解析のユーティリティ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_headers.c</code>: より現代的で柔軟なヘッダー操作を行うための代替モジュール。</li>
+<li><code>mod_asis.c</code> (Apache Core): <code>.asis</code> ファイルを扱う類似の仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ割り当ては <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を使用しており、リクエスト終了時に自動解放されます。</li>
+<li>**セキュリティ**: メタファイルは Web サーバーからアクセス可能な場所に配置する必要があるため、<code>Location</code> ブロック等で適切に保護することを推奨します。</li>
+<li>**制限事項**: <code>scan_meta_file</code> 内の解析ロジックは、<code>ap_scan_script_header_err_core</code> と類似していますが、コードの重複と経年劣化（bit rot）の可能性がある旨がソース内にコメントされています。</li>
+<li>**パフォーマンス**: 各リクエストでファイルシステムへのアクセスが発生するため、高負荷環境では注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__cern_meta_dir_config.html" target="wiki-view">`cern_meta_dir_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__create_cern_meta_dir_config.html" target="wiki-view">`create_cern_meta_dir_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__merge_cern_meta_dir_configs.html" target="wiki-view">`merge_cern_meta_dir_configs`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__set_metadir.html" target="wiki-view">`set_metadir`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__set_metasuffix.html" target="wiki-view">`set_metasuffix`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__set_metafiles.html" target="wiki-view">`set_metafiles`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__scan_meta_file.html" target="wiki-view">`scan_meta_file`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__add_cern_meta_data.html" target="wiki-view">`add_cern_meta_data`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_cern_meta_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

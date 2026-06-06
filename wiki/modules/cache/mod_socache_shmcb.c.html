@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cache/mod_socache_shmcb.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cache/mod_socache_shmcb.c</h1>
+<h2>概要</h2>
+<p><code>mod_socache_shmcb.c</code> は、Apache HTTP Server の共有メモリベースのキャッシュ（SHMCB: Shared Memory Cyclic Buffer）プロバイダーを実装するモジュールです。固定サイズの共有メモリセグメントを複数の「サブキャッシュ」に分割し、各サブキャッシュ内で循環バッファを用いてデータを管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>ap_socache</code> インターフェースを実装するプロバイダーの一つです。他のキャッシュプロバイダー（<code>dbm</code>, <code>memcache</code>, <code>redis</code> 等）と比較して、外部プロセスやネットワークを介さず、ローカルメモリ内で高速なキャッシュアクセスを提供することに特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**共有メモリ管理**: <code>apr_shm</code> を用いたセグメントの確保、初期化、およびクリーンアップ。</li>
+<li>**データ構造のレイアウト**: ヘッダー、サブキャッシュ、インデックス、データ領域のメモリ配置の制御。</li>
+<li>**循環バッファ操作**: 循環データ領域およびインデックスキューに対する読み書きと、ラップアラウンド時のメモリコピー処理。</li>
+<li>**キャッシュのライフサイクル**: 有効期限（TTL）に基づくエントリの期限切れ処理と、領域不足時の古いエントリの強制削除（スクロール）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>SHMCBHeader</code>: 共有メモリの先頭に配置されるメタデータと統計情報。</li>
+<li><code>SHMCBSubcache</code>: 各サブキャッシュの管理構造（インデックスとデータの位置情報）。</li>
+<li><code>SHMCBIndex</code>: 個別のキャッシュエントリのメタデータ（有効期限、データ位置、サイズ）。</li>
+<li><code>ap_socache_instance_t</code>: モジュールのインスタンスコンテキスト。</li>
+</ul>
+<h3>マクロ・ヘルパー</h3>
+<ul>
+<li><code>SHMCB_SUBCACHE</code>, <code>SHMCB_INDEX</code>: ポインタ演算による構造体へのアクセス。</li>
+<li><code>SHMCB_MASK</code>: ID からサブキャッシュを特定するためのハッシュ関数。</li>
+<li><code>SHMCB_CYCLIC_INCREMENT</code>, <code>SHMCB_CYCLIC_SPACE</code>: 循環バッファのインデックス計算。</li>
+<li><code>shmcb_cyclic_ntoc_memcpy</code>, <code>shmcb_cyclic_cton_memcpy</code>: 循環バッファを跨ぐメモリコピー処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>socache_shmcb_init</code> が共有メモリを確保し、<code>SHMCBHeader</code> を初期化してサブキャッシュを構築します。 2. **ストア**: <code>socache_shmcb_store</code> が ID からサブキャッシュを特定し、<code>shmcb_subcache_store</code> を呼び出します。必要に応じて <code>shmcb_subcache_expire</code> で空き領域を確保し、循環バッファにデータを書き込みます。 3. **取得**: <code>socache_shmcb_retrieve</code> がサブキャッシュ内を線形探索し、ID が一致し、かつ有効期限内のデータを <code>shmcb_cyclic_cton_memcpy</code> で抽出します。 4. **期限切れ**: <code>shmcb_subcache_expire</code> は、インデックスの先頭から順に有効期限をチェックし、期限切れまたは削除済みフラグが立っているエントリを解放します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ap_socache.h</code>: キャッシュプロバイダーの共通インターフェース定義。</li>
+<li><code>apr_shm.h</code>: 共有メモリ管理機能。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: Apache モジュール基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cache/ap_socache.h</code>: このモジュールが実装するインターフェースの定義。</li>
+<li><code>modules/cache/mod_cache_socache.c</code>: このプロバイダーを利用する上位キャッシュモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリレイアウト**: 共有メモリは固定長です。<code>SHMCBHeader</code> が先頭にあり、その後に <code>subcache_num</code> 個のサブキャッシュが続きます。各サブキャッシュは <code>SHMCBSubcache</code> 構造体、<code>SHMCBIndex</code> 配列、データ領域の順で構成されます。</li>
+<li>**スレッド安全性**: このモジュールは <code>AP_SOCACHE_FLAG_NOTMPSAFE</code> を指定しており、内部で排他制御を行いません。呼び出し側（<code>mod_cache_socache</code> 等）が適切なロックを管理する必要があります。</li>
+<li>**制限事項**: ソース内のコメントにある通り、一部のサイズ計算に <code>unsigned int</code> を使用しているため、非常に大きなキャッシュサイズを指定した際のオーバーフローリスクが残っています。</li>
+<li>**省略された詳細**: 循環バッファの複雑なポインタ演算の詳細や、特定のプラットフォームにおける <code>apr_shm</code> の挙動については、APR のドキュメントを参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__SHMCBHeader.html" target="wiki-view">`SHMCBHeader`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__SHMCBSubcache.html" target="wiki-view">`SHMCBSubcache`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__SHMCBIndex.html" target="wiki-view">`SHMCBIndex`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__ap_socache_instance_t.html" target="wiki-view">`ap_socache_instance_t`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__shmcb_cyclic_ntoc_memcpy.html" target="wiki-view">`shmcb_cyclic_ntoc_memcpy`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__shmcb_cyclic_cton_memcpy.html" target="wiki-view">`shmcb_cyclic_cton_memcpy`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__shmcb_cyclic_memcmp.html" target="wiki-view">`shmcb_cyclic_memcmp`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_create.html" target="wiki-view">`socache_shmcb_create`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_cleanup.html" target="wiki-view">`socache_shmcb_cleanup`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_init.html" target="wiki-view">`socache_shmcb_init`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_destroy.html" target="wiki-view">`socache_shmcb_destroy`</a></li>
+<li><a href="../../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html" target="wiki-view">`socache_shmcb_store`</a></li>
+</ul></body></html>

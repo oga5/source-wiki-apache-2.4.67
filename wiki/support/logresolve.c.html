@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>support/logresolve.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>support/logresolve.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のアクセスログに含まれる IP アドレスをホスト名に変換するコマンドラインユーティリティです。ログ処理のパフォーマンスを向上させるため、内部キャッシュを備えています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールの一部として、ログ解析の前処理を担います。HTTPD 自体で DNS 逆引きを行う負荷を回避し、オフラインでログを整形するために使用されます。</p>
+<h2>責務</h2>
+<ul>
+<li>標準入力からログを読み込み、各行の先頭にある IP アドレスを抽出する。</li>
+<li><code>apr_hash_t</code> を用いたキャッシュ機構により、同一 IP の重複解決を抑制する。</li>
+<li>オプションによる「ダブルルックアップ（正引き確認）」の実行。</li>
+<li>処理結果の統計情報の出力（オプション指定時）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>cache</code>: IP アドレスとホスト名のマッピングを保持するハッシュテーブル。</li>
+<li><code>main</code>: プログラムのメインループ。ログの読み込み、解析、解決、書き出しを制御。</li>
+<li><code>print_statistics</code>: 処理終了後にキャッシュヒット率や解決失敗数などの統計を表示。</li>
+<li><code>doublelookups</code>: <code>-c</code> オプションにより有効化される、DNS の整合性チェックフラグ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>apr_app_initialize</code> で APR 環境を構築し、コマンドライン引数を解析。 2. **バッファ設定**: <code>apr_file_buffer_set</code> を使用し、入出力の効率化を図る。 3. **メインループ**:</p>
+<ul>
+<li>行単位で読み込み、先頭の IP アドレスを特定。</li>
+<li><code>apr_hash_get</code> でキャッシュを検索。ヒットすれば即座に置換して出力。</li>
+<li>キャッシュミス時は <code>apr_getnameinfo</code> で逆引きを実行。</li>
+<li><code>-c</code> 指定時は <code>apr_sockaddr_info_get</code> で正引きを行い、IP の一致を確認。</li>
+<li>結果をキャッシュに保存し、ログ行を書き出す。</li>
+<p>4. **終了処理**: 統計ファイルが指定されていれば書き出し、リソースを解放。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_lib.h</code>: APR の基本型とユーティリティ。</li>
+<li><code>apr_hash.h</code>: キャッシュ用ハッシュテーブル。</li>
+<li><code>apr_getopt.h</code>: コマンドライン引数解析。</li>
+<li><code>apr_file_io.h</code>, <code>apr_network_io.h</code>: ファイルおよびネットワーク（DNS）操作。</li>
+<li><code>stdlib.h</code>: 標準ライブラリ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>support/rotatelogs.c</code>: ログ管理に関連する他のユーティリティ。</li>
+<li><code>apr_hash_t</code> (APR): 本プログラムのパフォーマンスを支えるハッシュ実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本プログラムは「ログの最初のフィールドが IP アドレスである」ことを前提としています。</li>
+<li><code>pline</code> プールは、ループ内で DNS 解決に使用される一時的なメモリを管理しており、<code>apr_pool_clear</code> で定期的に解放することでメモリ消費を抑えています。</li>
+<li>解決に失敗した場合も、その IP をキャッシュに登録することで、再度の無駄な DNS 問い合わせを防ぐ設計になっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__logresolve_c__print_statistics.html" target="wiki-view">`print_statistics`</a></li>
+<li><a href="../symbols/support__logresolve_c__usage.html" target="wiki-view">`usage`</a></li>
+<li><a href="../symbols/support__logresolve_c__main.html" target="wiki-view">`main`</a></li>
+</ul></body></html>

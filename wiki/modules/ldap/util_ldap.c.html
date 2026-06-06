@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ldap/util_ldap.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ldap/util_ldap.c</h1>
+<h2>概要</h2>
+<p><code>util_ldap.c</code> は、Apache HTTP Server における LDAP 接続管理、キャッシュ制御、および認証・認可操作のバックエンド機能を提供する中心的なソースファイルです。LDAP SDK（OpenLDAP, Novell, Solaris 等）の差異を抽象化し、接続プールと共有メモリキャッシュを統合して LDAP 操作のパフォーマンスを最適化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/ldap</code> サブシステムの基盤であり、<code>util_ldap.h</code> で定義されたインターフェースを実装します。他のモジュール（<code>mod_authnz_ldap</code> など）から <code>APR_REGISTER_OPTIONAL_FN</code> を通じて呼び出される API を提供し、LDAP サーバーとの通信を仲介します。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続管理**: LDAP 接続のライフサイクル（初期化、バインド、再利用、切断）の管理。</li>
+<li>**キャッシュ管理**: 検索結果、DN 比較、サブグループ情報の共有メモリキャッシュへの読み書き。</li>
+<li>**設定管理**: <code>httpd.conf</code> で指定された LDAP 関連ディレクティブの解析とサーバー状態への反映。</li>
+<li>**SDK 抽象化**: 異なる LDAP SDK 間の API 差異（特に SSL/TLS 設定や再バインド処理）の吸収。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>接続管理</h3>
+<ul>
+<li><code>uldap_connection_find</code>: キャッシュから既存の接続を検索、または新規作成する。</li>
+<li><code>uldap_connection_open</code>: LDAP サーバーへの接続とバインドを実行する。</li>
+<li><code>uldap_connection_unbind</code>: 接続を破棄し、リソースを解放する。</li>
+</ul>
+<h3>キャッシュ操作</h3>
+<ul>
+<li><code>uldap_cache_compare</code>: LDAP 比較操作を実行し、結果をキャッシュする。</li>
+<li><code>uldap_cache_checkuserid</code>: ユーザー認証のための検索と結果のキャッシュ。</li>
+<li><code>uldap_cache_check_subgroups</code>: ネストされたグループの再帰的な検索とキャッシュ。</li>
+</ul>
+<h3>設定・フック</h3>
+<ul>
+<li><code>ldap_module</code>: モジュールのメイン構造体。</li>
+<li><code>util_ldap_cmds</code>: 設定ディレクティブの定義テーブル。</li>
+<li><code>util_ldap_register_hooks</code>: Apache フック（<code>post_config</code>, <code>handler</code> 等）の登録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **接続取得**: <code>uldap_connection_find</code> が呼び出されると、スレッドセーフなミューテックスで保護されたリストから、条件（ホスト、ポート、証明書等）に一致する接続を探します。 2. **操作実行**: <code>uldap_cache_compare</code> 等の関数は、まず共有メモリキャッシュを検索します。キャッシュミスが発生した場合、<code>uldap_connection_open</code> を経由して LDAP サーバーへリクエストを送信します。 3. **再試行ロジック**: サーバーダウンやタイムアウト発生時、<code>st-&gt;retries</code> 回数まで再接続を試みるループ構造を持ちます。 4. **キャッシュ更新**: 操作成功後、結果は <code>util_ald_cache_insert</code> を通じて共有メモリに書き込まれます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>util_ldap.h</code>: 公開インターフェース定義。</li>
+<li><code>util_ldap_cache.h</code>: キャッシュ管理用データ構造と関数。</li>
+<li><code>apr_ldap.h</code>: APR 経由の LDAP SDK 抽象化レイヤー。</li>
+<li><code>httpd.h</code> 系: Apache サーバーコア機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>util_ldap_cache.c</code>: キャッシュの物理的な実装（共有メモリ管理）。</li>
+<li><code>util_ldap_cache_mgr.c</code>: キャッシュ管理用ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 接続構造体は <code>apr_pool_t</code> で管理されます。接続の再利用時には <code>must_rebind</code> フラグを監視し、認証情報が変更された場合に適切に再バインドを行う必要があります。</li>
+<li>**スレッド安全性**: <code>st-&gt;mutex</code> および <code>l-&gt;lock</code> を使用して、マルチスレッド環境での接続リストと個々の接続状態を保護しています。</li>
+<li>**共有メモリ**: キャッシュは <code>util_ald_cache</code> を介して共有メモリ上に構築されます。<code>post_config</code> フックで初期化され、子プロセス間で共有されます。</li>
+<li>**省略された詳細**: 本ファイルは非常に大規模であるため、個別の SDK 特有の <code>ifdef</code> 分岐（OpenLDAP vs Novell 等）の詳細な網羅は省略しています。これらは主に <code>uldap_connection_init</code> 内の SSL/TLS 設定に集中しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_rebind_proc.html" target="wiki-view">`uldap_rebind_proc`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_rebind_add.html" target="wiki-view">`uldap_rebind_add`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__ldap_cache_lock.html" target="wiki-view">`ldap_cache_lock`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__ldap_cache_unlock.html" target="wiki-view">`ldap_cache_unlock`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__util_ldap_strdup.html" target="wiki-view">`util_ldap_strdup`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__util_ldap_handler.html" target="wiki-view">`util_ldap_handler`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_connection_close.html" target="wiki-view">`uldap_connection_close`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_connection_unbind.html" target="wiki-view">`uldap_connection_unbind`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__util_ldap_connection_remove.html" target="wiki-view">`util_ldap_connection_remove`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_connection_init.html" target="wiki-view">`uldap_connection_init`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_ld_errno.html" target="wiki-view">`uldap_ld_errno`</a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_c__uldap_simple_bind.html" target="wiki-view">`uldap_simple_bind`</a></li>
+</ul></body></html>

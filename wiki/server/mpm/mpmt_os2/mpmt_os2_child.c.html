@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm/mpmt_os2/mpmt_os2_child.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>server/mpm/mpmt_os2/mpmt_os2_child.c</h1>
+<h2>概要</h2>
+<p>OS/2 プラットフォームにおける Apache HTTP Server のマルチプロセス・マルチスレッド MPM（MPMT_OS2）の子プロセス実行環境を定義します。本ファイルは、子プロセスのライフサイクル管理、OS/2 ネイティブのキューを用いたスレッド間通信、および接続の受け入れループを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mpmt_os2.c</code> が親プロセスの制御を行うのに対し、本ファイルは子プロセス生成後の実行コンテキストを完全に制御します。OS/2 特有の API（<code>Dos*</code> 系）を駆使し、プロセス内のスレッドプール管理とリクエスト処理のディスパッチを行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス初期化**: スコアボードへの接続、シグナルハンドラの登録、OS/2 キューの作成。</li>
+<li>**接続管理**: <code>apr_pollset</code> を用いたリスニングソケットの監視と、受け入れた接続のキューイング。</li>
+<li>**スレッドプール管理**: <code>server_maintenance</code> による動的なスレッド生成・破棄（<code>add_worker</code>）。</li>
+<li>**例外処理**: <code>thread_exception_handler</code> によるワーカー内のクラッシュ捕捉とプロセス全体の健全性維持。</li>
+<li>**終了処理**: グレースフルシャットダウンおよび強制終了の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロセス・スレッド管理</h3>
+<ul>
+<li><code>ap_mpm_child_main</code>: 子プロセスのメインエントリポイント。</li>
+<li><code>worker_main</code>: 各ワーカーの実行ループ。接続を受け取り、<code>ap_process_connection</code> を呼び出す。</li>
+<li><code>server_maintenance</code>: アイドル状態を監視し、スレッド数を調整する管理スレッド。</li>
+<li><code>add_worker</code>: 新規ワーカーを生成し、スコアボードを更新する。</li>
+</ul>
+<h3>OS/2 固有の同期・通信</h3>
+<ul>
+<li><code>shutdown_event</code>: 子プロセス終了時に全スレッドへ通知するためのイベントセマフォ。</li>
+<li><code>workq</code>: <code>DosCreateQueue</code> で作成される FIFO キュー。接続情報（<code>WORKTYPE_CONN</code>）や終了命令（<code>WORKTYPE_EXIT</code>）を伝達する。</li>
+<li><code>thread_exception_handler</code>: OS/2 の例外登録レコード。ワーカーのクラッシュ時にプロセスを安全に終了させる。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_mpm_child_main</code> が起動し、共有メモリからスコアボードをマップし、OS/2 キューを作成します。 2. **接続受け入れ**: メインループで <code>apr_pollset</code> を使用して接続を待機。接続が発生すると <code>worker_args_t</code> を作成し、<code>DosWriteQueue</code> でキューに投入します。 3. **ワーカー処理**: <code>worker_main</code> が <code>DosReadQueue</code> で接続を取り出し、<code>ap_run_create_connection</code> を経由してリクエストを処理します。 4. **保守**: <code>server_maintenance</code> が定期的にアイドルスレッド数を確認し、不足していれば <code>add_worker</code> を呼び出し、過剰であれば終了命令をキューに送ります。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>os2.h</code>: OS/2 ネイティブ API（<code>Dos*</code> 系）へのアクセス。</li>
+<li><code>scoreboard.h</code>: プロセス間での状態共有。</li>
+<li><code>mpm_common.h</code>: MPM 共通のユーティリティ関数。</li>
+<li><code>apr_poll.h</code>: 非ブロッキング I/O のためのポーリング機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mpmt_os2.c</code>: 親プロセスによる子プロセスの生成と監視ロジック。</li>
+<li><code>mpm_default.h</code>: MPM 固有の定数定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>pchild</code> プールが子プロセスの生存期間を管理します。各接続は <code>pconn</code> プールで個別に管理され、処理終了後に破棄されます。</li>
+<li>**例外安全性**: OS/2 の <code>DosSetExceptionHandler</code> を使用してワーカーのクラッシュを捕捉していますが、重大なエラー時はプロセス全体を終了させる設計です。</li>
+<li>**制約**: <code>HARD_THREAD_LIMIT</code>（デフォルト 256）がスレッド数の上限です。OS/2 のキューはプロセスローカルな通信として使用されており、外部プロセスからは直接参照できません。</li>
+<li>**省略箇所**: 本ファイルは OS/2 特有の API に強く依存しており、POSIX 互換層の詳細は省略されています。また、<code>Dos*</code> API の詳細なエラーコード定義は OS/2 のシステムドキュメントを参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html" target="wiki-view">`worker_args_t`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__clean_child_exit.html" target="wiki-view">`clean_child_exit`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__ap_mpm_child_main.html" target="wiki-view">`ap_mpm_child_main`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__add_worker.html" target="wiki-view">`add_worker`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__thread_exception_handler.html" target="wiki-view">`thread_exception_handler`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_main.html" target="wiki-view">`worker_main`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.html" target="wiki-view">`server_maintenance`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__sig_term.html" target="wiki-view">`sig_term`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__sig_hup.html" target="wiki-view">`sig_hup`</a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__set_signals.html" target="wiki-view">`set_signals`</a></li>
+</ul></body></html>

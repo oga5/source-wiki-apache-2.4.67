@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/aaa/mod_access_compat.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/aaa/mod_access_compat.c</h1>
+<h2>概要</h2>
+<p><code>mod_access_compat</code> は、Apache HTTP Server 2.2 以前のアクセス制御構文（<code>Order</code>, <code>Allow</code>, <code>Deny</code>, <code>Satisfy</code>）を 2.4 以降の環境で利用可能にするための互換性モジュールです。2.4 で導入された <code>mod_authz_host</code> の新しい構文への移行を支援する役割を持ちます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムにおいて、レガシーな設定ディレクティブを現在の <code>ap_hook_check_access</code> フックに変換するブリッジとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>Order</code>, <code>Allow</code>, <code>Deny</code>, <code>Satisfy</code> ディレクティブの解析と、ディレクトリごとの設定構造体への格納。</li>
+<li>**アクセス判定**: リクエスト時に、設定された順序（<code>allow,deny</code> 等）に基づき、環境変数、IPアドレス、ホスト名によるアクセス可否を評価。</li>
+<li>**互換性提供**: <code>access_compat_ap_satisfies</code> をオプション関数として公開し、他のモジュールが本モジュールの <code>Satisfy</code> 設定を参照できるようにする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>access_compat_dir_conf</code>: ディレクトリごとの設定を保持。<code>order</code>（判定順序）、<code>allows</code>/<code>denys</code>（ルール配列）、<code>satisfy</code>（ポリシー）を管理。</li>
+</ul>
+<h3>コマンドハンドラ</h3>
+<ul>
+<li><code>order</code>, <code>allow_cmd</code>, <code>satisfy</code>: 設定ファイル内のディレクティブを解析し、<code>access_compat_dir_conf</code> を構築するハンドラ。</li>
+</ul>
+<h3>判定ロジック</h3>
+<ul>
+<li><code>check_dir_access</code>: <code>ap_hook_check_access</code> に登録されるメインのエントリポイント。設定された <code>order</code> に基づき <code>find_allowdeny</code> を呼び出す。</li>
+<li><code>find_allowdeny</code>: 特定のメソッドに対するルール（<code>allow</code> または <code>deny</code>）を走査し、条件（IP, ホスト, 環境変数）に一致するか判定。</li>
+<li><code>in_domain</code>: ホスト名が指定ドメインに属するかを検証する補助関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <code>create_access_compat_dir_config</code> でメモリを確保。<code>allow_cmd</code> が <code>apr_array_push</code> を用いて <code>allows</code> または <code>denys</code> 配列にルールを追加。 2. **リクエスト処理**:</p>
+<ul>
+<li><code>check_dir_access</code> がリクエストごとに呼び出される。</li>
+<li><code>order</code> 設定（<code>DENY_THEN_ALLOW</code> 等）に従い、<code>find_allowdeny</code> を適切な順序で実行。</li>
+<li><code>find_allowdeny</code> は <code>r-&gt;useragent_addr</code>（IP）や <code>ap_get_useragent_host</code>（ホスト名）を使い、ルール配列を評価。</li>
+<p>3. **終了処理**: 判定結果が <code>HTTP_FORBIDDEN</code> の場合、<code>ap_log_rerror</code> でログを出力。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache モジュール基盤。</li>
+<li><code>apr_network_io.h</code>: IP サブネット判定用。</li>
+<li><code>mod_auth.h</code>: 認証・認可関連の共通定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_authz_host.c</code>: 本モジュールの代替となる、2.4 以降の標準的なアクセス制御モジュール。</li>
+<li><code>http_core.c</code>: <code>Satisfy</code> などの概念を定義するコアモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定構造体は <code>apr_pool_t</code> を介して管理され、リクエスト終了時に自動的に解放されます。</li>
+<li>**制約**: <code>Order</code> の設定はメソッド単位で行われます。<code>Satisfy</code> は <code>access_compat_ap_satisfies</code> を通じて他のモジュールから参照可能ですが、本モジュール自体は <code>check_dir_access</code> で完結するロジックを持っています。</li>
+<li>**注意点**: <code>in_domain</code> は単純な文字列比較に基づいているため、DNS 逆引きの結果に依存します。<code>REMOTE_DOUBLE_REV</code> を使用しており、セキュリティ上の考慮が必要です。</li>
+<li>**省略箇所**: 本ドキュメントでは、<code>apr_ipsubnet_t</code> の内部構造や、<code>ap_get_useragent_host</code> の詳細な DNS 解決プロセスについては、Apache コアの責務であるため省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__allowdeny_type.html" target="wiki-view">`allowdeny_type`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__allowdeny.html" target="wiki-view">`allowdeny`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__access_compat_dir_conf.html" target="wiki-view">`access_compat_dir_conf`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__create_access_compat_dir_config.html" target="wiki-view">`create_access_compat_dir_config`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__order.html" target="wiki-view">`order`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__satisfy.html" target="wiki-view">`satisfy`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__allow_cmd.html" target="wiki-view">`allow_cmd`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__in_domain.html" target="wiki-view">`in_domain`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__find_allowdeny.html" target="wiki-view">`find_allowdeny`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__access_compat_ap_satisfies.html" target="wiki-view">`access_compat_ap_satisfies`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__check_dir_access.html" target="wiki-view">`check_dir_access`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_access_compat_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

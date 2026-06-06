@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/main/util.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/main/util.c</h1>
+<h2>概要</h2>
+<p>WebDAV プロトコル処理におけるリポジトリ非依存の汎用ユーティリティ群を提供します。エラーハンドリング、バッファ管理、URI 解析、XML 操作、<code>If</code> ヘッダーのパース、および自動バージョン管理（Auto-versioning）のロジックを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> の中核となる補助モジュールです。リポジトリ固有の実装（<code>repository.c</code> 等）に依存せず、HTTP リクエストの検証や WebDAV 特有のヘッダー処理を共通化することで、各プロバイダーの実装負荷を軽減します。</p>
+<h2>責務</h2>
+<ul>
+<li>**エラー管理**: <code>dav_error</code> 構造体の生成、スタック管理、連結。</li>
+<li>**バッファ操作**: 可変長バッファの動的確保と文字列/メモリの追加。</li>
+<li>**リクエスト検証**: <code>If</code> ヘッダーのパース、リソース状態とロックトークンの照合。</li>
+<li>**XML ユーティリティ**: <code>apr_xml</code> 構造体からの要素検索、属性取得、CDATA 抽出。</li>
+<li>**自動バージョン管理**: リソースの自動チェックアウト/チェックイン処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>エラーハンドリング</h3>
+<ul>
+<li><code>dav_new_error</code>, <code>dav_new_error_tag</code>: <code>dav_error</code> オブジェクトの生成。</li>
+<li><code>dav_push_error</code>, <code>dav_join_error</code>: エラーのスタック化と連結。</li>
+</ul>
+<h3>バッファ管理</h3>
+<ul>
+<li><code>dav_buffer_init</code>, <code>dav_buffer_append</code>: <code>dav_buffer</code> 構造体の初期化と追記。</li>
+<li><code>dav_check_bufsize</code>: 必要に応じたバッファの拡張。</li>
+</ul>
+<h3>XML 操作</h3>
+<ul>
+<li><code>dav_find_child</code>, <code>dav_find_attr</code>: 名前空間を考慮した要素・属性の検索。</li>
+<li><code>dav_xml_get_cdata</code>: XML 要素内の CDATA を連結して取得。</li>
+</ul>
+<h3>リクエスト検証</h3>
+<ul>
+<li><code>dav_process_if_header</code>: <code>If</code> ヘッダーのパースと構造化。</li>
+<li><code>dav_validate_request</code>: リクエスト全体（リソースおよび親）の検証フローの統括。</li>
+</ul>
+<h3>自動バージョン管理</h3>
+<ul>
+<li><code>dav_auto_checkout</code>, <code>dav_auto_checkin</code>: バージョン管理プロバイダーと連携した自動チェックアウト/イン処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **検証フロー**: <code>dav_validate_request</code> が起点となり、<code>dav_process_if_header</code> でヘッダーを解析後、<code>dav_validate_resource_state</code> を呼び出してリソースのロック状態と <code>If</code> 条件を照合します。 2. **XML 解析**: <code>apr_xml_doc</code> を受け取り、<code>dav_find_child_ns</code> 等のヘルパーを用いて階層を辿り、<code>dav_xml_get_cdata</code> で最終的な値を抽出します。 3. **自動バージョン管理**: <code>dav_auto_checkout</code> はリソースの <code>auto_versionable</code> フックを確認し、必要に応じて <code>checkout</code> フックを呼び出します。エラー発生時は <code>dav_auto_checkin</code>（<code>undo</code> モード）で状態をロールバックします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_dav.h</code>: DAV 関連の主要構造体とフック定義。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作とメモリ管理。</li>
+<li><code>http_*.h</code>: Apache HTTP Server のリクエスト処理および設定用 API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/dav/main/mod_dav.c</code>: 本モジュールのユーティリティを利用するメインロジック。</li>
+<li><code>modules/dav/main/util_lock.c</code>: ロック関連のより詳細なロジック。</li>
+<li><code>modules/dav/main/props.c</code>: プロパティ操作関連。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的確保は <code>apr_pool_t</code> を介して行われます。リクエスト終了時に自動解放されるため、明示的な <code>free</code> は不要です。</li>
+<li>**バッファの不変性**: <code>dav_buffer</code> は <code>cur_len</code> と <code>alloc_len</code> を持ち、<code>dav_check_bufsize</code> で自動拡張されます。</li>
+<li>**If ヘッダーの複雑性**: <code>dav_process_if_header</code> は非常に複雑なステートマシンです。RFC 4918 の <code>If</code> ヘッダー仕様に厳密に従う必要があるため、修正時は注意が必要です。</li>
+<li>**省略された詳細**: 本ファイル内の <code>dav_xmlns_*</code> 系関数は XML 名前空間の管理用ですが、実装はハッシュテーブルベースの単純なマッピングであり、特筆すべき複雑なロジックは含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_new_error.html" target="wiki-view">`dav_new_error`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_new_error_tag.html" target="wiki-view">`dav_new_error_tag`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_push_error.html" target="wiki-view">`dav_push_error`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_join_error.html" target="wiki-view">`dav_join_error`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_check_bufsize.html" target="wiki-view">`dav_check_bufsize`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_set_bufsize.html" target="wiki-view">`dav_set_bufsize`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_buffer_init.html" target="wiki-view">`dav_buffer_init`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_buffer_append.html" target="wiki-view">`dav_buffer_append`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_buffer_place.html" target="wiki-view">`dav_buffer_place`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_buffer_place_mem.html" target="wiki-view">`dav_buffer_place_mem`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_get_timeout.html" target="wiki-view">`dav_get_timeout`</a></li>
+<li><a href="../../../symbols/modules__dav__main__util_c__dav_get_locktoken_list.html" target="wiki-view">`dav_get_locktoken_list`</a></li>
+</ul></body></html>

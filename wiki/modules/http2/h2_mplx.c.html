@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_mplx.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_mplx.c</h1>
+<h2>概要</h2>
+<p><code>h2_mplx.c</code> は、HTTP/2 セッションにおけるストリーム多重化（Multiplexing）の中核を担う実装です。プライマリ接続（c1）と、各リクエストを処理するセカンダリ接続（c2）間のブリッジとして機能し、リクエストのスケジューリング、ワーカーへの割り当て、I/O イベントの同期、および DoS 保護を管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> サブシステムにおいて、<code>h2_session</code> と <code>h2_workers</code> を繋ぐハブです。<code>h2_session</code> が HTTP/2 プロトコル層を処理するのに対し、<code>h2_mplx</code> はリクエスト処理のライフサイクルとリソース（スレッド、メモリ）の割り当てを制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストのライフサイクル管理**: ストリームの生成、実行、終了、および破棄の追跡。</li>
+<li>**ワーカー連携**: <code>h2_workers</code> を介した c2 接続の生成と、処理完了時のリサイクル。</li>
+<li>**I/O 同期**: <code>h2_bucket_beam</code> を用いた c1/c2 間のデータ転送と、<code>apr_pollset</code> によるイベント通知。</li>
+<li>**DoS 保護**: クライアントの挙動（RST_STREAM 等）に基づいた動的なワーカー制限（mood 管理）。</li>
+<li>**スレッド安全性**: <code>h2_mplx</code> インスタンスごとのミューテックスによる排他制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><code>h2_mplx_c1_create</code>: セッションごとの多重化インスタンスを初期化。専用のメモリプールとアロケータを生成。</li>
+<li><code>h2_mplx_c1_destroy</code>: セッション終了時のクリーンアップ。全ストリームのキャンセルとワーカーの待機。</li>
+<li><code>m_stream_cleanup</code>: ストリームの終了処理。<code>shold</code>（完了待ち）や <code>spurge</code>（破棄待ち）への移動を管理。</li>
+</ul>
+<h3>実行制御</h3>
+<ul>
+<li><code>h2_mplx_c1_process</code>: キュー内のストリームをワーカーへ投入。</li>
+<li><code>c2_prod_next</code>: <code>h2_workers</code> が呼び出すコールバック。次に処理すべき c2 接続を生成。</li>
+<li><code>c2_prod_done</code>: ワーカーが処理完了時に呼び出すコールバック。</li>
+</ul>
+<h3>DoS 保護（Mood 管理）</h3>
+<ul>
+<li><code>s_mplx_be_happy</code>: 正常終了時にワーカー制限を緩和。</li>
+<li><code>m_be_annoyed</code>: 不正な RST_STREAM 等を検知し、ワーカー制限を厳格化。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **投入**: <code>h2_mplx_c1_process</code> がストリームを <code>h2_iqueue</code> に追加し、ワーカーを起動。 2. **生成**: <code>h2_workers</code> が <code>c2_prod_next</code> を呼び出し、<code>c2_transit_get</code> でプールを確保して c2 接続を生成。 3. **I/O**: <code>c2_setup_io</code> で <code>h2_bucket_beam</code> を設定。データ転送は <code>c2_beam_input_read_notify</code> 等のコールバック経由で <code>pollset</code> に通知される。 4. **完了**: ワーカーが <code>c2_prod_done</code> を呼び出し、<code>s_c2_done</code> でストリームの状態を更新。 5. **破棄**: <code>c1_purge_streams</code> が <code>spurge</code> 配列内のストリームを安全に解放。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_thread_mutex.h</code>, <code>apr_thread_cond.h</code>: 排他制御とスレッド間同期。</li>
+<li><code>h2_workers.h</code>: ワーカー管理。</li>
+<li><code>h2_bucket_beam.h</code>: c1/c2 間のデータパイプライン。</li>
+<li><code>h2_stream.h</code>, <code>h2_conn_ctx.h</code>: ストリームおよび接続コンテキストの操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_mplx.h</code>: 公開インターフェース定義。</li>
+<li><code>h2_session.c</code>: 本モジュールの主要な呼び出し元。</li>
+<li><code>h2_workers.c</code>: リクエスト処理スレッドの管理。</li>
+<li><code>h2_bucket_beam.c</code>: データ転送の基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_mplx</code> は専用の <code>apr_allocator_t</code> を持ち、スレッド間でのメモリ安全性を確保しています。</li>
+<li>**排他制御**: <code>H2_MPLX_ENTER</code> マクロによるミューテックス保護が必須です。特に <code>pollset</code> 関連の操作は <code>poll_lock</code> で別途保護されています。</li>
+<li>**制約**: <code>c2</code> 接続は <code>h2_mplx</code> のライフサイクルに強く依存します。<code>c2_transit</code> のリサイクルはメモリ効率化のために行われていますが、複雑な状態遷移を伴うため、デバッグ時は <code>spurge</code> への移動タイミングに注意してください。</li>
+<li>**省略**: <code>h2_mplx</code> の詳細な優先度制御（<code>h2_iq_sort</code> 等）については、<code>h2_util.c</code> のキュー操作に依存しているため、本ファイルでは深入りしていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__stream_iter_ctx.html" target="wiki-view">`stream_iter_ctx`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__abort_on_oom.html" target="wiki-view">`abort_on_oom`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__h2_mplx_c1_child_init.html" target="wiki-view">`h2_mplx_c1_child_init`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__c1_input_consumed.html" target="wiki-view">`c1_input_consumed`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__stream_is_running.html" target="wiki-view">`stream_is_running`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__h2_mplx_c1_stream_is_running.html" target="wiki-view">`h2_mplx_c1_stream_is_running`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__add_for_purge.html" target="wiki-view">`add_for_purge`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__c1c2_stream_joined.html" target="wiki-view">`c1c2_stream_joined`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__m_stream_cleanup.html" target="wiki-view">`m_stream_cleanup`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__c2_transit_create.html" target="wiki-view">`c2_transit_create`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__stream_iter_ctx_t.html" target="wiki-view">`stream_iter_ctx_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_c__stream_iter_aws_t.html" target="wiki-view">`stream_iter_aws_t`</a></li>
+</ul></body></html>

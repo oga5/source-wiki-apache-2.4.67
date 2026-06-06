@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>support/ab.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>support/ab.c</h1>
+<h2>概要</h2>
+<p><code>ab.c</code> は Apache HTTP Server プロジェクトに含まれる標準的な HTTP ベンチマークツール「ApacheBench (ab)」のソースコードです。非同期 I/O と <code>apr_pollset_t</code> を活用し、単一プロセスで多数の同時接続をシミュレートしてサーバーの性能を測定します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールにおける主要なユーティリティの一つです。他のサポートツールが管理や設定に特化しているのに対し、本ファイルはサーバーの負荷試験と統計解析という動的な役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷生成**: 指定された同時接続数（concurrency）に基づき、非同期に HTTP リクエストを送信する。</li>
+<li>**統計計測**: 接続時間、処理時間、待機時間、転送量などのメトリクスを収集・計算する。</li>
+<li>**SSL/TLS 対応**: OpenSSL を用いた HTTPS 通信のサポート。</li>
+<li>**レポート出力**: テキスト形式または HTML 形式での結果出力、および GNUplot/CSV 用のデータエクスポート。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>接続管理</h3>
+<ul>
+<li><code>struct connection</code>: 各接続の状態、ソケット、SSL コンテキスト、タイムスタンプを保持する構造体。</li>
+<li><code>connect_state_e</code>: 接続のライフサイクル（UNCONNECTED, CONNECTING, CONNECTED, READ）を定義。</li>
+<li><code>start_connect()</code>: 非同期接続を開始し、<code>apr_pollset_t</code> に登録する。</li>
+<li><code>close_connection()</code>: 接続を終了し、統計を保存して次のリクエストへ遷移させる。</li>
+</ul>
+<h3>処理・通信</h3>
+<ul>
+<li><code>write_request()</code>: HTTP リクエストをソケットへ書き込む。</li>
+<li><code>read_connection()</code>: サーバーからのレスポンスを読み込み、ヘッダー解析とボディの受信を行う。</li>
+<li><code>ssl_proceed_handshake()</code>: SSL/TLS ハンドシェイクを非同期に進行させる。</li>
+</ul>
+<h3>統計・出力</h3>
+<ul>
+<li><code>struct data</code>: 個別のリクエストごとの時間計測データを保持。</li>
+<li><code>output_results()</code>: 収集した統計の集計、平均、標準偏差、パーセンタイル計算、および標準出力への表示。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>main()</code> で引数を解析し、APR プールと <code>apr_pollset_t</code> を作成。 2. **接続開始**: <code>test()</code> が最初の接続を <code>start_connect()</code> で開始。 3. **イベントループ**: <code>apr_pollset_poll()</code> を使用して、ソケットの読み込み/書き込み可能イベントを待機。 4. **状態遷移**: イベントに応じて <code>write_request()</code>（送信）または <code>read_connection()</code>（受信）を呼び出し、<code>connect_state_e</code> を更新。 5. **完了処理**: 全リクエスト終了後、<code>output_results()</code> が <code>stats</code> 配列をソートし、統計情報を計算して出力。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: ソケット、メモリプール、時間計測、ポーリング、シグナル処理の抽象化に使用。</li>
+<li>**OpenSSL**: <code>libssl</code>, <code>libcrypto</code> を使用した HTTPS 通信の実装。</li>
+<li>**標準ライブラリ**: <code>stdio.h</code>, <code>stdlib.h</code>, <code>math.h</code> 等。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>support/rotatelogs.c</code>: ログ管理ツール。</li>
+<li><code>support/htpasswd.c</code>: 認証ファイル管理ツール。</li>
+<li><code>apr_pollset_t</code> 関連 API: APR のドキュメントを参照することで、本ファイルの非同期 I/O モデルが理解しやすくなります。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>apr_pool_t</code> を使用してメモリを管理しており、<code>cntxt</code> プールが破棄される際に一括解放されます。</li>
+<li>**レイアウト**: <code>struct connection</code> 配列は <code>concurrency</code> 分だけ動的に確保されます。</li>
+<li>**既知の制限**: HTTP/1.x の解析は完全な仕様準拠ではなく、パフォーマンスを優先した簡易的な実装です。</li>
+<li>**注意点**: <code>ab</code> は非常に古いコードベースを含んでおり、一部のバッファ操作に <code>strcpy</code> 等の古い関数が残っています。また、SSL 関連のコードは OpenSSL のバージョンによって条件分岐が複雑化しているため、ビルド環境の OpenSSL バージョンに注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__ab_c__X509_STACK_TYPE.html" target="wiki-view">`X509_STACK_TYPE`</a></li>
+<li><a href="../symbols/support__ab_c__connect_state_e.html" target="wiki-view">`connect_state_e`</a></li>
+<li><a href="../symbols/support__ab_c__connection.html" target="wiki-view">`connection`</a></li>
+<li><a href="../symbols/support__ab_c__data.html" target="wiki-view">`data`</a></li>
+<li><a href="../symbols/support__ab_c__apr_err.html" target="wiki-view">`apr_err`</a></li>
+<li><a href="../symbols/support__ab_c__abort_on_oom.html" target="wiki-view">`abort_on_oom`</a></li>
+<li><a href="../symbols/support__ab_c__set_polled_events.html" target="wiki-view">`set_polled_events`</a></li>
+<li><a href="../symbols/support__ab_c__set_conn_state.html" target="wiki-view">`set_conn_state`</a></li>
+<li><a href="../symbols/support__ab_c__ssl_print_cb.html" target="wiki-view">`ssl_print_cb`</a></li>
+<li><a href="../symbols/support__ab_c__ssl_state_cb.html" target="wiki-view">`ssl_state_cb`</a></li>
+<li><a href="../symbols/support__ab_c__ssl_rand_choosenum.html" target="wiki-view">`ssl_rand_choosenum`</a></li>
+<li><a href="../symbols/support__ab_c__ssl_rand_seed.html" target="wiki-view">`ssl_rand_seed`</a></li>
+</ul></body></html>

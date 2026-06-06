@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/http2/test_800_websockets.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>test/modules/http2/test_800_websockets.py</h1>
+<h2>概要</h2>
+<p>HTTP/2 上での WebSocket プロトコル（RFC 8441）のサポートを検証するための統合テストスイートです。Apache HTTP Server (<code>mod_http2</code>) が <code>CONNECT</code> メソッドを介して WebSocket トンネルを正しく処理できるかをテストします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> モジュールの一部として、HTTP/2 の高度な機能である WebSocket プロキシ機能の品質保証を担います。外部の <code>ws_server.py</code> と連携し、クライアント側のテストツール <code>h2ws</code> を駆動して通信を検証します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル検証**: <code>CONNECT</code> リクエストの妥当性（ヘッダーの有無、プロトコル指定）の確認。</li>
+<li>**トンネル機能のテスト**: 正常な WebSocket 通信、PING/PONG、データ転送の整合性確認。</li>
+<li>**エラーハンドリング**: 不正なリクエストや存在しないパスに対する適切なステータスコード（400, 404, 501, 502）の返却確認。</li>
+<li>**負荷・タイミングテスト**: フレーム長や遅延を変化させた際のデータ転送スループットとタイムアウト挙動の検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ws_run</code>: テスト用クライアント <code>h2ws</code> を実行し、結果（終了コード、ログ、受信フレーム）を収集するヘルパー関数。</li>
+<li><code>TestWebSockets</code>: テストクラス。<code>pytest</code> フィクスチャを用いて Apache の設定と WebSocket サーバーのライフサイクルを管理。</li>
+<li><code>ws_server</code>: テストクラス内で起動されるバックエンドの WebSocket サーバー。</li>
+<li><code>H2Conf</code>: Apache の設定を動的に生成・適用するためのクラス。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>_class_scope</code> フィクスチャが <code>H2Conf</code> を用いて Apache を設定し、<code>H2WebSockets on</code> を有効化して再起動します。 2. **サーバー起動**: <code>ws_server</code> フィクスチャが <code>ws_server.py</code> をサブプロセスとして起動し、テスト対象のバックエンドを提供します。 3. **テスト実行**: 各 <code>test_h2_800_*</code> メソッドが <code>ws_run</code> を呼び出します。</p>
+<ul>
+<li><code>ws_run</code> は <code>h2ws</code> をサブプロセスで起動し、標準入力を通じて WebSocket フレームを送信します。</li>
+<li>出力は一時ファイルに書き出され、終了後に <code>WsFrameReader</code> が解析して <code>WsFrame</code> オブジェクトのリストを返します。</li>
+<p>4. **検証**: 返されたステータスコードやフレームの内容を <code>assert</code> で検証します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>websockets</code>: Python の WebSocket ライブラリ（バージョン 10.4 以上が必要）。</li>
+<li><code>pyhttpd</code>: Apache テスト用ユーティリティ（<code>ExecResult</code>, <code>WsFrameReader</code> 等）。</li>
+<li><code>subprocess</code>: <code>h2ws</code> および <code>ws_server.py</code> の実行に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/modules/http2/ws_server.py</code>: テスト用のバックエンドサーバー実装。</li>
+<li><code>test/modules/http2/env.py</code>: テスト環境の構成と Apache の制御を行う基盤コード。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本テストは <code>httpd 2.4.60</code> 以上を要求します。</li>
+<li><code>h2ws</code> クライアントがビルドされていない場合、テストは失敗します。</li>
+<li><code>ws_run</code> はデッドロックを避けるため、出力をファイル経由で取得する設計になっています。デバッグ時は <code>pytest -o log_cli=true</code> を使用して詳細なログを確認してください。</li>
+</ul></body></html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/mappers/mod_vhost_alias.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/mappers/mod_vhost_alias.c</h1>
+<h2>概要</h2>
+<p><code>mod_vhost_alias</code> は、Apache HTTP Server において動的なバーチャルホスト（Mass Virtual Hosting）を実現するためのモジュールです。ホスト名や IP アドレスをテンプレート文字列（<code>VirtualDocumentRoot</code> 等）に埋め込むことで、ディレクトリ構造を自動的に決定し、リクエストのパスをマッピングします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/mappers</code> サブシステムの一部として、リクエストの <code>translate_name</code> フェーズで動作します。<code>mod_alias</code> や <code>mod_userdir</code> と競合しないよう、フックの実行順序を制御しつつ、静的な設定ファイル記述を最小化する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>VirtualDocumentRoot</code> および <code>VirtualScriptAlias</code> の設定をサーバー単位で保持・マージする。</li>
+<li>**パス変換**: リクエストされたホスト名/IP を解析し、設定されたテンプレートに従って物理パスを生成する。</li>
+<li>**コンテキスト設定**: 生成されたパスを <code>r-&gt;filename</code> に反映し、<code>DocumentRoot</code> や <code>cgi-script</code> ハンドラを適切に設定する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体とライフサイクル</h3>
+<ul>
+<li><code>mva_sconf_t</code>: サーバー単位の設定を保持する構造体。<code>doc_root</code> / <code>cgi_root</code> のパスと、それらがホスト名ベースか IP ベースか（<code>mva_mode_e</code>）を管理。</li>
+<li><code>mva_create_server_config</code>: 設定構造体の初期化。</li>
+<li><code>mva_merge_server_config</code>: 親サーバー設定と子サーバー設定の継承処理。</li>
+</ul>
+<h3>コマンドハンドラ</h3>
+<ul>
+<li><code>vhost_alias_set</code>: <code>VirtualDocumentRoot</code> 等のディレクティブを処理する汎用ハンドラ。テンプレート文字列の構文チェック（<code>%</code> 記法）を行う。</li>
+</ul>
+<h3>変換ロジック</h3>
+<ul>
+<li><code>mva_translate</code>: <code>translate_name</code> フックのメイン関数。リクエストが CGI かドキュメントルートかを判定し、適切なモードで補間処理を呼び出す。</li>
+<li><code>vhost_alias_interpolate</code>: テンプレート文字列を解析し、ホスト名/IP のパーツを抽出して物理パスを構築するコア関数。</li>
+<li><code>vhost_alias_checkspace</code>: <code>r-&gt;filename</code> のバッファ溢れを防ぐためのユーティリティ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック登録**: <code>register_hooks</code> により <code>ap_hook_translate_name</code> に <code>mva_translate</code> を登録。 2. **判定**: <code>mva_translate</code> がリクエストの URI を確認し、CGI か通常パスかを判断。 3. **補間**: <code>vhost_alias_interpolate</code> がホスト名/IP を <code>dots</code> 配列で分割し、テンプレートの <code>%</code> 指定子（例: <code>%1.2</code>）に基づいてパスを組み立てる。 4. **適用**: 生成されたパスを <code>r-&gt;filename</code> に格納し、必要に応じて <code>r-&gt;handler</code> を <code>cgi-script</code> に設定して終了。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_request.h</code>: Apache コア API。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作およびメモリ管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_alias.c</code>: 実装の着想元。</li>
+<li><code>mod_cgi.c</code>: <code>cgi-script</code> ハンドラの挙動に関連。</li>
+<li><code>http_core.c</code>: <code>DocumentRoot</code> の標準的な扱い。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を使用しており、リクエスト処理中の文字列生成はすべてリクエストプールに依存します。</li>
+<li>**制約**: テンプレート文字列の構文チェックは厳密に行われますが、<code>HUGE_STRING_LEN</code> を超えるパス生成時の挙動には注意が必要です。</li>
+<li>**最適化の余地**: ソース内のコメントにある通り、パスの固定部分（<code>%</code> 以前のパス）を事前に計算してキャッシュする最適化は未実装です。</li>
+<li>**未実装領域**: このモジュールは <code>Directory</code> 単位の設定オーバーライドをサポートしていません（サーバー設定のみ）。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__mva_mode_e.html" target="wiki-view">`mva_mode_e`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__mva_sconf_t.html" target="wiki-view">`mva_sconf_t`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__mva_create_server_config.html" target="wiki-view">`mva_create_server_config`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__mva_merge_server_config.html" target="wiki-view">`mva_merge_server_config`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__vhost_alias_set.html" target="wiki-view">`vhost_alias_set`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__vhost_alias_checkspace.html" target="wiki-view">`vhost_alias_checkspace`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__vhost_alias_interpolate.html" target="wiki-view">`vhost_alias_interpolate`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__mva_translate.html" target="wiki-view">`mva_translate`</a></li>
+<li><a href="../../symbols/modules__mappers__mod_vhost_alias_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

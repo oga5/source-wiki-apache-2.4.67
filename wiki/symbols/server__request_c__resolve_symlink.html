@@ -6,22 +6,52 @@
 <li>定義箇所: <code>server/request.c:533</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>シンボリックリンクのアクセス制御（<code>FollowSymLinks</code> や <code>SymLinksIfOwnerMatch</code>）を検証し、リンク先のファイル情報を取得する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int resolve_symlink(char *d, apr_finfo_t *lfi, int opts, apr_pool_t *p)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>d</code>: 対象のファイルパス。</li>
+<li><code>lfi</code>: シンボリックリンクのファイル情報（<code>apr_finfo_t</code>）。</li>
+<li><code>opts</code>: 設定オプション（<code>OPT_SYM_OWNER</code>, <code>OPT_SYM_LINKS</code>）。</li>
+<li><code>p</code>: メモリプール。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> を返し、<code>lfi</code> にリンク先のファイル情報を格納する。</li>
+<li>失敗時は <code>HTTP_FORBIDDEN</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>呼び出し元は、対象が <code>APR_LNK</code>（シンボリックリンク）であることを確認していることが期待される。</li>
+<li><code>opts</code> に <code>OPT_SYM_OWNER</code> または <code>OPT_SYM_LINKS</code> が含まれていない場合、即座に <code>HTTP_FORBIDDEN</code> を返す。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **オプション検証**: <code>opts</code> に許可されたフラグが含まれない場合、アクセスを拒否する。 2. **リンク先情報の取得**:</p>
+<ul>
+<li><code>OPT_SYM_OWNER</code> が指定されていない場合: <code>apr_stat</code> でリンク先の情報を取得し、<code>lfi</code> を更新する。</li>
+<li><code>OPT_SYM_OWNER</code> が指定されている場合:</li>
+<li>リンク自体の所有者情報が不足していれば <code>apr_stat</code> で補完する。</li>
+<li>リンク先の情報を取得し、<code>apr_uid_compare</code> でリンクとリンク先の所有者を比較する。所有者が一致しない場合は <code>HTTP_FORBIDDEN</code> を返す。</li>
+<p>3. **結果の反映**: 成功時、<code>lfi</code> にリンク先の情報をコピーし、元のファイル名（<code>savename</code>）を保持したまま呼び出し元へ戻す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>server/request.c</code> 内の複数箇所（520行目付近のコメント、813行目、1249行目、1408行目、2391行目）。</li>
+<li>**呼び出し先**: <code>apr_stat</code>（APRライブラリ）、<code>apr_uid_compare</code>（APRライブラリ）、<code>memcpy</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_finfo_t</code>: ファイル情報を保持する構造体。</li>
+<li><code>request_rec</code>: 呼び出し元で利用されるリクエスト情報構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_stat</code> が失敗した場合、アクセス権限がないとみなして <code>HTTP_FORBIDDEN</code> を返す。</li>
+<li><code>OPT_SYM_OWNER</code> 指定時に所有者が一致しない場合、<code>HTTP_FORBIDDEN</code> を返す。</li>
+<li><code>opts</code> に適切なフラグが設定されていない場合、<code>HTTP_FORBIDDEN</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はシンボリックリンクのセキュリティチェックを担うため、変更時は認可ロジックへの影響を慎重に評価すること。</li>
+<li><code>lfi-&gt;name</code> の保持ロジックは、<code>apr_stat</code> 後の情報更新時にファイル名が失われないようにするための重要な処理である。</li>
 </ul></body></html>

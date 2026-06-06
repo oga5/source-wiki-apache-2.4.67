@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/mod_proxy_express.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/mod_proxy_express.c</h1>
+<h2>概要</h2>
+<p><code>mod_proxy_express</code> は、DBM ファイルを使用してリクエストのホスト名からバックエンドのプロキシ先を動的に解決する Apache HTTP Server モジュールです。設定ファイルに静的な <code>ProxyPass</code> を記述することなく、DBM ファイル内のキー（ホスト名）と値（バックエンド URL）のペアに基づいてリクエストをルーティングします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> サブシステムの一部として動作し、リクエストの翻訳フェーズ（<code>translate_name</code>）で介入します。他のプロキシモジュールが静的な設定に依存するのに対し、本モジュールは外部データソース（DBM）を利用して実行時にルーティング先を決定する「動的プロキシ」の役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: DBM ファイルのパス、タイプ、および機能の有効/無効をサーバー単位で管理。</li>
+<li>**動的ルーティング**: リクエストのホスト名をキーとして DBM を検索し、バックエンド URL を取得して <code>r-&gt;filename</code> を書き換える。</li>
+<li>**自動設定**: 解決されたバックエンドに対して、必要に応じて <code>ProxyPassReverse</code> エントリを動的に追加する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>express_server_conf</code>: サーバーごとの設定を保持。<code>dbmfile</code>（パス）、<code>dbmtype</code>（DBM形式）、<code>enabled</code>（フラグ）を格納。</li>
+</ul>
+<h3>設定ハンドラ</h3>
+<ul>
+<li><code>set_dbmfile</code>, <code>set_dbmtype</code>, <code>set_enabled</code>: <code>httpd.conf</code> でのディレクティブを処理し、<code>express_server_conf</code> を更新する。</li>
+</ul>
+<h3>ライフサイクル・フック</h3>
+<ul>
+<li><code>server_create</code> / <code>server_merge</code>: 設定構造体の初期化およびサーバー間での設定継承。</li>
+<li><code>post_config</code>: <code>mod_proxy</code> がロードされているかを確認。</li>
+<li><code>xlate_name</code>: リクエスト処理のメインロジック。DBM 検索とリクエストの書き換えを実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> により <code>xlate_name</code> が <code>APR_HOOK_FIRST</code> で登録される。 2. **リクエスト処理 (<code>xlate_name</code>)**:</p>
+<ul>
+<li><code>sconf-&gt;enabled</code> を確認し、無効なら <code>DECLINED</code>。</li>
+<li><code>apr_dbm_open2</code> (または <code>apr_dbm_open_ex</code>) で DBM ファイルを開く。</li>
+<li><code>ap_get_server_name(r)</code> で取得したホスト名をキーに <code>apr_dbm_fetch</code> を実行。</li>
+<li>成功時、<code>r-&gt;filename</code> を <code>proxy:&lt;backend&gt;&lt;uri&gt;</code> に書き換え、<code>r-&gt;handler</code> を <code>proxy-server</code> に設定。</li>
+<li><code>dconf-&gt;raliases</code> を走査し、該当バックエンドの <code>ProxyPassReverse</code> が存在しなければ動的に追加。</li>
+<p>3. **終了**: <code>apr_dbm_close</code> でリソースを解放。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシ機能の共通定義（<code>proxy_dir_conf</code>, <code>proxy_alias</code> 等）。</li>
+<li><code>apr_dbm.h</code>: DBM ファイル操作のための APR 抽象化レイヤー。</li>
+<li><code>apr_version.h</code> / <code>apu_version.h</code>: DBM ドライバ API のバージョン差異を吸収するための条件分岐に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/proxy/mod_proxy.c</code>: プロキシのコア機能。本モジュールが <code>proxy-server</code> ハンドラをセットすることで連携する。</li>
+<li><code>modules/proxy/proxy_util.c</code>: プロキシ関連のユーティリティ関数群。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: DBM 検索や文字列操作には <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動的に解放されます。</li>
+<li>**スレッド安全性**: DBM ファイルは読み取り専用 (<code>APR_DBM_READONLY</code>) で開かれるため、並行アクセスに対して安全です。</li>
+<li>**制限事項**: <code>ProxyPassReverse</code> の動的追加は、現在のプロセス/スレッドの <code>dconf</code> に対して行われます。このため、設定の反映範囲はプロセス境界に依存する可能性がある点に注意してください。</li>
+<li>**省略箇所**: DBM の内部構造や、特定の DBM ドライバ（GDBM, SDBM 等）の挙動については、APR の仕様に依存するため本ファイルでは詳細を扱っていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__express_server_conf.html" target="wiki-view">`express_server_conf`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__set_dbmfile.html" target="wiki-view">`set_dbmfile`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__set_dbmtype.html" target="wiki-view">`set_dbmtype`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__set_enabled.html" target="wiki-view">`set_enabled`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__server_create.html" target="wiki-view">`server_create`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__server_merge.html" target="wiki-view">`server_merge`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__post_config.html" target="wiki-view">`post_config`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__xlate_name.html" target="wiki-view">`xlate_name`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_express_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

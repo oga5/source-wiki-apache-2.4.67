@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/mpm_fdqueue.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm_fdqueue.h</h1>
+<h2>概要</h2>
+<p><code>server/mpm_fdqueue.h</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）、特に <code>event</code> や <code>worker</code> において、スレッド間でソケットやタイマーイベントを安全に受け渡すためのキュー構造を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p>MPM におけるリスナースレッドとワーカースレッド間の通信を仲介するデータ構造を提供します。リスナーが受け取った接続（ソケット）をワーカースレッドに引き継ぎ、効率的に処理を分散させるための基盤です。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッドセーフなキュー管理**: ソケットとタイマーイベントのプッシュ・ポップ操作の同期。</li>
+<li>**ワーカースレッドのアイドル管理**: <code>fd_queue_info_t</code> を通じたアイドルスレッドの追跡と待機制御。</li>
+<li>**メモリ管理の最適化**: ワーカースレッド間で再利用可能な <code>apr_pool_t</code> のプール管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>fd_queue_t</code>: ソケットとタイマーイベントを保持するメインのキュー構造体。</li>
+<li><code>fd_queue_info_t</code>: アイドルスレッド数や再利用プールを管理する制御構造体。</li>
+<li><code>timer_event_t</code>: タイムアウト処理のためのイベント構造体。</li>
+<li><code>ap_queue_push_socket</code>: キューに新しいソケットを追加する主要関数。</li>
+<li><code>ap_queue_pop_something</code>: キューからソケットまたはタイマーイベントを取り出す汎用関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リスナースレッド**: <code>ap_queue_push_socket</code> を呼び出し、接続済みソケットをキューに投入します。 2. **ワーカースレッド**: <code>ap_queue_pop_something</code> を呼び出し、キューが空の場合は条件変数（<code>not_empty</code>）で待機します。 3. **アイドル管理**: ワーカースレッドは <code>ap_queue_info_wait_for_idler</code> を通じて、処理可能な状態になるまで待機し、完了後に <code>ap_queue_info_set_idle</code> でプールを再利用リストへ戻します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>: APR（Apache Portable Runtime）の基本定義。</li>
+<li><code>apr_ring.h</code>: キュー内の要素管理に使用されるリング構造。</li>
+<li><code>apr_thread_mutex.h</code> / <code>apr_thread_cond.h</code>: スレッド間の同期と排他制御。</li>
+<li><code>apr_network_io.h</code>: ソケット操作の型定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/mpm_fdqueue.c</code>: 本ヘッダーで宣言された関数の実装。</li>
+<li><code>server/mpm_common.c</code>: MPM 共通のユーティリティ関数群。</li>
+<li><code>server/event.c</code> (MPM): 本キューを実際に利用する主要な MPM 実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>APR_HAS_THREADS</code> が定義されている環境でのみ有効です。</li>
+<li><code>ap_queue_pop_socket</code> は <code>ap_queue_pop_something</code> をラップしたマクロであり、ソケット取得専用の簡便なインターフェースとして提供されています。</li>
+<li>キューの操作は非常に頻繁に行われるため、ロックの競合を最小限にする設計になっています。デバッグ時には <code>one_big_mutex</code> の競合状況に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__mpm_fdqueue_h__fd_queue_info_t.html" target="wiki-view">`fd_queue_info_t`</a></li>
+<li><a href="../symbols/server__mpm_fdqueue_h__fd_queue_elem_t.html" target="wiki-view">`fd_queue_elem_t`</a></li>
+<li><a href="../symbols/server__mpm_fdqueue_h__timer_event_t.html" target="wiki-view">`timer_event_t`</a></li>
+<li><a href="../symbols/server__mpm_fdqueue_h__fd_queue_t.html" target="wiki-view">`fd_queue_t`</a></li>
+</ul></body></html>

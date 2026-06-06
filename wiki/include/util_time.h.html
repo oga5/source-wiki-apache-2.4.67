@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>include/util_time.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>include/util_time.h</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における日付・時刻処理の最適化モジュールです。主に、頻繁に発生する時刻変換処理を高速化するためのキャッシュ機構を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>apr_time.h</code>（Apache Portable Runtime）のラッパーとして機能します。標準的な時刻変換関数を直接呼び出す代わりに、直近の時刻をキャッシュすることで、ログ出力やヘッダー生成など、同一秒内に複数回発生する時刻変換のオーバーヘッドを削減します。</p>
+<h2>責務</h2>
+<ul>
+<li>**高速な時刻変換**: 直近 <code>AP_TIME_RECENT_THRESHOLD</code> 秒以内の時刻に対する <code>apr_time_exp_t</code> への変換（explode）の提供。</li>
+<li>**フォーマット変換**: <code>ctime</code> 形式や RFC822 形式への高速な文字列変換。</li>
+<li>**拡張フォーマットのサポート**: マイクロ秒やタイムゾーンオフセットを含む柔軟な時刻文字列生成の定義。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>AP_TIME_RECENT_THRESHOLD</code>: キャッシュが有効な過去の秒数（デフォルト 15）。</li>
+<li><code>ap_explode_recent_localtime</code> / <code>ap_explode_recent_gmt</code>: キャッシュを利用した時刻分解関数。</li>
+<li><code>ap_recent_ctime_ex</code>: 拡張オプション（<code>AP_CTIME_OPTION_*</code>）を指定可能なフォーマット変換関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **キャッシュ参照**: <code>ap_explode_recent_*</code> が呼び出されると、時刻 <code>t</code> を秒単位でハッシュ化し、リングバッファ（<code>exploded_cache_localtime</code> 等）を検索します。 2. **ヒット時**: キャッシュ内のデータが要求された時刻と一致すれば、計算をスキップして即座に返却します。 3. **ミス時**: <code>apr_time_exp_*</code> を実行して時刻を分解し、結果をキャッシュに格納してから返却します。 4. **データフロー**: <code>apr_time_t</code>（内部表現）から <code>apr_time_exp_t</code>（人間が読める構造体）への変換が主軸となります。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>: APR の基本定義。</li>
+<li><code>apr_time.h</code>: 時刻処理の基本ライブラリ。</li>
+<li><code>httpd.h</code>: Apache のコア定義（<code>AP_DECLARE</code> 等）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/util_time.c</code>: 本ヘッダーで宣言された関数の実装およびキャッシュの実体（リングバッファ）が含まれます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**スレッド安全性**: 実装（<code>util_time.c</code>）には意図的なレースコンディションが含まれています。これは、キャッシュ更新中に別のスレッドが古い値を読み取っても、システム全体の整合性に影響を与えないという設計判断に基づいています。</li>
+<li>**使用上の注意**: <code>ap_explode_recent_*</code> 系関数は、引数 <code>t</code> が <code>AP_TIME_RECENT_THRESHOLD</code> 秒以内であることを前提としています。これより古い時刻を渡すとキャッシュミスが発生し、パフォーマンス上の利点が失われます。</li>
+<li>**拡張性**: 複雑なフォーマットが必要な場合は、<code>ap_recent_ctime_ex</code> を使用してください。<code>AP_CTIME_OPTION_USEC</code> や <code>AP_CTIME_OPTION_GMTOFF</code> を組み合わせることで、ログの精度向上に役立ちます。</li>
+</ul></body></html>

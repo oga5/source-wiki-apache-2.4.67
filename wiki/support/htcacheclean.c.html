@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>support/htcacheclean.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>support/htcacheclean.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のディスクキャッシュ（<code>mod_cache_disk</code>）を管理・整理するためのスタンドアロンユーティリティです。キャッシュサイズの制限（バイト数および inode 数）に基づき、古いエントリや期限切れのエントリを削除し、ディスク領域を解放します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールの一部として、サーバー実行中または停止中にキャッシュディレクトリをクリーンアップする運用ツールを提供します。<code>mod_cache_disk</code> が生成するファイル構造（ヘッダーファイルとデータファイルのペア）を理解し、整合性を保ちながら削除を行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュの監視と削除**: 指定された制限値を超えたキャッシュエントリの特定と削除。</li>
+<li>**ディレクトリ管理**: キャッシュディレクトリの再帰的な走査と、不要になった空ディレクトリの削除。</li>
+<li>**デーモンモード**: 指定間隔での定期的なクリーンアップ実行。</li>
+<li>**URL 個別削除**: コマンドライン引数で指定された特定の URL キャッシュの削除。</li>
+<li>**統計情報の出力**: クリーンアップ結果のサマリー表示。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>DIRENTRY</code>: ディレクトリ走査中に一時的に保持されるファイル情報（ヘッダー/データファイルのペア管理用）。</li>
+<li><code>ENTRY</code>: 最終的に削除対象を決定するために使用されるキャッシュエントリのリスト構造。</li>
+<li><code>stats</code>: クリーンアップ処理中の統計情報（サイズ、inode 数、削除数など）を保持。</li>
+</ul>
+<h3>制御フラグ・状態</h3>
+<ul>
+<li><code>interrupted</code>: シグナル（SIGINT/SIGTERM）による中断フラグ。</li>
+<li><code>realclean</code>: Apache が停止していると仮定して徹底的にクリーンアップを行うフラグ。</li>
+<li><code>dryrun</code>: 削除を行わず、削除対象のシミュレーションのみを行うフラグ。</li>
+</ul>
+<h3>主要関数</h3>
+<ul>
+<li><code>process_dir()</code>: キャッシュディレクトリを再帰的に走査し、<code>ENTRY</code> リストを構築する。</li>
+<li><code>purge()</code>: <code>ENTRY</code> リストに基づき、制限値に収まるよう古いエントリから順に削除を実行する。</li>
+<li><code>delete_entry()</code>: ヘッダーファイル、データファイル、および関連するディレクトリを削除する。</li>
+<li><code>list_urls()</code>: キャッシュ内の URL 一覧を表示する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 引数を解析し、動作モード（デーモン、単発、URL 削除）を決定。 2. **走査**: <code>process_dir()</code> がキャッシュディレクトリを再帰的に探索し、<code>apr_hash_t</code> を用いてヘッダーとデータのペアを特定。 3. **リスト構築**: 有効なキャッシュエントリを <code>ENTRY</code> リング構造に格納。 4. **削除判定**: <code>purge()</code> が合計サイズと inode 数を計算し、制限を超過している場合に「期限切れ」「古い順」の優先度で <code>delete_entry()</code> を呼び出す。 5. **クリーンアップ**: <code>delete_entry()</code> はファイル削除後、必要に応じて <code>delete_parent()</code> を呼び出し、空になったディレクトリを再帰的に削除する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: ファイル操作 (<code>apr_file_io.h</code>)、メモリ管理 (<code>apr_pools.h</code>)、ハッシュ (<code>apr_hash.h</code>)、リング (<code>apr_ring.h</code>)、プロセス制御 (<code>apr_thread_proc.h</code>) 等の基盤。</li>
+<li>**Cache Common**: <code>../modules/cache/cache_common.h</code> および <code>cache_disk_common.h</code> を参照し、キャッシュファイルのフォーマット定義を共有。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cache/mod_cache_disk.c</code>: このツールが管理対象とするキャッシュファイルを生成するモジュール。</li>
+<li><code>support/rotatelogs.c</code>: 同じく <code>support</code> ディレクトリにあるログ管理ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を多用しています。特に <code>process_dir</code> や <code>delete_file</code> 内では、メモリリークを防ぐために一時的なサブプールを作成・破棄するパターンが徹底されています。</li>
+<li>**競合回避**: Apache との同時実行を考慮し、<code>apr_stat</code> のリトライ処理や、ファイルが存在しない場合のハンドリングが随所に含まれています。</li>
+<li>**制約**: <code>NICE_DELAY</code> や <code>DELETE_NICE</code> 定数により、システム負荷を抑えるためのスロットリング機能が実装されています。</li>
+<li>**省略箇所**: 本ファイルは非常に長大ですが、主に「ファイルシステム操作の抽象化」と「キャッシュフォーマットのパース」に注力しています。エラーハンドリングの詳細は、APR のステータスコードチェックに依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__htcacheclean_c__DIRENTRY.html" target="wiki-view">`DIRENTRY`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__ENTRY.html" target="wiki-view">`ENTRY`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__stats.html" target="wiki-view">`stats`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__fake_file_remove.html" target="wiki-view">`fake_file_remove`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__round_up.html" target="wiki-view">`round_up`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__delete_parent.html" target="wiki-view">`delete_parent`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__delete_file.html" target="wiki-view">`delete_file`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__delete_entry.html" target="wiki-view">`delete_entry`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__list_urls.html" target="wiki-view">`list_urls`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__process_dir.html" target="wiki-view">`process_dir`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__remove_directory.html" target="wiki-view">`remove_directory`</a></li>
+<li><a href="../symbols/support__htcacheclean_c__find_directory.html" target="wiki-view">`find_directory`</a></li>
+</ul></body></html>

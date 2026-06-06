@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/balancers/mod_lbmethod_bytraffic.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/proxy/balancers/mod_lbmethod_bytraffic.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_proxy_balancer</code> における負荷分散アルゴリズムの一つ、「トラフィック量ベース（bytraffic）」を実装するモジュールです。各ワーカーが処理したバイト数（送受信量）を重み（<code>lbfactor</code>）で正規化し、負荷が最も低いワーカーを選択します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のロードバランサー拡張機能として動作します。<code>PROXY_LBMETHOD</code> プロバイダーとして登録され、バランサーがリクエストを振り分ける際の「最適なワーカーの選定」ロジックを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷計算**: 各ワーカーの累積転送量と読み込み量を <code>lbfactor</code> で除算し、相対的な負荷を算出する。</li>
+<li>**ワーカー選定**: 算出された負荷が最小のワーカーを特定する。</li>
+<li>**統計リセット**: バランサーの統計情報（転送量・読み込み量）をゼロクリアする。</li>
+<li>**プロバイダー登録**: <code>bytraffic</code> という名前でバランサーメソッドをシステムに公開する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>bytraffic</code>: このモジュールのコアとなる <code>proxy_balancer_method</code> 構造体。アルゴリズムの各関数へのポインタを保持。</li>
+<li><code>find_best_bytraffic</code>: バランサーから呼び出されるメインの選定関数。</li>
+<li><code>is_best_bytraffic</code>: <code>ap_proxy_balancer_get_best_worker</code> に渡されるコールバック。個々のワーカーの負荷を比較する。</li>
+<li><code>ap_proxy_balancer_get_best_worker_fn</code>: <code>mod_proxy</code> から提供される、ワーカー反復処理用のオプション関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hook</code> が <code>bytraffic</code> プロバイダーを登録し、<code>post_config</code> で <code>mod_proxy</code> のオプション関数を取得します。 2. **選定フロー**:</p>
+<ul>
+<li>バランサーがリクエストを受け取ると <code>find_best_bytraffic</code> を呼び出します。</li>
+<li><code>find_best_bytraffic</code> は <code>ap_proxy_balancer_get_best_worker_fn</code> を経由して、全ワーカーに対して <code>is_best_bytraffic</code> を実行します。</li>
+<li><code>is_best_bytraffic</code> は <code>(transferred + read) / lbfactor</code> を計算し、最小値を持つワーカーを特定します。</li>
+<p>3. **リセット**: 管理者が統計をリセットする際、<code>reset</code> 関数が各ワーカーのカウンタを 0 に初期化します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>: プロキシ機能およびバランサー構造体の定義。</li>
+<li><code>scoreboard.h</code>: ワーカーのステータス管理。</li>
+<li><code>ap_mpm.h</code>: MPM（マルチプロセッシングモジュール）の状態確認。</li>
+<li><code>ap_hooks.h</code>: Apache のフックシステム。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_proxy_balancer.c</code>: このモジュールが提供するメソッドを利用するメインのバランサー実装。</li>
+<li><code>mod_lbmethod_byrequests.c</code>: リクエスト数ベースで負荷分散を行う類似モジュール。比較対象として有用です。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**計算式**: <code>(transferred + read) / lbfactor</code> という単純な式に基づいています。リクエスト数ではなく「バイト数」を重視するため、リクエストごとのデータサイズが大きく異なる環境に適しています。</li>
+<li>**スレッドセーフ**: <code>reset</code> 関数は呼び出し元でミューテックス保護されている前提で実装されています。</li>
+<li>**初期化の注意**: <code>lbmethod_bytraffic_post_config</code> は起動時に2回呼ばれるため、<code>AP_SQ_MS_CREATE_PRE_CONFIG</code> チェックによるガードが行われています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bytraffic_c__is_best_bytraffic.html" target="wiki-view">`is_best_bytraffic`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bytraffic_c__find_best_bytraffic.html" target="wiki-view">`find_best_bytraffic`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bytraffic_c__reset.html" target="wiki-view">`reset`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bytraffic_c__age.html" target="wiki-view">`age`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bytraffic_c__lbmethod_bytraffic_post_config.html" target="wiki-view">`lbmethod_bytraffic_post_config`</a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_bytraffic_c__register_hook.html" target="wiki-view">`register_hook`</a></li>
+</ul></body></html>

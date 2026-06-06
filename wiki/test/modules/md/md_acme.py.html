@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/modules/md/md_acme.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>test/modules/md/md_acme.py</h1>
+<h2>概要</h2>
+<p>ACME プロトコルを用いたテスト環境において、認証局（CA）サーバーである Pebble や Boulder を制御するための抽象化レイヤーを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/md</code> サブシステムの一部として、テスト実行時に必要な ACME サーバーのライフサイクル管理（起動・停止・CA 証明書のインストール）を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**サーバーの抽象化**: <code>ACMEServer</code> 基底クラスを通じ、異なる ACME 実装（Pebble/Boulder）を統一的に扱うインターフェースを定義。</li>
+<li>**Pebble のライフサイクル管理**: <code>MDPebbleRunner</code> を介したプロセスの起動、監視、および <code>pebble-challtestsrv</code> の制御。</li>
+<li>**CA バンドルの同期**: テスト環境と ACME サーバー間での CA 証明書の配布とインストール。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ACMEServer</code>: サーバー制御の契約を定義する抽象基底クラス。</li>
+<li><code>MDPebbleRunner</code>: Pebble サーバーをローカルプロセスとして管理する実装クラス。</li>
+<li><code>MDBoulderRunner</code>: Docker コンテナ上の Boulder サーバーを管理する実装クラス。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>MDTestEnv</code> を受け取り、サーバー設定を保持します。 2. **起動 (<code>start</code>)**:</p>
+<ul>
+<li><code>MDPebbleRunner</code> は <code>pebble</code> および <code>pebble-challtestsrv</code> を <code>subprocess</code> で起動します。</li>
+<li>起動後、<code>curl</code> を用いてサーバーの応答をポーリングし、準備完了を待機します。</li>
+<li>IPv6 のデフォルト設定を無効化するなどの環境調整を行います。</li>
+<p>3. **停止 (<code>stop</code>)**: 起動したプロセスに対して <code>terminate()</code> を呼び出し、リソースを解放します。 4. **CA インストール**: <code>install_ca_bundle</code> により、サーバーから CA 証明書を取得し、指定されたパスへ書き出します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>MDTestEnv</code>: テスト環境のパス管理やコマンド実行（<code>run</code>, <code>curl_get</code>）の基盤。</li>
+<li>標準ライブラリ: <code>subprocess</code> (プロセス管理), <code>threading</code> (監視), <code>shutil</code> (ファイル操作)。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/modules/md/md_env.py</code>: テスト環境の構成とパス管理の定義。</li>
+<li><code>test/modules/md/test_*.py</code>: 本モジュールを利用して ACME 関連のテストを実行する各テストケース。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**Pebble の監視**: <code>monitor_proc</code> はスレッド内でプロセス終了を待機する単純なラッパーです。</li>
+<li>**Boulder の扱い**: 現在 <code>MDBoulderRunner</code> はスタブに近い実装であり、Docker 環境への依存が前提となっています。</li>
+<li>**環境依存**: Pebble 起動時の IPv6 無効化処理は、Docker コンテナ内でのネットワークトラブルを回避するための重要なワークアラウンドです。</li>
+</ul></body></html>

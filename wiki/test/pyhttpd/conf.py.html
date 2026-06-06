@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>test/pyhttpd/conf.py.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>test/pyhttpd/conf.py</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server (httpd) のテスト用設定ファイルをプログラムから動的に生成するためのユーティリティクラスを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/pyhttpd</code> モジュールにおいて、テスト環境（<code>env.py</code>）と連携し、テスト実行時に必要な <code>httpd.conf</code> を構築する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定の抽象化**: <code>VirtualHost</code> や <code>Proxy</code> などの複雑な設定ディレクティブをメソッド呼び出しで生成。</li>
+<li>**TLS/SSL 変換**: <code>mod_tls</code> (rustls) 向けの設定を、<code>mod_ssl</code> や <code>mod_gnutls</code> 向けに自動変換する互換レイヤーを提供。</li>
+<li>**設定のインストール**: 生成した設定行を <code>HttpdTestEnv</code> を通じてファイルシステムへ書き出す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>HttpdConf</code>: 設定生成のメインクラス。設定行の保持、インデント管理、変換ロジックをカプセル化。</li>
+<li><code>add()</code>: 設定行を追加する汎用メソッド。<code>mod_tls</code> 以外の環境では自動的にディレクティブを変換。</li>
+<li><code>start_vhost()</code> / <code>end_vhost()</code>: <code>VirtualHost</code> ブロックの開始と終了を管理。</li>
+<li><code>replaceinstr()</code>: <code>mod_tls</code> 固有のディレクティブを <code>mod_ssl</code> 等の標準的な形式へ変換する内部ロジック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>HttpdTestEnv</code> を受け取り、<code>extras</code> で指定された追加設定を読み込む。 2. **構築**: <code>add()</code> や <code>add_vhost()</code> を呼び出し、内部リスト <code>_lines</code> に設定行を蓄積。この際、<code>mod_tls</code> が無効な場合は <code>replaceinstr()</code> が呼び出され、ディレクティブが書き換えられる。 3. **インストール**: <code>install()</code> を呼び出すと、蓄積された <code>_lines</code> が <code>env.install_test_conf()</code> に渡され、実際のテスト用設定ファイルとして出力される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>typing</code>: 型ヒント用。</li>
+<li><code>pyhttpd.env.HttpdTestEnv</code>: テスト環境情報およびモジュール構成の判定に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>test/pyhttpd/env.py</code>: <code>HttpdConf</code> が依存する環境設定の定義。</li>
+<li><code>test/modules/tls/</code>: <code>mod_tls</code> 関連のテストケース。<code>HttpdConf</code> の変換ロジックがどのように利用されるかの実例。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**自動変換の注意**: <code>add()</code> メソッドは <code>HttpdTestEnv.has_shared_module(&quot;tls&quot;)</code> をチェックし、TLS モジュールがない場合にのみ <code>replaceinstr()</code> を実行します。この挙動により、テスト環境の構成に応じて自動的に設定が最適化されます。</li>
+<li>**インデント**: <code>_indents</code> プロパティにより、<code>VirtualHost</code> 内部のディレクティブに対して自動的にインデントが付与されます。</li>
+<li>**拡張性**: <code>merge_extras</code> 静的メソッドを使用することで、複数の設定辞書を安全に結合可能です。</li>
+</ul></body></html>

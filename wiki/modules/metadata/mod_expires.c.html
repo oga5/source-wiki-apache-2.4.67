@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/metadata/mod_expires.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/metadata/mod_expires.c</h1>
+<h2>概要</h2>
+<p><code>mod_expires</code> は、HTTP レスポンスの <code>Expires</code> ヘッダーおよび <code>Cache-Control: max-age</code> を生成・制御するための Apache モジュールです。ファイル更新時刻（<code>M</code>）またはアクセス時刻（<code>A</code>）を基準に、設定されたオフセットを加算して有効期限を算出します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムの一部として、リクエスト処理の最終段階（出力フィルタ）で動作します。他のメタデータ関連モジュールと同様に、ディレクトリ単位での設定（<code>.htaccess</code> 対応）を可能にし、キャッシュ制御のポリシーを強制します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>ExpiresActive</code>, <code>ExpiresDefault</code>, <code>ExpiresByType</code> ディレクティブの解析とディレクトリごとの設定保持。</li>
+<li>**有効期限算出**: 柔軟な構文（<code>access plus 1 month</code> 等）を内部形式（<code>A</code> または <code>M</code> + 秒数）へ変換。</li>
+<li>**ヘッダー注入**: 出力フィルタとして動作し、レスポンスヘッダーに <code>Expires</code> および <code>Cache-Control</code> を付与。</li>
+<li>**フィルタ制御**: 条件に応じてフィルタの挿入を判断し、不要な場合はスキップする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>expires_dir_config</code>: ディレクトリごとの設定を保持。<code>active</code> フラグ、<code>expiresdefault</code> 文字列、MIME タイプごとのマッピングテーブルを管理。</li>
+</ul>
+<h3>ディレクティブハンドラ</h3>
+<ul>
+<li><code>set_expiresactive</code>: <code>ExpiresActive</code> の有効/無効を切り替え。</li>
+<li><code>set_expiresbytype</code>: MIME タイプごとの有効期限を設定。ワイルドカード（<code>image/*</code> 等）の有無を追跡。</li>
+<li><code>set_expiresdefault</code>: デフォルトの有効期限を設定。</li>
+</ul>
+<h3>フィルタ処理</h3>
+<ul>
+<li><code>expires_filter</code>: 出力フィルタ本体。既存の <code>Expires</code> ヘッダーがない場合にのみ、設定に基づいてヘッダーを生成・追加。</li>
+<li><code>expires_insert_filter</code>: リクエストのコンテキストを評価し、フィルタを適用すべきか判定。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>check_code</code>: ユーザー定義の有効期限文字列を解析し、内部形式（<code>[AM]&lt;seconds&gt;</code>）へ変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **設定フェーズ**: <code>register_hooks</code> でフィルタを登録。<code>create_dir_expires_config</code> で初期化された構造体に、ディレクティブ経由で値が格納される。 2.  **挿入フェーズ**: <code>expires_insert_filter</code> がリクエストごとに呼ばれ、<code>ExpiresActive</code> が <code>on</code> かつ設定が存在する場合に <code>expires_filter</code> を出力チェーンに追加。 3.  **実行フェーズ**: <code>expires_filter</code> が起動。</p>
+<ul>
+<li><code>r-&gt;err_headers_out</code> または <code>r-&gt;headers_out</code> を確認し、既に <code>Expires</code> があれば何もしない。</li>
+<li><code>r-&gt;content_type</code> に基づき、<code>expiresbytype</code> テーブルを検索。一致しなければ <code>expiresdefault</code> を使用。</li>
+<li><code>set_expiration_fields</code> を呼び出し、<code>apr_rfc822_date</code> でフォーマットした文字列をヘッダーにセット。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作および数値変換。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_protocol.h</code>: Apache のリクエスト処理、設定管理、プロトコル制御用 API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/metadata/mod_headers.c</code>: ヘッダー操作の共通基盤として概念的に近い。</li>
+<li><code>modules/http/http_protocol.c</code>: <code>Expires</code> ヘッダーの標準的な扱いを理解する上で重要。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定値は <code>apr_pool_t</code> を介して管理され、リクエスト終了時に自動解放されます。</li>
+<li>**制約**: <code>Expires</code> ヘッダーが既に存在する場合、本モジュールは上書きしません。</li>
+<li>**設計の浅い部分**: 本ソースは古いコードベース（1996年頃）をベースにしており、<code>Cache-Control</code> の詳細な制御や、より複雑なキャッシュポリシーについては拡張の余地があります。</li>
+<li>**注意点**: <code>check_code</code> 関数は、<code>atoi()</code> を使用しているため、非常に大きな数値や不正なフォーマットに対する堅牢性は限定的です。また、<code>ExpiresActive</code> の <code>ACTIVE_DONTCARE</code> は、親ディレクトリの設定を継承するための内部状態です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__expires_dir_config.html" target="wiki-view">`expires_dir_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__create_dir_expires_config.html" target="wiki-view">`create_dir_expires_config`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__set_expiresactive.html" target="wiki-view">`set_expiresactive`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__check_code.html" target="wiki-view">`check_code`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__set_expiresbytype.html" target="wiki-view">`set_expiresbytype`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__set_expiresdefault.html" target="wiki-view">`set_expiresdefault`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__merge_expires_dir_configs.html" target="wiki-view">`merge_expires_dir_configs`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__set_expiration_fields.html" target="wiki-view">`set_expiration_fields`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__expires_filter.html" target="wiki-view">`expires_filter`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__expires_insert_filter.html" target="wiki-view">`expires_insert_filter`</a></li>
+<li><a href="../../symbols/modules__metadata__mod_expires_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

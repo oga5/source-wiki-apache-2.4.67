@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_bucket_eos.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_bucket_eos.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 ストリームの終了（EOS: End of Stream）を表現するためのカスタム APR バケット型を定義するファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> におけるストリーム処理において、データストリームの終端を明示的に通知するためのメタデータバケットを提供します。これは、HTTP/2 のストリーム状態遷移を Apache HTTP Server のバケットチェーン上で管理するために不可欠なコンポーネントです。</p>
+<h2>責務</h2>
+<ul>
+<li>**EOS バケットの生成と管理**: <code>h2_stream</code> オブジェクトと紐付いたカスタムバケットの作成。</li>
+<li>**ライフサイクル同期**: ストリームの終了イベント（<code>H2_SEV_EOS_SENT</code>）を、バケットの破棄タイミングに合わせてディスパッチする。</li>
+<li>**リソース保護**: ストリームのプールとバケットの生存期間を調整し、二重解放や不正なアクセスを防ぐ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_bucket_type_eos</code>: このバケットの挙動を定義する <code>apr_bucket_type_t</code> 構造体。</li>
+<li><code>h2_bucket_eos_create()</code>: 新しい EOS バケットを生成し、ストリームのクリーンアップ処理を登録する公開関数。</li>
+<li><code>bucket_destroy()</code>: バケット破棄時にストリームへ EOS 送信イベントを通知する内部関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **生成**: <code>h2_bucket_eos_create</code> が呼ばれると、バケットが割り当てられ、ストリームのプールに <code>bucket_cleanup</code> が登録されます。 2. **伝搬**: バケットチェーンを EOS バケットが通過します。<code>bucket_read</code> はメタデータバケットであるため、データは返さず成功を返します。 3. **破棄**: バケットが解放される際、<code>bucket_destroy</code> が実行されます。</p>
+<ul>
+<li>ストリームがまだ存在する場合、<code>h2_stream_dispatch</code> を通じて <code>H2_SEV_EOS_SENT</code> イベントが発行されます。</li>
+<li><code>apr_pool_cleanup_kill</code> により、プール側のクリーンアップ登録が解除され、二重処理を防止します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_bucket</code> (APR): バケットの基本構造と型定義。</li>
+<li><code>h2_stream.h</code>: ストリームの状態管理とイベントディスパッチ。</li>
+<li><code>h2_private.h</code>: モジュール内部の共通定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_bucket_eos.h</code>: 公開インターフェース定義。</li>
+<li><code>h2_stream.c</code>: <code>h2_stream_dispatch</code> の実装元。</li>
+<li><code>h2_bucket_beam.c</code>: ストリーム間でのバケット転送を行う関連コンポーネント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>このバケットは「メタデータ」として扱われます。<code>bucket_read</code> が呼び出されても、実際のデータは読み取られません。</li>
+<li>ストリームの生存期間とバケットの生存期間が異なる可能性があるため、<code>bucket_cleanup</code> と <code>bucket_destroy</code> の両方でストリームのポインタを安全に管理する設計になっています。</li>
+<li><code>H2_SEV_EOS_SENT</code> イベントは、ストリームの終了処理をトリガーする重要なシグナルであることに注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos.html" target="wiki-view">`h2_bucket_eos`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__bucket_cleanup.html" target="wiki-view">`bucket_cleanup`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__bucket_read.html" target="wiki-view">`bucket_read`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos_make.html" target="wiki-view">`h2_bucket_eos_make`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos_create.html" target="wiki-view">`h2_bucket_eos_create`</a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__bucket_destroy.html" target="wiki-view">`bucket_destroy`</a></li>
+</ul></body></html>

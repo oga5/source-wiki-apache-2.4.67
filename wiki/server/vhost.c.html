@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/vhost.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/vhost.c</h1>
+<h2>概要</h2>
+<p>HTTP サーバーにおける仮想ホスト（Virtual Host）の構成管理および実行時のルーティングを担当するモジュールです。IP ベースおよび名前ベース（NameVirtualHost）の仮想ホストを効率的に解決するためのハッシュテーブル管理と、リクエストヘッダーに基づいたサーバーの動的切り替え機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール群の一部として、<code>http_vhost.h</code> で定義されたインターフェースを実装します。接続確立時（IP ベース）とリクエストヘッダー受信時（名前ベース）の二段階で <code>request_rec</code> や <code>conn_rec</code> のサーバー情報を更新し、適切な <code>server_rec</code> を割り当てる役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**構成管理**: 設定ファイル解析時に仮想ホストの IP/ポート情報をハッシュテーブル（<code>iphash_table</code>）に構築する。</li>
+<li>**実行時ルーティング**: 接続のローカルアドレスに基づき、候補となる仮想ホストリストを特定する。</li>
+<li>**リクエスト解決**: <code>Host</code> ヘッダーやリクエスト URI を検証・正規化し、適切な仮想ホストへリクエストを紐付ける。</li>
+<li>**統計・デバッグ**: 仮想ホスト構成のダンプおよびハッシュテーブルの統計情報の出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>ipaddr_chain</code>: IP アドレスとポートのペアをキーとするハッシュテーブルのノード。名前ベースの仮想ホストリスト（<code>names</code>）を保持する。</li>
+<li><code>name_chain</code>: 特定の IP/ポートに紐付く仮想ホストのリスト。</li>
+</ul>
+<h3>設定・初期化</h3>
+<ul>
+<li><code>ap_init_vhost_config</code>: 仮想ホスト設定の初期化。</li>
+<li><code>ap_parse_vhost_addrs</code>: <code>&lt;VirtualHost&gt;</code> ディレクティブの引数を解析し、アドレスリストを構築する。</li>
+<li><code>ap_fini_vhost_config</code>: 設定完了時にハッシュテーブルを構築し、デフォルトサーバーを確定させる。</li>
+</ul>
+<h3>実行時マッチング</h3>
+<ul>
+<li><code>ap_update_vhost_given_ip</code>: 接続確立時に IP/ポートから <code>conn_rec</code> に候補リストをセットする。</li>
+<li><code>ap_update_vhost_from_headers</code>: リクエストヘッダー受信後に <code>Host</code> ヘッダー等を解析し、最終的な <code>server_rec</code> を決定する。</li>
+<li><code>ap_matches_request_vhost</code>: 特定のホスト名とポートが仮想ホストに適合するかを判定する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_fini_vhost_config</code> が設定終了時に呼ばれ、<code>iphash_table</code> を構築します。IP アドレスは <code>hash_addr</code> でハッシュ化され、衝突時はリスト構造で管理されます。 2. **接続時**: <code>ap_update_vhost_given_ip</code> が接続の <code>local_addr</code> を使い、ハッシュテーブルから <code>ipaddr_chain</code> を検索。見つかった <code>names</code>（<code>name_chain</code>）を <code>conn-&gt;vhost_lookup_data</code> に格納します。 3. **リクエスト時**: <code>ap_update_vhost_from_headers</code> が呼ばれます。</p>
+<ul>
+<li><code>fix_hostname</code> で <code>Host</code> ヘッダーを正規化。</li>
+<li><code>update_server_from_aliases</code> が <code>vhost_lookup_data</code> を走査し、<code>ServerName</code> や <code>ServerAlias</code> と照合して <code>r-&gt;server</code> を更新します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_strings.h</code>: APR ユーティリティ。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_core.h</code>: Apache HTTP Server のコア構造体と設定インターフェース。</li>
+<li><code>arpa/inet.h</code>: IP アドレス操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/core.c</code>: <code>core_server_config</code> の定義と <code>http_conformance</code> の管理。</li>
+<li><code>include/http_vhost.h</code>: 本モジュールの公開 API 定義。</li>
+<li><code>server/listen.c</code>: リスニングソケットの管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのデータ構造は <code>apr_pool_t</code> を介して割り当てられます。設定時のメモリは <code>process_pool</code> に依存し、実行時の正規化されたホスト名は <code>request_pool</code> に依存します。</li>
+<li>**スレッド安全性**: <code>iphash_table</code> は設定完了後に構築され、実行時は読み取り専用となるため、マルチスレッド環境でも安全です。</li>
+<li>**制限事項**: <code>NameVirtualHost</code> ディレクティブは現在非推奨であり、設定時に警告が出力されます。</li>
+<li>**省略箇所**: <code>IPHASH_STATISTICS</code> が有効な場合の統計ダンプ機能は、デバッグ目的の補助的な実装であるため、詳細なアルゴリズム解説は省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__vhost_c__name_chain.html" target="wiki-view">`name_chain`</a></li>
+<li><a href="../symbols/server__vhost_c__ipaddr_chain.html" target="wiki-view">`ipaddr_chain`</a></li>
+<li><a href="../symbols/server__vhost_c__ap_init_vhost_config.html" target="wiki-view">`ap_init_vhost_config`</a></li>
+<li><a href="../symbols/server__vhost_c__get_addresses.html" target="wiki-view">`get_addresses`</a></li>
+<li><a href="../symbols/server__vhost_c__ap_parse_vhost_addrs.html" target="wiki-view">`ap_parse_vhost_addrs`</a></li>
+<li><a href="../symbols/server__vhost_c__ap_set_name_virtual_host.html" target="wiki-view">`ap_set_name_virtual_host`</a></li>
+<li><a href="../symbols/server__vhost_c__iphash_compare.html" target="wiki-view">`iphash_compare`</a></li>
+<li><a href="../symbols/server__vhost_c__dump_iphash_statistics.html" target="wiki-view">`dump_iphash_statistics`</a></li>
+<li><a href="../symbols/server__vhost_c__hash_inaddr.html" target="wiki-view">`hash_inaddr`</a></li>
+<li><a href="../symbols/server__vhost_c__ap_update_vhost_from_headers.html" target="wiki-view">`ap_update_vhost_from_headers`</a></li>
+<li><a href="../symbols/server__vhost_c__ap_update_vhost_from_headers_ex.html" target="wiki-view">`ap_update_vhost_from_headers_ex`</a></li>
+<li><a href="../symbols/server__vhost_c__ap_update_vhost_given_ip.html" target="wiki-view">`ap_update_vhost_given_ip`</a></li>
+</ul></body></html>

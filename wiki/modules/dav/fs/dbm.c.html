@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/fs/dbm.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/fs/dbm.c</h1>
+<h2>概要</h2>
+<p><code>dbm.c</code> は、<code>mod_dav_fs</code> におけるファイルシステムリポジトリのプロパティ（Dead Properties）を永続化するための DBM データベース層です。各ファイルおよびディレクトリに対応する <code>.DAV</code> サブディレクトリ内に SDBM 形式のデータベースを作成し、メタデータとプロパティ値を管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> のプロパティ管理インターフェース（<code>dav_hooks_db</code>）を実装するバックエンドです。<code>repos.c</code> がファイルシステム操作を担うのに対し、本ファイルはそれらのファイルに付随する WebDAV プロパティの読み書きを抽象化します。</p>
+<h2>責務</h2>
+<ul>
+<li>**DBM 抽象化**: APR DBM API をラップし、エラーハンドリングとリソース管理を提供。</li>
+<li>**プロパティ永続化**: XML 形式のプロパティを DBM キー/値ペアに変換して保存。</li>
+<li>**名前空間管理**: XML 名前空間 URI を内部インデックス（<code>ns_table</code>）にマッピングし、DBM キーのサイズを最適化。</li>
+<li>**メタデータ管理**: データベースのバージョン管理とスキーマ整合性の維持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データベース管理</h3>
+<ul>
+<li><code>struct dav_db</code>: データベース接続状態、名前空間テーブル、反復子を保持する主要構造体。</li>
+<li><code>dav_dbm_open_direct</code>: DBM ファイルを直接開く低レベル関数。</li>
+<li><code>dav_propdb_open</code>: プロパティデータベースを開き、メタデータを検証・初期化する。</li>
+</ul>
+<h3>プロパティ操作</h3>
+<ul>
+<li><code>dav_propdb_store</code>: XML 要素を DBM 値に変換して保存。</li>
+<li><code>dav_propdb_output_value</code>: DBM から値を読み込み、XML テキストとして出力。</li>
+<li><code>dav_propdb_remove</code>: 特定のプロパティを削除。</li>
+</ul>
+<h3>名前空間・キー生成</h3>
+<ul>
+<li><code>dav_build_key</code>: 名前空間 ID とプロパティ名から DBM キーを生成。</li>
+<li><code>dav_propdb_map_namespaces</code>: URI を内部 ID に変換し、必要に応じて <code>ns_table</code> を更新。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>dav_propdb_open</code> が呼ばれると、<code>METADATA</code> キーを読み込み、バージョンチェックと名前空間テーブルの構築を行う。 2. **キー生成**: <code>dav_build_key</code> は <code>uri_index</code> ハッシュを使用して URI を数値 ID に変換し、<code>#:name</code> 形式の文字列を生成する。 3. **保存**: <code>dav_propdb_store</code> は <code>apr_xml_to_text</code> を使用して XML をシリアライズし、<code>dav_dbm_store</code> を経由して DBM に書き込む。 4. **反復**: <code>dav_propdb_first_name</code> / <code>next_name</code> は DBM のキーを順次走査し、<code>METADATA</code> キーをスキップしつつ <code>dav_set_name</code> で名前空間を復元する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_dbm.h</code>: DBM 操作の基盤。</li>
+<li><code>mod_dav.h</code>: DAV プロトコル定義とフック構造体。</li>
+<li><code>repos.h</code>: ファイルシステムパスの解決補助。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/dav/fs/repos.c</code>: このモジュールが管理するデータベースファイルの配置場所を決定するロジックが含まれる。</li>
+<li><code>modules/dav/main/util.c</code>: XML 処理や名前空間管理の共通ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>dav_db</code> 構造体は <code>apr_pool_t</code> に紐付いており、データベースのクローズ時に適切に解放される必要があります。</li>
+<li>**並行性**: DBM の性質上、書き込み時のロック制御は APR DBM に依存します。コメントには「読み取り中に書き込みが重なる場合の再試行ロジック」の欠如が示唆されています。</li>
+<li>**制約**: <code>dav_build_key</code> は静的バッファを使用するため、呼び出し直後に結果をコピーする必要があります。</li>
+<li>**未実装/浅い部分**: DBM のエラーハンドリングや、データベースのバージョンアップグレードパスは限定的です。特に <code>METADATA</code> のマイナーバージョン更新は現在の実装では不完全な箇所があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_db.html" target="wiki-view">`dav_db`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_dbm_get_statefiles.html" target="wiki-view">`dav_dbm_get_statefiles`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_fs_dbm_error.html" target="wiki-view">`dav_fs_dbm_error`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_fs_ensure_state_dir.html" target="wiki-view">`dav_fs_ensure_state_dir`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_dbm_open_direct.html" target="wiki-view">`dav_dbm_open_direct`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_dbm_open.html" target="wiki-view">`dav_dbm_open`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_dbm_close.html" target="wiki-view">`dav_dbm_close`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_dbm_fetch.html" target="wiki-view">`dav_dbm_fetch`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_propdb_metadata.html" target="wiki-view">`dav_propdb_metadata`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_deadprop_rollback.html" target="wiki-view">`dav_deadprop_rollback`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_namespace_map.html" target="wiki-view">`dav_namespace_map`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__dbm_c__dav_get_ns_table_uri.html" target="wiki-view">`dav_get_ns_table_uri`</a></li>
+</ul></body></html>

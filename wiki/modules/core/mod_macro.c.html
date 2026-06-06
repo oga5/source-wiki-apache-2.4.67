@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/core/mod_macro.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/core/mod_macro.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の設定ファイル内でマクロ定義と展開を可能にするモジュールです。設定の再利用性を高め、冗長な設定記述を削減します。設定読み込み時（<code>EXEC_ON_READ</code>）に即時処理されるため、サーバー起動時や設定再読み込み時にマクロが展開されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/core</code> に属し、Apache の設定パーサーを拡張するユーティリティとして機能します。通常のモジュールとは異なり、リクエスト処理のフックは持たず、設定ファイルの解析フェーズに特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**マクロ定義の管理**: <code>&lt;Macro&gt;</code> セクションを解析し、名前、引数リスト、本体を <code>ap_macro_t</code> 構造体としてグローバルなハッシュテーブルに保持する。</li>
+<li>**マクロ展開**: <code>Use</code> ディレクティブを検出し、引数を置換した上で、その内容を一時的な設定ストリームとしてパーサーに注入する。</li>
+<li>**構文検証**: 引数の重複チェック、未定義マクロの検出、再帰呼び出しの防止、およびマクロ本体の構文整合性を検証する。</li>
+<li>**設定ストリームの制御**: <code>ap_configfile_t</code> を拡張し、マクロ展開後の内容を元の設定ファイルの一部としてパーサーに認識させる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>マクロ定義と管理</h3>
+<ul>
+<li><code>ap_macro_t</code>: マクロの定義を保持する構造体。名前、引数名配列、本体行配列、定義場所（エラーメッセージ用）を保持。</li>
+<li><code>ap_macros</code>: マクロ定義を格納するグローバルな <code>apr_hash_t</code>。</li>
+</ul>
+<h3>設定コマンド (ディレクティブ)</h3>
+<ul>
+<li><code>macro_section</code>: <code>&lt;Macro&gt;</code> を処理。定義の解析と検証を行う。</li>
+<li><code>use_macro</code>: <code>Use</code> を処理。引数置換を行い、展開後の内容をパーサーへ注入する。</li>
+<li><code>undef_macro</code>: <code>UndefMacro</code> を処理。ハッシュテーブルから定義を削除する。</li>
+</ul>
+<h3>設定ストリーム操作</h3>
+<ul>
+<li><code>array_contents_t</code>: マクロ展開後の内容を保持し、パーサーが読み取れるようにするコンテキスト構造体。</li>
+<li><code>make_array_config</code>: <code>array_contents_t</code> を <code>ap_configfile_t</code> としてラップし、パーサーに提供する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **定義時**: <code>macro_section</code> が設定ファイルを読み込み、<code>get_lines_till_end_token</code> を用いて <code>&lt;/Macro&gt;</code> までの行を <code>ap_macro_t</code> に格納する。 2. **展開時**: <code>use_macro</code> が <code>Use</code> を見つけると、<code>process_content</code> を呼び出す。 3. **置換**: <code>process_content</code> は内部で <code>substitute_macro_args</code> を呼び出し、各行に対して引数（<code>$</code>, <code>%</code>, <code>@</code> プレフィックス付き）を置換する。 4. **注入**: 置換後の内容は <code>make_array_config</code> により <code>ap_configfile_t</code> 互換のストリームに変換され、現在の設定ファイル読み込み処理に割り込まれる。これにより、パーサーはマクロ展開後の内容を「元のファイルの一部」として読み続ける。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code>: Apache コア API。</li>
+<li><code>apr.h</code>, <code>apr_strings.h</code>, <code>apr_hash.h</code>: APR (Apache Portable Runtime) の文字列操作およびハッシュテーブル。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/config.c</code>: Apache の設定ファイル解析のメインロジック。本モジュールはここでの解析処理に介入する。</li>
+<li><code>include/http_config.h</code>: <code>ap_configfile_t</code> や <code>cmd_parms</code> などの定義元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: マクロ定義はグローバルな <code>ap_macros</code> ハッシュに保持されます。<code>pre_config</code> フックで初期化・リセットされる設計です。</li>
+<li>**制約**: マクロの再帰的な使用は、設定ファイル名にマクロ名が含まれるかをチェックすることで簡易的に禁止されています。</li>
+<li>**エッジケース**: マクロ引数に <code>@</code> を使用すると、置換時にダブルクォートでエスケープされます。</li>
+<li>**未実装/浅い部分**: <code>get_lines_till_end_token</code> は行ベースの解析に依存しており、複雑なネスト構造の解析には限界があります。また、エラーメッセージの生成には <code>cmd-&gt;temp_pool</code> を使用しており、メモリリークを防ぐためのライフサイクル管理に注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__core__mod_macro_c__ap_macro_t.html" target="wiki-view">`ap_macro_t`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__get_arguments.html" target="wiki-view">`get_arguments`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__warn_if_non_blank.html" target="wiki-view">`warn_if_non_blank`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__get_lines_till_end_token.html" target="wiki-view">`get_lines_till_end_token`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__looks_like_an_argument.html" target="wiki-view">`looks_like_an_argument`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__check_macro_arguments.html" target="wiki-view">`check_macro_arguments`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__check_macro_use_arguments.html" target="wiki-view">`check_macro_use_arguments`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__number_of_escapes.html" target="wiki-view">`number_of_escapes`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__next_substitution.html" target="wiki-view">`next_substitution`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__substitute_macro_args.html" target="wiki-view">`substitute_macro_args`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__process_content.html" target="wiki-view">`process_content`</a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__array_contents_t.html" target="wiki-view">`array_contents_t`</a></li>
+</ul></body></html>

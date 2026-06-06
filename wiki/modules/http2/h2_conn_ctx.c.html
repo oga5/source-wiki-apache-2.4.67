@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_conn_ctx.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_conn_ctx.c</h1>
+<h2>概要</h2>
+<p><code>h2_conn_ctx.c</code> は、Apache HTTP Server の接続（<code>conn_rec</code>）に対して、HTTP/2 固有のメタデータや状態を保持するコンテキスト（<code>h2_conn_ctx_t</code>）を管理するファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p>HTTP/2 モジュールにおいて、クライアントとの直接通信を行う接続（C1）と、ストリーム処理のために内部生成される接続（C2）の両方で共通の管理基盤を提供します。<code>mod_http2</code> が接続を識別し、適切なセッションやストリーム情報を紐付けるためのハブとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**コンテキストのライフサイクル管理**: 接続に対するコンテキストの生成、初期化、および破棄（デタッチ）。</li>
+<li>**C1/C2 の識別と紐付け**: クライアント接続（C1）と、それによって派生したストリーム処理用接続（C2）のコンテキストを適切に構成する。</li>
+<li>**リソースの集約**: セッション、マルチプレクサ（<code>h2_mplx</code>）、ストリーム情報、およびデータ転送用のバケットビーム（<code>h2_bucket_beam</code>）の参照を保持する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとの状態を保持する主要な構造体。</li>
+<li><code>h2_conn_ctx_create_for_c1</code>: クライアント接続用のコンテキストを作成し、ソケットのポーリング設定を行う。</li>
+<li><code>h2_conn_ctx_init_for_c2</code>: ストリーム処理用接続（C2）のコンテキストを初期化し、親接続（C1）の情報を継承させる。</li>
+<li><code>h2_conn_ctx_detach</code>: 接続からコンテキストを切り離し、設定をクリアする。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **生成**: <code>ctx_create</code> が内部的に呼び出され、<code>ap_set_module_config</code> を通じて <code>conn_rec</code> にコンテキストをアタッチします。 2. **C1 初期化**: <code>h2_conn_ctx_create_for_c1</code> が呼ばれると、ソケットをノンブロッキングモードに設定し、ポーリング用の <code>apr_pollfd_t</code> を準備します。 3. **C2 初期化**: <code>h2_conn_ctx_init_for_c2</code> は、親接続（<code>c2-&gt;master</code>）から既存のコンテキストを取得し、ストリーム固有の <code>req_pool</code> や <code>h2_mplx</code> を割り当てます。 4. **タイムアウト管理**: <code>h2_conn_ctx_set_timeout</code> が、保持しているバケットビームやパイプに対して一括でタイムアウト値を適用します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_atomic.h</code>, <code>apr_strings.h</code>: アトミック操作と文字列操作。</li>
+<li><code>httpd.h</code>, <code>http_config.h</code>: Apache の接続設定管理。</li>
+<li><code>h2_private.h</code>, <code>h2_session.h</code>, <code>h2_mplx.h</code>, <code>h2_stream.h</code>: HTTP/2 モジュール内の主要なサブシステム。</li>
+<li><code>h2_conn_ctx.h</code>: 構造体定義とマクロ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_session.c</code>: このコンテキストを利用して HTTP/2 セッションを制御する。</li>
+<li><code>h2_c2.c</code>: ストリーム処理用接続（C2）のライフサイクルを管理する。</li>
+<li><code>h2_mplx.c</code>: ストリームの多重化とリソース共有を担う。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>conn_rec</code> の <code>conn_config</code> を利用して情報を保持しています。<code>h2_conn_ctx_get(c)</code> マクロを通じてどこからでもアクセス可能です。</li>
+<li>C1（クライアント接続）と C2（ストリーム処理用接続）でコンテキストの役割が微妙に異なる点に注意してください。C2 は <code>c2-&gt;master</code> を通じて親のコンテキストを参照する設計になっています。</li>
+<li><code>apr_atomic</code> を使用しているフィールド（<code>started</code>, <code>done</code>）は、マルチスレッド環境での状態追跡に使用されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_detach.html" target="wiki-view">`h2_conn_ctx_detach`</a></li>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_c__ctx_create.html" target="wiki-view">`ctx_create`</a></li>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_create_for_c1.html" target="wiki-view">`h2_conn_ctx_create_for_c1`</a></li>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_assign_session.html" target="wiki-view">`h2_conn_ctx_assign_session`</a></li>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_init_for_c2.html" target="wiki-view">`h2_conn_ctx_init_for_c2`</a></li>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_set_timeout.html" target="wiki-view">`h2_conn_ctx_set_timeout`</a></li>
+</ul></body></html>

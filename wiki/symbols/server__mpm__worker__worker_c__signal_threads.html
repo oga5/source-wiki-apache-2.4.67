@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/mpm/worker/worker.c:311</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server の <code>worker</code> MPM において、子プロセス内のスレッド群に対して終了モード（Graceful または Ungraceful）に応じた通知を行い、停止処理を開始する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void signal_threads(int mode)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>mode</code>: 終了モードを指定する整数値（<code>ST_GRACEFUL</code> または <code>ST_UNGRACEFUL</code>）。</li>
+<li>**出力**: なし（<code>void</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>terminate_mode</code> が既に指定された <code>mode</code> と一致する場合、関数は即座に終了する。</li>
+<li>呼び出しにより、グローバルな <code>terminate_mode</code> が更新され、<code>retained-&gt;mpm-&gt;mpm_state</code> が <code>AP_MPMQ_STOPPING</code> に設定される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>terminate_mode</code> を更新し、サーバー状態を <code>AP_MPMQ_STOPPING</code> に遷移させる。 2. <code>wakeup_listener()</code> を呼び出し、リスナースレッドがブロッキング状態であれば解除する。 3. <code>mode</code> が <code>ST_UNGRACEFUL</code> の場合:</p>
+<ul>
+<li><code>workers_may_exit</code> フラグを 1 に設定する。</li>
+<li><code>ap_queue_interrupt_all(worker_queue)</code> を呼び出し、全ワーカーをキューから解放する。</li>
+<li><code>close_worker_sockets()</code> を呼び出し、現在処理中の全接続ソケットを強制的に閉じる。</li>
+<p>4. 最後に <code>ap_run_child_stopping(pchild, ...)</code> を呼び出し、子プロセスの停止処理フックを実行する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: 提供されたソース情報には <code>worker.c</code> 内の直接的な呼び出し元は記載されていない。ツールによるヒューリスティックな検索では <code>server/mpm/event/event.c</code> からの呼び出しが多数検出されているが、これは <code>worker</code> MPM とのコード共有による参照の可能性がある。</li>
+<li>**呼び出し先**:</li>
+<li><code>wakeup_listener()</code></li>
+<li><code>ap_queue_interrupt_all()</code></li>
+<li><code>close_worker_sockets()</code></li>
+<li><code>ap_run_child_stopping()</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>retained</code>: MPM の再起動時にも保持される状態管理構造体。</li>
+<li><code>worker_queue</code>: ワーカー間で共有される接続キュー。</li>
+<li><code>pchild</code>: 子プロセスの生存期間を管理するメモリプール。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>mode</code> が既に設定済みの <code>terminate_mode</code> と一致する場合、処理はスキップされる。</li>
+<li><code>ST_UNGRACEFUL</code> モードでは、接続のクリーンアップを待たずにソケットが強制的に閉じられるため、進行中のリクエストは中断される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>worker.c</code> 内で定義されているが、<code>event.c</code> からの参照が検出されている。モジュール間でのコード共有範囲に注意すること。</li>
+<li><code>ap_run_child_stopping</code> の第2引数は、<code>mode == ST_GRACEFUL</code> の場合に真となる。</li>
 </ul></body></html>

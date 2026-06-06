@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/generators/mod_status.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/generators/mod_status.c</h1>
+<h2>概要</h2>
+<p><code>mod_status</code> は、Apache HTTP Server の内部状態、プロセス/スレッドの稼働状況、およびパフォーマンス統計をリアルタイムで提供するモジュールです。<code>/server-status</code> ハンドラを通じて、HTML または機械可読なプレーンテキスト形式でレポートを生成します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/generators</code> ディレクトリにおいて、サーバーの運用監視を担う中心的なコンポーネントです。<code>scoreboard.h</code> が保持する共有メモリ上の統計情報を読み取り、ユーザーのリクエストに応じて整形・出力します。</p>
+<h2>責務</h2>
+<ul>
+<li>**統計レポート生成**: サーバーの稼働時間、負荷平均、リクエスト処理数、トラフィック量、CPU 使用率の集計と表示。</li>
+<li>**プロセス/スレッド監視**: スコアボードを走査し、各ワーカーの状態（読み込み中、書き込み中、待機中など）を可視化。</li>
+<li>**拡張性**: <code>status_hook</code> を提供し、他のモジュールがレポートに独自の情報を追加できるようにする。</li>
+<li>**設定管理**: <code>ExtendedStatus</code> のデフォルト有効化や、MPM（Multi-Processing Module）の制限値の取得。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>レポート生成・整形</h3>
+<ul>
+<li><code>status_handler</code>: メインハンドラ。リクエストを解析し、レポート生成フローを制御。</li>
+<li><code>format_byte_out</code> / <code>format_kbyte_out</code>: バイト単位の数値を人間が読みやすい形式（B, kB, MB, GB）に変換。</li>
+<li><code>show_time</code>: 秒単位の稼働時間を「日・時間・分・秒」形式に変換。</li>
+</ul>
+<h3>設定・状態管理</h3>
+<ul>
+<li><code>status_module</code>: Apache モジュール構造体。フックの登録とモジュールメタデータを保持。</li>
+<li><code>status_options</code>: クエリパラメータ（<code>refresh</code>, <code>notable</code>, <code>auto</code>）を管理するテーブル。</li>
+<li><code>status_flags</code>: スコアボードの内部状態（<code>SERVER_READY</code> 等）を文字表現（<code>_</code>, <code>R</code>, <code>W</code> 等）にマッピングする配列。</li>
+</ul>
+<h3>フック</h3>
+<ul>
+<li><code>status_hook</code>: 外部モジュールがレポート末尾にコンテンツを追加するためのオプションフック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> がハンドラと設定フックを登録。<code>status_init</code> で MPM からスレッド/プロセス制限値を取得。 2. **リクエスト処理**: <code>status_handler</code> が <code>server-status</code> ハンドラを検知。 3. **スコアボード走査**: <code>server_limit</code> と <code>thread_limit</code> に基づき、全ワーカーの <code>worker_score</code> を <code>ap_copy_scoreboard_worker</code> で取得。 4. **集計**: <code>ap_extended_status</code> が有効な場合、各ワーカーのアクセス数、バイト数、CPU 時間を累積。 5. **出力**: <code>short_report</code> フラグに応じて、HTML テーブルまたはプレーンテキストを <code>ap_rprintf</code> 等でストリーム出力。 6. **拡張**: 最後に <code>ap_run_status_hook</code> を呼び出し、登録された外部モジュールの出力を追加。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>scoreboard.h</code>: サーバーの稼働状態を保持する共有メモリ構造体へのアクセス。</li>
+<li><code>ap_mpm.h</code>: MPM の制限値や非同期状態のクエリ。</li>
+<li><code>http_protocol.h</code> / <code>httpd.h</code>: リクエスト処理とレスポンス生成の基盤。</li>
+<li><code>apr_strings.h</code> / <code>apr_want.h</code>: 文字列操作とメモリ管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/generators/mod_status.h</code>: <code>status_hook</code> の定義とフラグ定数。</li>
+<li><code>include/scoreboard.h</code>: スコアボードのデータ構造定義。</li>
+<li><code>server/scoreboard.c</code>: スコアボードの読み書き実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: レポート生成にはリクエストプール (<code>r-&gt;pool</code>) を使用しており、ハンドラ終了時に自動解放されます。</li>
+<li>**スレッド安全性**: スコアボードの読み取りは <code>ap_copy_scoreboard_worker</code> を介して行われ、共有メモリの整合性が保たれる設計です。</li>
+<li>**パフォーマンス**: <code>ExtendedStatus</code> が有効な場合、全スレッドのスコアボードを走査するため、大規模なサーバーではリクエスト時に一定のオーバーヘッドが発生します。</li>
+<li>**制限事項**: <code>HAVE_TIMES</code> が定義されていない環境（一部の OS）では、CPU 使用率の統計は表示されません。また、inetd モードではスコアボードが利用できないため、エラーを返します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__generators__mod_status_c__format_byte_out.html" target="wiki-view">`format_byte_out`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__format_kbyte_out.html" target="wiki-view">`format_kbyte_out`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__show_time.html" target="wiki-view">`show_time`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__stat_opt.html" target="wiki-view">`stat_opt`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__status_handler.html" target="wiki-view">`status_handler`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__status_pre_config.html" target="wiki-view">`status_pre_config`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__status_init.html" target="wiki-view">`status_init`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__status_child_init.html" target="wiki-view">`status_child_init`</a></li>
+<li><a href="../../symbols/modules__generators__mod_status_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

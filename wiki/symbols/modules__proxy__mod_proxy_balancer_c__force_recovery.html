@@ -6,22 +6,48 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_balancer.c:426</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ロードバランサ内の全ワーカーがエラー状態にある場合に、設定に応じて強制的に復旧処理を行い、ワーカーを再利用可能な状態へ戻す。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void force_recovery(proxy_balancer *balancer, server_rec *s)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>balancer</code>: 対象となる <code>proxy_balancer</code> 構造体へのポインタ。</li>
+<li><code>s</code>: 現在のサーバー設定を表す <code>server_rec</code> 構造体へのポインタ。</li>
+<li>**出力**: なし（副作用として共有メモリ上のワーカー状態を更新）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>balancer-&gt;workers</code> が有効なワーカーリストを保持していること。</li>
+<li><code>balancer-&gt;s-&gt;forcerecovery</code> が真の場合、すべてのワーカーに対して強制復旧が試行される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. まず、エラー状態（<code>PROXY_WORKER_IN_ERROR</code>）ではないワーカーが存在するかを確認する。 2. エラー状態のワーカーに対しては、<code>ap_proxy_retry_worker_fn</code> を呼び出し、個別の復旧を試みる。 3. 復旧を試みた結果、いずれかのワーカーが正常状態に戻れば処理を終了する。 4. 全ワーカーが依然としてエラー状態であり、かつ <code>balancer-&gt;s-&gt;forcerecovery</code> が有効な場合：</p>
+<ul>
+<li>すべてのワーカーの <code>retries</code> カウンタをインクリメントする。</li>
+<li>すべてのワーカーから <code>PROXY_WORKER_IN_ERROR</code> フラグを除去し、強制的に復旧させる。</li>
+<li>復旧処理の実行をデバッグログに出力する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_balancer.c:507</code>（<code>proxy_balancer_pre_request</code> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_proxy_retry_worker_fn</code>: ワーカーの個別復旧を試みる関数。</li>
+<li><code>ap_log_error</code>: 復旧実行時のログ出力。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_balancer</code>: バランサの設定とワーカーリストを保持。</li>
+<li><code>proxy_worker</code>: 個々のバックエンドワーカーの状態（<code>status</code>, <code>retries</code> 等）を保持。</li>
+<li><code>server_rec</code>: サーバーのコンテキスト情報。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ワーカーリストが空の場合、ループは実行されず何も行われない。</li>
+<li><code>forcerecovery</code> が無効な場合、すべてのワーカーがエラー状態であっても強制復旧は行われない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>proxy_balancer_pre_request</code> の一部として、リクエスト処理の過程で呼び出される。</li>
+<li><code>PROXY_WORKER_IN_ERROR</code> フラグの操作は共有メモリ（<code>slotmem</code>）を介して行われるため、マルチプロセス環境での整合性に注意すること。</li>
 </ul></body></html>

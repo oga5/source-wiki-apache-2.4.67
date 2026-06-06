@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/proxy/mod_proxy_balancer.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/proxy/mod_proxy_balancer.c</h1>
+<h2>概要</h2>
+<p><code>mod_proxy_balancer</code> は、Apache HTTP Server のプロキシサブシステムにおけるロードバランサ機能を提供するモジュールです。複数のバックエンドワーカー間での負荷分散、セッションスティッキー（スティッキーセッション）、および動的なメンバー管理（<code>balancer-manager</code>）を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> の拡張機能として動作し、<code>balancer://</code> スキームを処理します。<code>proxy_util.c</code> で定義された共有メモリ（<code>slotmem</code>）を利用して、マルチプロセス環境下でバランサの状態とワーカーの統計情報を同期・共有します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストルーティング**: <code>proxy_balancer_pre_request</code> を通じて、負荷分散アルゴリズムに基づき最適なワーカーを選択する。</li>
+<li>**セッション管理**: クッキーやパスパラメータを用いたスティッキーセッションの維持。</li>
+<li>**状態管理と同期**: 共有メモリを用いたワーカーのヘルス状態、負荷状況、および統計情報の永続化と同期。</li>
+<li>**管理インターフェース**: <code>balancer-manager</code> ハンドラによる、実行時のワーカーパラメータ変更やメンバー追加機能の提供。</li>
+<li>**ヘルスチェック連携**: <code>mod_proxy_hcheck</code> 等の外部モジュールと連携し、ワーカーの稼働状態を監視・制御する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル・初期化</h3>
+<ul>
+<li><code>balancer_pre_config</code>: ミューテックスの登録とオプション関数の取得。</li>
+<li><code>balancer_post_config</code>: 共有メモリ（<code>slotmem</code>）の確保と各バランサ・ワーカーの初期化。</li>
+<li><code>balancer_child_init</code>: 子プロセス起動時の共有メモリへのアタッチ。</li>
+</ul>
+<h3>ルーティング・選択ロジック</h3>
+<ul>
+<li><code>proxy_balancer_pre_request</code>: リクエスト処理の入口。バランサの選択とワーカーの決定を行う。</li>
+<li><code>find_best_worker</code>: ロードバランサアルゴリズム（<code>lbmethod</code>）を呼び出し、最適なワーカーを特定する。</li>
+<li><code>find_session_route</code>: スティッキーセッション情報から既存のワーカーを検索する。</li>
+<li><code>find_route_worker</code>: 特定のルートを持つワーカーを検索し、必要に応じてリトライやリダイレクトを処理する。</li>
+</ul>
+<h3>管理・状態更新</h3>
+<ul>
+<li><code>balancer_handler</code>: <code>balancer-manager</code> のリクエストを処理する。</li>
+<li><code>balancer_process_balancer_worker</code>: 管理画面からのパラメータ変更をワーカー/バランサに適用する。</li>
+<li><code>force_recovery</code>: エラー状態のワーカーを再試行し、必要に応じて復旧を強制する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **リクエスト処理**: <code>proxy_balancer_pre_request</code> が呼ばれると、まず <code>find_session_route</code> でスティッキーセッションを試行。失敗した場合は <code>find_best_worker</code> でアルゴリズムに従いワーカーを選択する。 2.  **同期**: <code>balancer_post_config</code> で作成された <code>slotmem</code> を通じて、全プロセスが同一の <code>proxy_balancer</code> および <code>proxy_worker</code> 構造体を共有する。 3.  **排他制御**: <code>PROXY_THREAD_LOCK</code>/<code>UNLOCK</code> マクロにより、共有メモリへのアクセスを保護する。 4.  **管理フロー**: <code>balancer_handler</code> は POST データを解析し、<code>balancer_process_balancer_worker</code> を経由して共有メモリ上のパラメータを更新する。CSRF 対策として <code>nonce</code> の検証を行う。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_proxy.h</code>, <code>proxy_util.h</code>: プロキシ基盤の共通構造体とユーティリティ。</li>
+<li><code>mod_watchdog.h</code>: ヘルスチェック等の監視機能との連携。</li>
+<li><code>ap_slotmem_provider_t</code>: 共有メモリ管理プロバイダ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>proxy_util.c</code>: 共有メモリ操作やワーカーの初期化ロジックの本体。</li>
+<li><code>mod_proxy_hcheck.c</code>: ヘルスチェック機能の提供元。</li>
+<li><code>modules/proxy/mod_proxy.c</code>: プロキシのメインフック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: バランサとワーカーのデータは <code>slotmem</code> を介して共有メモリに配置されます。プロセス間でのデータ整合性は <code>gmutex</code> によって保証されます。</li>
+<li>**安全性**: <code>balancer-manager</code> は CSRF 攻撃を防ぐため、<code>Referer</code> ヘッダのチェックと <code>nonce</code> の照合を厳格に行います。</li>
+<li>**制約**: <code>balancer_post_config</code> は設定読み込み時に二度呼ばれる可能性があるため、初期化の重複防止処理が含まれています。</li>
+<li>**省略範囲**: 本ファイルはバランサの「制御」に特化しており、具体的な負荷分散アルゴリズム（<code>byrequests</code>, <code>bytraffic</code> 等）の実装は各 <code>lbmethod</code> プロバイダモジュールに委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__balancer_pre_config.html" target="wiki-view">`balancer_pre_config`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_canon.html" target="wiki-view">`proxy_balancer_canon`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__init_balancer_members.html" target="wiki-view">`init_balancer_members`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__get_path_param.html" target="wiki-view">`get_path_param`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__get_cookie_param.html" target="wiki-view">`get_cookie_param`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__find_route_worker.html" target="wiki-view">`find_route_worker`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__find_session_route.html" target="wiki-view">`find_session_route`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__find_best_worker.html" target="wiki-view">`find_best_worker`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__balancer_fixup.html" target="wiki-view">`balancer_fixup`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__force_recovery.html" target="wiki-view">`force_recovery`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__decrement_busy_count.html" target="wiki-view">`decrement_busy_count`</a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html" target="wiki-view">`proxy_balancer_pre_request`</a></li>
+</ul></body></html>

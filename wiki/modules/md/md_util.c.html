@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md_util.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md_util.c</h1>
+<h2>概要</h2>
+<p><code>md_util.c</code> は、<code>mod_md</code> モジュール全体で使用される汎用的なユーティリティ関数群を提供します。メモリ管理、文字列操作、ファイルシステム操作、DNS 名の検証、および HTTP Link ヘッダーの解析など、特定のドメインロジックに依存しない低レベルな補助機能を集約しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおける「共通ライブラリ」として機能します。他の多くのファイル（<code>md_reg.c</code>, <code>md_store.c</code> など）が、APR（Apache Portable Runtime）の機能をラップしたこれらのユーティリティを呼び出し、コードの重複を排除し、一貫したエラー処理を実現しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**メモリ管理**: <code>md_data_t</code> 構造体を用いたデータチャンクのライフサイクル管理とコピー操作。</li>
+<li>**ファイルシステム**: ファイルの作成、置換、再帰的な削除、ディレクトリ走査などの抽象化。</li>
+<li>**文字列・配列操作**: 大文字小文字を区別しない比較や、配列内の要素操作。</li>
+<li>**ネットワーク・プロトコル**: DNS 名の検証、URI の妥当性チェック、Base64URL エンコード/デコード。</li>
+<li>**HTTP ヘッダー解析**: <code>Link</code> ヘッダーの特定の関係性（rel）を持つ URL の抽出。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データチャンク管理 (<code>md_data_t</code>)</h3>
+<ul>
+<li><code>md_data_pinit</code>, <code>md_data_pmake</code>: プールベースのメモリ割り当てと初期化。</li>
+<li><code>md_data_clear</code>: 保持しているデータの解放と構造体のクリア。</li>
+<li><code>md_data_assign_copy</code>, <code>md_data_assign_pcopy</code>: データの代入とコピー。</li>
+</ul>
+<h3>ファイルシステム操作</h3>
+<ul>
+<li><code>md_util_fcreatex</code>: 排他的なファイル作成（<code>O_EXCL</code> 相当）。</li>
+<li><code>md_util_freplace</code>: 一時ファイル経由での安全なファイル置換。</li>
+<li><code>md_util_rm_recursive</code>, <code>md_util_ftree_remove</code>: ディレクトリツリーの再帰的削除。</li>
+<li><code>md_util_files_do</code>, <code>md_util_tree_do</code>: ファイルシステム走査とコールバックのディスパッチ。</li>
+</ul>
+<h3>DNS・URI 検証</h3>
+<ul>
+<li><code>md_dns_is_name</code>, <code>md_dns_is_wildcard</code>: DNS 名の構文チェック。</li>
+<li><code>md_util_abs_http_uri_check</code>: URI のスキームやホスト名の妥当性検証。</li>
+</ul>
+<h3>HTTP Link ヘッダー</h3>
+<ul>
+<li><code>md_link_find_relation</code>: <code>Link</code> ヘッダーから特定の <code>rel</code> 属性を持つ URL を検索。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**プールベースの実行**: <code>md_util_pool_do</code> や <code>md_util_pool_vdo</code> は、一時的な <code>apr_pool_t</code> を作成し、コールバック関数を実行した後にプールを破棄するパターンを提供します。これにより、再帰的なファイル操作や複雑な処理中のメモリリークを防ぎます。</li>
+<li>**ファイル操作**: <code>md_util_freplace</code> は、<code>fpath.tmp</code> を作成し、成功時に <code>rename</code> するというアトミックな更新フローを実装しています。</li>
+<li>**再帰的走査**: <code>match_and_do</code> や <code>tree_do</code> は、<code>apr_dir_read</code> を用いてディレクトリを走査し、マッチした要素に対してコールバックを再帰的に呼び出します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_file_io.h</code>, <code>apr_tables.h</code>, <code>apr_uri.h</code>: APR の基本機能。</li>
+<li><code>md.h</code>, <code>md_log.h</code>, <code>md_util.h</code>: モジュール内の共通定義とログ出力。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_json.c</code>: JSON データの処理。</li>
+<li><code>md_store.c</code>: ファイルシステム上の永続化層（本ファイルのファイル操作ユーティリティを多用）。</li>
+<li><code>md_crypt.c</code>: 暗号化関連のユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>md_data_t</code> は、<code>free_data</code> 関数ポインタを持つことで、動的に確保されたメモリの解放を管理します。<code>md_data_clear</code> を呼び出すことで、所有しているメモリが適切に解放される設計になっています。</li>
+<li>**エラー処理**: 多くの関数は <code>apr_status_t</code> を返します。<code>APR_SUCCESS</code> 以外が返された場合、呼び出し元で適切にログ出力やリソース解放を行う必要があります。</li>
+<li>**省略された詳細**: 本ファイルには、Base64URL 変換用の巨大なルックアップテーブルが含まれていますが、これらは RFC 準拠のための静的データであり、ロジック上の複雑さはありません。</li>
+<li>**パフォーマンス**: <code>md_util_freplace</code> は、ファイル作成時に <code>EEXIST</code> が発生した場合、指数バックオフを伴うリトライ処理を行っており、競合の多い環境での堅牢性を確保しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_util_c__md_util_pool_do.html" target="wiki-view">`md_util_pool_do`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__pool_vado.html" target="wiki-view">`pool_vado`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_util_pool_vdo.html" target="wiki-view">`md_util_pool_vdo`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_data_pinit.html" target="wiki-view">`md_data_pinit`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_data_pmake.html" target="wiki-view">`md_data_pmake`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_data_init.html" target="wiki-view">`md_data_init`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_data_init_str.html" target="wiki-view">`md_data_init_str`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_data_null.html" target="wiki-view">`md_data_null`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_data_clear.html" target="wiki-view">`md_data_clear`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__md_util_fwalk_t.html" target="wiki-view">`md_util_fwalk_t`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__link_ctx.html" target="wiki-view">`link_ctx`</a></li>
+<li><a href="../../symbols/modules__md__md_util_c__find_ctx.html" target="wiki-view">`find_ctx`</a></li>
+</ul></body></html>

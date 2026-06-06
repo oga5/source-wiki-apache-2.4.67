@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cluster/mod_heartbeat.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cluster/mod_heartbeat.c</h1>
+<h2>概要</h2>
+<p><code>mod_heartbeat</code> は、Apache HTTP Server の現在の負荷状況（Ready/Busy 状態）を定期的に UDP マルチキャストで外部へ通知するためのモジュールです。<code>mod_watchdog</code> を利用してバックグラウンドで動作し、サーバーのスコアボード情報を集計して送信します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/cluster</code> サブシステムにおいて、本モジュールは「情報発信側」の役割を担います。対となる <code>mod_heartmonitor</code> が受信した情報を収集・管理するのに対し、本モジュールは自身の稼働状況をネットワーク上にブロードキャストします。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷情報の集計**: スコアボードを走査し、現在のプロセス/スレッドの稼働状態（Ready/Busy）をカウントする。</li>
+<li>**定期通知の実行**: <code>mod_watchdog</code> のフックを利用し、一定間隔で UDP パケットを送信する。</li>
+<li>**設定管理**: <code>HeartbeatAddress</code> ディレクティブによるマルチキャスト先アドレスの定義と、モジュール設定の保持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・状態管理</h3>
+<ul>
+<li><code>hb_ctx_t</code>: モジュールのサーバー設定構造体。マルチキャスト先アドレス、スレッド/サーバー制限値、アクティブフラグを保持。</li>
+<li><code>heartbeat_module</code>: Apache モジュール定義構造体。</li>
+</ul>
+<h3>Watchdog フック（ライフサイクル）</h3>
+<ul>
+<li><code>hb_watchdog_init</code>: MPM の制限値（スレッド/サーバー数）を初期化時に取得。</li>
+<li><code>hb_watchdog_step</code>: メインのループ処理。<code>hb_monitor</code> を呼び出し、負荷情報を送信する。</li>
+<li><code>hb_watchdog_need</code>: <code>AP_WATCHDOG_SINGLETON</code> を要求し、単一プロセスでの実行を保証。</li>
+</ul>
+<h3>処理・設定コマンド</h3>
+<ul>
+<li><code>hb_monitor</code>: スコアボードを走査し、UDP ソケット経由で <code>v=1&amp;ready=X&amp;busy=Y</code> 形式の文字列を送信する。</li>
+<li><code>cmd_hb_address</code>: <code>HeartbeatAddress</code> ディレクティブのハンドラ。アドレスの解析と <code>hb_ctx_t</code> への格納を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>hb_register_hooks</code> が <code>mod_watchdog</code> の各フェーズを登録。 2. **設定**: <code>cmd_hb_address</code> が設定を解析し、<code>hb_ctx_t</code> に <code>apr_sockaddr_t</code> を生成・保持。 3. **定期実行**: <code>mod_watchdog</code> が <code>hb_watchdog_step</code> を呼び出す。 4. **集計と送信**:</p>
+<ul>
+<li><code>hb_monitor</code> が <code>ap_scoreboard_image</code> を走査。</li>
+<li><code>mpm_generation</code> を確認し、現在の世代のプロセスのみをカウント対象とする。</li>
+<li><code>apr_socket_sendto</code> を使用して UDP パケットを送信。</li>
+<li>送信後、ソケットは即座にクローズされる。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_watchdog.h</code>: 定期実行のトリガー。</li>
+<li><code>scoreboard.h</code>: サーバーの稼働状況取得。</li>
+<li><code>ap_mpm.h</code>: MPM の制限値および世代情報の取得。</li>
+<li><code>apr_network_io.h</code> (間接的): ソケット通信。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cluster/mod_heartmonitor.c</code>: 本モジュールが送信したパケットを受信し、クラスター全体の負荷状況を追跡する対となるモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>hb_ctx_t</code> はサーバープール (<code>p</code>) 上に割り当てられます。ソケット通信に使用するプールは <code>hb_monitor</code> に渡される一時的なプールであり、送信ごとにソケットの生成・破棄が行われます。</li>
+<li>**制約**: <code>HeartbeatAddress</code> はグローバルコンテキストでのみ指定可能です。</li>
+<li>**エラー処理**: ソケット作成や送信失敗時は <code>ap_log_error</code> で警告が出力されますが、処理は継続されます。</li>
+<li>**未実装/浅い部分**: 本モジュールは送信のみに特化しており、受信側の確認やパケットの暗号化・認証機能は含まれていません。また、<code>HEARTBEAT_INTERVAL</code> はコンパイル時定数として固定されており、実行時の動的な変更はできません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_ctx_t.html" target="wiki-view">`hb_ctx_t`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_monitor.html" target="wiki-view">`hb_monitor`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_init.html" target="wiki-view">`hb_watchdog_init`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_exit.html" target="wiki-view">`hb_watchdog_exit`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_step.html" target="wiki-view">`hb_watchdog_step`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_need.html" target="wiki-view">`hb_watchdog_need`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_register_hooks.html" target="wiki-view">`hb_register_hooks`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_create_config.html" target="wiki-view">`hb_create_config`</a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__cmd_hb_address.html" target="wiki-view">`cmd_hb_address`</a></li>
+</ul></body></html>

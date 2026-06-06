@@ -6,22 +6,51 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_http.c:230</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP レスポンスヘッダーに含まれる <code>Warning</code> ヘッダーを検証し、期限切れの警告を削除またはフィルタリングして、有効な警告のみを含むヘッダーテーブルを返します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>apr_table_t *ap_proxy_clean_warnings(apr_pool_t *p, apr_table_t *headers)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>p</code>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li><code>headers</code>: 処理対象の HTTP ヘッダーテーブル。</li>
+<li>**出力**:</li>
+<li>警告が修正された場合は、元のヘッダーから <code>Warning</code> を除外し、フィルタリング済みの警告を追加した新しい <code>apr_table_t</code> を返します。警告に変更がない場合は、元の <code>headers</code> をそのまま返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>headers</code> テーブル内に <code>Date</code> ヘッダーが存在する場合、その値は <code>apr_date_parse_http</code> で解析可能である必要があります。</li>
+<li>内部で <code>clean_warning_headers</code> をコールバックとして使用するため、<code>Warning</code> ヘッダーの各値は <code>clean_warning_headers</code> が期待する形式に従っている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>Date</code> ヘッダーを解析し、基準時刻を取得します。 2. <code>apr_table_do</code> を使用して、<code>headers</code> 内のすべての <code>Warning</code> ヘッダーに対して <code>clean_warning_headers</code> を適用します。 3. フィルタリングの結果、有効な警告が抽出された場合（<code>x.table != NULL</code>）:</p>
+<ul>
+<li>元のテーブルから <code>Warning</code> ヘッダーを削除します。</li>
+<li><code>apr_table_overlay</code> を使用して、元のヘッダーと抽出された警告テーブルを結合して返します。</li>
+<p>4. 警告に変更がない場合は、入力された <code>headers</code> をそのまま返します。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_http.c:1346</code> にて、レスポンスヘッダーのクリーンアップ処理として呼び出されています。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_date_parse_http</code> (APR)</li>
+<li><code>apr_table_do</code> (APR)</li>
+<li><code>clean_warning_headers</code> (同一ファイル内の静的関数)</li>
+<li><code>apr_table_unset</code> (APR)</li>
+<li><code>apr_table_overlay</code> (APR)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>header_dptr</code>: 警告のフィルタリング状態（プール、テーブル、基準時刻）を保持するために使用される構造体。</li>
+<li><code>apr_table_t</code>: HTTP ヘッダーの保持に使用される APR テーブル構造。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Date</code> ヘッダーが存在しない、または解析不能な場合、<code>apr_date_parse_http</code> は <code>0</code> を返します。この場合、警告の有効期限判定ロジックは <code>0</code> を基準に行われます。</li>
+<li><code>Warning</code> ヘッダーが存在しない場合、関数は入力された <code>headers</code> をそのまま返します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>Warning</code> ヘッダーの RFC 準拠のフィルタリングを目的としています。ロジックの詳細は <code>clean_warning_headers</code> に依存しているため、警告の削除条件を変更する場合はそちらを確認してください。</li>
+<li><code>apr_table_overlay</code> を使用しているため、メモリ消費量はヘッダーの数に比例します。大量の警告ヘッダーが含まれるレスポンスでは注意が必要です。</li>
 </ul></body></html>

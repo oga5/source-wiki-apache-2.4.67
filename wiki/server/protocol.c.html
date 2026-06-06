@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/protocol.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/protocol.c</h1>
+<h2>概要</h2>
+<p>HTTP プロトコルの解析、リクエストの構築、およびクライアントとの直接的な通信を担う中核ファイルです。リクエストラインの読み取り、MIME ヘッダーの解析、コンテンツタイプの生成、認証の補助、およびプロトコルスイッチングの制御を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>module:server</code> における通信層の最上位に位置します。<code>apr_bucket_brigade</code> を介してフィルタチェーンと連携し、低レベルなバイトストリームを HTTP リクエスト構造体 (<code>request_rec</code>) に変換します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト解析**: リクエストラインおよび MIME ヘッダーの読み取りと検証。</li>
+<li>**リクエスト構築**: <code>request_rec</code> の初期化と、サブリクエスト用のプロトコル状態の管理。</li>
+<li>**レスポンス補助**: コンテンツタイプの設定、最終更新時刻の合理化、認証失敗の通知。</li>
+<li>**プロトコル管理**: プロトコルの選択、アップグレード、およびスイッチングのフック管理。</li>
+<li>**出力フィルタリング**: コンテンツ長計算フィルタ (<code>ap_content_length_filter</code>) および古い書き込みインターフェースのバッファリング。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>ap_read_request</code>: リクエストのライフサイクルを開始するメインエントリポイント。</li>
+<li><code>ap_create_request</code>: <code>request_rec</code> のメモリ確保と初期化。</li>
+<li><code>ap_parse_request_line</code>: リクエストラインの解析と検証。</li>
+<li><code>ap_get_mime_headers_core</code>: MIME ヘッダーの読み取りと <code>headers_in</code> テーブルへの格納。</li>
+</ul>
+<h3>プロトコル・ユーティリティ</h3>
+<ul>
+<li><code>ap_rgetline_core</code>: フィルタから 1 行ずつ読み取る低レベル関数。</li>
+<li><code>ap_make_content_type</code>: <code>Content-Type</code> ヘッダーの生成と charset 付与。</li>
+<li><code>ap_rationalize_mtime</code>: <code>Last-Modified</code> 時刻の妥当性チェック。</li>
+</ul>
+<h3>認証・認可</h3>
+<ul>
+<li><code>ap_note_auth_failure</code>: 認証失敗時のフック実行。</li>
+<li><code>ap_get_basic_auth_pw</code>: Basic 認証情報の抽出とデコード。</li>
+</ul>
+<h3>プロトコルスイッチング</h3>
+<ul>
+<li><code>ap_select_protocol</code>, <code>ap_switch_protocol</code>: ALPN 等によるプロトコルネゴシエーションと切り替え。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト開始**: <code>ap_read_request</code> が <code>ap_create_request</code> で構造体を生成し、<code>read_request_line</code> で入力を待ちます。 2. **入力フィルタ**: <code>ap_rgetline_core</code> が <code>r-&gt;proto_input_filters</code> を通じて <code>apr_bucket_brigade</code> からデータを取得します。 3. **ヘッダー解析**: <code>ap_get_mime_headers_core</code> がヘッダーを読み取り、<code>apr_table_addn</code> で <code>headers_in</code> に格納します。 4. **出力フィルタ**: <code>ap_content_length_filter</code> がレスポンスボディの長さを計算し、必要に応じて <code>Content-Length</code> ヘッダーを挿入します。 5. **終了**: <code>ap_finalize_request_protocol</code> が EOS (End of Stream) バケットを挿入し、リクエストを完了させます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットベースの I/O 操作。</li>
+<li><code>httpd.h</code>, <code>http_request.h</code>, <code>http_protocol.h</code>: Apache HTTPD のコア構造体と API。</li>
+<li><code>util_filter.h</code>: フィルタチェーンの制御。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/core_filters.c</code>: フィルタの実装詳細。</li>
+<li><code>server/request.c</code>: リクエスト処理のライフサイクル管理。</li>
+<li><code>server/connection.c</code>: コネクションレベルの管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ほとんどの動的メモリは <code>request_rec</code> に紐付いた <code>r-&gt;pool</code> から確保されます。リクエスト終了時に自動的に解放されます。</li>
+<li>**EBCDIC 対応**: <code>ap_rgetline</code> は EBCDIC 環境下で自動的に ASCII 変換を行うラッパーとして機能します。</li>
+<li>**厳密な解析**: <code>http_conformance</code> 設定により、RFC 7230 に準拠した厳格な解析と、レガシーな「緩い」解析が切り替わります。</li>
+<li>**省略された詳細**: 本ファイルは非常に広範なため、特定の認証スキーム（Digest 等）の詳細なロジックや、各 MPM 固有のフィルタ挙動については、関連するモジュール側の実装を参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__protocol_c__ap_check_request_header.html" target="wiki-view">`ap_check_request_header`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_get_mime_headers_core.html" target="wiki-view">`ap_get_mime_headers_core`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_get_mime_headers.html" target="wiki-view">`ap_get_mime_headers`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_create_request.html" target="wiki-view">`ap_create_request`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_get_basic_auth_pw.html" target="wiki-view">`ap_get_basic_auth_pw`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_get_basic_auth_components.html" target="wiki-view">`ap_get_basic_auth_components`</a></li>
+<li><a href="../symbols/server__protocol_c__content_length_ctx.html" target="wiki-view">`content_length_ctx`</a></li>
+<li><a href="../symbols/server__protocol_c__old_write_filter_ctx.html" target="wiki-view">`old_write_filter_ctx`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_vrprintf_data.html" target="wiki-view">`ap_vrprintf_data`</a></li>
+<li><a href="../symbols/server__protocol_c__hdr_ptr.html" target="wiki-view">`hdr_ptr`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_get_protocol.html" target="wiki-view">`ap_get_protocol`</a></li>
+<li><a href="../symbols/server__protocol_c__ap_get_protocol_upgrades.html" target="wiki-view">`ap_get_protocol_upgrades`</a></li>
+</ul></body></html>

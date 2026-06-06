@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/ssl.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/ssl.c</h1>
+<h2>概要</h2>
+<p><code>server/ssl.c</code> は、Apache HTTP Server における SSL/TLS 関連機能の抽象化レイヤーです。特定の SSL 実装（<code>mod_ssl</code> など）に依存せず、コアサーバーが SSL 機能を透過的に利用するためのインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>本ファイルは、SSL 機能を実装するモジュールと、それを利用するコアサーバーや他のモジュールとの間の「仲介役」です。Apache のフック機構（Hooks）およびオプション関数（Optional Functions）を利用して、SSL 機能を動的に統合します。</p>
+<h2>責務</h2>
+<ul>
+<li>**SSL 抽象化**: SSL 関連の操作（接続の確認、変数検索、証明書管理、OCSP 応答取得）をフックとして定義し、実行する。</li>
+<li>**後方互換性の維持**: 以前のオプション関数ベースの API と、新しいフックベースの API を統合し、古いモジュールとの互換性を保つ。</li>
+<li>**SSL ライフサイクル管理**: <code>ap_setup_ssl_optional_fns</code> を通じて、SSL 関連のオプション関数を初期化・登録する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フック定義（SSL 抽象化）</h3>
+<ul>
+<li><code>ssl_conn_is_ssl</code>: 接続が SSL を使用しているか判定。</li>
+<li><code>ssl_var_lookup</code>: SSL 関連の環境変数（証明書情報など）を検索。</li>
+<li><code>ssl_add_cert_files</code> / <code>ssl_add_fallback_cert_files</code>: 証明書と鍵ファイルの登録。</li>
+<li><code>ssl_answer_challenge</code>: ACME 等のチャレンジ応答処理。</li>
+<li><code>ssl_ocsp_prime_hook</code> / <code>ssl_ocsp_get_resp_hook</code>: OCSP ステープリング関連の処理。</li>
+<li><code>ssl_bind_outgoing</code>: アウトバウンド接続（プロキシ等）への SSL 適用。</li>
+</ul>
+<h3>API エントリポイント</h3>
+<ul>
+<li><code>ap_ssl_conn_is_ssl</code>: 接続が SSL かを判定する公開 API。</li>
+<li><code>ap_ssl_var_lookup</code>: SSL 変数取得の公開 API。</li>
+<li><code>ap_ssl_bind_outgoing</code>: アウトバウンド接続の SSL 設定を適用する公開 API。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ap_setup_ssl_optional_fns</code> が起動時に呼ばれ、既存の SSL モジュールが提供するオプション関数を検索・キャッシュします。 2. **フック実行**: <code>ap_run_ssl_*</code> 系関数が呼ばれると、登録されたフックが実行されます。 3. **フォールバック**: フックが <code>DECLINED</code> を返した場合、またはフックが未定義の場合、キャッシュされた古いオプション関数（<code>module_ssl_*</code>）を呼び出して互換性を維持します。 4. **エラーハンドリング**: <code>ap_ssl_bind_outgoing</code> などでは、フックの戻り値に基づき、SSL が必須であるにもかかわらず有効化に失敗した場合に <code>APLOG_ERR</code> を出力します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_connection.h</code>: サーバーコアの基本構造体。</li>
+<li><code>http_ssl.h</code>: SSL 関連の公開 API 定義。</li>
+<li><code>util_filter.h</code>: フィルタチェーンを通じた SSL 処理の統合。</li>
+<li><code>apr_*.h</code>: APR（Apache Portable Runtime）によるメモリ管理および文字列操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/ssl/</code>: 実際の SSL 実装（<code>mod_ssl</code>）が含まれるディレクトリ。</li>
+<li><code>include/http_ssl.h</code>: 本ファイルで定義されたフックや関数の宣言元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を介したメモリ管理が行われています。特に <code>ssl_var_lookup</code> 等で返される文字列は、渡されたプールに依存するため注意が必要です。</li>
+<li>**設計思想**: 本ファイルは「SSL 実装」ではなく「SSL インターフェース」です。ロジックの大部分はフックを通じて外部モジュールに委譲されます。</li>
+<li>**省略された詳細**: OCSP や証明書管理の具体的な暗号学的処理は、本ファイルには含まれず、すべてフック先のモジュールに委譲されています。</li>
+<li>**注意点**: <code>APLOG_MODULE_INDEX</code> が <code>AP_CORE_MODULE_INDEX</code> に再定義されており、コアモジュールとしてログ出力が行われます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__ssl_c__ssl_is_https.html" target="wiki-view">`ssl_is_https`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_ssl_conn_is_ssl.html" target="wiki-view">`ap_ssl_conn_is_ssl`</a></li>
+<li><a href="../symbols/server__ssl_c__ssl_engine_set.html" target="wiki-view">`ssl_engine_set`</a></li>
+<li><a href="../symbols/server__ssl_c__ssl_proxy_enable.html" target="wiki-view">`ssl_proxy_enable`</a></li>
+<li><a href="../symbols/server__ssl_c__ssl_engine_disable.html" target="wiki-view">`ssl_engine_disable`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_ssl_bind_outgoing.html" target="wiki-view">`ap_ssl_bind_outgoing`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_ssl_has_outgoing_handlers.html" target="wiki-view">`ap_ssl_has_outgoing_handlers`</a></li>
+<li><a href="../symbols/server__ssl_c__ssl_var_lookup.html" target="wiki-view">`ssl_var_lookup`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_ssl_var_lookup.html" target="wiki-view">`ap_ssl_var_lookup`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_setup_ssl_optional_fns.html" target="wiki-view">`ap_setup_ssl_optional_fns`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_ssl_add_cert_files.html" target="wiki-view">`ap_ssl_add_cert_files`</a></li>
+<li><a href="../symbols/server__ssl_c__ap_ssl_add_fallback_cert_files.html" target="wiki-view">`ap_ssl_add_fallback_cert_files`</a></li>
+</ul></body></html>

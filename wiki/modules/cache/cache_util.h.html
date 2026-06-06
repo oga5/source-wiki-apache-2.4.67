@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/cache/cache_util.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/cache/cache_util.h</h1>
+<h2>概要</h2>
+<p><code>cache_util.h</code> は、Apache HTTP Server のキャッシュサブシステム（<code>mod_cache</code>）における共通ユーティリティ、データ構造、および定数を定義するヘッダーファイルです。キャッシュの有効性判定、ロック管理、設定保持、および HTTP ヘッダー操作のための基盤を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_cache</code> モジュール群（<code>mod_cache_disk</code>, <code>mod_socache</code> 等）が共通して利用する「キャッシュの振る舞い」を定義する中心的な役割を担います。各ストレージプロバイダが従うべき設定構造体や、リクエストごとのキャッシュ状態管理を標準化します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: サーバー全体（<code>cache_server_conf</code>）およびディレクトリ単位（<code>cache_dir_conf</code>）のキャッシュ設定の保持。</li>
+<li>**リクエスト状態管理**: <code>cache_request_rec</code> を通じた、現在処理中のリクエストに対するキャッシュ情報の追跡。</li>
+<li>**キャッシュロジック**: RFC 2616 に準拠したキャッシュの鮮度判定、<code>no-cache</code>/<code>no-store</code> の検証。</li>
+<li>**並行制御**: 「サンダリング・ハード（Thundering Herd）」問題を防ぐためのキャッシュロック機構の提供。</li>
+<li>**ユーティリティ**: HTTP ヘッダーの結合、引用符を考慮した文字列トークナイザー、テーブル操作の補助。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>cache_server_conf</code>: サーバー全体のキャッシュ設定（ロックパス、無視するヘッダー、キャッシュ対象外URL等）。</li>
+<li><code>cache_dir_conf</code>: ディレクトリ単位のキャッシュ設定（有効期限、キャッシュの可否、<code>X-Cache</code> ヘッダーの制御等）。</li>
+</ul>
+<h3>リクエスト管理</h3>
+<ul>
+<li><code>cache_request_rec</code>: リクエストごとのキャッシュコンテキスト。プロバイダのリスト、現在のキャッシュハンドル、鮮度フラグ、保存中のレスポンス（<code>saved_brigade</code>）を保持。</li>
+</ul>
+<h3>キャッシュ制御関数</h3>
+<ul>
+<li><code>ap_cache_check_no_cache</code> / <code>ap_cache_check_no_store</code>: RFC 2616 に基づくキャッシュ可否の検証。</li>
+<li><code>cache_check_freshness</code>: キャッシュオブジェクトが最新かどうかの判定。</li>
+<li><code>cache_try_lock</code> / <code>cache_remove_lock</code>: キャッシュ更新時の排他制御（ロック）の取得と解放。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>cache_table_getm</code>: 複数値を持つ HTTP ヘッダーをカンマ区切りで取得。</li>
+<li><code>cache_strqtok</code>: RFC 2616 に準拠し、引用符内の区切り文字を無視するトークナイザー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**キャッシュ判定フロー**: リクエスト処理の初期段階で <code>cache_request_rec</code> が生成され、<code>cache_check_freshness</code> や <code>ap_cache_check_no_cache</code> を通じてキャッシュの利用可否が決定されます。</li>
+<li>**ロックフロー**: <code>cache_try_lock</code> は、バックエンドへのリクエスト前に呼び出されます。成功時はキャッシュ更新権を得ますが、<code>APR_EEXISTS</code> が返された場合は、既存の古いデータを返しつつバックエンドの更新を待機するフローへ移行します。</li>
+<li>**データ構造のライフサイクル**: ほとんどの構造体は <code>request_rec</code> のプール（<code>apr_pool_t</code>）に紐付いており、リクエスト終了時に自動的に解放されます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_cache.h</code>: キャッシュの基本型定義。</li>
+<li><code>apr_*.h</code>: APR (Apache Portable Runtime) のメモリ管理、文字列操作、アトミック操作、URI 解析機能。</li>
+<li><code>httpd.h</code> / <code>http_*.h</code>: Apache HTTP Server のコアリクエスト処理および設定フレームワーク。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>cache_util.c</code>: 本ヘッダーで宣言された関数の実装。</li>
+<li><code>mod_cache.c</code>: キャッシュのメインフック処理。</li>
+<li><code>cache_storage.h</code>: ストレージプロバイダのインターフェース定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 本ヘッダーで定義される構造体は、主にリクエストプール上で割り当てられます。手動での <code>free</code> は不要ですが、プール寿命を意識した設計が必要です。</li>
+<li>**ロックの安全性**: <code>cache_try_lock</code> は、万が一プロセスがクラッシュしても、<code>lockmaxage</code> や <code>no-cache</code> リクエストによって自動的にロックがクリーンアップされるよう設計されています。</li>
+<li>**未実装・浅い部分**: 本ファイルはインターフェース定義が主であり、具体的なストレージ（ディスクや共有メモリ）への書き込みロジックは各プロバイダモジュールに委譲されています。そのため、本ファイル単体ではキャッシュの物理的な保存フローは追えません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__cache_util_h__cache_enable.html" target="wiki-view">`cache_enable`</a></li>
+<li><a href="../../symbols/modules__cache__cache_util_h__cache_disable.html" target="wiki-view">`cache_disable`</a></li>
+<li><a href="../../symbols/modules__cache__cache_util_h__cache_server_conf.html" target="wiki-view">`cache_server_conf`</a></li>
+<li><a href="../../symbols/modules__cache__cache_util_h__cache_dir_conf.html" target="wiki-view">`cache_dir_conf`</a></li>
+<li><a href="../../symbols/modules__cache__cache_util_h__cache_provider_list.html" target="wiki-view">`cache_provider_list`</a></li>
+<li><a href="../../symbols/modules__cache__cache_util_h__cache_request_rec.html" target="wiki-view">`cache_request_rec`</a></li>
+</ul></body></html>

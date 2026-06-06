@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/aaa/mod_authz_groupfile.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/aaa/mod_authz_groupfile.c</h1>
+<h2>概要</h2>
+<p><code>mod_authz_groupfile.c</code> は、Apache HTTP Server においてテキストファイルベースのグループ認証を提供するモジュールです。<code>AuthGroupFile</code> ディレクティブで指定されたファイルを参照し、<code>require group</code> および <code>require file-group</code> によるアクセス制御を実現します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムの一部として、認証・認可（Authz）プロバイダーを提供します。<code>mod_authz_core</code> が提供する認可フレームワークにプラグインとして登録され、ファイルシステム上のグループ定義とリクエストユーザーを照合します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>AuthGroupFile</code> ディレクティブの解析とディレクトリ単位の設定保持。</li>
+<li>**認可プロバイダーの提供**:</li>
+<li><code>group</code>: 指定されたグループ名とユーザーの所属を照合。</li>
+<li><code>file-group</code>: リクエスト対象ファイルの所有グループとユーザーの所属を照合。</li>
+<li>**ファイル解析**: グループ定義ファイル（<code>group: user1 user2 ...</code> 形式）の読み込みとパース。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・ライフサイクル</h3>
+<ul>
+<li><code>authz_groupfile_config_rec</code>: ディレクトリごとの設定構造体。<code>groupfile</code> パスを保持。</li>
+<li><code>create_authz_groupfile_dir_config</code>: 設定構造体の初期化関数。</li>
+<li><code>authz_groupfile_cmds</code>: <code>AuthGroupFile</code> ディレクティブを登録するコマンドテーブル。</li>
+</ul>
+<h3>認可ロジック</h3>
+<ul>
+<li><code>group_check_authorization</code>: <code>require group</code> の認可処理。式評価を行い、ユーザーが指定グループに含まれるか判定。</li>
+<li><code>filegroup_check_authorization</code>: <code>require file-group</code> の認可処理。<code>mod_authz_owner</code> から取得したファイルグループとユーザーの所属を照合。</li>
+<li><code>groups_for_user</code>: 指定ユーザーが所属する全グループを抽出し、<code>apr_table_t</code> に格納するヘルパー。</li>
+</ul>
+<h3>プロバイダー登録</h3>
+<ul>
+<li><code>authz_group_provider</code> / <code>authz_filegroup_provider</code>: 認可プロバイダーのインターフェース定義。</li>
+<li><code>register_hooks</code>: モジュール起動時にプロバイダーを登録し、<code>authz_owner_get_file_group</code> を取得するフック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> が <code>authz_owner_get_file_group</code> を取得し、認可プロバイダーを登録。 2. **認可実行**:</p>
+<ul>
+<li><code>group_check_authorization</code> が呼ばれると、<code>groups_for_user</code> を呼び出し、グループファイルを走査。</li>
+<li><code>groups_for_user</code> は <code>ap_varbuf</code> を使用して行単位でファイルを読み込み、ユーザー名に一致するグループを <code>apr_table_t</code> にキャッシュ。</li>
+<li>最後に <code>ap_expr_str_exec</code> で評価された要求グループ名と、キャッシュされたテーブルを照合。</li>
+<p>3. **ファイルグループ判定**: <code>filegroup_check_authorization</code> は <code>authz_owner_get_file_group</code> を呼び出し、対象ファイルの所有グループを取得した上で、同様に <code>groups_for_user</code> の結果と照合。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_auth.h</code>: 認証・認可の共通基盤。</li>
+<li><code>mod_authz_owner.h</code>: <code>file-group</code> 判定に必要なオプション関数を提供。</li>
+<li><code>util_varbuf.h</code>: 大規模なファイル行読み込みのためのバッファ管理。</li>
+<li><code>http_config.h</code>, <code>http_core.h</code>: 設定管理およびディレクティブ処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_authz_core.c</code>: 認可プロバイダーの呼び出し元。</li>
+<li><code>mod_authz_owner.c</code>: <code>file-group</code> の判定元となるファイル所有者情報の提供元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>groups_for_user</code> 内では <code>apr_pool_t</code> を使用し、一時的な文字列操作やテーブル生成を行っています。<code>sp</code> プールはループごとにクリアされ、メモリ消費を抑制しています。</li>
+<li>**パフォーマンス**: グループファイルはリクエストごとにオープン・走査されます。大規模なグループファイルの場合、I/O負荷が高くなる可能性があるため注意が必要です。</li>
+<li>**制約**: <code>groupfile_parse_config</code> は <code>ap_expr</code> を使用しており、動的なグループ指定が可能です。</li>
+<li>**省略箇所**: エラーハンドリングの詳細や、<code>ap_varbuf</code> の内部実装の詳細は省略しています。これらは Apache HTTP Server の標準的なユーティリティであるためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__authz_groupfile_config_rec.html" target="wiki-view">`authz_groupfile_config_rec`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__create_authz_groupfile_dir_config.html" target="wiki-view">`create_authz_groupfile_dir_config`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__groups_for_user.html" target="wiki-view">`groups_for_user`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__group_check_authorization.html" target="wiki-view">`group_check_authorization`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__filegroup_check_authorization.html" target="wiki-view">`filegroup_check_authorization`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__groupfile_parse_config.html" target="wiki-view">`groupfile_parse_config`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__authz_groupfile_getfns.html" target="wiki-view">`authz_groupfile_getfns`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_groupfile_c__register_hooks.html" target="wiki-view">`register_hooks`</a></li>
+</ul></body></html>

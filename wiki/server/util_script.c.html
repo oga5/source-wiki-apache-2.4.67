@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/util_script.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/util_script.c</h1>
+<h2>概要</h2>
+<p><code>server/util_script.c</code> は、Apache HTTP Server における CGI およびスクリプト実行に関連するユーティリティ関数群を提供します。主に、リクエスト環境変数の構築、CGI ヘッダーの解析、およびスクリプト出力の正規化を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、CGI ゲートウェイやスクリプト実行エンジン（<code>mod_cgi</code>, <code>mod_cgid</code> など）が共通して利用するロジックをカプセル化しています。これにより、各モジュール間でのコード重複を避け、CGI 仕様への準拠を維持します。</p>
+<h2>責務</h2>
+<ul>
+<li>**環境変数管理**: HTTP リクエストヘッダーから CGI 環境変数への変換、およびシステム固有の環境変数の注入。</li>
+<li>**スクリプトヘッダー解析**: スクリプトからの出力を読み取り、HTTP ヘッダーとして妥当性を検証し、<code>request_rec</code> に反映させる。</li>
+<li>**URI/パス変換**: <code>PATH_INFO</code> や <code>SCRIPT_NAME</code> の計算、およびスクリプト実行に必要なパス情報の正規化。</li>
+<li>**データ変換**: クエリ文字列の解析や、スクリプト出力のバッファリング・ストリーム処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>環境変数生成</h3>
+<ul>
+<li><code>ap_create_environment</code>: <code>apr_table_t</code> から <code>exec</code> 形式の環境変数配列を作成。</li>
+<li><code>ap_add_common_vars</code>: リクエストヘッダーやサーバー情報を基に、標準的な CGI 環境変数を <code>r-&gt;subprocess_env</code> に追加。</li>
+<li><code>ap_add_cgi_vars</code>: CGI/1.1 仕様に基づいたリクエスト固有の変数を設定。</li>
+</ul>
+<h3>ヘッダー解析 (Dispatch Family)</h3>
+<ul>
+<li><code>ap_scan_script_header_err_core_ex</code>: スクリプト出力解析のコアエンジン。<code>getsfunc</code> コールバックを用いて入力を抽象化。</li>
+<li><code>ap_scan_script_header_err</code>: ファイルベースの解析用ラッパー。</li>
+<li><code>ap_scan_script_header_err_brigade</code>: <code>apr_bucket_brigade</code> ベースの解析用ラッパー。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>http2env</code>: ヘッダー名を <code>HTTP_</code> プレフィックス付きの環境変数名に変換。</li>
+<li><code>getsfunc_FILE</code> / <code>getsfunc_BRIGADE</code> / <code>getsfunc_STRING</code>: それぞれファイル、バケットブリゲード、文字列からヘッダー行を抽出するリーダー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **環境変数構築**: <code>ap_add_common_vars</code> が呼び出されると、<code>r-&gt;headers_in</code> を走査し、<code>http2env</code> を経由して環境変数テーブルを構築します。その後、OS 固有の環境変数を <code>env2env</code> で追加します。 2. **ヘッダー解析**: <code>ap_scan_script_header_err_core_ex</code> がメインループとなり、<code>getsfunc</code> を通じてスクリプト出力を 1 行ずつ読み取ります。</p>
+<ul>
+<li>空行（<code>\0</code>）に到達するまでヘッダーを解析し、<code>Status</code> や <code>Location</code> などの特殊ヘッダーを処理します。</li>
+<li>不正なヘッダーやタイムアウト時はエラーを返し、正常時は <code>r-&gt;err_headers_out</code> にマージします。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr</code> 系: メモリプール管理、テーブル操作、文字列処理、ファイル I/O。</li>
+<li><code>httpd.h</code> / <code>http_request.h</code>: リクエスト構造体 (<code>request_rec</code>) およびサブリクエスト処理。</li>
+<li><code>util_script.h</code>: 公開 API 定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/generators/mod_cgi.c</code>: 本ファイルの関数を直接利用する主要なコンシューマー。</li>
+<li><code>server/util.c</code>: 汎用的な文字列操作やユーティリティ。</li>
+<li><code>server/protocol.c</code>: HTTP プロトコルレベルのヘッダー処理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的割り当ては <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動解放されます。</li>
+<li>**セキュリティ**: <code>Authorization</code> ヘッダーの取り扱いなど、CGI 経由の認証情報漏洩を防ぐためのガードロジックが含まれています。</li>
+<li>**EBCDIC**: <code>APR_CHARSET_EBCDIC</code> 定義時は、ASCII との変換ロジックがヘッダー解析に介入します。</li>
+<li>**制約**: <code>ap_scan_script_header_err</code> 系関数は、スクリプトの出力が完了するまでブロックする可能性があるため、非同期 I/O が必要な場合は注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_script_c__add_unless_null.html" target="wiki-view">`add_unless_null`</a></li>
+<li><a href="../symbols/server__util_script_c__ap_create_environment.html" target="wiki-view">`ap_create_environment`</a></li>
+<li><a href="../symbols/server__util_script_c__ap_find_path_info.html" target="wiki-view">`ap_find_path_info`</a></li>
+<li><a href="../symbols/server__util_script_c__original_uri.html" target="wiki-view">`original_uri`</a></li>
+<li><a href="../symbols/server__util_script_c__set_cookie_doo_doo.html" target="wiki-view">`set_cookie_doo_doo`</a></li>
+<li><a href="../symbols/server__util_script_c__ap_scan_script_header_err_core_ex.html" target="wiki-view">`ap_scan_script_header_err_core_ex`</a></li>
+<li><a href="../symbols/server__util_script_c__ap_scan_script_header_err_core.html" target="wiki-view">`ap_scan_script_header_err_core`</a></li>
+<li><a href="../symbols/server__util_script_c__getsfunc_FILE.html" target="wiki-view">`getsfunc_FILE`</a></li>
+<li><a href="../symbols/server__util_script_c__ap_scan_script_header_err.html" target="wiki-view">`ap_scan_script_header_err`</a></li>
+<li><a href="../symbols/server__util_script_c__ap_scan_script_header_err_ex.html" target="wiki-view">`ap_scan_script_header_err_ex`</a></li>
+<li><a href="../symbols/server__util_script_c__getsfunc_BRIGADE.html" target="wiki-view">`getsfunc_BRIGADE`</a></li>
+<li><a href="../symbols/server__util_script_c__vastrs.html" target="wiki-view">`vastrs`</a></li>
+</ul></body></html>

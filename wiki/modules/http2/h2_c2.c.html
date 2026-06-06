@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c2.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c2.c</h1>
+<h2>概要</h2>
+<p><code>h2_c2.c</code> は、HTTP/2 のストリームを個別の「セカンダリ接続（c2）」として扱うためのインフラを提供します。Apache HTTP Server の標準的な接続処理を HTTP/2 の多重化モデルに適合させるため、接続のライフサイクル管理、フィルタチェーンの構築、および入出力のブリッジングを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> における「ワーカー」側の接続処理を定義します。マスター接続（c1）から分離されたストリームを、あたかも独立した HTTP 接続であるかのように見せかけることで、既存の HTTP 処理パイプライン（<code>ap_process_request</code> 等）を再利用可能にします。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続ライフサイクル管理**: セカンダリ接続（<code>conn_rec</code>）の生成、破棄、および MPM 固有設定の継承。</li>
+<li>**フィルタチェーンの制御**: HTTP/2 特有の入出力フィルタ（<code>H2_C2_NET_IN/OUT</code> 等）を登録し、標準の HTTP/1.1 フィルタを置換またはバイパスする。</li>
+<li>**データブリッジング**: <code>h2_bucket_beam</code> を介して、HTTP/2 セッションとワーカー間のデータ転送を仲介する。</li>
+<li>**MPM 互換性**: 実行環境（MPM）のサポート状況を判定し、必要に応じてダミーソケットを使用して接続をエミュレートする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクルと管理</h3>
+<ul>
+<li><code>h2_c2_create</code>: セカンダリ接続用の <code>conn_rec</code> を生成し、メモリプールを分離して初期化する。</li>
+<li><code>h2_c2_destroy</code>: 接続に関連付けられたリソースとプールを解放する。</li>
+<li><code>h2_c2_abort</code>: 接続の I/O を強制終了し、関連する <code>beam</code> をエラー状態にする。</li>
+<li><code>h2_c2_child_init</code>: 子プロセス初期化時に MPM 情報を取得し、ダミーソケットを準備する。</li>
+</ul>
+<h3>フィルタとフック</h3>
+<ul>
+<li><code>h2_c2_filter_in</code>: ネットワーク入力フィルタ。<code>beam_in</code> からデータを読み取り、<code>apr_bucket_brigade</code> に変換する。</li>
+<li><code>h2_c2_filter_out</code>: ネットワーク出力フィルタ。<code>beam_out</code> を介してデータを HTTP/2 セッションへ送出する。</li>
+<li><code>h2_c2_register_hooks</code>: HTTP/2 接続処理に必要なフック（<code>pre_connection</code>, <code>post_read_request</code> 等）を登録する。</li>
+</ul>
+<h3>MPM 判定</h3>
+<ul>
+<li><code>h2_mpm_supported</code>: 現在の MPM が HTTP/2 のワーカーモデルをサポートしているか判定する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **接続生成**: <code>h2_c2_create</code> が呼ばれ、マスター接続から設定をコピーした <code>c2</code> が作成される。 2. **フック実行**: <code>ap_hook_process_connection</code> により <code>h2_c2_hook_process</code> が起動し、<code>c2_process</code> を通じて <code>ap_process_request</code> が呼び出される。 3. **データ入力**: <code>h2_c2_filter_in</code> が <code>h2_beam_receive</code> を呼び出し、HTTP/2 セッションから送られてきたデータを <code>beam_in</code> 経由で取得する。 4. **データ出力**: <code>h2_c2_filter_out</code> が <code>h2_beam_send</code> を呼び出し、レスポンスデータを <code>beam_out</code> 経由で HTTP/2 セッションへ戻す。 5. **終了**: <code>ap_process_request</code> 完了後、<code>h2_beam_close</code> で出力がクローズされ、接続が破棄される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>h2_conn_ctx.h</code>: 接続ごとのコンテキスト管理。</li>
+<li><code>h2_bucket_beam.h</code>: ストリーム間のデータ転送用バッファ。</li>
+<li><code>h2_mplx.h</code>: HTTP/2 多重化制御。</li>
+<li><code>httpd.h</code> / <code>http_connection.h</code>: Apache HTTP Server のコア接続構造体。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_c2_filter.c</code>: フィルタの実装詳細。</li>
+<li><code>h2_session.c</code>: HTTP/2 セッションのメインループ。</li>
+<li><code>h2_mplx.c</code>: ストリームの多重化とワーカーの割り当て。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_c2_create</code> で作成される <code>conn_rec</code> は、専用のメモリプールを所有します。これにより、マスター接続とは独立したスレッドでの処理が可能になります。</li>
+<li>**レイアウト**: <code>AP_HAS_RESPONSE_BUCKETS</code> の有無により、フィルタの構成が大きく異なります。新しい Apache バージョンではレスポンスバケットが標準化されているため、コードパスが分岐しています。</li>
+<li>**エッジケース**: <code>h2_c2_abort</code> は、接続が異常終了した際に <code>beam</code> を確実にクローズしてデッドロックを防ぐために重要です。</li>
+<li>**省略**: 本ファイルは接続の「枠組み」に特化しており、HTTP/2 プロトコル自体のフレーム解析（<code>h2_protocol.c</code>）や、ワーカーのスケジューリング（<code>h2_workers.c</code>）の詳細は省略されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_c2_c__check_modules.html" target="wiki-view">`check_modules`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_conn_mpm_name.html" target="wiki-view">`h2_conn_mpm_name`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_mpm_supported.html" target="wiki-view">`h2_mpm_supported`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_child_init.html" target="wiki-view">`h2_c2_child_init`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_log_io.html" target="wiki-view">`h2_c2_log_io`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_destroy.html" target="wiki-view">`h2_c2_destroy`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_abort.html" target="wiki-view">`h2_c2_abort`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_fctx_in_t.html" target="wiki-view">`h2_c2_fctx_in_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_filter_in.html" target="wiki-view">`h2_c2_filter_in`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__beam_out.html" target="wiki-view">`beam_out`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__h2_c2_filter_out.html" target="wiki-view">`h2_c2_filter_out`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_c__addn_headers.html" target="wiki-view">`addn_headers`</a></li>
+</ul></body></html>

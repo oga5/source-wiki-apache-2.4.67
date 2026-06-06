@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/sed1.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/sed1.c</h1>
+<h2>概要</h2>
+<p><code>sed1.c</code> は、Apache HTTP Server のフィルタモジュールで使用される <code>libsed</code> エンジンの実行（評価）フェーズを担う中核ファイルです。入力ストリームに対して <code>sed</code> コマンドを適用し、バッファ管理、パターンマッチング、置換処理、およびコマンドディスパッチを実行します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>sed0.c</code> がコンパイルおよびコマンド解析を担当するのに対し、本ファイルは解析済みのコマンド構造体（<code>sed_commands_t</code>）を読み込み、実際のデータ処理を行うランタイム環境を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**バッファ管理**: 行バッファ、ホールドバッファ、汎用バッファの動的拡張とメモリ管理。</li>
+<li>**実行エンジン**: <code>sed</code> の各コマンド（置換、削除、読み込み、書き込み等）のディスパッチと実行。</li>
+<li>**ストリーム処理**: 入力バッファの行単位の切り出しと、出力先への書き込み制御。</li>
+<li>**状態管理**: 評価中の行番号、フラグ（置換成功、終了要求、削除要求など）の保持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><code>sed_init_eval</code>: 評価状態（<code>sed_eval_t</code>）の初期化。</li>
+<li><code>sed_reset_eval</code>: 既存の評価状態をリセットし、ファイルハンドルやバッファを再設定。</li>
+<li><code>sed_destroy_eval</code>: 評価に関連するファイルハンドル等のリソース解放。</li>
+</ul>
+<h3>実行・評価</h3>
+<ul>
+<li><code>sed_eval_file</code>: ファイルストリーム全体を評価。</li>
+<li><code>sed_eval_buffer</code>: メモリ上のバッファを評価（フィルタ処理の主軸）。</li>
+<li><code>sed_finalize_eval</code>: ストリーム終了時の残存バッファ処理。</li>
+<li><code>execute</code>: 行ごとのコマンド実行ループ。</li>
+</ul>
+<h3>バッファ操作（内部ヘルパー）</h3>
+<ul>
+<li><code>grow_buffer</code>: 汎用的なメモリ拡張関数（4KB境界へのアライメント）。</li>
+<li><code>append_to_linebuf</code> / <code>copy_to_linebuf</code>: 行バッファへのデータ追加・置換。</li>
+<li><code>append_to_holdbuf</code> / <code>copy_to_holdbuf</code>: ホールドバッファ操作。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力処理**: <code>sed_eval_buffer</code> が入力データを <code>\n</code> で分割し、<code>execute</code> を呼び出します。 2. **コマンド実行**: <code>execute</code> は <code>sed_commands_t</code> 内のコマンドリストを順次走査します。 3. **マッチング**: <code>match</code> 関数が <code>sed_step</code> を呼び出し、現在の行バッファに対して正規表現マッチングを行います。 4. **置換処理**: <code>substitute</code> -&gt; <code>dosub</code> -&gt; <code>place</code> の順で、置換文字列の構築とバッファの更新が行われます。 5. **出力**: <code>wline</code> を通じて <code>eval-&gt;writefn</code> が呼び出され、最終的な出力が行われます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_lib.h</code>: APR（Apache Portable Runtime）によるメモリ管理とファイルI/O。</li>
+<li><code>libsed.h</code>, <code>sed.h</code>: 共通データ構造と型定義。</li>
+<li><code>regexp.h</code>: 正規表現エンジンとのインターフェース。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>sed0.c</code>: コマンドのコンパイルと解析。</li>
+<li><code>regexp.c</code>: 正規表現のコンパイルと実行ロジック。</li>
+<li><code>mod_sed.c</code>: Apache モジュールとしての統合レイヤー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>sed_eval_t</code> 内のバッファは <code>apr_pool_t</code> に紐付いており、明示的な <code>free</code> は不要です。ただし、<code>sed_destroy_eval</code> でファイルハンドルを閉じる必要があります。</li>
+<li>**バッファ拡張**: <code>grow_buffer</code> は <code>MAX_BUF_SIZE</code>（8MB）を上限としており、これを超える行データは <code>APR_ENOMEM</code> を返します。</li>
+<li>**ポインタの整合性**: <code>append_to_linebuf</code> 等でバッファが再確保されると、<code>step_vars</code> 内のポインタがずれるため、オフセット計算による再同期が行われています。</li>
+<li>**省略された詳細**: <code>sed_step</code>（<code>regexp.c</code> 内）の内部アルゴリズムは本ファイルには含まれていません。これは正規表現エンジンの詳細に依存するためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__sed1_c__eval_errf.html" target="wiki-view">`eval_errf`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__grow_buffer.html" target="wiki-view">`grow_buffer`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__grow_line_buffer.html" target="wiki-view">`grow_line_buffer`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__grow_hold_buffer.html" target="wiki-view">`grow_hold_buffer`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__grow_gen_buffer.html" target="wiki-view">`grow_gen_buffer`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__appendmem_to_linebuf.html" target="wiki-view">`appendmem_to_linebuf`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__append_to_linebuf.html" target="wiki-view">`append_to_linebuf`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__copy_to_linebuf.html" target="wiki-view">`copy_to_linebuf`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__append_to_holdbuf.html" target="wiki-view">`append_to_holdbuf`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__copy_to_holdbuf.html" target="wiki-view">`copy_to_holdbuf`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__sed_init_eval.html" target="wiki-view">`sed_init_eval`</a></li>
+<li><a href="../../symbols/modules__filters__sed1_c__sed_reset_eval.html" target="wiki-view">`sed_reset_eval`</a></li>
+</ul></body></html>

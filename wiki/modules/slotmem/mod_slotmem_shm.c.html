@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/slotmem/mod_slotmem_shm.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/slotmem/mod_slotmem_shm.c</h1>
+<h2>概要</h2>
+<p><code>mod_slotmem_shm.c</code> は、Apache HTTP Server における共有メモリベースの固定長スロット管理機能を提供します。複数のプロセス間で共有されるメモリ領域をスロット単位に分割し、各スロットの利用状況（in-use）を追跡・永続化する仕組みを実装しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>slotmem</code> サブシステムにおける「共有メモリプロバイダ」です。<code>mod_slotmem_plain</code> がプロセスローカルなメモリを扱うのに対し、本モジュールは <code>apr_shm</code> を利用してプロセス間共有を実現します。</p>
+<h2>責務</h2>
+<ul>
+<li>**共有メモリ管理**: <code>apr_shm</code> を用いたセグメントの作成、アタッチ、破棄。</li>
+<li>**スロット操作**: 固定長データ領域の読み書き、スロットの確保（grab）と解放（release）。</li>
+<li>**永続化**: サーバー再起動を跨ぐためのファイルベースのデータ保存と復元（MD5チェックサムによる整合性検証を含む）。</li>
+<li>**ライフサイクル管理**: プロセス終了時のクリーンアップと、MPM（Multi-Processing Module）環境下での子プロセスへの継承。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>ap_slotmem_instance_t</code>: 共有メモリインスタンスの管理構造体。SHMへのポインタ、スロットのメタデータ、利用状況フラグ配列を保持。</li>
+<li><code>sharedslotdesc_t</code>: スロットの構成情報（サイズ、個数、型）を保持するヘッダー。</li>
+</ul>
+<h3>プロバイダインターフェース</h3>
+<ul>
+<li><code>storage</code>: <code>ap_slotmem_provider_t</code> 構造体。外部モジュールから利用される関数ポインタ群（<code>create</code>, <code>attach</code>, <code>grab</code>, <code>put</code>, <code>get</code> 等）。</li>
+</ul>
+<h3>ライフサイクル・管理関数</h3>
+<ul>
+<li><code>slotmem_create</code> / <code>slotmem_attach</code>: インスタンスの初期化および既存SHMへの接続。</li>
+<li><code>slotmem_grab</code> / <code>slotmem_release</code>: スロットの利用権の排他制御と状態更新。</li>
+<li><code>store_slotmem</code> / <code>restore_slotmem</code>: 永続化ファイルへの書き出しと読み込み。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>pre_config</code> でグローバルプールを初期化し、<code>post_config</code> で <code>cleanup_slotmem</code> を登録。 2. **インスタンス作成**: <code>slotmem_create</code> が呼ばれると、<code>slotmem_filenames</code> でパスを決定し、<code>apr_shm_create</code> でメモリを確保。<code>sharedslotdesc_t</code> を先頭に配置し、後続にデータ領域と <code>inuse</code> フラグ配列をレイアウトする。 3. **データアクセス**: <code>slotmem_get</code> / <code>slotmem_put</code> は、<code>slotmem_dptr</code> を介してオフセット計算を行い、指定されたスロットのメモリ位置を特定して <code>memcpy</code> を実行。 4. **永続化フロー**: <code>store_slotmem</code> は、データ領域のMD5ハッシュを計算し、データ＋ハッシュ＋記述子をファイルに書き出す。<code>restore_slotmem</code> はこれを読み込み、ハッシュ照合により整合性を確認する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>ap_slotmem.h</code>: プロバイダ定義と型定義。</li>
+<li><code>httpd.h</code>, <code>http_main.h</code>: サーバー設定とログ出力。</li>
+<li><code>ap_mpm.h</code>: MPMの世代管理（<code>AP_MPMQ_GENERATION</code>）によるファイル名の一意性確保。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/slotmem/mod_slotmem_plain.c</code>: 同一インターフェースを持つメモリ内（非共有）実装。</li>
+<li><code>include/ap_slotmem.h</code>: 共通のプロバイダAPI定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリレイアウト**: 共有メモリは <code>[desc] [num_free] [data_slots] [inuse_array]</code> の順で配置されます。<code>AP_SLOTMEM_OFFSET</code> 等の定数でアライメントが厳密に管理されています。</li>
+<li>**メモリ所有権**: <code>gpool</code>（グローバルプール）がインスタンスの生存期間を管理します。<code>cleanup_slotmem</code> はプロセス終了時にSHMを破棄しますが、永続化が有効な場合は終了前に <code>store_slotmem</code> が呼ばれます。</li>
+<li>**エッジケース**: <code>is_child_process</code> は <code>WIN32</code> 環境でのプロセス継承を考慮しています。また、<code>restore_slotmem</code> は古い永続化ファイルとの互換性を保つため、EOF判定によるMD5チェックのスキップ処理を含みます。</li>
+<li>**省略箇所**: 本ドキュメントでは、MD5計算の詳細や、各OS固有のファイルシステムAPIの差異については詳細を省略しています。これらは <code>apr</code> ライブラリの抽象化に依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html" target="wiki-view">`sharedslotdesc_t`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__ap_slotmem_instance_t.html" target="wiki-view">`ap_slotmem_instance_t`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_filenames.html" target="wiki-view">`slotmem_filenames`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_clearinuse.html" target="wiki-view">`slotmem_clearinuse`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__store_slotmem.html" target="wiki-view">`store_slotmem`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html" target="wiki-view">`restore_slotmem`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__is_child_process.html" target="wiki-view">`is_child_process`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__cleanup_slotmem.html" target="wiki-view">`cleanup_slotmem`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_doall.html" target="wiki-view">`slotmem_doall`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_create.html" target="wiki-view">`slotmem_create`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_attach.html" target="wiki-view">`slotmem_attach`</a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_get.html" target="wiki-view">`slotmem_get`</a></li>
+</ul></body></html>

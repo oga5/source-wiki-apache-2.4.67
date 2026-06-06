@@ -6,22 +6,69 @@
 <li>定義箇所: <code>modules/filters/mod_include.c:174</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>SSI（Server Side Includes）処理における解析状態、バッファ、引数リスト、および式評価コンテキストを保持する非公開の内部構造体です。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>struct ssi_internal_ctx {
+    parse_state_t state;
+    int           seen_eos;
+    int           error;
+    char          quote;
+    apr_size_t    parse_pos;
+    apr_size_t    bytes_read;
+    apr_bucket_brigade *tmp_bb;
+    const char   *start_seq;
+    bndm_t       *start_seq_pat;
+    const char   *end_seq;
+    apr_size_t    end_seq_len;
+    char         *directive;
+    apr_size_t    directive_len;
+    arg_item_t   *current_arg;
+    arg_item_t   *argv;
+    backref_t    *re;
+    const char   *undefined_echo;
+    apr_size_t    undefined_echo_len;
+    char         legacy_expr;
+    ap_expr_eval_ctx_t *expr_eval_ctx;
+    const char         *expr_vary_this;
+    const char         *expr_err;
+    /* DEBUG_INCLUDE 定義時のみ debug メンバが存在 */
+};</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<p>本構造体は関数引数として渡されるのではなく、<code>include_ctx_t</code>（公開コンテキスト）の内部メンバとして保持されます。各解析ステップで <code>state</code> や <code>argv</code> が更新され、最終的な出力は <code>tmp_bb</code>（バケットブリゲード）を介してフィルタチェーンへ渡されます。</p>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>include_ctx_t</code> の一部としてライフサイクルが管理されます。</li>
+<li><code>dpool</code>（ディレクティブ実行用プール）と連動してメモリが確保されることが前提です。</li>
+<li><code>legacy_expr</code> フラグにより、式評価エンジン（<code>ap_expr</code> かレガシーか）が切り替えられます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ストリームベースのステートマシン（<code>parse_state_t</code>）の状態を保持し、タグの開始・終了シーケンスの検出を追跡します。</li>
+<li><code>bndm_t</code> を用いた高速なパターンマッチングにより、SSI タグの開始位置を特定します。</li>
+<li><code>argv</code> リストを通じて、解析されたディレクティブの引数を保持し、実行時に参照します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>mod_include.c</code> 内の複数の関数（<code>2841</code>, <code>2916</code>, <code>3011</code>, <code>3110</code>, <code>3134</code>, <code>3177</code>, <code>3391</code>, <code>3849</code> 行付近）が、<code>ctx-&gt;intern</code> を通じて本構造体にアクセスしています。</li>
+<li>**呼び出し先**: <code>ap_expr</code> 関連の関数や、バケット操作関数が本構造体のメンバを参照・更新します。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>parse_state_t</code>: 解析状態の遷移を定義。</li>
+<li><code>arg_item_t</code>: ディレクティブの引数リスト。</li>
+<li><code>bndm_t</code>: 高速検索用パターン。</li>
+<li><code>ap_expr_eval_ctx_t</code>: <code>ap_expr</code> による式評価コンテキスト。</li>
+<li><code>include_ctx_t</code>: 本構造体を保持する上位のコンテキスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>error</code> メンバにより解析エラー状態を保持します。</li>
+<li><code>parse_pos</code> は、タグがバッファ境界をまたぐ際の不完全なマッチング状態を管理します。</li>
+<li><code>re</code>（正規表現）が未初期化の場合、<code>NULL</code> が設定されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本構造体は非公開であり、<code>mod_include.c</code> 内部でのみ使用されます。</li>
+<li><code>DEBUG_INCLUDE</code> が定義されている場合、構造体のサイズとレイアウトが変化するため注意してください。</li>
+<li>メモリ管理は <code>include_ctx_t</code> のプールに依存しているため、サブリクエスト生成時の寿命管理には特に留意してください。</li>
 </ul></body></html>

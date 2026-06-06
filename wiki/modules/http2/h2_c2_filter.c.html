@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c2_filter.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c2_filter.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 のセカンダリコネクション（C2）において、HTTP/1.1 形式の入出力を HTTP/2 ストリームのセマンティクスに変換するためのフィルタ群を実装するファイルです。Apache HTTP Server のフィルタスタックに介入し、リクエストの注入、レスポンスの解析、およびチャンク化された転送エンコーディングのシミュレーションを行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> のサブシステムにおいて、HTTP/1.1 互換のハンドラと HTTP/2 プロトコル層の間の「翻訳レイヤー」として機能します。<code>h2_c2.c</code> が管理するストリームのライフサイクルと連携し、フィルタチェーンを通じてデータの流れを制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト注入**: <code>h2_c2_filter_request_in</code> を通じて、HTTP/2 ストリームから受け取ったリクエストを <code>request_rec</code> に変換し、フィルタスタックへ注入する。</li>
+<li>**レスポンス解析**: <code>AP_HAS_RESPONSE_BUCKETS</code> が無効な環境において、HTTP/1.1 形式のレスポンスを解析し、HTTP/2 ヘッダーバケットへ変換する。</li>
+<li>**チャンク化のシミュレーション**: <code>h2_chunk_filter_t</code> を使用し、HTTP/1.1 フィルタが期待するチャンク形式を生成・管理する。</li>
+<li>**ヘッダー/トレーラー管理**: <code>Vary</code> ヘッダーの正規化や、トレーラーの抽出・挿入を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタ関数 (Public API)</h3>
+<ul>
+<li><code>h2_c2_filter_request_in</code>: 入力フィルタ。ストリームのリクエストを注入し、自身を削除する。</li>
+<li><code>h2_c2_filter_response_out</code>: 出力フィルタ。レスポンスヘッダーを生成し、HTTP/2 ヘッダーバケットとして挿入する。</li>
+<li><code>h2_c2_filter_catch_h1_out</code>: HTTP/1.1 レスポンスを解析し、HTTP/2 構造へ変換する。</li>
+<li><code>h2_c2_filter_trailers_out</code>: トレーラーを検出し、ヘッダーバケットとして送信する。</li>
+</ul>
+<h3>データ構造</h3>
+<ul>
+<li><code>h2_response_parser</code>: レスポンス解析の状態（ステータス行、ヘッダー行、完了）を保持するコンテキスト。</li>
+<li><code>h2_chunk_filter_t</code>: チャンク化された転送エンコーディングのシミュレーション状態を保持するコンテキスト。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>create_response</code>: <code>request_rec</code> から <code>h2_headers</code> を生成し、ヘッダーの正規化を行う。</li>
+<li><code>parse_response</code>: <code>h2_response_parser</code> を用いて、ブリゲードから HTTP/1.1 レスポンスを段階的に解析する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <code>h2_c2_filter_request_in</code> が呼ばれると、<code>conn_ctx</code> からリクエストを取得し、<code>h2_request_create_bucket</code> でバケットを作成してブリゲードの末尾に挿入します。 2. **出力**: <code>h2_c2_filter_response_out</code> はブリゲードを走査し、<code>H2_BUCKET_IS_HEADERS</code> が見つかるまで待機します。ヘッダーが確定すると <code>create_response</code> を呼び出し、HTTP/2 ヘッダーバケットを挿入します。 3. **解析**: <code>h2_c2_filter_catch_h1_out</code> は <code>parse_response</code> を呼び出し、<code>get_line</code> でブリゲードから行単位でデータを読み取ります。データが不完全な場合は <code>APR_EAGAIN</code> を返し、後続の呼び出しで処理を継続します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_connection.h</code>, <code>http_request.h</code>: Apache コア API。</li>
+<li><code>h2_c2.h</code>, <code>h2_mplx.h</code>: ストリーム管理および多重化層。</li>
+<li><code>h2_headers.h</code>: HTTP/2 ヘッダーバケットの定義。</li>
+<li><code>h2_util.h</code>: ブリゲード操作やログ出力ユーティリティ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_c2.c</code>: C2 コネクションのライフサイクル管理。</li>
+<li><code>h2_bucket_beam.c</code>: ストリーム間でのデータ受け渡し。</li>
+<li><code>h2_headers.c</code>: ヘッダーバケットの生成と操作。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ほとんどの動的メモリは <code>request_rec</code> のプール (<code>r-&gt;pool</code>) またはコネクションのプール (<code>f-&gt;c-&gt;pool</code>) から割り当てられます。</li>
+<li>**フィルタの削除**: <code>h2_c2_filter_request_in</code> は「一度きり」のフィルタであり、処理完了後に <code>ap_remove_input_filter</code> で自身を削除します。</li>
+<li>**制約事項**: <code>AP_HAS_RESPONSE_BUCKETS</code> が定義されている場合とそうでない場合で、レスポンス処理のパスが大きく異なります。現在の実装は、HTTP/1.1 のレガシーな解析ロジックを HTTP/2 に適合させるための複雑な回避策を含んでいます。</li>
+<li>**未実装**: <code>AP_MODE_EATCRLF</code> はサポートされていません。また、<code>HUGE_STRING_LEN</code> を超えるヘッダー行はエラーとして扱われます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_notes_out.html" target="wiki-view">`h2_c2_filter_notes_out`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_request_in.html" target="wiki-view">`h2_c2_filter_request_in`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__uniq_field_values.html" target="wiki-view">`uniq_field_values`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__fix_vary.html" target="wiki-view">`fix_vary`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__create_response.html" target="wiki-view">`create_response`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__h2_rp_state_t.html" target="wiki-view">`h2_rp_state_t`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__h2_response_parser.html" target="wiki-view">`h2_response_parser`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__parse_header.html" target="wiki-view">`parse_header`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__get_line.html" target="wiki-view">`get_line`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__make_table.html" target="wiki-view">`make_table`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__pass_response.html" target="wiki-view">`pass_response`</a></li>
+<li><a href="../../symbols/modules__http2__h2_c2_filter_c__h2_chunk_filter_t.html" target="wiki-view">`h2_chunk_filter_t`</a></li>
+</ul></body></html>

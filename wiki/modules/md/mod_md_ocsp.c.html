@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/mod_md_ocsp.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/mod_md_ocsp.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server における OCSP Stapling の統合管理を担当します。<code>mod_md</code> の一部として、証明書のステータス取得、キャッシュ、および定期的な更新（Watchdog 経由）を自動化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> サブシステムにおいて、OCSP レスポンスのライフサイクルを管理するレイヤーです。<code>mod_ssl</code> が提供するフックと連携し、証明書の検証に必要な OCSP ステータスを透過的に提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ステータス提供**: <code>mod_ssl</code> からの要求に対し、キャッシュされた OCSP レスポンスを供給する。</li>
+<li>**初期化と検証**: 証明書チェーンを解析し、OCSP Stapling の対象となる証明書を特定・準備する。</li>
+<li>**バックグラウンド更新**: <code>mod_watchdog</code> を利用し、定期的に OCSP レスポンスを更新する。</li>
+<li>**ハウスキーピング**: 古くなった OCSP レスポンスファイルを定期的に削除し、ストレージの肥大化を防止する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ステータス管理 (Public API)</h3>
+<ul>
+<li><code>md_ocsp_prime_status</code>: 証明書チェーンを解析し、OCSP ステータスの取得準備を行う。</li>
+<li><code>md_ocsp_provide_status</code>: <code>mod_ssl</code> から呼ばれるコールバック関数。キャッシュされた OCSP レスポンスを供給する。</li>
+</ul>
+<h3>Watchdog 制御</h3>
+<ul>
+<li><code>md_ocsp_start_watching</code>: OCSP 更新用 Watchdog を登録・起動する。</li>
+<li><code>run_watchdog</code>: Watchdog のメインループ。<code>md_ocsp_renew</code> を呼び出し、次回の実行タイミングを計算する。</li>
+</ul>
+<h3>内部構造体</h3>
+<ul>
+<li><code>md_ocsp_ctx_t</code>: Watchdog の実行コンテキスト。サーバー設定と <code>mod_watchdog</code> インスタンスを保持する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>md_ocsp_start_watching</code> が呼ばれ、専用のメモリプールと <code>mod_watchdog</code> インスタンスが作成される。 2. **ステータス更新**: <code>run_watchdog</code> が定期的に起動し、<code>md_ocsp_renew</code> を通じて各証明書の OCSP レスポンスを更新する。 3. **リクエスト処理**:</p>
+<ul>
+<li><code>mod_ssl</code> が <code>md_ocsp_provide_status</code> を呼び出す。</li>
+<li><code>staple_here</code> で設定を確認し、<code>md_ocsp_get_status</code> を経由してストレージから DER 形式のレスポンスを取得する。</li>
+<p>4. **クリーンアップ**: <code>ocsp_remove_old_responses</code> が古いレスポンスファイルを削除し、ストレージの整合性を維持する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_watchdog.h</code>: バックグラウンドタスクの実行基盤。</li>
+<li><code>md_ocsp.h</code>: OCSP ロジックのコア実装（<code>md_ocsp_renew</code> 等）。</li>
+<li><code>mod_md_config.h</code>: <code>MD_CONFIG_STAPLING</code> 等の設定値取得。</li>
+<li><code>http_ssl.h</code>: <code>ap_ssl_ocsp_copy_resp</code> 等の <code>mod_ssl</code> インターフェース。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_ocsp.c</code>: OCSP レスポンスの取得・保存・解析を行う低レイヤー実装。</li>
+<li><code>mod_md_config.c</code>: OCSP 関連の設定ディレクティブの定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: Watchdog 用のコンテキストは、サーバーのライフサイクルを跨いで生存させるため、専用の <code>apr_pool_t</code> と <code>apr_allocator_t</code> を使用しています。</li>
+<li>**エラーパス**: <code>staple_here</code> が偽を返す場合、OCSP Stapling はスキップされ、<code>DECLINED</code> が返されます。これは設定ミスや無効な証明書チェーンの場合の標準的な挙動です。</li>
+<li>**制約**: <code>mod_watchdog</code> が必須です。これがロードされていない場合、OCSP Stapling 機能は初期化時にエラーとなります。</li>
+<li>**省略箇所**: 本ファイルは <code>mod_watchdog</code> とのインターフェースに特化しており、実際の OCSP 通信プロトコル（ASN.1 解析や HTTP 通信）の詳細は <code>md_ocsp.c</code> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__staple_here.html" target="wiki-view">`staple_here`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_prime_status.html" target="wiki-view">`md_ocsp_prime_status`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__ocsp_copy_ctx_t.html" target="wiki-view">`ocsp_copy_ctx_t`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_provide_status.html" target="wiki-view">`md_ocsp_provide_status`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_ctx_t.html" target="wiki-view">`md_ocsp_ctx_t`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__next_run_default.html" target="wiki-view">`next_run_default`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__run_watchdog.html" target="wiki-view">`run_watchdog`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__ocsp_remove_old_responses.html" target="wiki-view">`ocsp_remove_old_responses`</a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_start_watching.html" target="wiki-view">`md_ocsp_start_watching`</a></li>
+</ul></body></html>

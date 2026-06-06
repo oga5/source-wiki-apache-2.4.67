@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/filters/sed0.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/filters/sed0.c</h1>
+<h2>概要</h2>
+<p><code>sed0.c</code> は、Apache HTTP Server の <code>mod_sed</code> における <code>sed</code> スクリプトのコンパイルエンジンを実装するファイルです。テキストストリームや文字列から <code>sed</code> コマンドを解析し、実行可能な内部表現（<code>sed_commands_t</code>）へと変換する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_sed</code> サブシステムにおいて、<code>sed1.c</code> が実行時（評価）フェーズを担当するのに対し、本ファイルは準備フェーズを担当します。<code>libsed.h</code> で定義されたデータ構造を構築し、コンパイル済みのコマンドチェーンを生成します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スクリプト解析**: <code>sed</code> コマンド（<code>s</code>, <code>a</code>, <code>c</code>, <code>i</code>, <code>b</code>, <code>t</code> 等）の構文解析。</li>
+<li>**メモリ管理**: <code>apr_pool_t</code> を用いたコマンド構造体（<code>sed_reptr_t</code>）の動的割り当て。</li>
+<li>**エラーハンドリング**: コンパイル時の構文エラーを <code>errfn</code> コールバックを通じて報告。</li>
+<li>**ラベル解決**: <code>b</code>（分岐）や <code>t</code>（条件分岐）コマンドで使用されるラベルのチェーン管理と解決。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンパイル・初期化</h3>
+<ul>
+<li><code>sed_init_commands</code>: <code>sed_commands_t</code> 構造体の初期化とメモリプール設定。</li>
+<li><code>sed_compile_string</code> / <code>sed_compile_file</code>: 文字列またはファイルから <code>sed</code> スクリプトをコンパイルするメインエントリーポイント。</li>
+<li><code>fcomp</code>: スクリプトを一行ずつ読み込み、コマンドを解析する内部ループ。</li>
+</ul>
+<h3>構文解析ヘルパー</h3>
+<ul>
+<li><code>address</code>: <code>sed</code> のアドレス指定（行番号や正規表現）を解析。</li>
+<li><code>compsub</code>: <code>s</code> コマンドの置換文字列を解析。</li>
+<li><code>text</code>: <code>a</code>, <code>c</code>, <code>i</code> コマンドのテキストブロックを抽出。</li>
+<li><code>ycomp</code>: <code>y</code> コマンド（変換）のテーブルを生成。</li>
+<li><code>comple</code>: 正規表現コンパイルのラッパー。</li>
+</ul>
+<h3>管理・ユーティリティ</h3>
+<ul>
+<li><code>alloc_reptr</code>: 新しい <code>sed_reptr_t</code>（コマンドノード）を割り当て、リストに連結。</li>
+<li><code>command_errf</code>: エラーメッセージをフォーマットし、登録されたエラーハンドラへ送出。</li>
+<li><code>dechain</code>: 未解決のラベルチェーンを解決済みのコマンドアドレスに接続。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>sed_init_commands</code> で <code>sed_commands_t</code> が初期化され、メモリプールが割り当てられる。 2. **解析ループ**: <code>fcomp</code> が <code>rline</code> を通じてスクリプトを読み込み、<code>address</code> でアドレスを特定後、<code>switch</code> 文でコマンド種別を判定。 3. **コマンド構築**: 各コマンドに応じたヘルパー（<code>text</code>, <code>compsub</code>, <code>ycomp</code>）が呼ばれ、<code>sed_reptr_t</code> 構造体に属性が書き込まれる。 4. **連結**: <code>alloc_reptr</code> によりコマンドがリストに追加され、<code>commands-&gt;ptrend</code> が更新される。 5. **最終化**: <code>sed_get_finalize_error</code> および <code>check_finalized</code> により、未解決のラベルや不正なブロック構造がないか検証される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_strings.h</code>: APR（Apache Portable Runtime）によるメモリ管理と文字列操作。</li>
+<li><code>libsed.h</code>, <code>sed.h</code>: <code>sed</code> 内部データ構造の定義。</li>
+<li><code>regexp.h</code>: 正規表現コンパイル機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>sed1.c</code>: 本ファイルで構築された <code>sed_commands_t</code> を使用して、実際にテキストを処理する実行エンジン。</li>
+<li><code>regexp.c</code>: 正規表現のコンパイルおよびマッチングの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: すべての動的メモリは <code>sed_commands_t</code> に渡された <code>apr_pool_t</code> に依存します。<code>sed_destroy_commands</code> は現在空ですが、プールが破棄されることでメモリは解放されます。</li>
+<li>**制約**: <code>rline</code> 関数は <code>apr_file_read</code> を使用して 1 バイトずつ読み込む実装となっており、パフォーマンス上のボトルネックとなる可能性があります。</li>
+<li>**未実装/浅い部分**: <code>S5EMUL</code> マクロが定義されていない場合、テキスト挿入時のインデント除去が行われます。この挙動は標準的な <code>sed</code> との互換性に影響する可能性があります。</li>
+<li>**エラーパス**: コンパイルエラーが発生すると <code>APR_EGENERAL</code> が返され、詳細なエラーメッセージは <code>errfn</code> を通じて報告されます。呼び出し側は必ず戻り値を確認してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__sed0_c__command_errf.html" target="wiki-view">`command_errf`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__sed_init_commands.html" target="wiki-view">`sed_init_commands`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__sed_compile_string.html" target="wiki-view">`sed_compile_string`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__sed_compile_file.html" target="wiki-view">`sed_compile_file`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__sed_get_finalize_error.html" target="wiki-view">`sed_get_finalize_error`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__sed_canbe_finalized.html" target="wiki-view">`sed_canbe_finalized`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__check_finalized.html" target="wiki-view">`check_finalized`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__dechain.html" target="wiki-view">`dechain`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__fcomp.html" target="wiki-view">`fcomp`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__compsub.html" target="wiki-view">`compsub`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__rline.html" target="wiki-view">`rline`</a></li>
+<li><a href="../../symbols/modules__filters__sed0_c__alloc_reptr.html" target="wiki-view">`alloc_reptr`</a></li>
+</ul></body></html>

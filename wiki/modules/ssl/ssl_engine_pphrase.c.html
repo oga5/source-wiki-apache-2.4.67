@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/ssl/ssl_engine_pphrase.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/ssl/ssl_engine_pphrase.c</h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache <code>mod_ssl</code> における暗号化された秘密鍵の復号用パスフレーズ入力処理を担います。サーバー起動時や再起動時に、ファイルシステム上の鍵ファイル、外部コマンド（パイプ）、または OpenSSL エンジン/ストア API を介してパスフレーズを収集するメカニズムを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_ssl</code> の初期化フェーズにおいて、暗号化された秘密鍵を読み込むための「対話型インターフェース」として機能します。<code>ssl_engine_init.c</code> から呼び出され、ユーザーや外部プロセスからパスフレーズを取得し、OpenSSL の鍵読み込み処理を完結させます。</p>
+<h2>責務</h2>
+<ul>
+<li>**パスフレーズ収集**: 組み込み（標準入力）、外部パイプ、または外部フィルタプログラムを通じたパスフレーズの取得。</li>
+<li>**対話管理**: ユーザーへのプロンプト表示、入力の検証、およびリトライ回数の制御。</li>
+<li>**鍵のキャッシュと再利用**: サーバー再起動時に、ファイル更新時刻（mtime）をチェックし、変更がない場合は既存の鍵を再利用してパスフレーズ入力を省略。</li>
+<li>**API 抽象化**: OpenSSL の <code>UI_METHOD</code> を実装し、エンジン（ENGINE API）やストア（OSSL_STORE API）経由での鍵読み込みをサポート。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>pphrase_cb_arg_t</code>: パスフレーズ収集時の状態（サーバー設定、メモリプール、試行回数、鍵IDなど）を保持するコンテキスト構造体。</li>
+</ul>
+<h3>コールバック・UI メソッド</h3>
+<ul>
+<li><code>ssl_pphrase_Handle_CB</code>: レガシーな PEM パスフレーズコールバック。</li>
+<li><code>get_passphrase_ui</code>: OpenSSL の <code>UI_METHOD</code> を構築し、<code>passphrase_ui_open/read/write/close</code> を登録。</li>
+</ul>
+<h3>鍵読み込み・管理</h3>
+<ul>
+<li><code>ssl_load_encrypted_pkey</code>: 暗号化された秘密鍵を読み込むメインのエントリポイント。</li>
+<li><code>modssl_load_engine_keypair</code>: ENGINE または OSSL_STORE API を使用して鍵と証明書をロードする高レベル関数。</li>
+<li><code>asn1_table_vhost_key</code>: 仮想ホストごとの鍵IDを管理し、メモリリークを防ぐためのハッシュテーブル操作。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ssl_load_encrypted_pkey</code> が呼ばれ、<code>pphrase_cb_arg_t</code> が初期化されます。 2. **キャッシュ確認**: <code>exists_and_readable</code> で鍵ファイルの mtime を確認し、キャッシュ済みであれば処理を終了します。 3. **収集**:</p>
+<ul>
+<li><code>SSLPassPhraseDialog</code> 設定に基づき、組み込み、パイプ、フィルタのいずれかの方式でパスフレーズを要求します。</li>
+<li>外部パイプの場合、<code>ssl_pipe_child_create</code> で子プロセスを生成し、<code>readtty</code>/<code>writetty</code> を介して通信します。</li>
+<p>4. **復号**: <code>modssl_read_privatekey</code> または <code>ENGINE_load_private_key</code> がコールバック経由でパスフレーズを受け取り、鍵を復号します。 5. **クリーンアップ**: 成功後、機密データ（パスフレーズ）を <code>OPENSSL_cleanse</code> でメモリから消去し、パイプを閉じます。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>ssl_private.h</code>: <code>mod_ssl</code> 内部定義および設定構造体。</li>
+<li><code>openssl/ui.h</code>: OpenSSL の対話型 UI API。</li>
+<li><code>openssl/store.h</code>: URI ベースの鍵/証明書読み込み API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>ssl_engine_init.c</code>: 本ファイルの関数を呼び出し、SSL サーバーの初期化を行う。</li>
+<li><code>ssl_util_ssl.c</code>: <code>modssl_read_privatekey</code> 等の低レベルな OpenSSL ラッパーを提供。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>pphrase_cb_arg_t</code> 内のパスフレーズは <code>apr_pool_t</code> に割り当てられます。機密データは <code>OPENSSL_cleanse</code> で適切に消去されますが、メモリレイアウトは OpenSSL の仕様に依存します。</li>
+<li>**Win32 の制約**: Windows 環境では <code>SSLPassPhraseDialog builtin</code> がサポートされておらず、パイプ経由の入力が必須となる点に注意してください。</li>
+<li>**設計の意図**: <code>asn1_table_vhost_key</code> で <code>s-&gt;process-&gt;pool</code> を使用しているのは、再起動時にも鍵情報を保持し、パスフレーズ入力を最小限にするための設計です。</li>
+<li>**省略された詳細**: 本ファイルはパスフレーズの「収集」に特化しており、復号後の鍵の具体的な利用方法や証明書チェーンの検証ロジックは他のファイル（<code>ssl_engine_init.c</code> 等）に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__pphrase_cb_arg_t.html" target="wiki-view">`pphrase_cb_arg_t`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__exists_and_readable.html" target="wiki-view">`exists_and_readable`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__asn1_table_vhost_key.html" target="wiki-view">`asn1_table_vhost_key`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__pphrase_array_get.html" target="wiki-view">`pphrase_array_get`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__ssl_pipe_child_create.html" target="wiki-view">`ssl_pipe_child_create`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__pipe_get_passwd_cb.html" target="wiki-view">`pipe_get_passwd_cb`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__ssl_pphrase_Handle_CB.html" target="wiki-view">`ssl_pphrase_Handle_CB`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__passphrase_ui_open.html" target="wiki-view">`passphrase_ui_open`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__passphrase_ui_read.html" target="wiki-view">`passphrase_ui_read`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__passphrase_ui_write.html" target="wiki-view">`passphrase_ui_write`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__passphrase_ui_close.html" target="wiki-view">`passphrase_ui_close`</a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_pphrase_c__X509.html" target="wiki-view">`X509`</a></li>
+</ul></body></html>

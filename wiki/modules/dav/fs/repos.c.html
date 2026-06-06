@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/dav/fs/repos.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1>modules/dav/fs/repos.c</h1>
+<h2>概要</h2>
+<p><code>repos.c</code> は、Apache HTTP Server の <code>mod_dav</code> におけるファイルシステムベースのストレージプロバイダーの実装です。ローカルファイルシステム上のディレクトリやファイルを WebDAV リソースとして公開し、プロパティ管理、リソースのコピー/移動/削除、およびディレクトリ走査機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav_fs</code> モジュールの中心的なリポジトリフック実装です。<code>repos.h</code> で宣言されたインターフェースを具現化し、<code>mod_dav</code> コアに対してファイルシステム固有の操作を抽象化して提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リソース管理**: ファイルシステムパスと WebDAV リソースの相互変換、およびリソースの存在確認。</li>
+<li>**ファイル操作**: ストリーム（読み書き）の抽象化、ファイルのコピー・移動・削除の実行。</li>
+<li>**プロパティ管理**: <code>DAV:</code> 名前空間およびカスタム名前空間（<code>executable</code> 属性など）のライブプロパティの定義と操作。</li>
+<li>**ディレクトリ走査**: <code>dav_fs_walk</code> を通じた再帰的なリソース探索と、それに応じたコールバック実行。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リポジトリフック (<code>dav_hooks_repository</code>)</h3>
+<ul>
+<li><code>dav_hooks_repository_fs</code>: リポジトリ操作のメインエントリーポイント。<code>get_resource</code>, <code>open_stream</code>, <code>copy_resource</code>, <code>walk</code> 等の関数ポインタを保持。</li>
+</ul>
+<h3>コンテキスト構造体</h3>
+<ul>
+<li><code>dav_resource_private</code>: リソースの物理パス、<code>apr_finfo_t</code>、リクエスト情報を保持するプライベートデータ。</li>
+<li><code>dav_fs_walker_context</code>: ディレクトリ走査中に状態を維持するためのコンテキスト。</li>
+<li><code>dav_stream</code>: ファイル読み書きのためのストリーム状態（一時ファイルパスやクリーンアップ情報を含む）。</li>
+</ul>
+<h3>ライブプロパティ</h3>
+<ul>
+<li><code>dav_fs_liveprop_group</code>: サポートするライブプロパティ（<code>creationdate</code>, <code>getcontentlength</code> 等）と名前空間の定義。</li>
+<li><code>dav_fs_patch_*</code>: <code>executable</code> プロパティの更新、検証、ロールバックを行う一連のフック関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**リソース探索**: <code>dav_fs_get_resource</code> がリクエストからパスを構築し、<code>dav_resource</code> を初期化します。</li>
+<li>**ディレクトリ走査**: <code>dav_fs_walk</code> が <code>dav_fs_internal_walk</code> を経由して <code>dav_fs_walker</code> を呼び出します。これは再帰的にディレクトリを探索し、各リソースに対して <code>params-&gt;func</code> を実行します。</li>
+<li>**コピー/移動**: <code>dav_fs_copymove_resource</code> が走査を行い、各ファイルに対して <code>dav_fs_copymove_file</code> を実行します。プロパティの移動は <code>dav_fs_copymoveset</code> が担当し、DBM ファイルを操作します。</li>
+<li>**ストリーム処理**: <code>dav_fs_open_stream</code> でファイルを開き、<code>dav_fs_write_stream</code> で書き込み、<code>dav_fs_close_stream</code> でコミット（一時ファイルからのリネーム）またはロールバック（一時ファイルの削除）を行います。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_file_io.h</code>, <code>apr_buckets.h</code>: ファイル I/O およびバケット操作。</li>
+<li><code>mod_dav.h</code>: WebDAV プロバイダーインターフェース。</li>
+<li><code>repos.h</code>: 本モジュールの公開ヘッダー。</li>
+<li><code>httpd.h</code>, <code>http_protocol.h</code>: Apache HTTP Server のリクエスト処理およびヘッダー操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/dav/fs/repos.h</code>: 公開インターフェース定義。</li>
+<li><code>modules/dav/fs/lock.c</code>: ロック管理の実装。</li>
+<li><code>modules/dav/fs/dbm.c</code>: プロパティ保存用の DBM 操作。</li>
+<li><code>modules/dav/fs/mod_dav_fs.c</code>: モジュールの登録と初期化。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての操作は <code>request_rec</code> または <code>dav_resource</code> に関連付けられた <code>apr_pool_t</code> を使用します。明示的な <code>free</code> は不要ですが、プール寿命に注意が必要です。</li>
+<li>**エラー処理**: <code>dav_error</code> 構造体を使用してエラーを伝播します。<code>MAP_IO2HTTP</code> マクロにより、APR のエラーコードを適切な HTTP ステータスコードに変換しています。</li>
+<li>**一貫性**: <code>MOVE</code> や <code>COPY</code> 操作において、ファイルとプロパティ（DBM）の両方を更新する必要があるため、一部の操作で「不整合な状態」が発生するリスクがコメントで指摘されています。</li>
+<li>**未実装/浅い部分**: <code>DEBUG_GET_HANDLER</code> が 0 に設定されており、標準的な GET ハンドリングは <code>mod_dav</code> コアに依存しています。また、シンボリックリンクの扱いは明示的にスキップされています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_resource_private.html" target="wiki-view">`dav_resource_private`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_walker_context.html" target="wiki-view">`dav_fs_walker_context`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymove_walk_ctx.html" target="wiki-view">`dav_fs_copymove_walk_ctx`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_stream.html" target="wiki-view">`dav_stream`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_get_request_rec.html" target="wiki-view">`dav_fs_get_request_rec`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_pool.html" target="wiki-view">`dav_fs_pool`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_pathname.html" target="wiki-view">`dav_fs_pathname`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_dir_file_name.html" target="wiki-view">`dav_fs_dir_file_name`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_format_time.html" target="wiki-view">`dav_format_time`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymove_file.html" target="wiki-view">`dav_fs_copymove_file`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymove_state.html" target="wiki-view">`dav_fs_copymove_state`</a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymoveset.html" target="wiki-view">`dav_fs_copymoveset`</a></li>
+</ul></body></html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/md/md.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/md/md.h</h1>
+<h2>概要</h2>
+<p><code>modules/md/md.h</code> は、Apache HTTP Server の Managed Domain (MD) サブシステムにおける中心的なデータ定義と定数、およびドメイン管理のための基本操作を提供するヘッダーファイルです。MD は、証明書の自動取得・更新を管理するための論理的なドメイン単位を指します。</p>
+<h2>モジュール内での役割</h2>
+<p>本ファイルは <code>modules/md</code> モジュール全体の「共通言語」として機能します。ACME プロトコルによる証明書管理、ストレージ操作、設定管理など、他のすべてのサブコンポーネントが参照するデータ構造 <code>md_t</code> を定義しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**データモデルの定義**: Managed Domain の状態、設定、および証明書関連のメタデータを保持する構造体の定義。</li>
+<li>**定数管理**: ACME プロトコル、HSTS、タイムアウト、および JSON シリアライズ用のキー文字列の集約。</li>
+<li>**ドメイン操作の抽象化**: 複数のドメインリストに対する包含関係の判定や、重複チェックなどのユーティリティ関数の提供。</li>
+<li>**シリアライズ**: <code>md_t</code> 構造体と JSON 形式間の相互変換インターフェースの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>md_t</code>: MD の設定と状態を保持するメイン構造体。ドメイン名、連絡先、CA 設定、更新ポリシー、現在の状態（<code>md_state_t</code>）を保持。</li>
+<li><code>md_pubcert_t</code>: 公開証明書チェーンと対応する秘密鍵のファイルパスを保持する構造体。</li>
+<li><code>md_state_t</code>: MD のライフサイクル状態（<code>COMPLETE</code>, <code>INCOMPLETE</code>, <code>ERROR</code> 等）。</li>
+</ul>
+<h3>定数・マクロ</h3>
+<ul>
+<li>**設定キー**: <code>MD_KEY_*</code> で始まる多数のマクロ。JSON ストレージにおけるフィールド名を定義。</li>
+<li>**タイムアウト**: <code>MD_TIME_*</code> マクロ。更新ウィンドウや警告ウィンドウのデフォルト値を定義。</li>
+<li>**プロトコル**: <code>PROTO_ACME_TLS_1</code> 等のプロトコル識別子。</li>
+</ul>
+<h3>操作関数</h3>
+<ul>
+<li>**ライフサイクル**: <code>md_create</code>, <code>md_create_empty</code>, <code>md_clone</code>, <code>md_copy</code>。</li>
+<li>**検索・判定**: <code>md_contains</code>, <code>md_domains_overlap</code>, <code>md_get_by_name</code> 等。</li>
+<li>**変換**: <code>md_to_json</code>, <code>md_from_json</code>。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**データフロー**: 設定ファイルから読み込まれた MD 定義は <code>md_t</code> 構造体に格納されます。この構造体は <code>md_to_json</code> を通じて永続化され、<code>md_from_json</code> を通じて再構築されます。</li>
+<li>**制御フロー**: 多くの関数は <code>apr_array_header_t</code> を引数に取り、ドメインリストの走査や比較を行います。<code>md_contains</code> などの述語関数は、設定されたドメインとリクエストされたドメインの照合に使用されます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_time.h</code>: 時間計算用。</li>
+<li><code>md_time.h</code>: <code>md_timeslice_t</code> 等の MD 固有の時間管理定義。</li>
+<li><code>md_version.h</code>: モジュールバージョン情報。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>md_reg.h</code>: MD の登録と管理を行うレジストリ層。</li>
+<li><code>md_store.h</code>: <code>md_t</code> を JSON としてディスクに保存・読み込みを行うストレージ層。</li>
+<li><code>md_json.h</code>: JSON 操作の基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>md_t</code> 構造体およびその内部の配列は、生成時に渡される <code>apr_pool_t</code> に依存します。<code>md_clone</code> を使用する際は、適切なプールが指定されていることを確認してください。</li>
+<li>**不変条件**: <code>md_t</code> の <code>name</code> は一意である必要があり、<code>state</code> は <code>md_reg</code> などの上位モジュールによって更新されます。</li>
+<li>**注意点**: 本ファイルは定義のみを提供します。実装の詳細は各 <code>.c</code> ファイル（<code>md_core.c</code> 等）に委譲されています。</li>
+<li>**省略された詳細**: 複雑な ACME 認証フローや HTTP 通信の詳細は、このヘッダーファイルでは抽象化されており、<code>md_acme.h</code> や <code>md_http.h</code> で定義されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_h__md_state_t.html" target="wiki-view">`md_state_t`</a></li>
+<li><a href="../../symbols/modules__md__md_h__md_require_t.html" target="wiki-view">`md_require_t`</a></li>
+<li><a href="../../symbols/modules__md__md_h__md_renew_mode_t.html" target="wiki-view">`md_renew_mode_t`</a></li>
+<li><a href="../../symbols/modules__md__md_h__md_t.html" target="wiki-view">`md_t`</a></li>
+<li><a href="../../symbols/modules__md__md_h__apr_pool_t.html" target="wiki-view">`apr_pool_t`</a></li>
+<li><a href="../../symbols/modules__md__md_h__md_pubcert_t.html" target="wiki-view">`md_pubcert_t`</a></li>
+</ul></body></html>

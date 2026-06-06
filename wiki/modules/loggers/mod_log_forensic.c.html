@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/loggers/mod_log_forensic.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/loggers/mod_log_forensic.c</h1>
+<h2>概要</h2>
+<p><code>mod_log_forensic.c</code> は、Apache HTTP Server におけるリクエストの「フォレンジック（証拠保全）」ログを記録するためのモジュールです。リクエストの開始時と終了時に、リクエストラインやヘッダーを含む詳細な情報を一意の ID と共に記録し、リクエストの追跡可能性を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/loggers</code> ディレクトリ内の他のログモジュールが主にアクセスログのカスタマイズやデバッグを目的とするのに対し、本モジュールはセキュリティや監査を主眼に置いています。<code>mod_unique_id</code> と連携し、リクエストのライフサイクル全体を識別可能な形式で出力します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>ForensicLog</code> ディレクティブによるログ出力先（ファイルまたはパイプ）の管理。</li>
+<li>**ライフサイクル追跡**: リクエスト開始時（<code>post_read_request</code>）に詳細なヘッダーを記録し、終了時（<code>log_transaction</code>）に完了フラグを記録。</li>
+<li>**データエスケープ**: ログ出力時に制御文字や特殊文字を安全な形式（<code>%XX</code>）に変換。</li>
+<li>**一意性保証**: <code>mod_unique_id</code> が利用できない環境でも、PID、時刻、アトミックカウンタを用いたフォレンジック ID の生成。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>fcfg</code>: サーバーごとの設定を保持。ログファイル名とファイルディスクリプタ（<code>apr_file_t</code>）を管理。</li>
+</ul>
+<h3>ライフサイクル・フック</h3>
+<ul>
+<li><code>log_init</code>: サーバー起動時にログファイルを開く。</li>
+<li><code>log_before</code>: リクエスト開始時に実行。ヘッダーを解析し、<code>+&lt;id&gt;|...</code> 形式でログを書き込む。</li>
+<li><code>log_after</code>: リクエスト終了時に実行。<code>-&lt;id&gt;</code> 形式で完了ログを書き込む。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>log_escape</code>: 文字列内の特殊文字をエスケープし、バッファに書き込む。</li>
+<li><code>count_string</code> / <code>count_headers</code>: ログ書き込みに必要なバッファサイズを事前に計算する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>log_init</code> が各サーバー設定を走査し、<code>open_log</code> を呼び出してログファイルを開く。 2. **開始時**: <code>log_before</code> がリクエストヘッダーを走査。<code>count_headers</code> で必要なメモリ量を算出し、<code>apr_palloc</code> で確保。<code>log_escape</code> を用いてヘッダーをシリアライズし、ファイルへ書き込む。 3. **終了時**: <code>log_after</code> がリクエストコンテキストから ID を取得し、終了を示す <code>-&lt;id&gt;</code> を書き込む。 4. **エスケープ**: <code>log_escape</code> は <code>TEST_CHAR</code> マクロ（<code>test_char.h</code>）を使用して、エスケープ対象文字を判定し、<code>ap_bin2hex</code> で変換を行う。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>httpd.h</code>, <code>http_config.h</code>, <code>http_log.h</code>: Apache コア API。</li>
+<li><code>apr_strings.h</code>, <code>apr_atomic.h</code>: 文字列操作およびアトミックな ID 生成。</li>
+<li><code>test_char.h</code>: エスケープ対象文字の判定用。</li>
+<li><code>http_protocol.h</code>: リクエスト処理関連。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>mod_unique_id.c</code>: 本モジュールが依存する一意 ID 生成モジュール。</li>
+<li><code>support/check_forensic</code>: 本モジュールが出力したログを解析・検証するための補助ツール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: リクエストごとのログ生成には <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動的に解放されます。</li>
+<li>**アトミック性**: <code>next_id</code> のインクリメントには <code>apr_atomic_inc32</code> を使用しており、マルチスレッド環境での ID の一意性を保証しています。</li>
+<li>**エスケープの不変条件**: <code>log_escape</code> は <code>ap_assert</code> を多用しており、バッファオーバーフローを厳格に防いでいます。</li>
+<li>**制限事項**: <code>log_before</code> は <code>r-&gt;prev</code> が存在する場合（内部リダイレクト等）はログ出力をスキップします。これは同一リクエストの重複記録を防ぐためです。</li>
+<li>**パフォーマンス**: ログ出力ごとにヘッダーの走査とメモリ確保が発生するため、高負荷環境では I/O およびメモリ消費に注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__fcfg.html" target="wiki-view">`fcfg`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__make_forensic_log_scfg.html" target="wiki-view">`make_forensic_log_scfg`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__merge_forensic_log_scfg.html" target="wiki-view">`merge_forensic_log_scfg`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__open_log.html" target="wiki-view">`open_log`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__log_init.html" target="wiki-view">`log_init`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__log_escape.html" target="wiki-view">`log_escape`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__hlog.html" target="wiki-view">`hlog`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__count_string.html" target="wiki-view">`count_string`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__count_headers.html" target="wiki-view">`count_headers`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__log_headers.html" target="wiki-view">`log_headers`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__log_before.html" target="wiki-view">`log_before`</a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_forensic_c__log_after.html" target="wiki-view">`log_after`</a></li>
+</ul></body></html>

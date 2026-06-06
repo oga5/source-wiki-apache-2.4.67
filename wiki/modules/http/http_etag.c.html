@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http/http_etag.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http/http_etag.c</h1>
+<h2>概要</h2>
+<p>HTTP プロトコルにおける <code>ETag</code> ヘッダーの生成と管理を担うモジュールです。ファイルシステム上の属性（inode, サイズ, 更新日時）や、ファイル内容の SHA1 ハッシュに基づいた一意な識別子を生成し、キャッシュの検証をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> サブシステムの一部として、リクエスト処理の最終段階でレスポンスヘッダーに <code>ETag</code> を付与する役割を持ちます。<code>http_protocol.c</code> 等から呼び出され、リソースの同一性を保証するための計算ロジックを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ETag 生成ロジック**: ファイル属性（<code>finfo</code>）または内容のハッシュ（<code>SHA1</code>）を用いた文字列生成。</li>
+<li>**検証情報の統合**: コンテンツネゴシエーション時に使用される <code>vlist_validator</code> (VLV) との結合。</li>
+<li>**設定に基づく制御**: <code>FileETag</code> ディレクティブの設定（<code>etag_bits</code>）に従った、ETag に含める情報のフィルタリング。</li>
+<li>**ヘッダー管理**: 生成された ETag を <code>r-&gt;headers_out</code> テーブルへ設定、または生成不可時のフラグ設定。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>公開 API (ETag 生成・設定)</h3>
+<ul>
+<li><code>ap_make_etag_ex</code>: <code>etag_rec</code> 構造体を受け取り、詳細な設定に基づいて ETag 文字列を生成するコア関数。</li>
+<li><code>ap_make_etag</code>: <code>request_rec</code> から簡易的に ETag を生成するラッパー。</li>
+<li><code>ap_set_etag</code>: リクエストのファイル情報から ETag を生成し、レスポンスヘッダーに自動設定する。</li>
+<li><code>ap_set_etag_fd</code>: ファイル記述子（<code>apr_file_t</code>）を直接指定して ETag を生成・設定する。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>make_digest_etag</code>: ファイル内容を読み込み、SHA1 ハッシュによる強力な ETag を生成する。</li>
+<li><code>etag_uint64_to_hex</code>: <code>apr_uint64_t</code> を高速に 16 進数文字列へ変換する。</li>
+<li><code>etag_start</code> / <code>etag_end</code>: ETag 文字列のフォーマット（<code>W/</code> プレフィックスや引用符の付与）を管理する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **入力**: <code>ap_set_etag</code> 等が <code>request_rec</code> から <code>etag_rec</code> を構築し、<code>ap_make_etag_ex</code> を呼び出します。 2.  **設定評価**: <code>core_dir_config</code> から <code>etag_bits</code> を取得し、どの属性を含めるかを決定します。 3.  **分岐**:</p>
+<ul>
+<li><code>ETAG_DIGEST</code> 指定時または強力な ETag が必要な場合: <code>make_digest_etag</code> がファイルを読み込み、<code>apr_sha1</code> でハッシュ化します。</li>
+<li>通常時: ファイルの inode, size, mtime を連結し、<code>etag_uint64_to_hex</code> で文字列化します。</li>
+<p>4.  **VLV 統合**: <code>r-&gt;vlist_validator</code> が存在する場合、ETag の末尾に結合し、ネゴシエーション情報を保持します。 5.  **出力**: 生成された文字列を <code>apr_table_setn</code> で <code>headers_out</code> に格納します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_sha1.h</code>, <code>apr_base64.h</code>: ハッシュ生成およびエンコード。</li>
+<li><code>apr_buckets.h</code>: ファイル読み込み時のバケット操作。</li>
+<li><code>http_core.h</code>: <code>core_dir_config</code>（<code>FileETag</code> 設定）の取得。</li>
+<li><code>http_protocol.h</code>: レスポンスヘッダー操作の基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/http/http_protocol.c</code>: 本モジュールの API を利用してレスポンスを構築する主要ファイル。</li>
+<li><code>server/core.c</code>: <code>FileETag</code> ディレクティブの定義と <code>core_dir_config</code> の管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての ETag 文字列は <code>r-&gt;pool</code> から割り当てられ、リクエスト終了時に自動解放されます。</li>
+<li>**パフォーマンス**: <code>make_digest_etag</code> はファイル全体を読み込むため、大きなファイルに対してはコストが高い操作です。</li>
+<li>**弱 ETag**: 更新から 1 秒以内のファイルや、VLV が弱い場合は <code>W/</code> プレフィックスが付与されます。</li>
+<li>**省略された詳細**: <code>apr_mmap</code> に関する最適化パスは、<code>APR_HAS_MMAP</code> が有効な環境でのみ動作するよう条件分岐されています。</li>
+<li>**不変条件**: <code>etag_bits</code> が <code>ETAG_NONE</code> の場合、ETag は生成されず、<code>no-etag</code> ノートが設定されます。これは後続のフィルターが ETag を付与しないようにするための制御です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__http_etag_c__etag_uint64_to_hex.html" target="wiki-view">`etag_uint64_to_hex`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__etag_start.html" target="wiki-view">`etag_start`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__etag_end.html" target="wiki-view">`etag_end`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__make_digest_etag.html" target="wiki-view">`make_digest_etag`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_make_etag_ex.html" target="wiki-view">`ap_make_etag_ex`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_make_etag.html" target="wiki-view">`ap_make_etag`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_set_etag.html" target="wiki-view">`ap_set_etag`</a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_set_etag_fd.html" target="wiki-view">`ap_set_etag_fd`</a></li>
+</ul></body></html>

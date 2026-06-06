@@ -6,22 +6,57 @@
 <li>定義箇所: <code>server/request.c:661</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>ファイルシステムパスに基づき、Apache の <code>&lt;Directory&gt;</code> 設定セクションをリクエストコンテキストにマージする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_directory_walk(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （リクエスト情報。<code>r-&gt;filename</code> を使用してパスを特定する）</li>
+<li>**出力**: <code>int</code> （成功時は <code>OK</code>、失敗時は <code>HTTP_FORBIDDEN</code> や <code>HTTP_INTERNAL_SERVER_ERROR</code> などのステータスコード）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;filename</code> が絶対パスとして解決可能であること。</li>
+<li><code>r-&gt;pool</code> を使用してメモリ管理が行われること。</li>
+<li><code>filename_len</code> はスコープ内において常に <code>strlen(r-&gt;filename)</code> と等しい。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **正規化**: <code>apr_filepath_merge</code> を使用して <code>r-&gt;filename</code> を絶対パスに正規化する。 2. **キャッシュ確認**: <code>prep_walk_cache</code> を呼び出し、既存のディレクトリウォーク結果が再利用可能か判定する。 3. **ファイル情報取得**: <code>ap_run_dirwalk_stat</code> を呼び出し、ファイルタイプを確認する。 4. **キャッシュヒット時**: 設定に変更がなく、パスが一致する場合はキャッシュされた <code>per_dir_config</code> を適用し、シンボリックリンクの制限を確認して終了する。 5. **キャッシュミス時**:</p>
+<ul>
+<li>ルートパスから順にコンポーネントを走査する。</li>
+<li><code>r-&gt;path_info</code> を適切に分離・再構成する。</li>
+<li>各階層で設定をマージし、結果をキャッシュに保存する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/core.c:4818</code></li>
+<li><code>modules/proxy/mod_proxy_fcgi.c:383</code></li>
+<li>**呼び出し先**: </li>
+<li><code>prep_walk_cache</code></li>
+<li><code>ap_run_dirwalk_stat</code></li>
+<li><code>resolve_symlink</code></li>
+<li><code>ap_make_dirstr_parent</code></li>
+<li><code>apr_filepath_merge</code></li>
+<li><code>apr_filepath_root</code></li>
+<li><code>ap_get_core_module_config</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストの主要な状態を保持。</li>
+<li><code>walk_cache_t</code>: ディレクトリウォークの結果をキャッシュし、再計算を回避する。</li>
+<li><code>core_dir_config</code>: ディレクトリ単位の設定（オプションやオーバーライド設定）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;filename</code> が <code>NULL</code> の場合: エラーログを出力し <code>OK</code> を返す。</li>
+<li>パスが不正または非絶対パスの場合: エラーログを出力し <code>OK</code> を返す。</li>
+<li>シンボリックリンクの解決失敗: <code>HTTP_FORBIDDEN</code> を返す。</li>
+<li>パス情報のマージ失敗: <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はリクエスト処理のセキュリティモデルの根幹であるため、処理順序の変更は認可バイパス等の脆弱性を招く可能性がある。</li>
+<li>パフォーマンス向上のため、キャッシュ機構（<code>walk_cache_t</code>）のヒット率を維持することが重要である。</li>
+<li><code>CASE_BLIND_FILESYSTEM</code> 定義時は、大文字小文字を区別しないファイルシステム向けのパス解決ロジックが有効になる。</li>
 </ul></body></html>

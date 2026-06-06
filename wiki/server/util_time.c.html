@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/util_time.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/util_time.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における、高頻度な時刻変換およびフォーマット処理を最適化するためのユーティリティモジュールです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、ログ出力やヘッダー生成など、サーバー内で頻繁に発生する「現在時刻の文字列化」処理を高速化します。標準的な APR（Apache Portable Runtime）の時刻関数をラップし、キャッシュ層を提供することでシステムコール呼び出しを削減します。</p>
+<h2>責務</h2>
+<ul>
+<li>**時刻キャッシュの管理**: 直近数秒間の時刻情報を保持するリングバッファを維持し、重複する時刻変換処理を回避する。</li>
+<li>**高速な時刻分解**: <code>apr_time_exp_t</code> 構造体への変換を、キャッシュヒット時はメモリコピーのみで完結させる。</li>
+<li>**フォーマット変換**: <code>ctime</code> 形式や RFC822 形式への文字列変換を、キャッシュされた分解済み時刻を用いて効率的に行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>exploded_time_cache_element</code>: 時刻分解結果を保持するキャッシュ構造体。整合性検証用のタイムスタンプを含む。</li>
+<li><code>cached_explode()</code>: キャッシュの読み書きと、競合発生時のフォールバック処理を行う内部関数。</li>
+<li><code>ap_explode_recent_localtime()</code> / <code>ap_explode_recent_gmt()</code>: キャッシュを利用した時刻分解の公開インターフェース。</li>
+<li><code>ap_recent_ctime_ex()</code>: 拡張オプション（マイクロ秒、ISO 8601 形式、タイムゾーンオフセット）をサポートするフォーマット関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **キャッシュ探索**: <code>cached_explode</code> が呼び出されると、現在の秒数からリングバッファのインデックスを計算します。 2. **整合性チェック**: キャッシュ内のタイムスタンプが現在の秒と一致するか確認します。 3. **競合回避**: マルチスレッド環境での書き込み競合を許容しつつ、読み取り時に「スナップショット」を採取して整合性を検証します。データが不整合であれば、標準の <code>apr_time_exp_*</code> 関数を直接呼び出します。 4. **フォーマット**: <code>ap_recent_ctime_ex</code> 等は、分解された時刻構造体から文字列バッファへ直接数値を書き込みます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>util_time.h</code>: 公開インターフェースおよび定数定義。</li>
+<li><code>apr_time.h</code>: APR の時刻処理プリミティブ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>server/log.c</code>: ログ出力時に本モジュールの <code>ap_recent_ctime</code> 等が頻繁に利用されます。</li>
+<li><code>server/protocol.c</code>: HTTP レスポンスヘッダーの Date フィールド生成に利用されます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**スレッド安全性**: 本モジュールはロックフリーな設計を採用しています。キャッシュ更新中の不整合を検知して再計算するアプローチをとっているため、高負荷時でもロックによるボトルネックが発生しません。</li>
+<li>**キャッシュの制約**: <code>AP_TIME_RECENT_THRESHOLD</code>（デフォルト15秒）以内の時刻に対してのみ有効です。それより古い時刻を扱う場合は、標準の APR 関数を直接使用してください。</li>
+<li>**拡張性**: <code>ap_recent_ctime_ex</code> は、将来的なフォーマット変更にも対応できるよう設計されています。新しい形式が必要な場合は、この関数を拡張することを検討してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_time_c__exploded_time_cache_element.html" target="wiki-view">`exploded_time_cache_element`</a></li>
+<li><a href="../symbols/server__util_time_c__cached_explode.html" target="wiki-view">`cached_explode`</a></li>
+<li><a href="../symbols/server__util_time_c__ap_explode_recent_localtime.html" target="wiki-view">`ap_explode_recent_localtime`</a></li>
+<li><a href="../symbols/server__util_time_c__ap_explode_recent_gmt.html" target="wiki-view">`ap_explode_recent_gmt`</a></li>
+<li><a href="../symbols/server__util_time_c__ap_recent_ctime.html" target="wiki-view">`ap_recent_ctime`</a></li>
+<li><a href="../symbols/server__util_time_c__ap_recent_ctime_ex.html" target="wiki-view">`ap_recent_ctime_ex`</a></li>
+<li><a href="../symbols/server__util_time_c__ap_recent_rfc822_date.html" target="wiki-view">`ap_recent_rfc822_date`</a></li>
+</ul></body></html>

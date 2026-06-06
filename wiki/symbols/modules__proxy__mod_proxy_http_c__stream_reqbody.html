@@ -6,22 +6,50 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_http.c:320</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>クライアントから受信したリクエストボディを、バックエンドサーバーへストリーミング転送する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int stream_reqbody(proxy_http_req_t *req)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>proxy_http_req_t *req</code>（リクエスト状態、入力ブリゲード、バックエンド接続情報を含む）</li>
+<li>**出力**: <code>int</code>（成功時は <code>OK</code>、失敗時は <code>HTTP_INTERNAL_SERVER_ERROR</code> またはその他のエラーコード）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>req-&gt;input_brigade</code> および <code>req-&gt;header_brigade</code> が適切に初期化されていること。</li>
+<li><code>rb_method</code> に基づき、転送方式（チャンク転送または固定長）が決定済みであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ループ処理**: <code>input_brigade</code> が空の場合、<code>ap_proxy_read_input</code> を呼び出しデータを読み込む。 2. **EOS 処理**: 入力ブリゲードの末尾に EOS (End of Stream) がある場合、それを削除し終了フラグを立てる。 3. **転送方式の適用**:</p>
+<ul>
+<li><code>RB_STREAM_CHUNKED</code>: チャンクサイズを先頭に付与し、末尾に CRLF を追加。EOS 到達時に 0 サイズのチャンクを送信。</li>
+<li><code>RB_STREAM_CL</code>: 転送バイト数が <code>req-&gt;cl_val</code> と一致するか検証し、不一致の場合は <code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<p>4. **ヘッダー結合**: 初回ループ時に <code>header_brigade</code> を <code>input_brigade</code> の先頭に結合する。 5. **送信**: <code>ap_proxy_pass_brigade</code> を呼び出し、バックエンドへデータを送信する。 6. **終了**: EOS が確認されるまでループを継続する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/proxy/mod_proxy_http.c:685</code></li>
+<li><code>modules/proxy/mod_proxy_http.c:994</code></li>
+<li>**呼び出し先**: </li>
+<li><code>ap_proxy_read_input</code></li>
+<li><code>ap_proxy_pass_brigade</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_http_req_t</code>: リクエスト処理中の状態を保持。</li>
+<li><code>rb_methods</code>: リクエストボディの転送方式を定義する列挙型。</li>
+<li><code>apr_bucket_brigade</code>: データのバッファリングに使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**Content-Length 不一致**: <code>RB_STREAM_CL</code> モードで、ストリームされたバイト数が期待値と異なる場合、HTTP リクエスト分割攻撃を防ぐためエラーを返す。</li>
+<li>**読み込みエラー**: <code>ap_proxy_read_input</code> が <code>OK</code> 以外を返した場合、そのエラーコードを伝播する。</li>
+<li>**送信エラー**: <code>ap_proxy_pass_brigade</code> が <code>OK</code> 以外を返した場合、そのエラーコードを伝播する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>chunk_hdr</code> は <code>transient</code> バケットとして使用されるため、ループ内で適切に管理されている。</li>
+<li><code>proxy-sendextracrlf</code> 環境変数が設定されている場合、EOS 時に追加の CRLF を送信するロジックが含まれている。</li>
 </ul></body></html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_c1_io.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_c1_io.h</h1>
+<h2>概要</h2>
+<p><code>h2_c1_io.h</code> は、HTTP/2 セッションにおけるクライアント接続（C1）の入出力処理を抽象化するコンポーネントです。Apache HTTP Server の接続フィルタスタックと、HTTP/2 プロトコル層の橋渡しを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> における「C1（クライアント接続）」層の入出力管理を担当します。<code>h2_session</code> が管理する接続に対して、バッファリングされたデータ転送と、フィルタチェーンを通じた効率的な読み書きを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**出力バッファリング**: <code>apr_bucket_brigade</code> を使用し、ネットワークへの書き込みを最適化するためのバッファ管理。</li>
+<li>**フロー制御**: TLS レコードサイズや MTU を考慮した書き込みサイズの調整。</li>
+<li>**フィルタ連携**: <code>httpd</code> の接続フィルタスタックに対するデータの投入とフラッシュ処理。</li>
+<li>**入力処理**: クライアントからの入力を読み取り、HTTP/2 プロトコル層（<code>nghttp2</code>）へ渡すためのインターフェース提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_c1_io</code>: 入出力状態を保持するメイン構造体。セッション情報、出力ブリゲード、バッファ統計、TLS 状態などを管理します。</li>
+<li><code>h2_c1_io_add_data</code> / <code>h2_c1_io_add</code>: 出力バッファへデータやバケットを追加する関数。</li>
+<li><code>h2_c1_io_pass</code>: バッファされたデータを接続フィルタへ送信（フラッシュ）する関数。</li>
+<li><code>h2_c1_read</code>: クライアントからの入力を読み取り、セッションへ供給する関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **出力**: <code>h2_c1_io_add</code> 等でデータが <code>h2_c1_io</code> の出力ブリゲードに蓄積されます。<code>h2_c1_io_pass</code> が呼び出されると、蓄積されたデータが <code>ap_pass_brigade</code> を通じて下位の接続フィルタへ渡されます。 2. **入力**: <code>h2_c1_read</code> が呼び出されると、接続フィルタからデータを読み取り、HTTP/2 セッションの処理ロジックへ渡します。 3. **フラッシュ制御**: <code>h2_c1_io_needs_flush</code> や <code>h2_c1_io_assure_flushed</code> により、バッファの閾値やプロトコル上の必要性に応じて適切なタイミングでフラッシュが行われます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_bucket_brigade</code> (APR): データ転送の基本単位。</li>
+<li><code>h2_session</code> (構造体宣言): 関連するセッションコンテキスト。</li>
+<li><code>httpd.h</code> 関連: Apache HTTP Server の接続およびフィルタ処理基盤。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_c1_io.c</code>: 本ヘッダーで定義された関数の実装。デバッグ用のログ出力関数 <code>h2_c1_io_bb_log</code> などが含まれます。</li>
+<li><code>h2_session.h</code>: この IO コンポーネントを所有し、セッション全体のライフサイクルを管理する上位モジュール。</li>
+<li><code>h2_c1.h</code>: クライアント接続の定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは、HTTP/2 のパフォーマンスを左右する「書き込みの集約」を担っています。<code>WRITE_SIZE_MAX</code> などの定数が TLS レコードサイズと密接に関係している点に注意してください。</li>
+<li><code>h2_c1_io</code> は <code>h2_session</code> と対になって動作します。デバッグ時には <code>h2_c1_io_bb_log</code> を活用して、ブリゲード内のバケット状態（EOS, FLUSH 等）を追跡することをお勧めします。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_c1_io_h__h2_c1_io.html" target="wiki-view">`h2_c1_io`</a></li>
+</ul></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/http2/h2_headers.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/http2/h2_headers.c</h1>
+<h2>概要</h2>
+<p>HTTP/2 通信におけるレスポンスヘッダーを管理するためのカスタムバケット型（<code>H2HEADERS</code>）および関連するデータ構造の定義と操作関数を提供します。Apache HTTP Server のバケットチェーン内で HTTP/2 特有のメタデータを保持・伝搬させる役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> サブシステムにおいて、レスポンスヘッダーをストリーム処理のパイプラインに流し込むためのブリッジとして機能します。<code>AP_HAS_RESPONSE_BUCKETS</code> が定義されていない環境（古い Apache バージョン等）において、ヘッダー情報をバケットとしてカプセル化し、他のフィルタやモジュールと連携します。</p>
+<h2>責務</h2>
+<ul>
+<li>**カスタムバケット管理**: <code>H2HEADERS</code> 型バケットの生成、破棄、クローン、および読み取りインターフェースの提供。</li>
+<li>**ヘッダーデータ構造の抽象化**: HTTP ステータス、ヘッダーテーブル、ノート（メモ）を保持する <code>h2_headers</code> 構造体のライフサイクル管理。</li>
+<li>**プロトコル変換と検証**: <code>request_rec</code> からのヘッダー生成時の HTTP/2 特有の制約（TLS 再ネゴシエーション禁止など）の適用。</li>
+<li>**統計・計測**: ヘッダー文字列の合計バイト数計算。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>h2_headers</code>: ヘッダー情報（ステータス、テーブル、ノート）を保持するメイン構造体。</li>
+<li><code>h2_bucket_headers</code>: <code>apr_bucket</code> のデータ領域に格納される、参照カウント付きのヘッダーラッパー。</li>
+</ul>
+<h3>バケット操作</h3>
+<ul>
+<li><code>h2_bucket_headers_create/make</code>: <code>H2HEADERS</code> 型バケットの初期化と生成。</li>
+<li><code>h2_bucket_headers_get</code>: バケットから <code>h2_headers</code> 構造体を取り出すアクセサ。</li>
+<li><code>h2_bucket_headers_clone</code>: バケットのディープコピー。</li>
+</ul>
+<h3>ヘッダー管理・生成</h3>
+<ul>
+<li><code>h2_headers_create/rcreate</code>: 汎用的な生成関数および <code>request_rec</code> を基にした生成関数。</li>
+<li><code>h2_headers_clone/copy</code>: メモリプールを跨いだヘッダー情報の複製。</li>
+<li><code>h2_headers_die</code>: エラー発生時のレスポンスヘッダー生成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **生成**: <code>h2_headers_rcreate</code> が <code>request_rec</code> から情報を抽出し、<code>h2_headers</code> を作成します。この際、<code>is_unsafe</code> チェックや TLS 再ネゴシエーションの判定を行い、必要に応じてステータスコードを <code>H2_ERR_HTTP_1_1_REQUIRED</code> に書き換えます。 2. **バケット化**: 生成された <code>h2_headers</code> は <code>h2_bucket_headers_create</code> を通じて <code>apr_bucket</code> にラップされ、出力フィルタチェーンに投入されます。 3. **消費**: <code>h2_bucket_headers_headers_length</code> 等の関数がバケット内の <code>h2_headers</code> を参照し、ヘッダーサイズを計算します。 4. **破棄**: <code>bucket_destroy</code> が参照カウントを管理し、ゼロになった時点で <code>h2_headers</code> とバケットメモリを解放します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_bucket</code> (APR): バケット管理の基盤。</li>
+<li><code>httpd.h</code>, <code>http_core.h</code>: Apache のリクエスト処理および設定コンテキストへのアクセス。</li>
+<li><code>h2_private.h</code>, <code>h2_request.h</code>: HTTP/2 固有の型定義とリクエスト構造体。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>h2_bucket_beam.c</code>: バケットのストリーム間転送を担当。</li>
+<li><code>h2_stream.c</code>: ストリームのライフサイクルとヘッダーの送受信フロー。</li>
+<li><code>h2_util.c</code>: ヘッダー操作の補助関数群。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_headers</code> 構造体およびその内部の <code>apr_table_t</code> は、生成時に指定された <code>apr_pool_t</code> に依存します。<code>h2_headers_clone</code> を使用する際は、適切なプールを指定してメモリリークや生存期間の不一致を防いでください。</li>
+<li>**制約**: <code>AP_HAS_RESPONSE_BUCKETS</code> が定義されている環境では、このファイル内のロジックは無効化されます。</li>
+<li>**パフォーマンス**: <code>h2_headers_length</code> はテーブル内の全ヘッダーを走査するため、ヘッダー数が多い場合は注意が必要です。</li>
+<li>**未実装**: <code>bucket_read</code> は意図的に空（<code>str = NULL</code>）として実装されています。これは <code>H2HEADERS</code> バケットがメタデータ専用であり、直接的なデータ読み取りを想定していないためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_headers_c__is_unsafe.html" target="wiki-view">`is_unsafe`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_bucket_headers.html" target="wiki-view">`h2_bucket_headers`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__bucket_read.html" target="wiki-view">`bucket_read`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_bucket_headers_make.html" target="wiki-view">`h2_bucket_headers_make`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_bucket_headers_create.html" target="wiki-view">`h2_bucket_headers_create`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_bucket_headers_get.html" target="wiki-view">`h2_bucket_headers_get`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__bucket_destroy.html" target="wiki-view">`bucket_destroy`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_bucket_headers_clone.html" target="wiki-view">`h2_bucket_headers_clone`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_headers_create.html" target="wiki-view">`h2_headers_create`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__add_header_lengths.html" target="wiki-view">`add_header_lengths`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_headers_length.html" target="wiki-view">`h2_headers_length`</a></li>
+<li><a href="../../symbols/modules__http2__h2_headers_c__h2_bucket_headers_headers_length.html" target="wiki-view">`h2_bucket_headers_headers_length`</a></li>
+</ul></body></html>

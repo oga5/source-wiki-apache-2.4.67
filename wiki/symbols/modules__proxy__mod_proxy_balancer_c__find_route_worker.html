@@ -6,22 +6,58 @@
 <li>定義箇所: <code>modules/proxy/mod_proxy_balancer.c:201</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>指定されたルート文字列に一致するバックエンドワーカーをバランサ内から検索し、必要に応じてリトライやリダイレクト先への再帰的な探索を行う。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static proxy_worker *find_route_worker(proxy_balancer *balancer,
+                                       const char *route, request_rec *r,
+                                       int recursion)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>balancer</code>: 検索対象のバランサ構造体。</li>
+<li><code>route</code>: 検索するルート識別子。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>recursion</code>: 再帰回数（リダイレクトループ防止用）。</li>
+<li>**出力**:</li>
+<li>条件に合致し、かつ利用可能な <code>proxy_worker</code> 構造体へのポインタ。見つからない場合は <code>NULL</code>。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>balancer-&gt;workers</code> に有効なワーカーリストが存在すること。</li>
+<li><code>recursion</code> はバランサのワーカー数を超えない範囲で指定されること（再帰呼び出し時にインクリメントされる）。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **二段階検索**: まず非スタンバイワーカーを検索し、見つからなければスタンバイワーカーを検索する。 2. **ルート照合**: 各ワーカーの <code>worker-&gt;s-&gt;route</code> と引数の <code>route</code> を比較する。 3. **利用可能性の確認**:</p>
+<ul>
+<li>ワーカーが利用可能（<code>PROXY_WORKER_IS_USABLE</code>）であればそのワーカーを返す。</li>
+<li>利用不可の場合、<code>ap_proxy_retry_worker_fn</code> を呼び出して復旧を試みる。復旧成功時はそのワーカーを返す。</li>
+<p>4. **リダイレクト処理**:</p>
+<li>ワーカーが利用不可で、かつ <code>redirect</code> 設定が存在する場合、再帰的に <code>find_route_worker</code> を呼び出し、リダイレクト先のワーカーを探索する。</li>
+<li>再帰回数がワーカー数に達した場合はループを避けるため探索を停止する。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/proxy/mod_proxy_balancer.c</code> 内の <code>find_session_route</code>（推測される文脈）および本関数自身の再帰呼び出し。</li>
+<li>**呼び出し先**:</li>
+<li><code>ap_proxy_retry_worker_fn</code>: ワーカーの再試行処理。</li>
+<li><code>find_route_worker</code>: 自身を再帰的に呼び出す。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>proxy_balancer</code>: バランサの状態とワーカーリストを保持。</li>
+<li><code>proxy_worker</code>: 個別のバックエンドワーカー情報。</li>
+<li><code>proxy_worker_shared</code>: ワーカーの共有状態（<code>route</code> や <code>redirect</code> 設定を含む）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**一致なし**: 指定されたルートを持つワーカーが存在しない場合、<code>NULL</code> を返す。</li>
+<li>**リダイレクトループ**: <code>recursion</code> が <code>balancer-&gt;workers-&gt;nelts</code> に達すると、それ以上の再帰探索を打ち切る。</li>
+<li>**全ワーカー利用不可**: 復旧を試みても利用可能なワーカーが見つからない場合、<code>NULL</code> を返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はスティッキーセッションのルーティングにおいて中心的な役割を果たす。</li>
+<li><code>ap_proxy_retry_worker_fn</code> による復旧処理は、共有メモリ上の状態を更新する副作用を持つ。</li>
+<li>リダイレクト先探索時の再帰制限は、設定ミスによる無限ループを防止するために重要である。</li>
 </ul></body></html>

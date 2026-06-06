@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/session/mod_session_dbd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/session/mod_session_dbd.c</h1>
+<h2>概要</h2>
+<p><code>mod_session_dbd.c</code> は、Apache HTTP Server のセッション管理機能において、セッションデータをデータベース（SQL）に永続化するためのバックエンドモジュールです。<code>mod_dbd</code> を介してデータベース接続を確立し、セッションの読み込み、保存、削除を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_session</code> サブシステムにおけるデータストア層の一つです。<code>mod_session_cookie</code> がセッションをクライアント側に保持するのに対し、本モジュールはサーバー側のデータベースを信頼できる唯一の情報源（Source of Truth）として利用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**データベース連携**: <code>mod_dbd</code> のオプション関数を利用した接続の取得と、プリペアドステートメントの実行。</li>
+<li>**セッション永続化**: 匿名セッション（UUIDベース）およびユーザー紐付けセッションの読み書き。</li>
+<li>**設定管理**: ディレクトリ単位での SQL クエリラベルやクッキー名の設定、および設定の継承・マージ。</li>
+<li>**フック処理**: <code>session_load</code> および <code>session_save</code> フックを実装し、リクエスト処理パイプラインに統合。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>session_dbd_dir_conf</code>: ディレクトリ単位の設定を保持。SQL クエリラベル（select/insert/update/delete）やクッキー名、ユーザー紐付けフラグを格納。</li>
+</ul>
+<h3>データベース操作（内部ヘルパー）</h3>
+<ul>
+<li><code>dbd_init</code>: <code>mod_dbd</code> から接続を取得し、指定されたクエリラベルに対応するプリペアドステートメントを検証。</li>
+<li><code>dbd_load</code>, <code>dbd_save</code>, <code>dbd_remove</code>: データベースに対する実際の CRUD 操作を実行。</li>
+</ul>
+<h3>セッションライフサイクル</h3>
+<ul>
+<li><code>session_dbd_load</code>: リクエストからキー（クッキーまたはユーザー名）を特定し、データベースからセッションを復元。</li>
+<li><code>session_dbd_save</code>: セッションの変更を検知し、データベースへの書き込みおよびクッキーの更新を行う。</li>
+</ul>
+<h3>設定・フック</h3>
+<ul>
+<li><code>session_dbd_cmds</code>: <code>SessionDBD*</code> 系ディレクティブの定義。</li>
+<li><code>register_hooks</code>: セッションフックおよび監視用フックの登録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **読み込み**: <code>session_dbd_load</code> が呼ばれると、設定に基づきキーを抽出。<code>dbd_load</code> が <code>mod_dbd</code> を介して SQL を実行し、結果を <code>session_rec</code> に格納。 2. **保存**: <code>session_dbd_save</code> が呼ばれると、セッションの <code>dirty</code> フラグや UUID の有無を確認。<code>dbd_save</code> が更新（UPDATE）を試み、失敗した場合は挿入（INSERT）を行う。 3. **キャッシュ**: パフォーマンス向上のため、一度読み込んだセッションは <code>request_rec-&gt;notes</code> にキャッシュされ、同一リクエスト内での再パースを回避する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_session.h</code>: セッション管理の基本インターフェース。</li>
+<li><code>apr_dbd.h</code> / <code>mod_dbd.h</code>: データベース接続およびプリペアドステートメントの管理。</li>
+<li><code>util_cookies.h</code>: クッキーの読み書き処理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/session/mod_session.c</code>: セッション管理のコアロジック。</li>
+<li><code>modules/database/mod_dbd.c</code>: データベース接続プール管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのデータは <code>request_rec</code> のプール（<code>r-&gt;pool</code>）で管理されます。セッションの生存期間はリクエストの生存期間に依存します。</li>
+<li>**未実装機能**: <code>dbd_clean</code> は現在 <code>APR_ENOTIMPL</code> を返しており、期限切れセッションの自動削除機能は未実装です。</li>
+<li>**制約**: <code>mod_dbd</code> がロードされていない場合、モジュールは初期化に失敗します。</li>
+<li>**エッジケース**: <code>peruser</code> 設定時、ログインしていないユーザーに対するセッション保存は拒否されます。また、セッションが存在しない場合は空のセッションが生成されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__session_dbd_dir_conf.html" target="wiki-view">`session_dbd_dir_conf`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__dbd_init.html" target="wiki-view">`dbd_init`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__dbd_load.html" target="wiki-view">`dbd_load`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__session_dbd_load.html" target="wiki-view">`session_dbd_load`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__dbd_save.html" target="wiki-view">`dbd_save`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__dbd_remove.html" target="wiki-view">`dbd_remove`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__dbd_clean.html" target="wiki-view">`dbd_clean`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__session_dbd_save.html" target="wiki-view">`session_dbd_save`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__session_dbd_monitor.html" target="wiki-view">`session_dbd_monitor`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__create_session_dbd_dir_config.html" target="wiki-view">`create_session_dbd_dir_config`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__merge_session_dbd_dir_config.html" target="wiki-view">`merge_session_dbd_dir_config`</a></li>
+<li><a href="../../symbols/modules__session__mod_session_dbd_c__check_string.html" target="wiki-view">`check_string`</a></li>
+</ul></body></html>

@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>modules/aaa/mod_auth_form.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1>modules/aaa/mod_auth_form.c</h1>
+<h2>概要</h2>
+<p><code>mod_auth_form.c</code> は、Apache HTTP Server におけるフォームベース認証（ログインフォームを使用した認証）を実装するモジュールです。ユーザーがログインフォームに入力した認証情報をセッション（<code>mod_session</code> 経由）に保持し、以降のアクセスで認証状態を維持します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムにおいて、従来の Basic/Digest 認証とは異なり、アプリケーション層のフォーム入力に基づいた認証フローを提供します。<code>mod_session</code> および <code>mod_request</code> に強く依存しており、これらと連携して認証情報の抽出、保持、およびリクエストの再構築を行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリ単位での認証プロバイダー、フォームフィールド名、リダイレクト先などの設定保持とマージ。</li>
+<li>**認証フローの実行**: <code>check_authn</code> を通じた認証プロバイダーの呼び出しと、結果に応じたアクセス制御。</li>
+<li>**セッション管理**: 認証情報のセッションへの保存・取得（<code>mod_session</code> 依存）。</li>
+<li>**フォーム解析**: POST リクエストからユーザー名・パスワードを抽出するためのサブリクエスト処理。</li>
+<li>**ハンドラ提供**: ログイン、ログアウト、および認証成功後のリダイレクト処理を行うためのハンドラ実装。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>auth_form_config_rec</code>: ディレクトリごとの認証設定（プロバイダーリスト、フォームフィールド名、リダイレクト先など）を保持。</li>
+</ul>
+<h3>設定・初期化</h3>
+<ul>
+<li><code>create_auth_form_dir_config</code>: 設定構造体の初期化（デフォルト値の設定）。</li>
+<li><code>merge_auth_form_dir_config</code>: 親ディレクトリの設定と現在の設定をマージ。</li>
+<li><code>add_authn_provider</code>: <code>AuthFormProvider</code> ディレクティブの解析とプロバイダーの登録。</li>
+</ul>
+<h3>認証・セッション操作</h3>
+<ul>
+<li><code>get_form_auth</code>: POST リクエストからフォームデータを解析し、認証情報を抽出。</li>
+<li><code>check_authn</code>: 抽出された認証情報を基に、登録された認証プロバイダーを順次実行。</li>
+<li><code>set_session_auth</code> / <code>get_session_auth</code>: セッションへの認証情報の永続化と取得。</li>
+</ul>
+<h3>ハンドラ</h3>
+<ul>
+<li><code>authenticate_form_login_handler</code>: ログインフォームの送信先ハンドラ。</li>
+<li><code>authenticate_form_logout_handler</code>: ログアウト処理ハンドラ。</li>
+<li><code>authenticate_form_redirect_handler</code>: 認証成功後のリダイレクトおよびリクエスト再構築ハンドラ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **認証チェック**: <code>authenticate_form_authn</code> がリクエストごとに呼ばれ、セッションまたはリクエストノートから認証情報を確認します。 2. **フォーム解析**: 認証情報がない場合、POST リクエストであれば <code>get_form_auth</code> を呼び出します。ここではサブリクエストを作成し、<code>mod_request</code> のフィルタを使用してフォームボディを安全に解析します。 3. **認証実行**: <code>check_authn</code> が設定された認証プロバイダーをループで呼び出し、認証結果（<code>AUTH_GRANTED</code> 等）を判定します。 4. **状態維持**: 認証成功時、<code>set_session_auth</code> でセッションに情報を書き込みます。 5. **リダイレクト**: ログイン成功後、設定に応じて指定された URL へリダイレクトします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>mod_auth.h</code>: 認証プロバイダーインターフェース。</li>
+<li><code>mod_session.h</code>: セッション管理機能（<code>ap_session_load</code>, <code>get</code>, <code>set</code>）。</li>
+<li><code>mod_request.h</code>: フォーム解析およびフィルタ操作。</li>
+<li><code>ap_expr.h</code>: リダイレクト先などの動的式評価。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/session/mod_session.c</code>: セッションデータの保存先。</li>
+<li><code>modules/filters/mod_request.c</code>: フォーム解析の基盤。</li>
+<li><code>modules/aaa/mod_authn_core.c</code>: 認証プロバイダーの管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>request_rec</code> のプールを使用してメモリを割り当てており、サブリクエストのライフサイクルはメインリクエストに依存します。</li>
+<li>**セキュリティ**: プロキシリクエストでの使用は XSS リスクのため禁止されています。また、<code>AuthFormDisableNoStore</code> を有効にする際は、ブラウザのキャッシュによる認証情報漏洩のリスクを考慮する必要があります。</li>
+<li>**制約**: フォーム解析のためにサブリクエストを作成するため、リクエストボディの読み取りには一定のオーバーヘッドが発生します。</li>
+<li>**省略**: <code>ap_session_*</code> などのオプション関数は実行時に <code>APR_RETRIEVE_OPTIONAL_FN</code> で解決されるため、<code>mod_session</code> がロードされていない場合はエラーとなります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__auth_form_config_rec.html" target="wiki-view">`auth_form_config_rec`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__create_auth_form_dir_config.html" target="wiki-view">`create_auth_form_dir_config`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__merge_auth_form_dir_config.html" target="wiki-view">`merge_auth_form_dir_config`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__add_authn_provider.html" target="wiki-view">`add_authn_provider`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__check_string.html" target="wiki-view">`check_string`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_location.html" target="wiki-view">`set_cookie_form_location`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_username.html" target="wiki-view">`set_cookie_form_username`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_password.html" target="wiki-view">`set_cookie_form_password`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_method.html" target="wiki-view">`set_cookie_form_method`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_mimetype.html" target="wiki-view">`set_cookie_form_mimetype`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_body.html" target="wiki-view">`set_cookie_form_body`</a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_form_c__set_cookie_form_size.html" target="wiki-view">`set_cookie_form_size`</a></li>
+</ul></body></html>

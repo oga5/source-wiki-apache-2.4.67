@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>server/util_expr_parse.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/util_expr_parse.c</h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の式評価エンジン（<code>ap_expr</code>）における構文解析器の実装です。GNU Bison 2.5 によって生成された LALR(1) パーサーであり、<code>util_expr_parse.y</code> から生成されています。式言語の文法定義に基づき、トークン列を抽象構文木（AST）へと変換する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール内の式評価サブシステムの一部です。<code>util_expr_scan.c</code>（字句解析器）からトークンを受け取り、<code>util_expr_eval.c</code> で実行される AST を構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**構文解析**: <code>ap_expr_yyparse</code> を通じて、入力文字列を文法規則に従って解析する。</li>
+<li>**AST 構築**: <code>ap_expr_make</code> などのヘルパー関数を呼び出し、ノードを生成してツリーを組み立てる。</li>
+<li>**エラーハンドリング**: 構文エラー発生時に <code>yyerror</code> を呼び出し、コンテキスト構造体にエラーメッセージを格納する。</li>
+<li>**リソース管理**: 解析中に使用するメモリを <code>apr_pool_t</code> を介して管理する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>解析制御</h3>
+<ul>
+<li><code>ap_expr_yyparse</code>: 解析のメインエントリポイント。</li>
+<li><code>ap_expr_yylex</code>: 字句解析器を呼び出すインターフェース。</li>
+<li><code>ap_expr_yyerror</code>: 構文エラー発生時に呼び出されるコールバック。</li>
+</ul>
+<h3>データ構造</h3>
+<ul>
+<li><code>YYSTYPE</code>: パーサーのスタックで使用される共用体。<code>cpVal</code>（文字列）、<code>exVal</code>（AST ノード）、<code>num</code>（数値）を保持。</li>
+<li><code>ap_expr_parse_ctx_t</code>: 解析コンテキスト。AST のルート、エラーメッセージ、メモリプール、スキャナー状態を保持する。</li>
+</ul>
+<h3>トークン定義</h3>
+<ul>
+<li><code>yytokentype</code>: 式言語の演算子（<code>T_OP_EQ</code> 等）、変数（<code>T_VAR_BEGIN</code> 等）、リテラル（<code>T_STRING</code> 等）を定義する列挙型。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 呼び出し元が <code>ap_expr_parse_ctx_t</code> を準備し、<code>ap_expr_yyparse</code> を呼び出す。 2. **トークン取得**: <code>yyparse</code> が <code>yylex</code> を呼び出し、入力からトークンを順次消費する。 3. **還元 (Reduction)**: 文法規則に一致すると、対応するアクションが実行される。ここで <code>ap_expr_make</code> 等が呼ばれ、AST ノードが生成される。 4. **AST 構築**: 生成されたノードは <code>YYSTYPE</code> を通じて上位の規則へ渡され、最終的に <code>ctx-&gt;expr</code> にルートノードが格納される。 5. **終了**: 解析成功時は 0、失敗時は 1 または 2（メモリ不足等）を返す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>util_expr_private.h</code>: 内部的なデータ構造定義と <code>ap_expr</code> 関連の API 定義。</li>
+<li><code>apr_pool.h</code> (間接): メモリ管理に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>util_expr_parse.y</code>: このファイルのソースとなる文法定義ファイル。</li>
+<li><code>util_expr_scan.c</code>: 字句解析器。</li>
+<li><code>util_expr_eval.c</code>: 構築された AST を評価するエンジン。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての AST ノードとエラーメッセージは、コンテキストに含まれる <code>apr_pool_t</code> から割り当てられます。解析終了後にプールを破棄することでメモリリークを防ぎます。</li>
+<li>**自動生成コード**: このファイルは Bison によって自動生成されています。直接編集せず、必ず <code>util_expr_parse.y</code> を修正してください。</li>
+<li>**エラー処理**: <code>YYERROR</code> マクロが呼び出されると、パーサーはエラー回復ルーチンへ移行します。この際、<code>ctx-&gt;error</code> に詳細が設定されるため、呼び出し元は必ず確認してください。</li>
+<li>**省略された詳細**: Bison の内部スタック管理や <code>yyoverflow</code> などの低レベルなスタック操作ロジックは、標準的な Bison スケルトンコードであるため、本ページでは詳細な解説を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_expr_parse_c__yytokentype.html" target="wiki-view">`yytokentype`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__YYSTYPE.html" target="wiki-view">`YYSTYPE`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_uint8.html" target="wiki-view">`yytype_uint8`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_int8.html" target="wiki-view">`yytype_int8`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_uint16.html" target="wiki-view">`yytype_uint16`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_int16.html" target="wiki-view">`yytype_int16`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__YYID.html" target="wiki-view">`YYID`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_symbol_value_print.html" target="wiki-view">`yy_symbol_value_print`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_symbol_print.html" target="wiki-view">`yy_symbol_print`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_stack_print.html" target="wiki-view">`yy_stack_print`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_reduce_print.html" target="wiki-view">`yy_reduce_print`</a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yysyntax_error.html" target="wiki-view">`yysyntax_error`</a></li>
+</ul></body></html>

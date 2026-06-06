@@ -6,22 +6,44 @@
 <li>定義箇所: <code>server/util.c:3305</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>サーバー全体の負荷状況（アイドル状態およびビジー状態の割合）を算出し、提供された構造体に格納します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_get_sload(ap_sload_t *ld)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>ld</code> (<code>ap_sload_t *</code>) - 負荷情報を書き込むための出力先構造体へのポインタ。</li>
+<li>**出力**: なし（<code>ld</code> が指す構造体の <code>idle</code>, <code>busy</code>, <code>bytes_served</code>, <code>access_count</code> フィールドが更新されます）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_scoreboard_image</code> が初期化されている必要があります。</li>
+<li><code>ap_mpm_query</code> が正常に MPM の制限値および世代情報を取得できる必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>ld</code> の各フィールドを初期化します（<code>idle</code>, <code>busy</code> は -1、他は 0）。 2. <code>ap_mpm_query</code> を使用して、現在の世代情報 (<code>mpm_generation</code>) およびスレッド/プロセスのハードリミットを取得します。 3. スコアボードを全プロセスおよび全スレッドについて走査します。 4. 現在の世代と一致し、かつ停止中（quiescing）でないプロセス内のスレッドを対象に、状態（<code>SERVER_READY</code> か否か等）を判定して <code>ready</code> および <code>busy</code> カウンタを増分します。 5. <code>ap_extended_status</code> が有効な場合、各スレッドのアクセス数と転送バイト数を集計します。 6. 合計値が 0 でない場合、<code>ready</code> および <code>busy</code> の割合（パーセンテージ）を計算して <code>ld</code> に格納します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/arch/unix/mod_systemd.c:108</code></li>
+<li><code>modules/metadata/mod_headers.c:228</code>, <code>235</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_mpm_query</code></li>
+<li><code>ap_get_scoreboard_process</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_sload_t</code>: 負荷情報を保持する構造体。</li>
+<li><code>process_score</code>: プロセスごとのスコアボード情報。</li>
+<li><code>worker_score</code>: スレッドごとのスコアボード情報。</li>
+<li><code>ap_scoreboard_image</code>: サーバー全体のスコアボード状態を保持するグローバル構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>total</code>（<code>busy + ready</code>）が 0 の場合、計算を行わず <code>idle</code> と <code>busy</code> は初期値（-1）のままとなります。</li>
+<li><code>ap_extended_status</code> が無効な場合、<code>access_count</code> および <code>bytes_served</code> の集計はスキップされます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はスコアボードの全走査を行うため、スレッド数やプロセス数が多い環境では呼び出し頻度に注意してください。</li>
+<li><code>ap_mpm_query</code> で取得する制限値と、実際のスコアボードのサイズが一致していることを前提としています。</li>
 </ul></body></html>
