@@ -6,22 +6,56 @@
 <li>定義箇所: <code>server/vhost.c:1173</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>リクエストヘッダー（<code>Host</code>）およびリクエスト URI に基づいて、現在のリクエスト (<code>request_rec</code>) に適切な仮想ホスト設定を適用し、<code>r-&gt;server</code> を更新します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_update_vhost_from_headers_ex(request_rec *r, int require_match)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>require_match</code>: 仮想ホストの適合を必須とするかを示すフラグ。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 処理結果のステータスコード（<code>HTTP_OK</code> など）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;server</code> は初期状態で設定されている必要があります。</li>
+<li><code>r-&gt;connection-&gt;vhost_lookup_data</code> には、接続時に特定された仮想ホストの候補リストが格納されている場合があります。</li>
+<li><code>conf-&gt;http_conformance</code> が <code>AP_HTTP_CONFORMANCE_UNSAFE</code> でない場合、RFC 2616 5.2 に従い、絶対 URI と <code>Host</code> ヘッダーが競合した際に <code>Host</code> ヘッダーが上書きされます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **ホスト名の特定**: リクエスト URI にホスト名が含まれる場合はそれを優先し、含まれない場合は <code>Host</code> ヘッダーを使用します。<code>fix_hostname</code> を呼び出し、ホスト名を正規化します。 2. **ヘッダーの整合性確保**: <code>require_match</code> が偽かつリクエストが既にエラー状態であれば、即座に <code>HTTP_OK</code> を返します。 3. **RFC 準拠の強制**: <code>http_conformance</code> 設定が安全な場合、絶対 URI と <code>Host</code> ヘッダーの両方が存在すれば、<code>Host</code> ヘッダーをリクエスト行の値で置換し、デバッグログを出力します。 4. **仮想ホストの解決**:</p>
+<ul>
+<li>接続時に特定された <code>vhost_lookup_data</code> が存在する場合、ホスト名の有無に応じて <code>update_server_from_aliases</code> または <code>check_serverpath</code> を実行します。</li>
+<li><code>vhost_lookup_data</code> が存在せず、<code>require_match</code> が真かつホスト名が存在する場合は、ベースサーバー設定に対して <code>update_server_from_aliases</code> を実行します。</li>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/protocol.c:1013</code></li>
+<li><code>server/vhost.c:1170</code></li>
+<li>**呼び出し先**:</li>
+<li><code>fix_hostname</code> (内部関数)</li>
+<li><code>construct_host_header</code> (内部関数)</li>
+<li><code>update_server_from_aliases</code> (内部関数)</li>
+<li><code>check_serverpath</code> (内部関数)</li>
+<li><code>ap_get_core_module_config</code></li>
+<li><code>apr_table_get</code> / <code>apr_table_setn</code></li>
+<li><code>ap_log_rerror</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストの状態管理。</li>
+<li><code>core_server_config</code>: サーバーのコア設定（<code>http_conformance</code> 等）。</li>
+<li><code>conn_rec</code>: 接続情報（<code>vhost_lookup_data</code> を保持）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>Host</code> ヘッダーが欠落している場合、<code>fix_hostname</code> の挙動に依存します。</li>
+<li><code>require_match</code> が真で、かつホスト名がどの仮想ホストにも適合しない場合、<code>update_server_from_aliases</code> の戻り値がエラーコードを返す可能性があります。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>http_vhost.h</code> で宣言されており、プロトコル処理の重要なフェーズで呼び出されます。</li>
+<li><code>http_conformance</code> の設定値によって <code>Host</code> ヘッダーの書き換え挙動が変化するため、変更時は RFC 2616 の要件との整合性に注意してください。</li>
 </ul></body></html>

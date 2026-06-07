@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-deadprop-rollback.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_deadprop_rollback</h1>
 <h2>概念</h2>
-<p><code>dav_deadprop_rollback</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>dav_deadprop_rollback</code> は、WebDAV のデッドプロパティ（Dead Properties）の更新処理において、操作が失敗した場合やトランザクション的なロールバックが必要な際に、変更前のプロパティ値を一時的に保持し、元の状態に復元するためのデータ構造です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>WebDAV プロパティの更新中にエラーが発生した場合、データベース（DBM）内のデータを更新前の状態に安全に巻き戻す必要があります。この構造体は、変更前のキーと値のペアを退避させておくことで、データの整合性を維持する役割を果たします。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/dav/fs</code></li>
@@ -11,15 +11,25 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/dav/fs/dbm.c#dav_deadprop_rollback</code></li>
-<li><code>symbol:modules/dav/main/mod_dav.h#dav_deadprop_rollback</code></li>
+<li>**<code>symbol:modules/dav/fs/dbm.c#dav_deadprop_rollback</code>**</li>
+<p>プロパティデータベース（DBM）のロールバック情報を保持する構造体。以下のメンバを持ちます。 ``<code>c struct dav_deadprop_rollback { apr_datum_t key; apr_datum_t value; }; </code>``</p>
+<li>**<code>symbol:modules/dav/main/mod_dav.h#dav_deadprop_rollback</code>**</li>
+<p><code>mod_dav</code> のメインヘッダーにおける定義または参照。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **退避**: プロパティの更新処理の開始時に、変更前の DBM キーと値（<code>apr_datum_t</code>）が <code>dav_deadprop_rollback</code> 構造体に退避されます。 2. **更新と成否判定**: プロパティの更新処理が実行されます。 3. **ロールバック**: 更新処理が失敗した場合、この構造体に保持されている <code>key</code> と <code>value</code> を使用して、DBM 上のデータが元の状態に復元されます。</p>
+<p>※上位レイヤー（<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a> など）からプロバイダーインターフェースを介した具体的な関数呼び出しの連鎖や、詳細なエンドツーエンドの制御フローは、提供された情報からは未確定です。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリ管理の依存性**: <code>apr_datum_t</code> 型を使用しているため、構造体およびその内部データのライフサイクルとメモリ管理は <code>apr_pool_t</code> に依存します。</li>
+<li>※ロールバック処理中における DBM のトランザクション境界や、状態遷移に関する厳密な不変条件は、提供された情報からは未確定です。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリ確保の失敗**: <code>apr_pcalloc</code> 等によるメモリ確保に失敗した場合、ロールバック情報自体を生成できず、安全な復元ができなくなる可能性があります。</li>
+<li>**DBM の破損**: ロールバックを実行する時点で DBM 自体が破損している場合、復元操作そのものが失敗する可能性があります。</li>
+<li>**定義の二重管理**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> の両方に定義や参照が存在するため、構造体を変更する際はインターフェースの整合性に注意する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a></li>

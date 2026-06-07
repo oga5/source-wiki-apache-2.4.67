@@ -1,29 +1,44 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-slotmem-instance-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_slotmem_instance_t</h1>
 <h2>概念</h2>
-<p><code>ap_slotmem_instance_t</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>ap_slotmem_instance_t</code> は、Apache HTTP Server において固定サイズメモリ領域（スロット）を管理するためのデータ構造です。</p>
+<p>ヘッダーファイル（<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a>）においては、具体的な構造を隠蔽した不透明な（opaque）ハンドルとして定義されています。一方で、具体的なメモリ管理を行うプロバイダーモジュール（<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>mod_slotmem_plain.c</code></a> や <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a>）の内部では、それぞれの管理方式（プレーンメモリまたは共有メモリ）に適した異なるメンバを持つ構造体として定義されています。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この構造体は、メモリ管理の具体的な実装（単一プロセス内でのプレーンメモリ管理か、複数プロセス間での共有メモリ管理か）を抽象化するために重要です。</p>
+<p><code>mod_proxy_balancer</code> などの呼び出し元モジュールは、具体的なメモリレイアウトや排他制御の詳細を意識することなく、<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> インターフェースを介して一貫した方法でスロットメモリの確保、アタッチ、読み書き（<code>get</code>/<code>put</code>/<code>dptr</code>）を行うことができます。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:include</code></li>
-<li><code>module:modules/slotmem</code></li>
+<li><code>module:include</code> : 抽象インターフェースおよび不透明なハンドルを定義します。</li>
+<li><code>module:modules/slotmem</code> : プレーンメモリ（<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>mod_slotmem_plain.c</code></a>）および共有メモリ（<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a>）による具体的な管理実装を提供します。</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/ap_slotmem.h#ap_slotmem_instance_t</code></li>
-<li><code>symbol:modules/slotmem/mod_slotmem_plain.c#ap_slotmem_instance_t</code></li>
-<li><code>symbol:modules/slotmem/mod_slotmem_shm.c#ap_slotmem_instance_t</code></li>
+<li>**<code>symbol:include/ap_slotmem.h#ap_slotmem_instance_t</code>**</li>
+<p>外部モジュール向けに公開されている不透明な構造体宣言。</p>
+<li>**<code>symbol:modules/slotmem/mod_slotmem_plain.c#ap_slotmem_instance_t</code>**</li>
+<p>単一プロセス内でのスロット管理用構造体。データ領域の開始アドレス（<code>base</code>）や利用状況フラグ（<code>inuse</code>）、セグメントリスト（<code>next</code>）などを保持します。</p>
+<li>**<code>symbol:modules/slotmem/mod_slotmem_shm.c#ap_slotmem_instance_t</code>**</li>
+<p>共有メモリ（SHM）ベースのスロット管理用構造体。<code>apr_shm_t</code> へのポインタ（<code>shm</code>）、永続化ファイルパス（<code>pname</code>）、空きスロット数（<code>num_free</code>）などを保持します。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **初期化と生成**: 呼び出し元モジュールが <a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> の <code>create</code> または <code>attach</code> を呼び出します。 2. **インスタンス構築**: 各プロバイダー（<code>plain</code> または <code>shm</code>）は、それぞれの方式でメモリ領域を確保し、<code>ap_slotmem_instance_t</code> を初期化してそのポインタを返します。 3. **データ操作**: 呼び出し元は取得したインスタンスポインタを引数として <code>get</code>、<code>put</code>、<code>dptr</code> などのAPIに渡し、スロットデータの読み書きを行います。</p>
+<p>*注意: 提供されたコンテキストからは、呼び出し元モジュール（<code>mod_proxy_balancer</code> 等）における具体的なライフサイクル遷移や、詳細なエンドツーエンドの完全な制御フローは未だ完全には明らかになっていません。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**不透明性の維持**: 呼び出し元は <code>ap_slotmem_instance_t</code> の内部メンバに直接アクセスしてはならず、必ず <a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> の API を経由する必要があります。</li>
+<li>**プールの生存期間**: インスタンス内の <code>gpool</code>（セグメントごとのプール）は、インスタンスの生存期間全体にわたって維持され、クリーンアップや再起動時のメモリ解放を制御します。</li>
+<li>**共有メモリのレイアウト（<code>mod_slotmem_shm</code>）**: 共有メモリ領域は、<code>[desc] [num_free] [data_slots] [inuse_array]</code> の順序で厳密にアライメントされて配置される必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**排他制御の欠如（<code>plain</code> 実装）**: <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>mod_slotmem_plain.c</code></a> による実装は単一プロセス内での利用を想定しており、マルチスレッド環境で安全に使用するためには呼び出し側での排他制御が必須です。</li>
+<li>**境界チェックの委譲**: <code>slotmem_get</code> や <code>slotmem_put</code> において、転送元・転送先のバッファサイズ（<code>dest_len</code> / <code>src_len</code>）がスロットサイズ（<code>size</code>）を超えないように保護する責任は、呼び出し側に委ねられています。</li>
+<li>**プラットフォーム固有の挙動（<code>shm</code> 実装）**: Windows 環境などのプロセス継承時において、<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L285" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__is_child_process.html&quot;}, '*');"><code>is_child_process</code></a> フラグとの相互作用により共有メモリの再アタッチ挙動が変化するため、プラットフォーム固有の考慮が必要です。</li>
+<li>**データの破損**: <code>mod_slotmem_shm</code> の永続化データ復元（<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html&quot;}, '*');"><code>restore_slotmem</code></a>）の際、MD5チェックサムが一致しない場合はデータが破損しているとみなされ、初期化が失敗します。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_plain.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_shm.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a> : API 定義と不透明なハンドルの宣言。</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_plain.c</code></a> : プロセス内メモリ管理の具体的なデータ構造と実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_shm.c</code></a> : 共有メモリおよび永続化を伴う管理の具体的なデータ構造と実装。</li>
 </ul></body></html>

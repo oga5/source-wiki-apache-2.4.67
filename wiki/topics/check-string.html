@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/check-string.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>check_string</h1>
 <h2>概念</h2>
-<p><code>check_string</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>check_string</code> は、Apache HTTP Server の認証（AAA）およびセッション管理モジュールにおいて、設定ディレクティブ（Cookie名、フォーム認証設定、DBDセッション設定など）に指定された文字列が、仕様上禁止されている文字を含んでいないか、または空でないかを検証するためのバリデーション関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この関数は、クッキーやフォーム認証の内部処理において、セパレータや特殊文字として扱われる文字（<code>=</code>、<code>&amp;</code>、<code>;</code> など）が設定値に混入することを防ぎます。これにより、設定値の不正なパースや、セッション・認証処理における予期しない挙動、セキュリティ上の脆弱性を未然に防ぐ役割を果たします。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/aaa</code></li>
@@ -11,16 +11,36 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/aaa/mod_auth_form.c#check_string</code></li>
-<li><code>symbol:modules/session/mod_session_cookie.c#check_string</code></li>
-<li><code>symbol:modules/session/mod_session_dbd.c#check_string</code></li>
+<li>**<code>symbol:modules/aaa/mod_auth_form.c#check_string</code>**</li>
+<p>フォーム認証の設定値（location, username, password, <a class="wiki-source-link" href="../../source/support/ab.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');">method</a>, mimetype, body）を検証します。<code>=</code> および <code>&amp;</code> を禁止文字とします。</p>
+<li>**<code>symbol:modules/session/mod_session_cookie.c#check_string</code>**</li>
+<p>クッキー設定（Cookie名など）を検証します。<code>=</code> および <code>&amp;</code> を禁止文字とします。</p>
+<li>**<code>symbol:modules/session/mod_session_dbd.c#check_string</code>**</li>
+<p>DBDセッション設定を検証します。<a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_check_string.html&quot;}, '*');"><code>ap_cookie_check_string</code></a> を用いて、<code>=</code>, <code>;</code>, <code>&amp;</code> を禁止文字として検証します。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>設定ファイルの読み込み時（設定ディレクティブの解析フェーズ）において、各モジュールの設定ハンドラから <code>check_string</code> が呼び出されます。</p>
+<p>1. **入力**: 設定コマンドのパラメータ構造体（<code>cmd_parms</code>）と、検証対象の文字列（<code>string</code>）が渡されます。 2. **検証**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_form.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_form.c.html&quot;}, '*');"><code>mod_auth_form.c</code></a> および <a class="wiki-source-link" href="../../source/modules/session/mod_session_cookie.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_cookie.c.html&quot;}, '*');"><code>mod_session_cookie.c</code></a> では、文字列が <code>NULL</code> または空でないかを確認し、<code>ap_strchr_c</code> を用いて <code>=</code> または <code>&amp;</code> が含まれていないかを直接検査します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/session/mod_session_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_dbd.c.html&quot;}, '*');"><code>mod_session_dbd.c</code></a> では、<a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_check_string.html&quot;}, '*');"><code>ap_cookie_check_string</code></a> を呼び出して、<code>=</code>, <code>;</code>, <code>&amp;</code> の有無を検査します。</li>
+<p>3. **出力**:</p>
+<li>検証を通過した場合、<code>NULL</code> を返して処理を継続します。</li>
+<li>検証に失敗した場合、<code>cmd-&gt;pool</code> を使用してエラーメッセージを構築し、それを返します。これにより、Apache の起動時または再起動時に設定エラーとして報告されます。</li>
+</ul>
+<p>※なお、リクエスト処理時の動的なバリデーションなど、設定解析フェーズ以外での詳細なエンドツーエンドの実行フローは現時点では不明です。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリプールの有効性**: 検証エラー時にエラーメッセージを生成するため、<code>cmd-&gt;pool</code> が有効なメモリプールを指している必要があります。</li>
+<li>**禁止文字の不検出**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_form.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_form.c.html&quot;}, '*');"><code>mod_auth_form.c</code></a> および <a class="wiki-source-link" href="../../source/modules/session/mod_session_cookie.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_cookie.c.html&quot;}, '*');"><code>mod_session_cookie.c</code></a> では、対象文字列に <code>=</code> および <code>&amp;</code> が含まれていてはなりません。</li>
+<li><a class="wiki-source-link" href="../../source/modules/session/mod_session_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_dbd.c.html&quot;}, '*');"><code>mod_session_dbd.c</code></a> では、対象文字列に <code>=</code>, <code>;</code>, <code>&amp;</code> が含まれていてはなりません。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**モジュール間での実装の差異**: <a class="wiki-source-link" href="../../source/modules/session/mod_session_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_dbd.c.html&quot;}, '*');"><code>mod_session_dbd.c</code></a> の <code>check_string</code> は <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_check_string.html&quot;}, '*');"><code>ap_cookie_check_string</code></a> を使用して <code>;</code> も禁止文字として検証しますが、他の2つの実装では <code>;</code> の検証が明示されていません。共通のバリデーターとして扱われる一方で、禁止文字の定義が微妙に異なる点に注意が必要です。</li>
+<li>**静的（static）関数の重複**: 各ファイルに <code>static const char *check_string</code> として定義されているため、グローバルな共通関数ではなく、ファイルごとに独立して実装されています。変更を加える際は、それぞれのファイルに個別に修正を適用する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_form.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_form.c.html&quot;}, '*');"><code>modules/aaa/mod_auth_form.c</code></a></li>

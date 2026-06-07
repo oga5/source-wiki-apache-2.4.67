@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/find-chr.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>find_chr</h1>
 <h2>概念</h2>
-<p><code>find_chr</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>find_chr</code> は、HTTP/2 や ACME (Managed Domains) などのモジュールにおいて、<code>Link</code> ヘッダーなどの文字列を解析する際に、特定の文字（クォートや区切り文字など）を探索するために使用されるユーティリティ関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>HTTP/2 のプッシュ機能（<a class="wiki-source-link" href="../../source/modules/http2/h2_push.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push.html&quot;}, '*');"><code>h2_push</code></a>）やプロキシユーティリティ（<code>h2_proxy_util</code>）、および MD モジュール（<code>md_util</code>）において、ヘッダー値などの文字列をパースする処理は頻出します。<code>find_chr</code> は、解析コンテキスト（<code>link_ctx</code>）の状態を維持しながら、指定された文字の位置を安全に探索するための共通的な手段を提供します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/http2</code></li>
@@ -11,19 +11,26 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http2/h2_proxy_util.c#find_chr</code></li>
-<li><code>symbol:modules/http2/h2_push.c#find_chr</code></li>
-<li><code>symbol:modules/md/md_util.c#find_chr</code></li>
+<li><code>symbol:modules/http2/h2_push.c#find_chr</code>: <code>link_ctx</code> 構造体を用いて、指定された文字 <code>c</code> を線形探索する静的関数。</li>
+<li><code>symbol:modules/http2/h2_proxy_util.c#find_chr</code>: 同名の探索処理（呼び出し元として関与）。</li>
+<li><code>symbol:modules/md/md_util.c#find_chr</code>: 同名の探索処理（呼び出し元として関与）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>システム全体における完全なエンドツーエンドの制御フロー（例えば、HTTP リクエストの受信から <code>Link</code> ヘッダーの解析、そしてプッシュのトリガーに至る詳細なシーケンス）は、提供された情報からは完全には明らかになっていません。</p>
+<p>現時点で判明している局所的な流れは以下の通りです： 1. <code>Link</code> ヘッダーなどの解析対象文字列と現在のオフセット（<code>i</code>）、文字列長（<code>slen</code>）を保持する <code>link_ctx</code> 構造体が用意されます。 2. 解析処理の中で、クォートや区切り文字などの特定の文字 <code>c</code> を探す必要が生じた際、<code>find_chr(ctx, c, &amp;pidx)</code> が呼び出されます。 3. <code>find_chr</code> は <code>ctx-&gt;i</code> から <code>ctx-&gt;slen</code> までの範囲を線形探索します。 4. 文字が見つかった場合、そのインデックスが <code>pidx</code> に格納され、関数は <code>1</code> を返します。呼び出し側はこのインデックスを基に次の解析ステップ（トークンの切り出しなど）に進みます。 5. 文字が見つからない場合は <code>0</code> を返します。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**探索範囲の制限**: 探索は常に現在のオフセット <code>ctx-&gt;i</code> から開始され、文字列の長さ <code>ctx-&gt;slen</code> を超えてアクセスすることはありません。</li>
+<li>**引数の有効性**: 呼び出し時に <code>ctx</code> は有効な <code>link_ctx</code> 構造体を指し、<code>pidx</code> は書き込み可能なメモリ領域を指している必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**オフセットの更新漏れ**: <code>find_chr</code> 自体は <code>ctx-&gt;i</code>（現在のオフセット）を自動的に更新しません。呼び出し側で <code>ctx-&gt;i</code> を適切に進めないと、無限ループに陥るか、同じ文字を繰り返し検出する原因になります。</li>
+<li>**境界条件のハンドリング**: <code>ctx-&gt;i</code> がすでに <code>ctx-&gt;slen</code> 以上である場合、探索ループは実行されず即座に <code>0</code> が返されます。呼び出し側はこの戻り値を適切にハンドリングする必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> の <code>find_chr</code> 定義およびその呼び出し元（<code>Link</code> ヘッダー解析部）</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> における <code>find_chr</code> の利用箇所</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> における <code>find_chr</code> の利用箇所</li>
 </ul></body></html>

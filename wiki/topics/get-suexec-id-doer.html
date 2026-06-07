@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/get-suexec-id-doer.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>get_suexec_id_doer</h1>
 <h2>概念</h2>
-<p><code>get_suexec_id_doer</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>get_suexec_id_doer</code> は、Apache HTTP Server において suEXEC 実行時のユーザーおよびグループ ID（<a class="wiki-source-link" href="../../source/os/unix/unixd.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_h__ap_unix_identity_t.html&quot;}, '*');"><code>ap_unix_identity_t</code></a>）を解決するための関数（フックハンドラ）です。異なるモジュール（<code>mod_suexec</code> と <code>mod_userdir</code>）で同名の関数として定義されており、それぞれ異なるコンテキスト（ディレクトリ設定またはユーザーディレクトリ）から適切なシステム権限情報を取得する役割を持ちます。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>suEXEC 環境下で CGI などの外部プログラムを実行する際、どのシステムユーザー/グループ権限で実行すべきかを正しく決定する必要があります。<code>get_suexec_id_doer</code> は、<code>ap_hook_get_suexec_identity</code> フックを介して、リクエストに応じた適切な UID/GID 情報を動的に提供するため、セキュリティと権限分離の制御において重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/generators</code></li>
@@ -11,17 +11,30 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/generators/mod_suexec.c#get_suexec_id_doer</code></li>
-<li><code>symbol:modules/mappers/mod_userdir.c#get_suexec_id_doer</code></li>
+<li><code>symbol:modules/generators/mod_suexec.c#get_suexec_id_doer</code>: ディレクトリごとの設定（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a>）から、設定済みの UID/GID を取得して返します。</li>
+<li><code>symbol:modules/mappers/mod_userdir.c#get_suexec_id_doer</code>: リクエストに関連付けられたユーザー名を基に、システム（OS）から UID/GID を動的に解決して返します。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. Apache がリクエストを処理する際、suEXEC の実行権限を決定するために <code>ap_hook_get_suexec_identity</code> フックを呼び出します。 2. このフックに登録された各モジュールの <code>get_suexec_id_doer</code> が呼び出されます。</p>
+<ul>
+<li>**<code>mod_suexec</code> の場合**: リクエストのディレクトリ設定から <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> を取得し、<code>active</code> フラグが真であれば設定済みの <code>ugid</code> を返します。</li>
+<li>**<code>mod_userdir</code> の場合**: リクエスト設定からユーザー名を取得し、<code>apr_uid_get</code> を用いて OS から UID/GID を取得して返します。</li>
+<p>3. 取得された <a class="wiki-source-link" href="../../source/os/unix/unixd.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_h__ap_unix_identity_t.html&quot;}, '*');"><code>ap_unix_identity_t</code></a> は、後続の処理（<code>mod_cgi</code> など）で実際の suEXEC バイナリ実行時の権限切り替えに使用されます。</p>
+</ul>
+<p>*注意: フック呼び出しの優先順位や、複数のハンドラが競合した場合の最終的な決定ロジックなど、詳細なエンドツーエンドの制御フローは提供された情報からは完全には明らかになっていません。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**<code>mod_suexec</code> 側**: <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> の <code>active</code> フラグが真である場合のみ、有効な <a class="wiki-source-link" href="../../source/os/unix/unixd.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_h__ap_unix_identity_t.html&quot;}, '*');"><code>ap_unix_identity_t</code></a> が返されます。偽の場合は <code>NULL</code> を返します。</li>
+<li>**<code>mod_userdir</code> 側**: <code>APR_HAS_USER</code> が定義されている環境でのみ動作します。未定義の場合や、リクエスト内にユーザー名が設定されていない場合、あるいは <code>apr_uid_get</code> が失敗した場合は <code>NULL</code> を返します。また、成功時には <code>ugid-&gt;userdir</code> フラグが <code>1</code> に設定されます。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**設定の依存関係**: <code>mod_suexec</code> のハンドラは <code>active</code> フラグに依存しており、設定が未初期化または無効な場合は <code>NULL</code> を返します。この場合、呼び出し側（<code>mod_cgi</code> 等）が suEXEC を適用しないなどの判断を行う必要があります。</li>
+<li>**OS/プラットフォーム依存**: <code>mod_userdir</code> のハンドラは OS のユーザー名前解決（<code>apr_uid_get</code>）に直接依存しているため、プラットフォーム固有のユーザー管理設定の影響を受けます。</li>
+<li>**メモリ確保**: <code>mod_userdir</code> ではリクエストプールから <code>apr_palloc</code> でメモリを確保するため、メモリ確保に失敗した場合は <code>NULL</code> が返されます。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_userdir.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_userdir.c.html&quot;}, '*');"><code>modules/mappers/mod_userdir.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a> (フック登録箇所: 126行目付近)</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_userdir.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_userdir.c.html&quot;}, '*');"><code>modules/mappers/mod_userdir.c</code></a> (フック登録箇所: 378行目付近)</li>
 </ul></body></html>

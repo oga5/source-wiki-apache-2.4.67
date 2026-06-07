@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/proc-info.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>proc_info</h1>
 <h2>概念</h2>
-<p><code>proc_info</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>proc_info</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）である <code>event</code> および <code>worker</code> において、プロセスやスレッドの識別情報、および関連するコンテキスト（ソケット記述子など）をスレッド起動時や初期化時に引き渡すために使用される構造体です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>マルチスレッドモデルを採用する <code>event</code> および <code>worker</code> MPM において、新しく生成されるスレッドに対して、自身がどのプロセス（またはスロット）に属し、どのスレッド（またはスロット）として動作すべきかというコンテキスト情報を安全かつ確実に伝達するために不可欠なデータ構造だからです。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -11,17 +11,28 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#proc_info</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#proc_info</code></li>
+<li>**<code>symbol:server/mpm/event/event.c#proc_info</code>**</li>
+<li>メンバとして <code>pslot</code>（プロセススロット）および <code>tslot</code>（ワーカー用スレッドスロット）を持ちます。</li>
+<li>**<code>symbol:server/mpm/worker/worker.c#proc_info</code>**</li>
+<li>メンバとして <code>pid</code>（プロセスID）、<code>tid</code>（スレッドID）、および <code>sd</code>（ソケット記述子）を持ちます。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **メモリ確保と初期化**: スレッドを生成する側（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> の <code>thread_starter</code> や、<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> のスレッド生成処理）が、<a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_malloc</code></a> を用いてヒープ上に <code>proc_info</code> 構造体の領域を動的に確保し、識別情報を設定します。 2. **コンテキストの引き渡し**: スレッド生成関数の引数（<code>void *dummy</code> など）として、この構造体へのポインタが渡されます。 3. **情報の参照**: 起動したスレッド関数内部で、受け取った <code>void *</code> ポインタを <code>proc_info *</code> にキャストし、自身のプロセス/スレッド識別子やソケット記述子を取得して処理に利用します。</p>
+<p>※なお、スレッド生成から破棄に至るライフサイクル全体におけるメモリ解放の厳密なタイミングなど、詳細なエンドツーエンドのフローの全容は、提供されたコンテキストからは完全には判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> において、<code>pslot</code> および <code>tslot</code> は、MPM のプロセスおよびスレッド管理におけるインデックスとして有効な値でなければなりません。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_malloc</code></a> を用いて動的にメモリ確保されるため、呼び出し側または受け取り側で適切にメモリ管理（解放）を行う必要があります。</li>
+</ul>
+<p>※その他の詳細な不変条件や、OSの型定義（<code>pid_t</code> 等）との厳密な整合性ルールについては、提供された情報からは完全には判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**同名異構造の混同**: <code>proc_info</code> は <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> と <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> の両方で定義されていますが、保持するメンバ（<code>pslot</code>/<code>tslot</code> と <code>pid</code>/<code>tid</code>/<code>sd</code>）が異なります。一方のMPMを変更する際、もう一方の定義と混同しないよう注意が必要です。</li>
+<li>**メモリリークと確保失敗**: <a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_malloc</code></a> によるメモリ確保が失敗した場合、スレッド起動プロセスが中断されたり、メモリ不足によりプログラムが終了したりする可能性があります。また、ライフサイクル管理を誤るとメモリリークの原因になります。</li>
+<li>**キャストの安全性**: スレッド関数内で <code>void *</code> ポインタから <code>proc_info *</code> へキャストする際、ポインタが正しく初期化されていないと未定義の動作を引き起こす危険性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （特に <code>proc_info</code> の定義と <code>thread_starter</code> 周辺の実装）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （特に <code>proc_info</code> の定義とスレッド初期化・コンテキスト管理の実装）</li>
 </ul></body></html>

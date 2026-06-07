@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/just-die.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>just_die</h1>
 <h2>概念</h2>
-<p><code>just_die</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>just_die</code> は、Apache HTTP Server (httpd) のマルチプロセッシングモジュール (MPM) において、シグナル（<code>SIGHUP</code> や <code>SIGTERM</code> など）を受信した際に子プロセスを安全かつ正常に終了させるためのシグナルハンドラ関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この関数は、シグナル受信時にプロセスを即座に、かつクリーンに終了させる役割を担います。<code>just_die</code> という名称でありながら、内部的には <code>clean_child_exit(0)</code> を呼び出すことで、リソースのクリーンアップ処理を経由した正常終了（ステータス0）を保証します。これにより、プロセスの異常終了を防ぎ、システムの安定性を維持します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -17,14 +17,22 @@
 <li><code>symbol:server/mpm/worker/worker.c#just_die</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **シグナルの受信**: 子プロセスが <code>SIGHUP</code> や <code>SIGTERM</code> などのシグナルを受信します。 2. **ハンドラの起動**: <code>apr_signal</code> を介して登録された <code>just_die</code> が起動します。 3. **クリーンアップと終了**: <code>just_die</code> は受信したシグナル番号を無視し、<code>clean_child_exit(0)</code> を呼び出して子プロセスのクリーンアップ処理を実行し、プロセスを終了させます。</p>
+<p>※なお、<code>event</code> および <code>worker</code> MPM における具体的な登録・呼び出しのライフサイクルや、詳細なエンドツーエンドのフローの全容は現時点では完全には判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>just_die</code> が呼び出された場合、制御は呼び出し元には戻らず、必ずプロセスが終了します。</li>
+<li>終了ステータスは常に <code>0</code>（正常終了）として <code>clean_child_exit</code> に渡されます。</li>
+</ul>
+<p>※その他の詳細な不変条件については、現時点では完全には判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**名称による誤解**: <code>just_die</code> という名前から強制終了や異常終了を連想しがちですが、実際には <code>clean_child_exit(0)</code> を呼び出すため、正常終了として処理されます。</li>
+<li>**MPM間の共通性**: <code>prefork</code> だけでなく <code>event</code> や <code>worker</code> でも同様のハンドラとして参照されているため、この関数を変更する際はすべての対象MPMへの影響を考慮する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a>（<code>just_die</code> の具体的な実装と <code>clean_child_exit</code> の呼び出し）</li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
 </ul></body></html>

@@ -1,9 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/link-ctx.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>link_ctx</h1>
 <h2>概念</h2>
-<p><code>link_ctx</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>link_ctx</code> は、Apache HTTP Server 内の複数のモジュール（<code>mod_http2</code> および <code>mod_md</code>）において、HTTP <code>Link</code> ヘッダー（RFC 5988）の構文解析や、それに伴う処理（URIの書き換えやサーバープッシュ候補の抽出など）を行う際に、解析状態や対象文字列のメタデータを保持するために定義されている構造体です。</p>
+<p>同名の構造体が複数のソースファイルで個別に定義されていますが、いずれも <code>Link</code> ヘッダー文字列を走査・解析するためのステートフルなコンテキストとして機能します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>HTTP <code>Link</code> ヘッダーは、リバースプロキシ環境におけるバックエンドURIからフロントエンドURIへの書き換え（<a class="wiki-source-link" href="../../source/modules/filters/mod_proxy_html.c.html#L1298" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_proxy_html.c.html&quot;}, '*');"><code>mod_proxy_html</code></a> や <code>mod_http2</code> のプロキシ機能）や、HTTP/2 におけるサーバープッシュ（<code>rel=preload</code> の検出）など、複数の重要な機能でパースする必要があります。 <code>link_ctx</code> を用いることで、再帰を使用しない軽量なステートマシンとして文字列を安全かつ効率的に走査し、メモリ管理や境界チェックを一元化できます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/http2</code></li>
@@ -11,19 +12,43 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http2/h2_proxy_util.c#link_ctx</code></li>
-<li><code>symbol:modules/http2/h2_push.c#link_ctx</code></li>
-<li><code>symbol:modules/md/md_util.c#link_ctx</code></li>
+<li>**<code>symbol:modules/http2/h2_proxy_util.c#link_ctx</code>**: リバースプロキシ環境下での <code>Link</code> ヘッダーのパースおよび URI 書き換え処理用のコンテキスト。</li>
+<li>**<code>symbol:modules/http2/h2_push.c#link_ctx</code>**: HTTP/2 サーバープッシュ機能において、<code>Link</code> ヘッダーからプッシュ候補（<code>rel=preload</code> など）を抽出するためのコンテキスト。</li>
+<li>**<code>symbol:modules/md/md_util.c#link_ctx</code>**: <code>Link</code> ヘッダーの解析において、抽出されたリンク要素やパラメータのオフセット情報を保持するための汎用的なコンテキスト。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>詳細なエンドツーエンドの呼び出しフロー全体は完全には判明していませんが、提供された情報から以下の部分的な流れが確認できます。</p>
+<p>1. **プロキシ時のURI書き換え (<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a>)**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html#L1043" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_link_reverse_map</code></a>（推測される呼び出し元）等からパース処理が開始されます。</li>
+<li><code>link_ctx</code> に対象の <code>Link</code> ヘッダー文字列 <code>s</code> や書き換え用のベース URI 情報（<code>server_uri</code> など）を格納します。</li>
+<li><code>skip_ws</code>, <code>read_link</code>, <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html#L928" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>subst_str</code></a> などのユーティリティ関数群が <code>link_ctx</code> を更新しながら走査し、URI の置換を行います。</li>
+</ul>
+<p>2. **サーバープッシュ候補の抽出 (<a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>h2_push.c</code></a>)**:</p>
+<ul>
+<li><code>h2_push_collect()</code> 等の関数により、レスポンスヘッダー内の <code>Link</code> 文字列が <code>link_ctx</code> にセットされます。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html#L371" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>inspect_link</code></a> などの解析関数が、<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a> 内の共通ユーティリティ（<code>skip_ws</code>, <code>read_link</code> など）を呼び出してパースを進めます。</li>
+<li>解析結果として、抽出されたプッシュ候補は <code>pushes</code> 配列に格納され、パラメータは <code>params</code> テーブルに保持されます。</li>
+</ul>
+<p>3. **MDユーティリティによる解析 (<a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>md_util.c</code></a>)**:</p>
+<ul>
+<li><code>Link</code> ヘッダーの解析関数（<code>read_link</code> 等）が <code>link_ctx</code> を引数として受け取り、文字列内のリンクやパラメータの開始位置・長さをオフセット情報（<code>link_start</code>, <code>link_len</code> など）として書き込みます。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a> 内の静的関数群（<code>skip_ws</code>, <code>read_link</code> など）がこの構造体を引数として受け取り、解析状態を操作します。</li>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**インデックスの境界**: 解析位置を示すインデックス（<code>i</code>）は、常に <code>0</code> から対象文字列の長さ（<code>slen</code>）の範囲内でなければなりません。</li>
+<li>**メモリ管理**: <code>pool</code> フィールドが存在する場合、それは有効な <code>apr_pool_t</code> を指している必要があります。</li>
+<li>**オフセットの整合性**: <a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>md_util.c</code></a> の <code>link_ctx</code> において、各 <code>_start</code> および <code>_len</code> フィールドは、対象文字列 <code>s</code> 内の有効な部分文字列を指す必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**バッファオーバーフローの懸念**: <a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>h2_push.c</code></a> の <code>link_ctx</code> は <code>char b[4096]</code> という固定長の一時作業用バッファを保持しています。解析対象のトークンや文字列がこのサイズを超える場合、境界条件の処理に注意が必要です。</li>
+<li>**モジュール間の密結合**: <a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> や <a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> で定義されている <code>link_ctx</code> は、<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> 内の関数群からも参照・操作されています。構造体の定義を変更する際は、これら複数のファイルにまたがる解析ロジックの整合性を崩さないよう注意する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> (RFC 5988 パース関数群の実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> (サーバープッシュの収集ロジック)</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> (MDモジュールにおける <code>Link</code> ヘッダー解析ユーティリティ)</li>
 </ul></body></html>

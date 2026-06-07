@@ -6,22 +6,65 @@
 <li>定義箇所: <code>server/util_script.c:482</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>CGI スクリプトの出力を読み取り、HTTP ヘッダーとして解析・検証し、<code>request_rec</code> 構造体に反映させるコアエンジン。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_scan_script_header_err_core_ex(request_rec *r, char *buffer,
+                                       int (*getsfunc) (char *, int, void *),
+                                       void *getsfunc_data,
+                                       int module_index)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>buffer</code>: ヘッダー行を格納するバッファ（NULL の場合は内部スタック変数を使用）。</li>
+<li><code>getsfunc</code>: スクリプト出力を 1 行ずつ読み取るためのコールバック関数。</li>
+<li><code>getsfunc_data</code>: <code>getsfunc</code> に渡されるコンテキストデータ。</li>
+<li><code>module_index</code>: ログ出力に使用するモジュールインデックス。</li>
+<li>**出力**:</li>
+<li>成功時は <code>OK</code> または <code>ap_meets_conditions</code> の結果を返す。</li>
+<li>失敗時は <code>HTTP_INTERNAL_SERVER_ERROR</code> または <code>HTTP_GATEWAY_TIME_OUT</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>すべての動的メモリ割り当ては <code>r-&gt;pool</code> を使用する。</li>
+<li><code>getsfunc</code> はスクリプト出力の終端（空行）までヘッダーを供給する必要がある。</li>
+<li><code>APR_CHARSET_EBCDIC</code> 定義環境下では、ASCII/EBCDIC の自動変換ロジックが介入する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: ヘッダーマージ用テーブルおよび <code>Set-Cookie</code> 用テーブルを初期化。 2. **ループ処理**: <code>getsfunc</code> を使用してスクリプト出力を 1 行ずつ読み取る。</p>
+<ul>
+<li>読み取り失敗（<code>rv == 0</code>）は「ヘッダーの早期終了」、タイムアウト（<code>rv == -1</code>）は「ゲートウェイタイムアウト」として処理。</li>
+<li>行末の改行コード（CR/LF）を除去。</li>
+<p>3. **ヘッダー解析**:</p>
+<li>空行（<code>\0</code>）に到達した場合、<code>Status</code> ヘッダーの有無を確認し、<code>err_headers_out</code> をマージして終了。</li>
+<li><code>Content-type</code>, <code>Status</code>, <code>Location</code>, <code>Content-Length</code>, <code>Content-Range</code>, <code>Transfer-Encoding</code>, <code>ETag</code>, <code>Last-Modified</code>, <code>Set-Cookie</code> を個別に処理。</li>
+<li><code>Last-Modified</code> は日付の妥当性を検証し、必要に応じて更新。</li>
+<li>未知のヘッダーは <code>merge</code> テーブルに蓄積。</li>
+<p>4. **エラーハンドリング**: 不正なヘッダー形式（<code>:</code> が含まれない行）が検出された場合、エラーをログ出力し、スクリプト出力を読み切った後にエラーを返す。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/util_script.c</code> 内の <code>ap_scan_script_header_err</code> 系関数群（<code>ap_scan_script_header_err</code>, <code>ap_scan_script_header_err_ex</code>, <code>ap_scan_script_header_err_brigade</code> など）。</li>
+<li>**呼び出し先**:</li>
+<li><code>getsfunc</code> コールバック関数。</li>
+<li><code>ap_meets_conditions</code>, <code>ap_log_rerror</code>, <code>apr_table_make</code>, <code>apr_table_do</code>, <code>apr_table_overlap</code>, <code>apr_table_overlay</code>, <code>apr_table_unset</code>, <code>apr_table_add</code>, <code>apr_table_set</code>, <code>ap_set_content_type</code>, <code>ap_update_mtime</code>, <code>ap_set_last_modified</code>, <code>apr_date_parse_http</code>, <code>apr_date_parse_rfc</code> 等の APR/HTTPD API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト状態の保持。</li>
+<li><code>apr_table_t</code>: ヘッダー情報の管理に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**スクリプトの早期終了**: ヘッダーが出力される前にストリームが終了した場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**タイムアウト**: <code>getsfunc</code> が <code>-1</code> を返した場合、<code>HTTP_GATEWAY_TIME_OUT</code> を返す。</li>
+<li>**不正なヘッダー**: <code>:</code> を含まない行が検出された場合、<code>HTTP_INTERNAL_SERVER_ERROR</code> を返す。</li>
+<li>**無効な Status**: <code>Status</code> ヘッダーの値が HTTP 仕様に適合しない場合、ログ出力を行う。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はスクリプトの出力が完了するまでブロックする可能性がある。非同期 I/O が必要な場合は注意が必要。</li>
+<li><code>Set-Cookie</code> は他のヘッダーとマージせず、個別に保持・出力される仕様となっている。</li>
+<li><code>Last-Modified</code> の処理には GMT 変換や将来の日付に対するガードロジックが含まれている。</li>
 </ul></body></html>

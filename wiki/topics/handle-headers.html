@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/handle-headers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>handle_headers</h1>
 <h2>概念</h2>
-<p><code>handle_headers</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>handle_headers</code> は、FastCGI バックエンドから受信したストリームデータから HTTP ヘッダの終端（空行）を検出するためのステートマシンとして機能する関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>FastCGI プロトコルにおいて、バックエンドからのレスポンスはヘッダとボディが連続したストリームとして送信されます。レスポンスを正しく処理するためには、ヘッダの境界（<code>\r\n\r\n</code> または <code>\n\n</code>）を正確に識別し、ヘッダ部分の受信完了を検知する必要があります。この関数は、データの断片化に対応しながら低レベルな状態遷移を管理し、ヘッダの終端を判定する役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/aaa</code></li>
@@ -11,17 +11,24 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/aaa/mod_authnz_fcgi.c#handle_headers</code></li>
-<li><code>symbol:modules/proxy/mod_proxy_fcgi.c#handle_headers</code></li>
+<li><code>symbol:modules/proxy/mod_proxy_fcgi.c#handle_headers</code>: FastCGI バックエンドからの受信データからヘッダ終端を検出する関数。</li>
+<li><code>symbol:modules/aaa/mod_authnz_fcgi.c#handle_headers</code>: <a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>mod_authnz_fcgi.c</code></a> 内で定義または利用される同名の処理（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> の <code>handle_headers</code> は <code>mod_authnz_fcgi.c:557</code> からも呼び出されます）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. FastCGI バックエンドからデータを受信する際、受信したデータバッファ（<code>readbuf</code>）とその長さ（<code>readlen</code>）が、現在の解析状態（<code>state</code>）とともに <code>handle_headers</code> に渡されます。 2. <code>handle_headers</code> はバッファをバイト単位で走査し、<code>\r</code> や <code>\n</code> の出現パターンに応じて <code>state</code> を更新します。 3. <code>\r\n\r\n</code> または <code>\n\n</code> に相当するシーケンスを検出すると、状態が <code>HDR_STATE_DONE_WITH_HEADERS</code> に遷移し、関数は <code>1</code> を返してヘッダの終端に達したことを呼び出し元に知らせます。 4. 終端に達しない場合は <code>0</code> を返し、呼び出し元は後続のデータ受信を待機します。</p>
+<p>なお、<code>mod_authnz_fcgi</code> および <code>mod_proxy_fcgi</code> における、ヘッダ解析後のレスポンス転送やエラーハンドリングを含む完全なエンドツーエンドの制御フローの詳細は現時点では判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**状態の継続性**: データの断片化によりヘッダが複数回に分けて受信される場合、呼び出し間で <code>state</code> ポインタが指す状態値が一貫して保持・更新される必要があります。</li>
+<li>**バッファの整合性**: 入力される <code>readbuf</code> は、指定された <code>readlen</code> 分の有効なデータを保持していなければなりません。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**状態のリセット**: <code>\r</code> や <code>\n</code> 以外の文字が入力された場合、状態は即座に <code>HDR_STATE_READING_HEADERS</code> にリセットされます。不完全な改行シーケンスや不正な文字が混入すると、ヘッダの終端検出が正しく行われない可能性があります。</li>
+<li>**状態遷移の不整合**: <code>HDR_STATE_*</code> 定数の遷移ロジックを変更する際、状態遷移図との不整合が生じると、ヘッダの終端を誤判定したり、無限にデータ受信を待ち続けたりする危険性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>modules/aaa/mod_authnz_fcgi.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a> （<code>handle_headers</code> の実装箇所: 543行目）</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>modules/aaa/mod_authnz_fcgi.c</code></a> （呼び出し箇所: 557行目）</li>
 </ul></body></html>

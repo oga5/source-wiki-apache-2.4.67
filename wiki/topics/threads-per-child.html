@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/threads-per-child.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>threads_per_child</h1>
 <h2>概念</h2>
-<p><code>threads_per_child</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>threads_per_child</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、1つの子プロセスあたりに生成・維持されるスレッド数を制御するための設定値、およびそれに関連する変数や関数群です。設定ファイル内の <code>ThreadsPerChild</code> ディレクティブを通じて指定されます。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この設定は、Apacheの並行処理能力とリソース消費のバランスを決定する重要な要素です。<code>event</code>、<code>worker</code>、<code>winnt</code> といった異なるMPM実装において、共通のディレクティブ名 <code>ThreadsPerChild</code> を用いて子プロセス内のスレッド数を一元的に管理・設定できるようにするために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -12,18 +12,25 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#set_threads_per_child</code></li>
-<li><code>symbol:server/mpm/event/event.c#threads_per_child</code></li>
-<li><code>symbol:server/mpm/winnt/mpm_winnt.c#set_threads_per_child</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#set_threads_per_child</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#threads_per_child</code></li>
+<li><code>symbol:server/mpm/event/event.c#set_threads_per_child</code> : <code>event</code> MPMにおける <code>ThreadsPerChild</code> ディレクティブのハンドラ関数。</li>
+<li><code>symbol:server/mpm/event/event.c#threads_per_child</code> : <code>event</code> MPMでスレッド数を保持する変数。</li>
+<li><code>symbol:server/mpm/winnt/mpm_winnt.c#set_threads_per_child</code> : <code>winnt</code> MPMにおける <code>ThreadsPerChild</code> ディレクティブのハンドラ関数。</li>
+<li><code>symbol:server/mpm/worker/worker.c#set_threads_per_child</code> : <code>worker</code> MPMにおける <code>ThreadsPerChild</code> ディレクティブのハンドラ関数。</li>
+<li><code>symbol:server/mpm/worker/worker.c#threads_per_child</code> : <code>worker</code> MPMでスレッド数を保持する変数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. Apacheの起動時または設定再読み込み時に、設定ファイルから <code>ThreadsPerChild</code> ディレクティブが読み込まれます。 2. 各MPM（<code>event</code>、<code>winnt</code>、<code>worker</code>）に定義された <a class="wiki-source-link" href="../../source/include/http_config.h.html#L128" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>AP_INIT_TAKE1</code></a> マクロ経由で、設定ハンドラ関数 <code>set_threads_per_child</code> が呼び出されます。 3. <code>set_threads_per_child</code> 内で、<a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> を用いて設定がグローバルスコープで行われているか検証されます。 4. 設定値（文字列）が <code>atoi</code> によって整数に変換され、グローバル変数 <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>ap_threads_per_child</code></a> に代入されます。</p>
+<p>※ 設定された <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>ap_threads_per_child</code></a> が、その後の子プロセス生成やスレッドプール初期化においてどのように使用されるかという詳細なエンドツーエンドの実行フローは、提供された情報からは未だ不明です。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**グローバルスコープの強制**: <code>ThreadsPerChild</code> ディレクティブは、グローバルスコープ（バーチャルホストやディレクトリコンテキスト以外）で設定されなければなりません。これは <a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> によって検証されます。</li>
+</ul>
+<p>※ その他の実行時におけるスレッド数の上限や下限、他パラメータとの相関関係などの不変条件は、提供された情報からは未だ不明です。</p>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**非数値の指定**: <code>ThreadsPerChild</code> に数値として解釈できない文字列を指定した場合、<code>atoi</code> の挙動により <code>0</code> が設定されてしまいます。この際、明示的なエラーチェックやバリデーションが <code>set_threads_per_child</code> 内で行われないため、意図しない動作を引き起こす可能性があります。</li>
+<li>**コンテキスト違反**: グローバルスコープ以外（例: <code>&lt;VirtualHost&gt;</code> 内など）で <code>ThreadsPerChild</code> を設定しようとすると、<a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> による検証でエラーとなり、設定の読み込みに失敗します。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>

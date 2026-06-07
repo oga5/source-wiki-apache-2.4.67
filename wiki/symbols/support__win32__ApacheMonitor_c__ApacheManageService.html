@@ -6,22 +6,55 @@
 <li>定義箇所: <code>support/win32/ApacheMonitor.c:540</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows Service Control Manager (SCM) を介して、指定された Apache サービスの起動、停止、または再起動を実行し、その進捗を GUI 上のリストボックスに通知する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>BOOL ApacheManageService(LPCTSTR szServiceName, LPCTSTR szImagePath, LPTSTR szComputerName, DWORD dwCommand)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>szServiceName</code>: 制御対象のサービス名。</li>
+<li><code>szImagePath</code>: サービスの実行パス（権限昇格時の再起動に使用）。</li>
+<li><code>szComputerName</code>: 接続先コンピュータ名（ローカルまたはリモート）。</li>
+<li><code>dwCommand</code>: 実行するコマンド（<code>SERVICE_CONTROL_STOP</code>, <code>SERVICE_CONTROL_CONTINUE</code>, <code>SERVICE_APACHE_RESTART</code>）。</li>
+<li>**出力**:</li>
+<li>成功時に <code>TRUE</code>、失敗時に <code>FALSE</code> を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>サービス制御には適切な権限が必要。権限不足時は <code>am_RespawnAsUserAdmin</code> を介して管理者権限での再起動を試みる。</li>
+<li>処理中はグローバル変数 <code>g_bConsoleRun</code> が <code>TRUE</code> に設定され、カーソルが砂時計（<code>g_hCursorHourglass</code>）に変更される。</li>
+<li>処理終了時には必ず <code>CloseServiceHandle</code> によりハンドルが解放され、カーソルが元に戻る。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>OpenSCManager</code> で SCM に接続し、<code>OpenService</code> で対象サービスを開く。 2. サービスが開けない場合、<code>szImagePath</code> が存在すれば <code>am_RespawnAsUserAdmin</code> を呼び出し、存在しなければエラーを表示して終了する。 3. <code>dwCommand</code> に応じて以下の処理を行う：</p>
+<ul>
+<li>**STOP**: <code>ControlService</code> で停止を指示し、<code>SERVICE_STOP_PENDING</code> 状態の間、1秒間隔でポーリングを行う。</li>
+<li>**CONTINUE**: <code>StartService</code> で起動を指示し、<code>SERVICE_START_PENDING</code> 状態の間、1秒間隔でポーリングを行う。</li>
+<li>**RESTART**: <code>ControlService</code> で再起動を指示し、最大60秒間、状態遷移を監視する。</li>
+<p>4. 各操作の開始・終了時に、<code>addListBoxString</code> を使用して GUI のリストボックスへ進捗メッセージを出力する。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>support/win32/ApacheMonitor.c</code> 内の複数箇所（ダイアログ操作時やコマンドライン引数処理時）。</li>
+<li>**呼び出し先**:</li>
+<li>Windows API: <code>OpenSCManager</code>, <code>OpenService</code>, <code>ControlService</code>, <code>StartService</code>, <code>QueryServiceStatus</code>, <code>CloseServiceHandle</code>。</li>
+<li>内部関数: <code>ErrorMessage</code>, <code>am_RespawnAsUserAdmin</code>, <code>addListBoxString</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>SERVICE_STATUS</code>: サービスの状態を保持する Windows 構造体。</li>
+<li><code>g_lpMsg</code>: メッセージ文字列を保持するグローバル配列。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>SCM への接続失敗やサービスオープン失敗時は <code>ErrorMessage</code> を呼び出し <code>FALSE</code> を返す。</li>
+<li>サービスの状態遷移がタイムアウト（再起動時の60秒制限など）した場合、操作は失敗とみなされる。</li>
+<li>権限昇格が必要な状況で <code>szImagePath</code> が <code>NULL</code> の場合、再起動は行われずエラーとなる。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>サービス状態のポーリングに <code>Sleep(1000)</code> を使用しているため、UI スレッドで実行する場合は注意が必要。</li>
+<li><code>MAX_PATH</code> を超えるサービス名やパスの取り扱いには制限がある。</li>
+<li>終了処理における <code>g_bConsoleRun</code> のリセット漏れがないよう注意すること。</li>
 </ul></body></html>

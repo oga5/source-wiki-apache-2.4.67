@@ -6,22 +6,58 @@
 <li>定義箇所: <code>support/logresolve.c:131</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Apache HTTP Server のアクセスログを標準入力から読み込み、各行の先頭にある IP アドレスをホスト名に変換して標準出力へ書き出すコマンドラインユーティリティのメイン処理。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int main(int argc, const char * const argv[])</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: </li>
+<li>コマンドライン引数 (<code>-c</code>: ダブルルックアップ有効化, <code>-s</code>: 統計出力先ファイルパス)</li>
+<li>標準入力 (<code>stdin</code>): ログデータ</li>
+<li>**出力**:</li>
+<li>標準出力 (<code>stdout</code>): ホスト名に変換されたログデータ</li>
+<li>統計ファイル (指定時): 処理結果の統計情報</li>
+<li>終了ステータス: 成功時 <code>0</code>、初期化失敗やファイルオープン失敗時 <code>1</code></li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ログの各行の先頭フィールドが IP アドレスであることを前提とする。</li>
+<li><code>apr_app_initialize</code> による APR 環境の初期化が成功していること。</li>
+<li>メモリ管理には APR プール (<code>pool</code>, <code>pline</code>) を使用し、ループ内での一時的なメモリ消費を抑制する。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **初期化**: APR 環境の構築、コマンドライン引数の解析、入出力バッファの設定を行う。 2. **キャッシュ初期化**: <code>apr_hash_make</code> で IP-ホスト名マッピング用のハッシュテーブルを作成。 3. **メインループ**:</p>
+<ul>
+<li>行単位で読み込み、先頭の IP アドレスを抽出。</li>
+<li>キャッシュヒット時は即座に置換して出力。</li>
+<li>キャッシュミス時は <code>apr_getnameinfo</code> で逆引きを実行。</li>
+<li><code>-c</code> オプション指定時は、取得したホスト名に対して正引きを行い、元の IP と一致するか検証（ダブルルックアップ）。</li>
+<li>解決の成否に関わらず、結果をキャッシュに保存。</li>
+<p>4. **終了処理**: 統計情報の書き出し（指定時）とリソースの解放。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: OS の実行環境（エントリーポイント）。</li>
+<li>**呼び出し先**: </li>
+<li>APR ライブラリ関数群 (<code>apr_app_initialize</code>, <code>apr_getopt</code>, <code>apr_hash_get/set</code>, <code>apr_sockaddr_info_get</code>, <code>apr_getnameinfo</code> 等)</li>
+<li><code>usage()</code> (引数エラー時)</li>
+<li><code>print_statistics()</code> (統計出力時)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cache</code>: <code>apr_hash_t</code> 型。IP アドレスをキー、ホスト名を値として保持。</li>
+<li><code>pline</code>: <code>apr_pool_t</code> 型。DNS 解決用の一時メモリ管理に使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**初期化失敗**: APR 環境構築やメモリ確保に失敗した場合、<code>1</code> を返して終了。</li>
+<li>**DNS 解決失敗**: 逆引きができない場合、元の IP アドレスをそのまま出力し、その IP をキャッシュに登録して再試行を回避する。</li>
+<li>**ダブルルックアップ失敗**: 正引き結果が元の IP と一致しない場合、解決失敗とみなして元の IP を出力。</li>
+<li>**ファイル操作失敗**: 統計ファイルが開けない場合、エラーメッセージを標準エラー出力に出力して終了。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>pline</code> プールはループ内で <code>apr_pool_clear</code> されており、メモリリークを防ぐために重要。</li>
+<li><code>logresolve</code> はオフライン処理を想定しているため、パフォーマンス向上のためのキャッシュ機構が設計の核となっている。</li>
+<li>ツールが提供する <code>find_callers</code> の結果は、Apache HTTP Server 全体のコードベースにおける一般的な <code>main</code> への言及であり、本関数の直接的な呼び出し元を示すものではない。</li>
 </ul></body></html>

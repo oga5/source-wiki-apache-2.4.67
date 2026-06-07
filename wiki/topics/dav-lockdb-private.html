@@ -1,30 +1,47 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-lockdb-private.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lockdb_private</h1>
 <h2>概念</h2>
-<p><code>dav_lockdb_private</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>dav_lockdb_private</code> は、Apache HTTP Server の <code>mod_dav</code> モジュールにおいて、WebDAV ロックデータベース（DBM）へのアクセスや操作に必要なコンテキスト、状態情報、およびデータベースハンドルを保持するための内部プライベート構造体です。</p>
+<p>この構造体は、ファイルシステムベースのロックプロバイダー（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>）と、汎用的なロックプロバイダー（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>）のそれぞれで同名の構造体として定義されており、各プロバイダーの内部状態管理に特化したフィールドを持っています。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>WebDAV のロック管理では、リクエストごとにロックデータベースへの接続や読み書きが発生します。<code>dav_lockdb_private</code> は以下の役割を果たすことで、効率的かつ安全なロック管理を実現します。</p>
+<ul>
+<li>**遅延オープン（Lazy Open）のサポート**: データベースの実際のオープン処理を初回アクセス時まで遅延させ、不要な I/O 負荷を削減します。</li>
+<li>**リソース管理の統合**: Apache のリクエストコンテキスト（<code>request_rec</code>）やメモリプール（<code>apr_pool_t</code>）と紐付けることで、リクエスト終了時に自動的かつ安全にリソースを解放します。</li>
+<li>**プロバイダーごとのカプセル化**: 上位の <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_lockdb</code></a> 構造体の <a class="wiki-source-link" href="../../source/modules/generators/mod_info.c.html#L1010" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_info.c.html&quot;}, '*');"><code>info</code></a> メンバ（ポインタ）を介して参照されるため、具体的なデータベース実装（DBM ハンドルの型など）を隠蔽します。</li>
+</ul>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/dav/fs</code></li>
-<li><code>module:modules/dav/lock</code></li>
-<li><code>module:modules/dav/main</code></li>
+<li><code>module:modules/dav/fs</code> (ファイルシステムベースのロックプロバイダー)</li>
+<li><code>module:modules/dav/lock</code> (汎用的なロックプロバイダー)</li>
+<li><code>module:modules/dav/main</code> (mod_dav のメインヘッダー定義)</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/dav/fs/lock.c#dav_lockdb_private</code></li>
-<li><code>symbol:modules/dav/lock/locks.c#dav_lockdb_private</code></li>
-<li><code>symbol:modules/dav/main/mod_dav.h#dav_lockdb_private</code></li>
+<li>**<code>symbol:modules/dav/fs/lock.c#dav_lockdb_private</code>**: ファイルシステムベースのロックデータベース（<code>dav_db</code> 抽象化ハンドルを使用）の状態を追跡する構造体。</li>
+<li>**<code>symbol:modules/dav/lock/locks.c#dav_lockdb_private</code>**: 汎用的なロックデータベース（<code>apr_dbm_t</code> ハンドルを使用）の状態を追跡する構造体。</li>
+<li>**<code>symbol:modules/dav/main/mod_dav.h#dav_lockdb_private</code>**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_lockdb</code></a> 構造体の <a class="wiki-source-link" href="../../source/modules/generators/mod_info.c.html#L1010" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_info.c.html&quot;}, '*');"><code>info</code></a> メンバとして、各プロバイダーのプライベートデータへのポインタを保持するための前方参照。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **初期化**: ロックデータベースのオープン要求（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L333" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_open_lockdb</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L375" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_open_lockdb</code></a> など）が発生すると、<code>dav_lockdb_private</code> がメモリプールから割り当てられ、<code>request_rec</code>、<code>apr_pool_t</code>、<code>lockdb_path</code> などの基本情報が設定されます。この時点では、実際のデータベースファイルはまだ開かれません。 2. **遅延オープン**: 実際にロックの読み書きや削除などの I/O 操作が発生したタイミングで、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L318" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_really_open_lockdb</code></a> などの関数が呼び出され、データベースハンドル（<code>db</code>）が取得され、<code>opened</code> フラグがセットされます。 3. **ロック操作**: <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> などの関数が、この構造体に保持されている <code>db</code> ハンドルを介して DBM 操作を実行します。 4. **クリーンアップ**: リクエストの終了に伴い、関連付けられたメモリプール（<code>pool</code>）が破棄されることで、データベースハンドルや割り当てられたメモリなどのリソースが自動的に解放されます。</p>
+<p>*注意: 上記以外の詳細なエラーハンドリングや、特定のロック競合時における詳細なエンドツーエンドの排他制御フローは、提供された情報からは完全には明らかになっていません。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**データベースハンドルの有効性**: <code>db</code> フィールドが非NULLである場合、データベースは正常に開かれており、有効な状態である必要があります。</li>
+<li>**遅延オープンの整合性**: <code>opened</code> フラグと <code>db</code> ハンドルの状態は常に同期している必要があります（<code>opened</code> が真であれば <code>db</code> は有効、またはその逆）。</li>
+<li>**メモリプールの整合性**: 構造体およびそのメンバに割り当てられるメモリは、必ず構造体内の <code>pool</code>（通常は <code>r-&gt;pool</code>）から割り当てられなければなりません。</li>
+<li>**書き込み制限**: データベースが読み取り専用モードで開かれている場合、書き込み操作や期限切れロックの自動クリーンアップ処理は実行できません。</li>
+</ul>
+<p>*注意: 複数プロセス・スレッド間でのロックデータベースファイル自体の排他制御や一貫性に関する不変条件は、提供された情報からは完全には明らかになっていません。*</p>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**未オープン状態での操作**: <code>db</code> ハンドルが <code>NULL</code> の状態で直接データベース操作を試みると失敗します。必ず事前に遅延オープン処理（<code>really_open</code> など）を経由させる必要があります。</li>
+<li>**読み取り専用時の書き込みエラー**: 読み取り専用で開かれたデータベースに対して書き込みや削除を試みるとエラーが発生します。特に、期限切れロックの自動削除処理などが意図せずスキップされる原因になります。</li>
+<li>**構造体定義の不一致**: <code>dav_lockdb_private</code> は <code>fs/lock.c</code> と <code>lock/locks.c</code> で個別に定義されているため、一方のフィールドを変更する際、もう一方やそれらを利用するシリアライズロジック（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> など）との整合性を誤って崩さないよう注意が必要です。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> (ファイルシステムプロバイダーにおける具体的な実装と <code>dav_lockdb_combined</code> との関係)</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> (汎用プロバイダーにおける DBM 操作と遅延オープンの実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> (上位の <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_lockdb</code></a> 構造体定義とプロバイダーAPIのインターフェース)</li>
 </ul></body></html>

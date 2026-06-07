@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/content-type.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>content_type</h1>
 <h2>概念</h2>
-<p><code>content_type</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>content_type</code> は、Apache HTTP Server において HTTP の <code>Content-Type</code> ヘッダや MIME タイプの情報を表現・処理するために使用される概念です。 具体的には、<code>mod_mime</code> モジュール内部で MIME タイプ（メディアタイプ、サブタイプ、および関連パラメータ）を構造化して保持するための内部データ構造 <code>content_type</code> 構造体として定義されています。また、サポートツールである <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> にも関連するシンボルが存在します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>HTTP 通信において、コンテンツのデータ型を正しく識別・処理することは不可欠です。<code>mod_mime</code> において <code>content_type</code> 構造体を用いることで、<code>Content-Type</code> ヘッダ文字列をメディアタイプ、サブタイプ、パラメータに分解し、個別に正規化やパラメータ処理を行うことが容易になります。これにより、MIME タイプの正確な解析とハンドリングが可能になります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/http</code></li>
@@ -11,17 +11,26 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http/mod_mime.c#content_type</code></li>
-<li><code>symbol:support/ab.c#content_type</code></li>
+<li><code>symbol:modules/http/mod_mime.c#content_type</code>: <code>mod_mime</code> 内部で MIME タイプの要素（<code>type</code>, <code>subtype</code>, <a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html#L96" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__param.html&quot;}, '*');"><code>param</code></a> など）を保持するための構造体。</li>
+<li><code>symbol:support/ab.c#content_type</code>: <code>ab</code>（ApacheBench）ツール内に存在する関連シンボル（詳細な構造や役割は現時点で未定義）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p><code>mod_mime</code> における解析の流れは以下の通りですが、システム全体にわたる詳細なエンドツーエンドの流れは現時点では完全に明らかになっていません。</p>
+<p>1. **ヘッダの解析**: <a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>mod_mime.c</code></a> 内の <a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>analyze_ct</code></a> などの関数が、<code>Content-Type</code> ヘッダ文字列を解析します。 2. **構造体への格納**: 解析されたメディアタイプ、サブタイプ、およびそれぞれの長さ（<code>type_len</code>, <code>subtype_len</code>）、パラメータへのポインタ（<a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html#L96" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__param.html&quot;}, '*');"><code>param</code></a>）が <code>content_type</code> 構造体に格納されます。 3. **パラメータ処理**: 構造体に格納された情報を基に、後続のパラメータ処理や正規化が行われます。</p>
+<p>なお、<a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a> における <code>content_type</code> の処理フローとの連携や、リクエスト処理全体における詳細なライフサイクルは現時点では不明です。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>content_type</code> 構造体の <code>type</code> および <code>subtype</code> フィールドは、メモリプール（<code>apr_pool_t</code>）によって管理された有効な文字列を指している必要があります。</li>
+<li><code>type_len</code> および <code>subtype_len</code> は、それぞれ <code>type</code> および <code>subtype</code> が指す文字列の実際の長さと正確に一致していなければなりません。</li>
+<li>その他のシステム全体における不変条件は現時点では不明です。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**request_rec-&gt;content_type との混同**: Apache のリクエスト構造体である <code>request_rec</code> には <code>content_type</code> という同名のフィールド（<code>const char *</code> 型）が存在しますが、これは最終的な HTTP ヘッダ値を保持する文字列であり、<a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>mod_mime.c</code></a> で定義されている <code>content_type</code> 構造体とは直接的な型の一致はありません。これらを混同しないよう注意が必要です。</li>
+<li>**バッファオーバーランのリスク**: <code>type_len</code> や <code>subtype_len</code> が実際の文字列長と一致しない場合、後続の文字列操作においてバッファオーバーランや不正なメモリ参照が発生するリスクがあります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>modules/http/mod_mime.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>modules/http/mod_mime.c</code></a> (特に <code>content_type</code> 構造体の定義と <a class="wiki-source-link" href="../../source/modules/http/mod_mime.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>analyze_ct</code></a> 関数)</li>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a> (サポートツールにおける <code>content_type</code> の利用方法の確認)</li>
 </ul></body></html>

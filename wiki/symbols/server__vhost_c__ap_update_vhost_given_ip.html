@@ -6,22 +6,43 @@
 <li>定義箇所: <code>server/vhost.c:1280</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>接続確立時に、接続のローカルアドレス（IP/ポート）に基づいて、該当する仮想ホストの候補リストとベースサーバーを <code>conn_rec</code> に割り当てます。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>void ap_update_vhost_given_ip(conn_rec *conn)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>conn_rec *conn</code> （接続情報。<code>local_addr</code> を参照して検索を行う）</li>
+<li>**出力**: なし（副作用として <code>conn-&gt;vhost_lookup_data</code> および <code>conn-&gt;base_server</code> を更新）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn-&gt;local_addr</code> が有効なアドレス情報を含んでいること。</li>
+<li>仮想ホストのハッシュテーブル（<code>iphash_table</code>）が <code>ap_fini_vhost_config</code> によって構築済みであること。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **完全一致検索**: <code>conn-&gt;local_addr</code> をキーとしてハッシュテーブルを検索します。一致する <code>ipaddr_chain</code> が見つかった場合、その <code>names</code>（名前ベースの仮想ホストリスト）と <code>server</code> を <code>conn</code> に格納して終了します。 2. **デフォルトサーバー検索**: 完全一致がない場合、<code>conn-&gt;local_addr-&gt;port</code> を使用して、そのポートで待機しているデフォルトサーバー（<code>find_default_server</code>）を検索します。見つかった場合は同様に <code>conn</code> を更新します。 3. **フォールバック**: いずれも該当しない場合、<code>conn-&gt;vhost_lookup_data</code> を <code>NULL</code> に設定し、メインサーバーのみが有効な状態となります。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/connection.c:212</code></li>
+<li><code>server/mpm/event/event.c:1044</code></li>
+<li>**呼び出し先**:</li>
+<li><code>find_ipaddr</code> (内部関数)</li>
+<li><code>find_default_server</code> (内部関数)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>conn_rec</code>: 接続状態を保持する構造体。</li>
+<li><code>ipaddr_chain</code>: IP/ポートをキーとするハッシュテーブルのノード。</li>
+<li><code>name_chain</code>: 特定の IP/ポートに紐付く名前ベースの仮想ホストリスト。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>該当する IP/ポートが見つからない場合、<code>conn-&gt;vhost_lookup_data</code> は <code>NULL</code> に設定され、名前ベースの仮想ホスト解決は行われません。</li>
+<li><code>conn-&gt;local_addr</code> が未初期化の場合の挙動は、呼び出し側の実装に依存します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は接続確立の初期段階で呼ばれます。リクエストヘッダーに基づく最終的な仮想ホストの決定は、後続の <code>ap_update_vhost_from_headers</code> が担当します。</li>
+<li><code>vhost_lookup_data</code> に格納されるリストは、名前ベースの仮想ホスト解決時に <code>update_server_from_aliases</code> によって走査されます。</li>
 </ul></body></html>

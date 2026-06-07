@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-os-create-privileged-process.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_os_create_privileged_process</h1>
 <h2>概念</h2>
-<p><code>ap_os_create_privileged_process</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>ap_os_create_privileged_process</code> は、Apache HTTP Serverにおいて、プラットフォーム（OS）ごとの特性や権限モデルの違いを抽象化し、特権プロセス（CGIプロセスなど）を生成するための共通インターフェースを提供する関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>Apache HTTP Serverはマルチプラットフォームで動作するため、外部プロセスを起動する際の権限管理方法がOSごとに異なります。例えば、Unix系OSでは <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>suexec</code></a> を使用したユーザー/グループの切り替えが必要ですが、他のOSでは異なるアプローチが取られます。この関数は、<code>mod_cgi</code> や <code>mod_cgid</code> などのプロセス生成を行うモジュールに対して、プラットフォーム固有のプロセス生成ロジックを隠蔽した統一的なAPIを提供するために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:os/netware</code></li>
@@ -19,15 +19,31 @@
 <li><code>symbol:os/win32/util_win32.c#ap_os_create_privileged_process</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> または <a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a> から、リクエスト情報（<code>request_rec</code>）、生成するプロセス情報（<code>apr_proc_t</code>）、プログラム名、引数、環境変数、プロセス属性（<code>apr_procattr_t</code>）、メモリプールを引数として本関数が呼び出されます。 2. **プラットフォーム別の処理**:</p>
+<ul>
+<li>**Unix環境 (<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>)**:</li>
+<p>1. <code>ap_run_get_suexec_identity(r)</code> を呼び出し、対象リクエストに対する <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>suexec</code></a> 用のユーザー/グループ識別子（<code>ugid</code>）を取得します。 2. <code>ugid</code> が取得できた場合、<code>ap_unix_create_privileged_process</code> を呼び出して <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>suexec</code></a> を経由した特権プロセス生成を行います。 3. <code>ugid</code> が <code>NULL</code> の場合（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>suexec</code></a> が適用不可の場合）は、通常の <code>apr_proc_create</code> を直接呼び出して標準的なプロセス生成を行います。</p>
+<li>**NetWare, OS/2, Windows環境 (<a class="wiki-source-link" href="../../source/os/netware/util_nw.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/util_nw.c.html&quot;}, '*');"><code>os/netware/util_nw.c</code></a>, <a class="wiki-source-link" href="../../source/os/os2/util_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/os2/util_os2.c.html&quot;}, '*');"><code>os/os2/util_os2.c</code></a>, <a class="wiki-source-link" href="../../source/os/win32/util_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/util_win32.c.html&quot;}, '*');"><code>os/win32/util_win32.c</code></a>)**:</li>
+<li>受け取った引数をそのまま APR（Apache Portable Runtime）ライブラリの <code>apr_proc_create</code> に転送し、プロセスを生成します。</li>
+<p>3. **返却**: プロセス生成処理の結果（成功時は <code>APR_SUCCESS</code>、失敗時はエラーコード）を呼び出し元に返します。</p>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**引数の有効性**: 呼び出し元は、<code>newproc</code>（<code>apr_proc_t</code>）および <code>attr</code>（<code>apr_procattr_t</code>）に対して、適切に初期化または割り当てられた有効なメモリ領域を渡す必要があります。</li>
+<li>**Unix環境における前提条件**: <code>ap_run_get_suexec_identity</code> フックが利用可能である必要があります。</li>
+<li>**非Unix環境における前提条件**: APRのプロセス管理機能（<code>apr_proc_create</code>）が正常に動作する環境である必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**非Unix環境での特権処理の欠如**: NetWare、OS/2、Windows環境における現在の実装は、単に <code>apr_proc_create</code> を呼び出すだけのラッパーとなっています。そのため、これらのプラットフォームで固有の特権昇格や詳細なセキュリティ制御が必要になった場合、現行の実装では対応できず、将来的に関数内部の実装を拡張する必要があります。</li>
+<li>**エラーハンドリングの依存**: 内部で呼び出される <code>apr_proc_create</code> や <code>ap_unix_create_privileged_process</code> が失敗した場合、そのエラーコードがそのまま呼び出し元に返されるため、呼び出し元で適切にエラーをハンドリングする必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/os/netware/util_nw.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/util_nw.c.html&quot;}, '*');"><code>os/netware/util_nw.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/os/os2/util_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/os2/util_os2.c.html&quot;}, '*');"><code>os/os2/util_os2.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/os/win32/util_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/util_win32.c.html&quot;}, '*');"><code>os/win32/util_win32.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> （Unix環境における <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>suexec</code></a> 判定と特権プロセス生成の具体的な実装）</li>
+<li><a class="wiki-source-link" href="../../source/os/win32/util_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/util_win32.c.html&quot;}, '*');"><code>os/win32/util_win32.c</code></a> （Windows環境における実装）</li>
+<li><a class="wiki-source-link" href="../../source/os/os2/util_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/os2/util_os2.c.html&quot;}, '*');"><code>os/os2/util_os2.c</code></a> （OS/2環境における実装）</li>
+<li><a class="wiki-source-link" href="../../source/os/netware/util_nw.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/util_nw.c.html&quot;}, '*');"><code>os/netware/util_nw.c</code></a> （NetWare環境における実装）</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> （呼び出し元モジュール）</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a> （呼び出し元モジュール）</li>
 </ul></body></html>

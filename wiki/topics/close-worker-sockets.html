@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/close-worker-sockets.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_worker_sockets</h1>
 <h2>概念</h2>
-<p><code>close_worker_sockets</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>close_worker_sockets</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、ワーカープロセスが保持しているすべてのアクティブなソケットを強制的にクローズし、リソースを解放するための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>プロセスの強制終了処理時などに、開いたままのソケットを確実にクローズしてシステムリソースを解放し、リソースリークや不正なソケット参照（二重解放など）を防ぐために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -11,17 +11,27 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#close_worker_sockets</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#close_worker_sockets</code></li>
+<li><code>symbol:server/mpm/worker/worker.c#close_worker_sockets</code>: <code>worker</code> MPMにおける実装。</li>
+<li><code>symbol:server/mpm/event/event.c#close_worker_sockets</code>: <code>event</code> MPMにおける実装（<code>worker</code> MPMとのアーキテクチャ上の類似性により存在・参照されます）。</li>
+<li><code>worker_sockets</code>: 各ワーカーが使用するソケットを格納する配列。</li>
+<li><code>threads_per_child</code>: 子プロセスあたりのスレッド数（ループの終了条件として使用）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. 強制終了処理時（<code>worker.c:331</code> または <code>event.c:645</code>）に、本関数が呼び出されます。 2. <code>0</code> から <code>threads_per_child - 1</code> までのインデックスでループを実行します。 3. 各インデックス <code>i</code> について、<code>worker_sockets[i]</code> が有効（<code>NULL</code> ではない）かを確認します。 4. 有効な場合、<code>apr_socket_close()</code> を呼び出してソケットを閉じます。 5. クローズ後、<code>worker_sockets[i]</code> を <code>NULL</code> に設定し、二重解放や不正な参照を防ぎます。</p>
+<p>※ 強制終了処理が開始される契機（シグナル受信や親プロセスからの指示など）に関する詳細なエンドツーエンドのフローは、提供された情報からは判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>threads_per_child</code> が正しく初期化されている必要があります。</li>
+<li><code>worker_sockets</code> 配列が、各ワーカーのソケット状態を正しく保持している必要があります。</li>
+<li>ソケットのクローズ後、<code>worker_sockets[i]</code> は必ず <code>NULL</code> に設定され、再利用や二重解放が防止されます。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>apr_socket_close</code> 自体が失敗した場合、本関数内ではエラーハンドリングやリトライは行われません。</li>
+<li><code>worker_sockets</code> が初期化されていない場合や、既に閉じられたソケットに対しては <code>NULL</code> チェックにより安全にスキップされますが、配列自体の整合性が崩れている場合の挙動は保証されません。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （<code>close_worker_sockets</code> の定義および強制終了時の呼び出し箇所）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （強制終了時の呼び出し箇所）</li>
 </ul></body></html>

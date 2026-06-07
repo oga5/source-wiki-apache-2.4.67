@@ -1,9 +1,11 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/append-bucket.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>append_bucket</h1>
 <h2>概念</h2>
-<p><code>append_bucket</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>append_bucket</code> は、Apache HTTP Server (httpd) の複数のモジュール（<code>mod_sed</code> および <code>mod_http2</code>）において、バケットブリゲード（データのストリームを表現するバケットの連結リスト）に新しいデータバケットを追加するために定義されている内部関数です。</p>
+<p>これらは共通の共有ライブラリ関数ではなく、各モジュールの文脈（フィルタ処理やHTTP/2のバケット転送）に応じて個別に実装された同名の関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>バケットブリゲードへのデータの追加は、Apacheのフィルタチェーンやデータ転送において基本となる処理です。</p>
+<p>例えば <code>mod_sed</code> においては、<a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L529" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');">sed</a>によるストリーム編集の処理結果を効率的にバケット化し、メモリ消費を抑えつつ後続のフィルタへ受け渡す（フラッシュする）役割を担っています。これにより、大容量データ処理時におけるメモリリークや過度なメモリ消費を防ぐことができます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/filters</code></li>
@@ -11,17 +13,41 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/filters/mod_sed.c#append_bucket</code></li>
-<li><code>symbol:modules/http2/h2_bucket_beam.c#append_bucket</code></li>
+<li>**<code>symbol:modules/filters/mod_sed.c#append_bucket</code>**: <a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L529" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>sed</code></a> フィルタの処理結果をバケットブリゲードに追加し、必要に応じてフラッシュとメモリ解放を行う静的関数。</li>
+<li>**<code>symbol:modules/http2/h2_bucket_beam.c#append_bucket</code>**: <a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>h2_bucket_beam.c</code></a> 内で定義または呼び出されている同名の関数（詳細な内部仕様は本コンテキストからは未詳）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<h3><code>mod_sed</code> における流れ</h3>
+<p>1. **バケットの生成**:</p>
+<ul>
+<li>コンテキストのプール（<code>ctx-&gt;tpool</code>）がリクエストプールと一致する場合は、<code>apr_bucket_pool_create</code> を用いてプールバケットを作成します。</li>
+<li>それ以外の場合は、<code>apr_bucket_transient_create</code> を用いて一時バケット（transient bucket）を作成し、一時バケットのカウント（<code>ctx-&gt;numbuckets</code>）をインクリメントします。</li>
+<p>2. **ブリゲードへの挿入**: 生成したバケットを、コンテキストが保持するバケットブリゲード（<code>ctx-&gt;bb</code>）の末尾に挿入します。 3. **フラッシュとクリーンアップ**:</p>
+<li>一時バケットの数が <a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>MAX_TRANSIENT_BUCKETS</code></a> に達した場合、フラッシュバケットを作成してブリゲードの末尾に挿入します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を呼び出して、ブリゲードを後続のフィルタチェーンに渡します。</li>
+<li>送信後、<code>apr_brigade_cleanup</code> でブリゲードをクリアし、<code>clear_ctxpool(ctx)</code> を呼び出してコンテキストプールを解放します。</li>
+</ul>
+<h3><code>mod_http2</code> における流れ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a> における <code>append_bucket</code> の具体的なエンドツーエンドの流れや、<code>mod_sed</code> 側との直接的な相互作用（もしあれば）については、現時点では情報が不足しており不明です。</li>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**<code>mod_sed</code> における前提条件**:</li>
+<li><code>append_bucket</code> の呼び出し時、フィルタ実行コンテキスト内のバケットブリゲード（<code>ctx-&gt;bb</code>）が適切に初期化されている必要があります。</li>
+<li>接続オブジェクトのバケットアロケータ（<code>ctx-&gt;r-&gt;connection-&gt;bucket_alloc</code>）が有効でなければなりません。</li>
+<li>**メモリ管理の不変条件**:</li>
+<li>一時バケットの累積数が <a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>MAX_TRANSIENT_BUCKETS</code></a> に達した際は、必ず後続フィルタへの受け渡し（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a>）と、コンテキストプール（<a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_sed_c__clear_ctxpool.html&quot;}, '*');"><code>clear_ctxpool</code></a>）の解放が行われ、メモリ使用量が一定以下に維持される必要があります。</li>
+<li>**<code>mod_http2</code> における不変条件**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a> 側の不変条件については、現時点では不明です。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリリークとフラッシュタイミング**: <code>mod_sed</code> の <code>append_bucket</code> は <a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_sed_c__clear_ctxpool.html&quot;}, '*');"><code>clear_ctxpool</code></a> によるプール管理と密接に結びついています。一時バケットの管理やフラッシュのタイミングを誤ると、メモリ消費が急増したり、解放済みのメモリにアクセスする危険性があります。</li>
+<li>**名前の衝突と混同**: <a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>mod_sed.c</code></a> と <a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>h2_bucket_beam.c</code></a> の <code>append_bucket</code> は、名前は同じですが別個の実装です。これらを混同して、一方の仕様や前提条件を他方に適用しないよう注意が必要です。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>modules/filters/mod_sed.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>modules/filters/mod_sed.c</code></a> (特に <code>append_bucket</code> の実装と <a class="wiki-source-link" href="../../source/modules/filters/mod_sed.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_sed_c__clear_ctxpool.html&quot;}, '*');"><code>clear_ctxpool</code></a> の関連箇所)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a> (同名関数の実装およびバケットビーム内での役割の確認)</li>
 </ul></body></html>

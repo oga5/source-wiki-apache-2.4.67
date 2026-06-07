@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/signal-threads.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>signal_threads</h1>
 <h2>概念</h2>
-<p><code>signal_threads</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>signal_threads</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、子プロセス内のスレッド群に対して終了処理（GracefulまたはUngraceful）を通知し、停止プロセスを開始するための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>サーバーのシャットダウンや再起動時に、実行中のスレッド（リスナースレッドやワーカースレッド）を適切に制御して終了させるために不可欠です。Graceful（緩やかな）停止では既存の接続処理の完了を待ち、Ungraceful（即時の）停止ではソケットを強制的に閉じて迅速に終了させるなど、システムの運用要件に応じた終了処理の切り替えを制御します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -11,17 +11,32 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#signal_threads</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#signal_threads</code></li>
+<li><code>symbol:server/mpm/worker/worker.c#signal_threads</code>: <code>worker</code> MPMにおけるスレッド終了通知の実装。</li>
+<li><code>symbol:server/mpm/event/event.c#signal_threads</code>: <code>event</code> MPMにおける同名または関連する終了通知処理。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **終了要求の受信**: 終了処理がトリガーされ、<code>signal_threads(mode)</code> が呼び出されます。 2. **状態の更新**: グローバルな <code>terminate_mode</code> が指定された <code>mode</code> に更新され、サーバー状態（<code>retained-&gt;mpm-&gt;mpm_state</code>）が <a class="wiki-source-link" href="../../source/include/ap_mpm.h.html#L142" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>AP_MPMQ_STOPPING</code></a> に設定されます。 3. **リスナーの解除**: <code>wakeup_listener()</code> が呼び出され、ブロッキング状態のリスナースレッドが解除されます。 4. **モードに応じた分岐**:</p>
+<ul>
+<li>**<code>ST_UNGRACEFUL</code> の場合**:</li>
+<li><code>workers_may_exit</code> フラグが <code>1</code> に設定されます。</li>
+<li><code>ap_queue_interrupt_all(worker_queue)</code> により、キュー待ち状態の全ワーカーを解放します。</li>
+<li><code>close_worker_sockets()</code> により、現在処理中の全接続ソケットを強制的に閉じます。</li>
+<li>**<code>ST_GRACEFUL</code> の場合**: 既存の接続処理の完了を待ちます（詳細な待機フローは提供された情報からは未確定です）。</li>
+<p>5. **停止フックの実行**: <code>ap_run_child_stopping</code> が呼び出され、子プロセスの停止処理フックが実行されます。</p>
+</ul>
+<p>*注意: <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> 内の直接的な呼び出し元や、<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> 側での具体的なエンドツーエンドの呼び出しフローの全容は、提供された情報からは完全には判明していません。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**重複処理の防止**: 指定された <code>mode</code> が既に設定されている <code>terminate_mode</code> と一致する場合、関数は何も行わずに即座に終了します。</li>
+<li>**状態遷移の一貫性**: 本関数が呼び出されると、サーバー状態は必ず <a class="wiki-source-link" href="../../source/include/ap_mpm.h.html#L142" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>AP_MPMQ_STOPPING</code></a> に遷移します。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**強制切断による影響**: <code>ST_UNGRACEFUL</code> モードが指定された場合、接続のクリーンアップを待たずにソケットが強制的に閉じられるため、処理中のアクティブなリクエストは中断されます。</li>
+<li>**コード共有の複雑さ**: <code>signal_threads</code> は <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> で定義されていますが、<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> からの参照も検出されています。MPM間でのコード共有や依存関係の変更時には、両モジュールへの影響を考慮する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> (特に <code>signal_threads</code> の定義と関連する <code>wakeup_listener</code>, <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L519" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>ap_queue_interrupt_all</code></a> などの呼び出し先)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> (同名シンボルの実装および <code>worker</code> MPM とのコード共有関係)</li>
 </ul></body></html>

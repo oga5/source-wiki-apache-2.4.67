@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-sb-handle-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_sb_handle_t</h1>
 <h2>概念</h2>
-<p><code>ap_sb_handle_t</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>ap_sb_handle_t</code> は、Apache HTTP Server において特定のワーカープロセスまたはスレッドのスコアボード（実行時状態）を識別・参照するための不透明な（Opaque）ハンドルです。公開ヘッダ側では詳細が隠蔽されたポインタとして扱われますが、実装内部では特定のワーカーを指し示すインデックス情報を保持しています。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>MPM（Multi-Processing Module）や各種モジュール（<code>mod_echo</code> など）が、共有メモリ上に配置されたスコアボード内の特定のワーカー（プロセス/スレッド）のスロットを特定し、状態（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__worker_score.html&quot;}, '*');"><code>worker_score</code></a>）を安全かつ効率的に更新・参照するためのキーとして機能するためです。これにより、直接的なメモリ操作を隠蔽し、一貫した API を通じた状態管理が可能になります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,15 +11,27 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/scoreboard.h#ap_sb_handle_t</code></li>
-<li><code>symbol:server/scoreboard.c#ap_sb_handle_t</code></li>
+<li>**<code>symbol:include/scoreboard.h#ap_sb_handle_t</code>**</li>
+<p>外部モジュール向けに公開されている不透明な構造体定義（<code>typedef struct ap_sb_handle_t ap_sb_handle_t;</code>）。</p>
+<li>**<code>symbol:server/scoreboard.c#ap_sb_handle_t</code>**</li>
+<p>内部で定義されている具体的な構造体。以下のメンバを持ち、スコアボード内のオフセットを特定します。 ``<code>c struct ap_sb_handle_t { int child_num; int thread_num; }; </code>``</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>スコアボード全体の初期化から破棄に至る完全なライフサイクルやエンドツーエンドのフローは提供された情報からは未確定ですが、部分的な利用フローは以下の通りです。</p>
+<p>1. **ハンドルの生成**: <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L432" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_create_sb_handle.html&quot;}, '*');"><code>ap_create_sb_handle</code></a> 等の関数を通じて、特定の <code>child_num</code> と <code>thread_num</code> を保持するハンドルが生成・初期化されます。 2. **状態の更新・参照**: MPM や <code>mod_echo</code>（例: <a class="wiki-source-link" href="../../source/modules/echo/mod_echo.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__update_echo_child_status.html&quot;}, '*');"><code>update_echo_child_status</code></a>）などの呼び出し元が、このハンドルを <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L590" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_update_child_status.html&quot;}, '*');"><code>ap_update_child_status</code></a> や <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L692" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_get_scoreboard_worker.html&quot;}, '*');"><code>ap_get_scoreboard_worker</code></a> などのスコアボード操作 API に引数として渡します。 3. **共有メモリへのアクセス**: API 内部で、ハンドルが保持するインデックスを基に共有メモリ上の該当する <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__worker_score.html&quot;}, '*');"><code>worker_score</code></a> 構造体を特定し、統計情報や状態の読み書きを行います。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**有効なインデックスの保持**: ハンドル内の <code>child_num</code> および <code>thread_num</code> は、常にスコアボード内の有効なインデックスを指していなければなりません。</li>
+<li>**単一所有者による書き込み**: 本ハンドルが指すスコアボード上のスロットは、単一の所有者（ワーカー）によってのみ書き込まれることが想定されており、排他制御（ロック）なしでの更新が可能です。</li>
+<li>**インデックスの不変性**: メモリレイアウトの設計上、このハンドルが指すインデックスは初期化後に変更されない前提で運用されます。</li>
+<li>**有効なライフサイクル**: 共有メモリ上に配置されるスコアボード情報を指すため、スコアボード自体の有効なライフサイクル内でのみ使用可能です。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**未初期化・無効なハンドル**: ハンドルが適切に初期化されていない、または無効な <code>child_num</code>/<code>thread_num</code> を保持している場合、アクセサ関数を経由した際にスコアボードのメモリ領域外アクセスや未定義動作、誤った統計情報の更新を引き起こすリスクがあります。</li>
+<li>**直接アクセスの禁止**: 本構造体は <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a> において不透明な型として定義されているため、外部モジュールから直接メンバにアクセスすることは避け、必ず <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L692" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_get_scoreboard_worker.html&quot;}, '*');"><code>ap_get_scoreboard_worker</code></a> などの公開 API を経由する必要があります。</li>
+<li>**定義の二重管理**: 本構造体は <a class="wiki-source-link" href="../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a> と <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a> の両方に関連定義が存在するため、構造を変更する際は両方の整合性を確認する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a></li>

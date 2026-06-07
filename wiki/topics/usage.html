@@ -1,9 +1,11 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/usage.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>usage</h1>
 <h2>概念</h2>
-<p><code>usage</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>usage</code> は、Apache HTTP Server（<code>httpd</code>）本体、およびその周辺のサポートツールやテストユーティリティにおいて、コマンドライン引数のヘルプメッセージ（使用方法）を出力するための関数群です。</p>
+<p>共通のライブラリ関数として一元化されているわけではなく、各プログラム（<code>httpd</code> 本体、<code>fcgistarter</code>、<code>htpasswd</code>、<code>rotatelogs</code> など）のソースコード内に個別の <code>usage</code> 関数として定義されています。それぞれのプログラムがサポートする独自のコマンドラインオプションや動作モードに応じたヘルプメッセージを出力するように実装されています。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>ユーザーや管理者がコマンドラインからツールを誤った引数で実行した際、または <code>-h</code> などのヘルプオプションを指定した際に、適切な使用方法を提示して安全かつ即座にプロセスを終了させるために重要です。</p>
+<p>また、新しいコマンドラインオプションが追加された場合には、実際の引数解析ロジックと <code>usage</code> 内のヘルプメッセージの整合性を手動で維持する必要があるため、メンテナンスの観点からも重要な変更対象となります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server</code></li>
@@ -12,36 +14,53 @@
 <li><code>module:test/clients</code></li>
 </ul>
 <h2>主要エンティティ</h2>
+<p>各モジュールおよびファイルにおける <code>usage</code> 関数の定義は以下の通りです。</p>
 <ul>
-<li><code>symbol:server/main.c#usage</code></li>
+<li>**<code>symbol:server/main.c#usage</code>**: <code>httpd</code> 本体のヘルプメッセージを <a class="wiki-source-link" href="../../source/include/http_log.h.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_STARTUP</code></a>（標準エラー出力）に表示し、<a class="wiki-source-link" href="../../source/server/main.c.html#L257" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__main_c__destroy_and_exit_process.html&quot;}, '*');"><code>destroy_and_exit_process</code></a> を呼び出して終了します。</li>
+<li>**<code>symbol:support/fcgistarter.c#usage</code>**: <code>fcgistarter</code> ユーティリティの使用方法を <code>stderr</code> に出力し、<code>exit(EXIT_FAILURE)</code> で終了します。</li>
+<li>**<code>symbol:support/htdigest.c#usage</code>**: <code>htdigest</code> コマンドの使用方法を <code>errfile</code> に出力し、<code>exit(1)</code> で終了します。</li>
+<li>**<code>symbol:support/htpasswd.c#usage</code>**: <code>htpasswd</code> コマンドの使用方法を <code>errfile</code> に出力し、<code>exit(ERR_SYNTAX)</code> で終了します。</li>
+<li>**<code>symbol:support/httxt2dbm.c#usage</code>**: <code>httxt2dbm</code> コマンドの使用方法と、ビルド時に有効な DBM フォーマット（SDBM, GDBM 等）のサポート状況を <code>errfile</code> に出力します。</li>
+<li>**<code>symbol:support/logresolve.c#usage</code>**: <code>logresolve</code> コマンドの使用方法を <code>errfile</code> に出力し、<code>exit(1)</code> で終了します。</li>
+<li>**<code>symbol:support/rotatelogs.c#usage</code>**: <code>rotatelogs</code> ユーティリティの使用方法を <code>stderr</code> に出力し、<code>exit(1)</code> で終了します。</li>
+<li>**<code>symbol:test/test_limits.c#usage</code>**: <code>test_limits</code> ユーティリティの使用方法を <code>stderr</code> に出力し、<code>exit(1)</code> で終了します。</li>
+</ul>
+<p>※ 以下のエンティティについては、ソース参照に含まれているものの、詳細なコンテキストが提供されていないため、具体的な振る舞いは未確定です。</p>
+<ul>
 <li><code>symbol:support/ab.c#usage</code></li>
-<li><code>symbol:support/fcgistarter.c#usage</code></li>
 <li><code>symbol:support/htcacheclean.c#usage</code></li>
-<li><code>symbol:support/htdigest.c#usage</code></li>
-<li><code>symbol:support/htpasswd.c#usage</code></li>
-<li><code>symbol:support/httxt2dbm.c#usage</code></li>
-<li><code>symbol:support/logresolve.c#usage</code></li>
-<li><code>symbol:support/rotatelogs.c#usage</code></li>
 <li><code>symbol:test/clients/h2ws.c#usage</code></li>
-<li><code>symbol:test/test_limits.c#usage</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **起動と引数解析**: 各プログラムの <code>main</code> 関数が起動し、コマンドライン引数（<code>argv</code>）の解析を開始します。 2. **エラーまたはヘルプの検出**: 引数の解析中に不正なオプションが指定された場合、またはヘルプオプション（<code>-h</code> や <code>--help</code> など）が指定された場合に、各プログラム固有の <code>usage</code> 関数が呼び出されます。 3. **メッセージ出力**: <code>usage</code> 関数内部で、標準エラー出力（<code>stderr</code>）、APR のファイルハンドル（<code>errfile</code>）、または <code>ap_log_error</code> を介してヘルプメッセージが出力されます。 4. **プロセスの終了**: メッセージ出力後、<code>exit</code> や <a class="wiki-source-link" href="../../source/server/main.c.html#L257" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__main_c__destroy_and_exit_process.html&quot;}, '*');"><code>destroy_and_exit_process</code></a> などの終了処理を呼び出し、呼び出し元に制御を戻さずにプロセスを終了します。</p>
+<p>※ <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a>、<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>support/htcacheclean.c</code></a>、<a class="wiki-source-link" href="../../source/test/clients/h2ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>test/clients/h2ws.c</code></a> における詳細な呼び出しフローやエンドツーエンドの挙動は、提供された情報からは特定されていません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**プロセスの強制終了**: <code>usage</code> 関数が呼び出された場合、プログラムは必ず制御を呼び出し元に戻さず、プロセスを終了（<code>exit</code> またはそれに準ずる終了処理）させなければなりません。</li>
+<li>**引数の有効性**: <a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a> の <code>usage</code> においては、引数として渡される <code>process_rec *process</code> が <code>NULL</code> でないことが前提となります（<code>process-&gt;argv[0]</code> を参照するため）。</li>
+<li>**出力ストリームの初期化**: <code>support</code> 配下の多くのツール（<code>htdigest</code>, <code>htpasswd</code>, <code>httxt2dbm</code>, <code>logresolve</code>）では、出力先となる <code>errfile</code>（<code>apr_file_t</code>）が有効に初期化されている必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**ヘルプメッセージの更新漏れ**: 新しいコマンドラインオプションを追加した際、対応する <code>usage</code> 関数の出力メッセージを手動で更新し忘れると、ユーザーに正しい使い方が伝わらなくなります。</li>
+<li>**プラットフォーム固有の条件付きコンパイル**: <a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a> や <a class="wiki-source-link" href="../../source/support/rotatelogs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>support/rotatelogs.c</code></a> などでは、<code>WIN32</code> や <a class="wiki-source-link" href="../../source/os/netware/pre_nw.h.html#L34" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/pre_nw.h.html&quot;}, '*');"><code>NETWARE</code></a>、あるいは <code>APR_FILES_AS_SOCKETS</code> などのマクロ定義によって表示されるオプションが切り替わります。プラットフォームごとの差異を考慮せずにメッセージを変更すると、特定の環境でビルドエラーや表示の不整合が発生する原因になります。</li>
+<li>**NULL ポインタアクセス**: <a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a> の <code>usage</code> において、<code>process</code> 構造体が <code>NULL</code> の状態で呼び出されると、<code>process-&gt;argv[0]</code> へのアクセスによりセグメンテーション違反が発生する可能性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
+<p>各プログラムにおける <code>usage</code> の具体的な出力内容や引数解析ロジックを確認するには、以下のファイルを参照してください。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/support/fcgistarter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/fcgistarter.c.html&quot;}, '*');"><code>support/fcgistarter.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>support/htcacheclean.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>support/htdigest.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/support/htpasswd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htpasswd.c.html&quot;}, '*');"><code>support/htpasswd.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/support/httxt2dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/httxt2dbm.c.html&quot;}, '*');"><code>support/httxt2dbm.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/support/logresolve.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/logresolve.c.html&quot;}, '*');"><code>support/logresolve.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>support/rotatelogs.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/test/clients/h2ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>test/clients/h2ws.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/test/test_limits.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/test_limits.c.html&quot;}, '*');"><code>test/test_limits.c</code></a></li>
+</ul>
+<p>（以下のファイルは詳細未解析の参照先です）</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>support/htcacheclean.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/clients/h2ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>test/clients/h2ws.c</code></a></li>
 </ul></body></html>

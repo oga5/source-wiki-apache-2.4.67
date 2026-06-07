@@ -1,9 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/keep-body-filter.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/mod_request.h.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');">KEEP_BODY_FILTER</a></h1>
 <h2>概念</h2>
-<p><a class="wiki-source-link" href="../../source/include/mod_request.h.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>KEEP_BODY_FILTER</code></a> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><a class="wiki-source-link" href="../../source/include/mod_request.h.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>KEEP_BODY_FILTER</code></a> は、HTTP リクエストボディをメモリ上に一時的にバッファリング（コピー）し、後続のサブリクエストや他のフィルタがリクエストボディを再利用できるようにするための入力フィルタです。</p>
+<p>通常、HTTP リクエストボディは一度読み込むと消費されてしまいますが、このフィルタを適用することで、データを <code>r-&gt;kept_body</code> に保持し、複数回アクセスすることが可能になります。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>Apache HTTP Server において、特定のモジュールやサブリクエストが元のリクエストボディを再度読み込む必要がある場合、標準の入力ストリームはすでに消費されているため読み込めません。<a class="wiki-source-link" href="../../source/include/mod_request.h.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>KEEP_BODY_FILTER</code></a> は、リクエストボディをメモリにキャッシュすることで、リクエストデータの「巻き戻し」や「再読み込み」を可能にし、モジュール間での柔軟なデータ共有を実現します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,15 +12,23 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/mod_request.h#KEEP_BODY_FILTER</code></li>
-<li><code>symbol:modules/filters/mod_request.c#keep_body_filter</code></li>
+<li>**<code>symbol:include/mod_request.h#KEEP_BODY_FILTER</code>**: フィルタを識別するための定義。</li>
+<li>**<code>symbol:modules/filters/mod_request.c#keep_body_filter</code>**: リクエストボディを <code>r-&gt;kept_body</code> にコピーする、実際の入力フィルタ関数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **フィルタの呼び出し**: Apache のフィルタチェーンから <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を経由して <a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__keep_body_filter.html&quot;}, '*');"><code>keep_body_filter</code></a> が呼び出されます。 2. **初期化と検証**: 初回呼び出し時、フィルタは <a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__keep_body_ctx_t.html&quot;}, '*');"><code>keep_body_ctx_t</code></a> を作成し、<code>Content-Length</code> ヘッダーを検証します。 3. **データの取得**: 上流フィルタから <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を通じてデータを読み込みます。 4. **サイズ制限のチェック**: 読み込んだデータの合計サイズが、設定された制限（<code>dconf-&gt;keep_body</code>）を超えていないか検証します。 5. **データの複製と保持**: 読み込んだバケットを <code>apr_bucket_copy</code> で複製し、<code>r-&gt;kept_body</code> ブリゲードの末尾に追加します。 6. **データの透過**: 読み込んだオリジナルのブリゲード <code>b</code> は、そのまま下流のフィルタへ透過的に渡されます。</p>
+<p>*注意: フィルタがどのような条件でフィルタチェーンに挿入されるか、またサブリクエスト側がどのように <code>r-&gt;kept_body</code> を再利用するかという全体的なエンドツーエンドの統合フローは、提供された情報からは完全には明らかになっていません。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリの生存期間**: <code>r-&gt;kept_body</code> はリクエストプール（<code>r-&gt;pool</code>）に紐付けられており、リクエスト終了時に自動的に解放されます。</li>
+<li>**サイズ制限の遵守**: 読み込んだデータサイズが設定された制限（<code>dconf-&gt;keep_body</code>）を超過した場合、フィルタは即座にエラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L525" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_REQUEST_ENTITY_TOO_LARGE</code></a>）を返し、それまでに保持されたデータは破棄されます。</li>
+<li>**重複動作の防止**: すでに <code>r-&gt;kept_body</code> が存在する場合、フィルタは自身をフィルタチェーンから削除し、以降は透過的に動作します。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリ消費の増大**: リクエストボディをメモリ上にコピーするため、大きなリクエストボディを扱うとメモリ消費が急増します。これを防ぐために <code>KeptBodySize</code> ディレクティブによる適切なサイズ制限の設定が必須です。</li>
+<li>**エラー時のデータ消失**: データの読み込み中にサイズ制限を超過した場合、それまでにバッファリングされていたデータはすべてクリーンアップされ、破棄されます。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/mod_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>include/mod_request.h</code></a></li>

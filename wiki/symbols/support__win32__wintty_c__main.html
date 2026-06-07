@@ -6,22 +6,48 @@
 <li>定義箇所: <code>support/win32/wintty.c:82</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>Windows サービス環境下で実行されるプロセスに対し、対話的なコンソールウィンドウを動的に割り当て、標準入出力（stdin/stdout/stderr）をリダイレクトする。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int main(int argc, char** argv)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: コマンドライン引数（コンソールモード設定、タイムアウト値、タイトル指定など）。</li>
+<li>**出力**: 終了コード（成功時は0、失敗時は1）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>実行プロセスがサービスセッション内にあるか否かを <code>WindowStation</code> 名（&quot;Service-&quot; で始まるか）で判定する。</li>
+<li>標準入出力ハンドルは、コンソール解放前に <code>DuplicateHandle</code> で複製し、サービス環境下でも有効な状態を維持する必要がある。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **引数解析**: コンソール入力/出力モードのフラグやタイムアウト値を設定。 2. **環境判定とハンドル複製**: 現在のプロセスがサービスセッションかを確認し、標準入出力ハンドルを複製して保持。 3. **コンソール再割り当て**:</p>
+<ul>
+<li>サービス環境の場合: <code>CreateProcess</code> を使用し、<code>WinSta0\Default</code> デスクトップ上で新しいコンソールプロセスを起動して待機。</li>
+<li>通常環境の場合: <code>AllocConsole</code> を実行。</li>
+<p>4. **ストリーム仲介**:</p>
+<li>メインスレッド: <code>stdin</code> から読み取り、<code>CONOUT$</code> へ書き込む。</li>
+<li>フィードバックスレッド (<code>feedback</code>): <code>CONIN$</code> から読み取り、<code>stdout</code> へ書き込む。</li>
+<p>5. **終了処理**: <code>stdin</code> の EOF 検知後、スレッドの終了を待機し、コンソールを解放して終了。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: OS（プログラムの起点）。</li>
+<li>**呼び出し先**: <code>feedback</code>（スレッドとして起動）、<code>CreateProcess</code>, <code>DuplicateHandle</code>, <code>AllocConsole</code>, <code>GetStdHandle</code> 等の Windows API。</li>
+<li>*注: ツールが提示した「呼び出し元」のリストは、Apache HTTP Server 全体における用語の衝突であり、本関数の直接の呼び出し元を示すものではありません。*</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>feedback_args_t</code>: <code>feedback</code> スレッドへ入出力ハンドルを渡すための構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>GetProcessWindowStation</code> や <code>DuplicateHandle</code> が失敗した場合、<code>printerr</code> を経由してエラーを出力。</li>
+<li>サービス環境下でのコンソール生成に失敗した場合、終了コード 1 を返して終了。</li>
+<li><code>stdin</code> からの EOF 検知時、コンソールタイトルを更新し、スレッドの完了を待機する。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本コードは実験的な実装であり、エラーハンドリングは限定的です。</li>
+<li><code>isservice</code> の判定ロジックは WindowStation 名に依存しており、環境によっては誤判定の可能性があります。</li>
+<li>サービス環境下でのコンソール操作はセキュリティ制約が厳しいため、<code>CreateProcess</code> による別プロセス起動が必須となっています。デバッグ時は <code>verbose</code> フラグを有効にしてください。</li>
 </ul></body></html>

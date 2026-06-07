@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-listen-rec.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_listen_rec</h1>
 <h2>概念</h2>
-<p><code>ap_listen_rec</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>ap_listen_rec</code> は、Apache HTTP Server においてサーバーが接続を待機する各リスナーソケットの情報を保持・管理するための構造体（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。この構造体は <code>next</code> ポインタを保持しており、グローバルなリンクリスト（<code>ap_listeners</code>）を構成して複数のリスナーソケットを管理します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この構造体は、設定ファイル（<code>Listen</code> ディレクティブ）に基づいて生成されたリスニングソケットの情報を一元管理し、MPM（Multi-Processing Module）が接続を受け入れる（accept）際の参照先として機能します。また、プロトコルごとの接続処理を行うための関数ポインタ（<code>accept_func</code>）を保持しており、柔軟なプロトコルハンドリングを実現するために不可欠な役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,17 +11,25 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/ap_listen.h#ap_listen_rec</code></li>
-<li><code>symbol:server/listen.c#ap_listen_rec</code></li>
+<li><code>symbol:include/ap_listen.h#ap_listen_rec</code>：構造体の定義（<a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>include/ap_listen.h</code></a>）</li>
+<li><code>symbol:server/listen.c#ap_listen_rec</code>：リスナー管理関数群の実装（<a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a>）</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **初期化**: 設定ファイルの解析に基づき、<code>ap_setup_listeners()</code> によってソケットの生成、バインド（<code>bind</code>）、およびリスニング（<code>listen</code>）が行われ、<code>ap_listen_rec</code> 構造体が生成されます。 2. **実行**: MPM はグローバルな <code>ap_listeners</code> リンクリストから各 <code>ap_listen_rec</code> を参照し、設定された <code>accept_func</code>（接続受け入れ関数ポインタ）を介してクライアントからの接続を受け入れます。 3. **複製**: マルチコア環境などの要件に応じて、<code>ap_duplicate_listeners()</code> によりリスナーが複製される場合があります（<code>SO_REUSEPORT</code> のサポート状況に依存します）。 4. **終了**: サーバーの終了時または再起動時に、<code>ap_close_listeners()</code> または <code>ap_close_listeners_ex()</code> が呼び出され、保持されているソケットがクローズされます。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>すべての <code>ap_listen_rec</code> インスタンスは、グローバル変数 <code>ap_listeners</code> を起点とするリンクリストの一部として正しく管理されている必要があります。</li>
+<li>リスト内の各インスタンスは、<code>socket()</code>, <code>bind()</code>, <code>listen()</code> の一連の処理を経て、有効なリスニング状態にある必要があります。</li>
+<li>メモリおよびソケットのライフサイクルは、関連付けられた <code>apr_pool_t</code>（メモリプール）によって管理されます。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>ソケットのバインド失敗やリスニング開始の失敗は、サーバー全体の起動停止（致命的エラー）に直結します。</li>
+<li><code>SO_REUSEPORT</code> のサポート状況によって <code>ap_duplicate_listeners()</code> の挙動が変化するため、プラットフォームごとの差異に注意が必要です。</li>
+<li>設定解析時に使用される <code>ap_set_...</code> 系の関数は内部的なものであり、外部モジュールから直接呼び出してはなりません。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>include/ap_listen.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>include/ap_listen.h</code></a>：<code>ap_listen_rec</code> 構造体および関連する関数・型の定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a>：リスナーのセットアップ、複製、クローズなどの具体的な管理ロジックの実装。</li>
 </ul></body></html>

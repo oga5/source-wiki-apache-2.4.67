@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-cgi-build-command.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_cgi_build_command</h1>
 <h2>概念</h2>
-<p><code>ap_cgi_build_command</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>ap_cgi_build_command</code> は、Apache HTTP Serverにおいて、プラットフォーム固有（NetWare および Windows）の環境下でCGIスクリプトや実行ファイルを起動するために必要なコマンドライン文字列および引数配列（<code>argv</code>）を構築するための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>CGIの実行方法はオペレーティングシステムによって大きく異なります。例えば、NetWareではNLM（NetWare Loadable Module）の実行やアドレス空間の制御が必要であり、Windowsでは拡張子の判別、レジストリ検索、シバン（<code>#!</code>）解析、複雑な引数のエスケープ処理が必要です。<code>ap_cgi_build_command</code> は、これらのプラットフォーム固有の差異を吸収し、<code>mod_cgi</code> などのジェネリックなCGI実行モジュールに対して統一されたインターフェース（オプショナル関数）を提供するために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/arch/netware</code></li>
@@ -15,11 +15,33 @@
 <li><code>symbol:modules/arch/win32/mod_win32.c#ap_cgi_build_command</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p><code>mod_cgi</code> などの外部モジュールからプロセス起動に至る完全なエンドツーエンドのフローは、提供されたコンテキストからは未だ不明ですが、本関数内における処理の流れは以下の通りです。</p>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> が <code>APR_RETRIEVE_OPTIONAL_FN</code> を介して本関数を動的に取得し、呼び出します。 2. **プラットフォーム固有のコマンド構築**:</p>
+<ul>
+<li>**NetWare環境**:</li>
+<p>1. リクエスト設定から <a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a> を取得します。 2. <code>r-&gt;filename</code> の拡張子を抽出します。 3. 拡張子をキーに <code>d-&gt;file_type_handlers</code> からハンドラ（NLM）を検索します。 4. ハンドラに基づき <code>[ハンドラ] [ファイル名]</code> 形式のコマンドを構築し、<code>apr_tokenize_to_argv</code> で引数配列に変換します。 5. <a class="wiki-source-link" href="../../source/server/config.c.html#L1594" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_server_root_relative</code></a> を使用して実行ファイルの絶対パスを解決します。</p>
+<li>**Windows環境**:</li>
+<p>1. ファイル拡張子（<code>.exe</code>, <code>.com</code>, <code>.bat</code>, <code>.cmd</code>）を判定し、標準的な実行形式であればインタープリタを空に設定します。 2. 必要に応じて、設定（<code>ScriptInterpreterSource</code>）に基づきレジストリからインタープリタを検索します。 3. レジストリで特定できない場合、ファイル先頭のシバン（<code>#!</code>）行を解析してインタープリタを抽出します（UTF-8 BOMはスキップ）。 4. <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> を呼び出し、引数テンプレートを実際のパスで展開して配列化します。 5. <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__prep_string.html&quot;}, '*');"><code>prep_string</code></a> を使用して環境変数をWindows向けに調整し、<code>e_info-&gt;detached</code> を <code>1</code> に設定します。 3. **返却**: 構築されたコマンドパス（<code>cmd</code>）と引数配列（<code>argv</code>）を呼び出し元に返し、成功時は <code>APR_SUCCESS</code> を、失敗時は <code>APR_EBADF</code> などのステータスコードを返します。</p>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<p>プラットフォームを跨いだ共通のグローバルな不変条件の全貌は、提供されたコンテキストからは未だ不明ですが、各プラットフォームの実装において以下の条件が課されています。</p>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ確保は、引数として渡される <code>apr_pool_t</code>（<a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>）に依存しなければなりません。</li>
+<li>**NetWare環境**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a> がリクエストのディレクトリ設定から取得可能である必要があります。</li>
+<li><code>e_info-&gt;process_cgi</code> が真の場合、<code>r-&gt;filename</code> をベースにコマンドが初期化されます。</li>
+<li>**Windows環境**:</li>
+<li><code>e_info-&gt;cmd_type</code> が <code>APR_SHELLCMD</code> でない場合、インタープリタが特定されれば <code>APR_PROGRAM_PATH</code> に設定される必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**NetWare環境**:</li>
+<li>拡張子に対応するハンドラが <code>file_type_handlers</code> に登録されていない場合、<code>APR_EBADF</code> を返して処理が失敗します。</li>
+<li>**Windows環境**:</li>
+<li>インタープリタが特定できず、シバン行も存在しない場合は <code>APR_EBADF</code> で失敗します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__prep_string.html&quot;}, '*');"><code>prep_string</code></a> によるUTF-8からWindowsローカルコードページへの変換は限定的な実装に留まっています。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> 内の引数解析は複雑なエスケープ処理を伴うため、Windowsのコマンドライン引数ルールに注意する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_netware.c.html&quot;}, '*');"><code>modules/arch/netware/mod_netware.c</code></a></li>

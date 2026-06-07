@@ -6,22 +6,45 @@
 <li>定義箇所: <code>support/htcacheclean.c:323</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュディレクトリ内の指定されたファイルを削除し、関連する親ディレクトリのクリーンアップを試行します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void delete_file(char *path, char *basename, apr_off_t *nodes, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>path</code>: ファイルが存在するディレクトリパス。</li>
+<li><code>basename</code>: 削除対象のファイル名。</li>
+<li><code>nodes</code>: 削除成功時にデクリメントされる inode カウンタへのポインタ。</li>
+<li><code>pool</code>: メモリ割り当てに使用する親プール。</li>
+<li>戻り値: なし。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>pool</code> は呼び出し元で管理されている有効な <code>apr_pool_t</code> であること。</li>
+<li><code>nodes</code> は有効な <code>apr_off_t</code> 型のポインタであること。</li>
+<li>削除処理中、一時的なサブプールが作成・破棄されるため、メモリリークを防ぐ構造になっています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>pool</code> から一時的なサブプール <code>p</code> を作成し、<code>path</code> と <code>basename</code> を結合して対象ファイルのフルパスを生成します。 2. <code>dryrun</code> フラグが有効な場合、<code>apr_stat</code> でファイルの存在を確認し、存在すれば <code>nodes</code> を減らします。 3. <code>dryrun</code> が無効な場合、<code>apr_file_remove</code> を実行してファイルを削除し、成功すれば <code>nodes</code> を減らします。 4. サブプール <code>p</code> を破棄します。 5. <code>benice</code> フラグが有効な場合、削除回数 <code>delcount</code> が <code>DELETE_NICE</code> に達するごとに <code>apr_sleep</code> を呼び出し、システム負荷を抑制します。 6. 最後に <code>delete_parent</code> を呼び出し、空になった親ディレクトリの削除を試みます。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>呼び出し元: <code>support/htcacheclean.c</code> 内の複数箇所（行 794, 818, 946）。</li>
+<li>呼び出し先: <code>apr_pool_create</code>, <code>apr_pstrcat</code>, <code>apr_stat</code>, <code>apr_file_remove</code>, <code>apr_pool_destroy</code>, <code>apr_sleep</code>, <code>delete_parent</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: メモリ管理に使用。</li>
+<li><code>apr_off_t</code>: inode カウントの管理に使用。</li>
+<li><code>dryrun</code>, <code>benice</code>, <code>delcount</code>: グローバルな制御フラグおよびカウンタ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_file_remove</code> が失敗した場合、<code>nodes</code> は減らされません。</li>
+<li><code>dryrun</code> モード時は実際のファイル削除は行われず、統計情報の更新のみが行われます。</li>
+<li><code>delete_parent</code> の呼び出しにより、ファイル削除後にディレクトリ構造が空になった場合は再帰的にディレクトリも削除されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>htcacheclean</code> のファイル削除ロジックの末端を担います。</li>
+<li><code>benice</code> によるスロットリングは、大量のファイル削除時にシステム負荷を抑えるために重要です。</li>
+<li><code>delete_parent</code> への依存があるため、ディレクトリ構造の整合性については <code>delete_parent</code> の仕様も併せて確認してください。</li>
 </ul></body></html>

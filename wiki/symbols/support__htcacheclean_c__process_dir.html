@@ -6,22 +6,50 @@
 <li>定義箇所: <code>support/htcacheclean.c:594</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュディレクトリを再帰的に走査し、ヘッダーファイルとデータファイルのペアを特定して、キャッシュエントリのリスト（<code>ENTRY</code>）を構築します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int process_dir(char *path, apr_pool_t *pool, apr_off_t *nodes)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>path</code>: 走査対象のディレクトリパス。</li>
+<li><code>pool</code>: メモリ管理用の APR プール。</li>
+<li><code>nodes</code>: 走査した inode 数をカウントするためのポインタ。</li>
+<li>**出力**:</li>
+<li>成功時は <code>0</code>、失敗または中断時は <code>1</code> を返します。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code> を使用してメモリを管理し、再帰呼び出し時のリークを防ぐため、関数内でサブプールを作成・破棄します。</li>
+<li><code>interrupted</code> フラグが真の場合、処理を即座に中断します。</li>
+<li>Apache との競合を避けるため、<code>apr_stat</code> のリトライ処理が組み込まれています。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. 指定されたディレクトリを <code>apr_dir_open</code> で開き、内容を <code>DIRENTRY</code> リング構造に格納します。 2. 各エントリを走査し、ファイルタイプ（ディレクトリ、ヘッダー、データ）を判定します。 3. ディレクトリの場合は再帰的に <code>process_dir</code> を呼び出します。 4. ファイルの場合は <code>apr_hash_t</code> を用いて、同一ベース名のヘッダーとデータをペアリングします。 5. ペアリング完了後、ハッシュテーブルを走査し、キャッシュフォーマット（<code>DISK_FORMAT_VERSION</code> 等）を検証します。 6. 有効なエントリを <code>ENTRY</code> リストに追加し、不正なファイルや孤立したファイルは <code>delete_entry</code> または <code>delete_file</code> で削除します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>support/htcacheclean.c:687</code> (再帰呼び出し)</li>
+<li><code>support/htcacheclean.c:1771</code> (メイン処理からの呼び出し)</li>
+<li>**呼び出し先**:</li>
+<li><code>delete_entry</code>, <code>delete_file</code> (ファイル削除)</li>
+<li><code>apr_dir_open</code>, <code>apr_dir_read</code>, <code>apr_stat</code>, <code>apr_file_open</code> 等の APR 関数群。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>DIRENTRY</code>: ディレクトリ走査中の一時的なファイル情報保持用。</li>
+<li><code>ENTRY</code>: 最終的な削除判定に使用されるキャッシュエントリリスト。</li>
+<li><code>apr_hash_t</code>: ヘッダーとデータのペアリングに使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>ディレクトリが開けない場合、または走査中に中断された場合は <code>1</code> を返します。</li>
+<li><code>realclean</code> モードでない場合、一時ファイル（<code>AP_TEMPFILE_BASE</code> で始まるもの）はスキップされます。</li>
+<li>読み取り不能なヘッダーファイルは、現在の時刻と <code>MAXDEVIATION</code> を比較し、古い場合にのみ削除されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>メモリ管理のため、関数内で作成したサブプール <code>p</code> が適切に破棄されているか確認してください。</li>
+<li><code>apr_stat</code> のリトライ回数は <code>STAT_ATTEMPTS</code> 定数で制御されています。</li>
+<li><code>deldirs</code> フラグが有効な場合、空になったディレクトリの削除が試行されます。</li>
 </ul></body></html>

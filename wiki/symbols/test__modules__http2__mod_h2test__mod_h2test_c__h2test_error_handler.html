@@ -6,22 +6,44 @@
 <li>定義箇所: <code>test/modules/http2/mod_h2test/mod_h2test.c:429</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 プロトコルのテスト環境において、意図的な HTTP ステータスコードの返却やエラー発生、レスポンスの遅延送信をシミュレートするリクエストハンドラです。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int h2test_error_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（Apache リクエスト構造体）。<code>r-&gt;args</code> を通じて以下のパラメータを受け付けます。</li>
+<li><code>status</code>: HTTP ステータスコード</li>
+<li><code>error</code> / <code>body_error</code>: シミュレートするエラー種別（文字列）</li>
+<li><code>error_bucket</code>: エラーバケットの有効/無効フラグ</li>
+<li><code>delay</code> / <code>body_delay</code>: 送信前の遅延時間（例: &quot;10s&quot;）</li>
+<li>**出力**: <code>int</code>（Apache ハンドラ戻り値: <code>OK</code>, <code>DECLINED</code>, <code>AP_FILTER_ERROR</code>）</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;handler</code> が <code>&quot;h2test-error&quot;</code> であること。</li>
+<li>リクエストメソッドが <code>GET</code> または <code>POST</code> であること。</li>
+<li>メモリ管理は <code>r-&gt;pool</code> に依存しており、リクエスト終了時に自動解放されます。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **パラメータ解析**: <code>r-&gt;args</code> を解析し、遅延時間やエラー条件を抽出します。不明な引数は <code>ap_die</code> で <code>HTTP_BAD_REQUEST</code> を返します。 2. **環境設定**: レスポンスヘッダーから <code>Content-Length</code> や圧縮設定（Brotli/Gzip）を無効化し、<code>application/octet-stream</code> を設定します。 3. **初期遅延とエラー**: <code>delay</code> 指定があれば待機し、<code>error</code> 指定があれば <code>ap_map_http_request_error</code> を経由して即座にエラーを返します。 4. **レスポンス送信**: <code>apr_bucket_brigade</code> を使用してフラッシュバケットを送信後、ループ内でダミーデータ（&#x27;X&#x27;）を分割送信します。 6. **終了処理**: 正常終了時は EOS バケットを送信し <code>OK</code> を返します。エラー時は <code>error_bucket</code> 設定に基づきエラーバケットを挿入し <code>AP_FILTER_ERROR</code> を返します。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のフックシステム（<code>h2test_hooks</code> にて <code>ap_hook_handler</code> で登録）。</li>
+<li>**呼び出し先**: <code>status_from_str</code>, <code>duration_parse</code>, <code>ap_map_http_request_error</code>, <code>ap_pass_brigade</code>, <code>ap_bucket_error_create</code> 等の Apache/APR API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報の保持。</li>
+<li><code>apr_bucket_brigade</code>: レスポンスデータの構築とフィルタチェーンへの受け渡し。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**引数解析失敗**: 不正な引数指定時は <code>ap_die</code> により <code>HTTP_BAD_REQUEST</code> を返します。</li>
+<li>**送信失敗**: <code>ap_pass_brigade</code> が失敗した場合、<code>cleanup</code> ラベルへジャンプし、リソース解放後にエラーバケットを生成します。</li>
+<li>**エラーバケット無効化**: <code>error_bucket=0</code> が指定された場合、エラー発生時にバケットを挿入せず終了します。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はテスト専用です。意図的にエラーを発生させるため、プロダクション環境での有効化は厳禁です。</li>
+<li><code>goto cleanup</code> パターンによるリソース管理が行われています。修正時は <code>apr_brigade</code> のクリーンアップ漏れに注意してください。</li>
 </ul></body></html>

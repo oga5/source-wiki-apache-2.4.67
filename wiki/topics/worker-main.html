@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/worker-main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>worker_main</h1>
 <h2>概念</h2>
-<p><code>worker_main</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>worker_main</code> は、Apache HTTP Serverの特定のマルチプロセッシングモジュール（MPM）において、クライアントからの接続リクエストを処理する個々のワーカースレッドのメインループを実行する関数です。OS/2、NetWare、Windows（WinNT）といったプラットフォームごとに個別の実装が存在し、それぞれのOS固有の非同期I/Oやスレッドモデルに適合した方法で接続を処理します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この関数は、Apacheがクライアントからの接続を受け入れてから、リクエストを処理し、接続を閉じるまでの接続ライフサイクルを駆動する中核的な役割を担います。プラットフォーム固有のAPI（OS/2のキュー、NetWareの <code>select</code>、WindowsのIOCP）を抽象化し、Apache共通の接続処理API（<a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> など）へと橋渡しするために不可欠な存在です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/mpmt_os2</code></li>
@@ -17,14 +17,34 @@
 <li><code>symbol:server/mpm/winnt/child.c#worker_main</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>プラットフォームごとに接続の取得方法や終了条件は異なりますが、共通して以下の流れで接続を処理します。</p>
+<p>1. **初期化と待機**:</p>
+<ul>
+<li>**OS/2**: <code>DosOpenQueue</code> でキューを開き、<code>DosReadQueue</code> で接続情報（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a>）の到着を待機します。</li>
+<li>**NetWare**: <code>select()</code> でリスニングソケットを監視し、<code>apr_socket_accept()</code> で接続を受け入れます。</li>
+<li>**Windows**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L733" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_get_connection.html&quot;}, '*');"><code>winnt_get_connection</code></a> を介してI/O Completion Port (IOCP) から接続コンテキスト（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a>）を取得します。</li>
+<p>2. **接続の処理**:</p>
+<li><code>ap_run_create_connection</code> を呼び出して接続オブジェクト（<code>conn_rec</code>）を作成します。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> を呼び出して実際のHTTPリクエストを処理します。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> を呼び出して接続を安全に閉じます。</li>
+<p>3. **終了処理**:</p>
+<li>終了シグナルや最大リクエスト数（<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a>）への到達、またはキューの読み取り失敗などの終了条件を満たした場合、ループを脱出してスコアボードを <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_DEAD</code></a> に更新し、スレッドを終了します。</li>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**スコアボードの更新**: 接続処理の開始時、処理中、終了時に応じて、スコアボードのステータス（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_READY</code></a>、<code>SERVER_BUSY</code> 相当、<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_DEAD</code></a>）を正確に更新し、親プロセスや監視ツールがスレッドの状態を把握できるようにします。</li>
+<li>**メモリプールの管理**: 各接続の処理ごとにトランザクション用のメモリプール（OS/2の <code>pconn</code>、NetWareの <code>ptrans</code> など）が適切に作成・破棄され、メモリリークを防ぐ必要があります。</li>
+<li>**例外・エラーハンドリングの維持**: OS/2における <code>DosSetExceptionHandler</code> による例外捕捉や、NetWareにおける <code>clean_child_exit</code> によるリソース解放など、スレッドの異常終了がプロセス全体のクラッシュを引き起こさないように保護します。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**プラットフォーム間の非互換性**: 同名の関数ですが、シグネチャや内部実装、依存するデータ構造（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a>、<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> など）はプラットフォームごとに完全に異なります。共通のコードベースとして扱うことはできません。</li>
+<li>**メモリリーク**: Windows版の <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> の再利用ロジックにおいて、エラーパスでのメモリリークの可能性があるため注意が必要です。</li>
+<li>**ブロッキング操作**: NetWare環境ではNKSスレッドとして動作するため、スレッド内での不用意なブロッキング操作がシステム全体のパフォーマンス低下を招く恐れがあります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>server/mpm/winnt/child.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a> (OS/2におけるキューベースの実装)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a> (NetWareにおける <code>select</code> ベースの実装)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>server/mpm/winnt/child.c</code></a> (WindowsにおけるIOCPベースの実装)</li>
 </ul></body></html>

@@ -6,22 +6,41 @@
 <li>定義箇所: <code>test/modules/http2/mod_h2test/mod_h2test.c:352</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP/2 のトレーラーヘッダー付与機能を検証するためのテスト用ハンドラ。指定されたバイト数のレスポンスボディを送信し、その後にトレーラーヘッダーを付与する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static int h2test_trailer_handler(request_rec *r)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>request_rec *r</code>（Apache リクエスト構造体）。<code>r-&gt;handler</code> が &quot;h2test-trailer&quot; である必要があり、<code>r-&gt;args</code> にボディサイズ（整数）を指定可能。</li>
+<li>**出力**: <code>int</code>（Apache ステータスコード: <code>OK</code> または <code>AP_FILTER_ERROR</code>）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;handler</code> が &quot;h2test-trailer&quot; であること。</li>
+<li>リクエストメソッドが <code>GET</code> または <code>POST</code> であること。</li>
+<li><code>r-&gt;args</code> が指定された場合、数値として解釈され、負の値は 0 として扱われる。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. リクエストのハンドラ名とメソッドを検証し、不一致なら <code>DECLINED</code> を返す。 2. <code>r-&gt;args</code> からボディサイズを解析し、レスポンスヘッダーに <code>Content-Length</code> を設定する。 3. <code>Trailer</code> ヘッダーに <code>trailer-content-length</code> を追加し、<code>r-&gt;trailers_out</code> に同じキーでボディサイズを格納する。 4. <code>apr_bucket_brigade</code> を作成し、指定されたサイズ分だけ <code>0</code> で埋めたバケットを <code>ap_pass_brigade</code> で順次送信する。 5. 最後に <code>EOS</code>（End of Stream）バケットを送信して終了する。 6. 処理中にエラーが発生した場合は <code>cleanup</code> ラベルへジャンプし、リソースを解放する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: Apache のフックシステム（<code>test/modules/http2/mod_h2test/mod_h2test.c:585</code> にて <code>ap_hook_handler</code> に登録）。</li>
+<li>**呼び出し先**: <code>ap_log_rerror</code>, <code>ap_set_content_length</code>, <code>ap_set_content_type</code>, <code>apr_table_mergen</code>, <code>apr_table_set</code>, <code>apr_brigade_create</code>, <code>apr_brigade_write</code>, <code>ap_pass_brigade</code>, <code>apr_bucket_eos_create</code>, <code>apr_brigade_cleanup</code> 等の Apache/APR API。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエスト情報の保持。</li>
+<li><code>apr_bucket_brigade</code>: レスポンスデータのバッファリングと送信に使用。</li>
+<li><code>r-&gt;trailers_out</code>: トレーラーヘッダーを格納するテーブル。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_brigade_write</code> または <code>ap_pass_brigade</code> が <code>APR_SUCCESS</code> 以外を返した場合、<code>AP_FILTER_ERROR</code> を返す。</li>
+<li><code>r-&gt;args</code> が数値以外の場合、<code>apr_atoi64</code> の挙動に依存する（ソース上は明示的なエラーハンドリングなし）。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数はテスト専用であり、意図的にトレーラーヘッダーを生成する。</li>
+<li>メモリ管理は <code>r-&gt;pool</code> に依存しており、明示的な解放は不要。</li>
+<li><code>cleanup</code> ラベルでの終了判定において、<code>r-&gt;status</code> が <code>HTTP_OK</code> でない場合や接続異常時は <code>OK</code> を返して終了する仕様となっている。</li>
 </ul></body></html>

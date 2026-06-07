@@ -1,30 +1,46 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-propdb.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_propdb</h1>
 <h2>概念</h2>
-<p><code>dav_propdb</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>dav_propdb</code> は、Apache HTTP ServerのWebDAVモジュール（<code>mod_dav</code>）において、WebDAVプロパティ（ライブプロパティおよびデッドプロパティ）の操作コンテキストを保持・管理するためのデータ構造およびサブシステムです。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>WebDAVでは、リソースに付随するメタデータ（プロパティ）をクライアントから取得（<code>PROPFIND</code>）したり、更新（<code>PROPPATCH</code>）したりする必要があります。<code>dav_propdb</code> は、これらのプロパティ操作に必要なデータベース接続、トランザクション状態、名前空間マッピング、ロック情報、およびメモリプールを一元管理し、プロパティ操作の一貫性と効率性を保証するために不可欠な役割を果たします。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/dav/fs</code></li>
 <li><code>module:modules/dav/main</code></li>
+<li><code>module:modules/dav/fs</code></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/dav/fs/dbm.c#dav_propdb_close</code></li>
-<li><code>symbol:modules/dav/fs/dbm.c#dav_propdb_open</code></li>
-<li><code>symbol:modules/dav/main/mod_dav.h#dav_propdb</code></li>
-<li><code>symbol:modules/dav/main/props.c#dav_propdb</code></li>
+<li><code>symbol:modules/dav/main/props.c#dav_propdb</code> : <code>struct dav_propdb</code> の具体的な定義。プロパティ操作のコンテキスト（リクエスト、リソース、データベース、名前空間マップ、ロック等）を保持します。</li>
+<li><code>symbol:modules/dav/main/mod_dav.h#dav_propdb</code> : プロパティデータベースのコンテキストを表す構造体の宣言。</li>
+<li><code>symbol:modules/dav/fs/dbm.c#dav_propdb_open</code> : DBMをバックエンドとするプロパティデータベースのオープン処理。</li>
+<li><code>symbol:modules/dav/fs/dbm.c#dav_propdb_close</code> : DBMをバックエンドとするプロパティデータベースのクローズ処理。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>mod_dav.c</code></a> 内のメソッドハンドラ（<code>PROPFIND</code> や <code>PROPPATCH</code> など）がリクエストを受け取ると、<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>dav_popen_propdb</code></a> を呼び出して <code>dav_propdb</code> コンテキストを生成します。 2. **データベースのオープン**: <code>deferred</code> フラグが有効な場合は遅延されますが、プロパティ操作が必要になった時点で <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L415" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>dav_propdb_open</code></a> 等を介してバックエンドデータベースがオープンされます。 3. **プロパティの解決と操作**:</p>
+<ul>
+<li>ライブプロパティ（動的プロパティ）は <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L264" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_find_liveprop.html&quot;}, '*');"><code>dav_find_liveprop</code></a> を通じてプロバイダーが特定されます。</li>
+<li>デッドプロパティ（静的プロパティ）はデータベースから直接読み書きされます。</li>
+<li><code>PROPPATCH</code> の場合は、<code>validate</code> -&gt; <code>exec</code> -&gt; <code>commit/rollback</code> のトランザクションフローに従って処理され、失敗時には <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L220" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_rollback_item.html&quot;}, '*');"><code>dav_rollback_item</code></a> で復旧されます。</li>
+<p>4. **XML出力の構築**: <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L723" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_get_props.html&quot;}, '*');"><code>dav_get_props</code></a> 等により、名前空間マッピング（<code>ns_xlate</code>, <code>mapping</code>）を解決しながらXML形式のプロパティリストが生成されます。 5. **クローズとクリーンアップ**: 処理の終了時、<a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L510" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>dav_propdb_close</code></a>（または <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>dav_close_propdb</code></a>）が呼び出され、データベース接続の切断、サブリクエスト（<code>subreq</code>）の破棄、およびメモリの解放が行われます。</p>
+</ul>
+<p>*注意: メソッドハンドラから各関数への具体的なコールスタックや、詳細なエラーハンドリングを伴うエンドツーエンドの完全なフローは、提供された情報からは一部推論に基づいています。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**メモリ管理**: <code>dav_propdb</code> はリクエストプール（<code>r-&gt;pool</code>）または指定されたプールを使用してメモリを管理します。</li>
+<li>**リソースの確実な解放**: 内部でサブリクエスト（<code>subreq</code>）が生成された場合、リークを防ぐために必ず <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>dav_close_propdb</code></a> を呼び出して破棄しなければなりません。</li>
+<li>**遅延オープン**: <code>deferred</code> フラグが設定されている場合、実際にプロパティ操作が要求されるまでデータベースのオープン処理は実行されません。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**サブリクエストの破棄漏れ**: <code>subreq</code> を使用した後に <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>dav_close_propdb</code></a> による適切なクリーンアップを怠ると、メモリやリソースのリークが発生します。</li>
+<li>**名前空間プレフィックスへの依存**: プロパティ値内の名前空間は内部的に <code>ns&lt;index&gt;</code> 形式に変換されるため、クライアント側で特定のプレフィックス（例: <code>D:</code> や <code>lp1:</code> など）に依存した実装を行うと、互換性の問題が生じる可能性があります。</li>
+<li>**書き込み制限**: <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L166" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>DAV_DISABLE_WRITABLE_PROPS</code></a> が有効化されている環境では、一部のコアプロパティへの書き込みが制限され、<code>PROPPATCH</code> が失敗します。</li>
+<li>**不完全なエラー伝播**: <code>PROPPATCH</code> のエラーハンドリングは複雑であり、特定の境界条件においてエラーの伝播が不完全になる可能性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a> : <code>dav_propdb</code> の構造体定義、およびプロパティ解決やトランザクション処理のコアロジック。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a> : <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L415" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>dav_propdb_open</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L510" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>dav_propdb_close</code></a> など、DBMをバックエンドとした具体的なプロパティデータベース操作の実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> : <code>dav_propdb</code> 構造体や関連するフック、APIの宣言。</li>
 </ul></body></html>

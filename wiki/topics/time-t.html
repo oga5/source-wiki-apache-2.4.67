@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/time-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>time_t</h1>
 <h2>概念</h2>
-<p><code>time_t</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>time_t</code> は、C言語の標準ライブラリで定義されているシステム時刻を保持するためのデータ型です。Apache HTTP Serverの複数のモジュール（<code>mod_md</code> および <a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a>）において、プロセス起動時や初期化時の乱数生成器（PRNG）に対するシード（エントロピー源）の一部として、現在のシステム時刻を表現・保持するために利用されます。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>安全な暗号通信や証明書管理を行うためには、予測不可能な高品質の乱数生成器の初期化（シード設定）が不可欠です。<code>time_t</code> を用いて取得した現在のシステム時刻は、プロセスID（<code>pid_t</code>）などのプロセス固有の情報と組み合わせることで、初期シードの一意性とエントロピーを向上させるための基本的な要素として機能します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/md</code></li>
@@ -12,14 +12,27 @@
 <h2>主要エンティティ</h2>
 <ul>
 <li><code>symbol:modules/md/md_crypt.c#time_t</code></li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>md_crypt.c</code></a> 内で、乱数生成の初期化に使用されるローカルな匿名構造体 <code>struct { time_t t; pid_t pid; } my_seed</code> のメンバとして定義されています。</li>
 <li><code>symbol:modules/ssl/ssl_engine_rand.c#time_t</code></li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');"><code>ssl_engine_rand.c</code></a> 内で、組み込みのシード生成（<code>SSL_RSSRC_BUILTIN</code>）の際に、エントロピー収集用のローカル構造体 <code>struct { time_t t; pid_t pid; } my_seed</code> のメンバとして定義されています。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **時刻の取得**: 乱数シード生成処理（<code>ssl_rand_seed</code> など）において、標準ライブラリの <code>time()</code> 関数等を用いて現在のシステム時刻が <code>time_t</code> 型として取得されます。 2. **シード構造体の構築**: 取得した <code>time_t</code> 型の時刻データは、プロセスID（<code>pid_t</code>）とともにローカルな <code>my_seed</code> 構造体に格納されます。 3. **乱数生成器への供給**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');"><code>modules/ssl/ssl_engine_rand.c</code></a> では、この <code>my_seed</code> 構造体のバイナリデータが <code>RAND_seed()</code> に渡され、OpenSSLの内部状態の初期化に寄与します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>modules/md/md_crypt.c</code></a> でも同様に、プロセス起動時の乱数状態を確立するために、現在の時刻とプロセスIDを組み合わせたシードが使用されます。</li>
+</ul>
+<p>なお、これら以外の詳細な呼び出し元や、システム全体におけるエンドツーエンドの完全な制御フローは現時点では完全には特定されていません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>my_seed</code> 構造体は、システム時刻（<code>time_t</code>）とプロセス固有の識別子（<code>pid_t</code>）を組み合わせることで、初期化時の一意性を高める設計となっています。</li>
+<li>システム時刻が正しく取得可能であることが前提となります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**エントロピーの強度不足**: システム時刻（<code>time_t</code>）とプロセスID（<code>pid_t</code>）のみに依存したシード生成（<code>SSL_RSSRC_BUILTIN</code> など）は補助的な手法に過ぎません。システム時刻が固定されている環境や予測可能な環境では、エントロピー源としての強度が低下するため、これだけに依存したセキュリティ設計は避ける必要があります。</li>
+<li>**プラットフォーム依存性**: <code>time_t</code> のサイズやオーバーフローの挙動、および型定義の詳細は、実行されるプラットフォームの仕様に依存します。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>modules/md/md_crypt.c</code></a></li>

@@ -1,32 +1,45 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/abort-on-oom.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>abort_on_oom</h1>
 <h2>概念</h2>
-<p><code>abort_on_oom</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>abort_on_oom</code> は、メモリ割り当て失敗（OOM: Out of Memory）が発生した際に、プロセスを安全かつ即座に強制終了（または異常終了）させるためのコールバック関数です。APR（Apache Portable Runtime）のメモリプール（<code>apr_pool_t</code>）において、メモリ不足時のエラーハンドラとして <code>apr_pool_abort_set</code> を介して登録されます。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>メモリ不足が発生した際、不確定な状態のまま処理を継続すると、データの破損や予期せぬクラッシュを引き起こす危険性があります。各コンポーネント（HTTP/2モジュール、コアサーバー、各種サポートツール）がそれぞれの要件に応じた終了処理（エラーメッセージの出力や、<code>ap_abort_on_oom()</code>、<code>exit()</code>、<code>abort()</code> の呼び出し）を定義することで、安全かつ決定論的なプロセス終了を保証します。</p>
 <h2>関与するモジュール</h2>
+<p>提供された情報に基づき、以下のモジュールが関与しています。</p>
 <ul>
 <li><code>module:modules/http2</code></li>
 <li><code>module:server</code></li>
 <li><code>module:support</code></li>
 </ul>
 <h2>主要エンティティ</h2>
+<p>本トピックに関与する主要なエンティティ（シンボル）は以下の通りです。</p>
 <ul>
-<li><code>symbol:modules/http2/h2_mplx.c#abort_on_oom</code></li>
-<li><code>symbol:server/main.c#abort_on_oom</code></li>
-<li><code>symbol:support/ab.c#abort_on_oom</code></li>
-<li><code>symbol:support/passwd_common.c#abort_on_oom</code></li>
+<li>**<code>symbol:modules/http2/h2_mplx.c#abort_on_oom</code>**: HTTP/2の多重化管理（<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>）で使用されるハンドラ。内部で <code>ap_abort_on_oom()</code> を呼び出します。</li>
+<li>**<code>symbol:server/main.c#abort_on_oom</code>**: サーバー本体の初期化処理等で登録されるハンドラ。内部で <code>ap_abort_on_oom()</code> を呼び出します。</li>
+<li>**<code>symbol:support/ab.c#abort_on_oom</code>**: 性能測定ツール <code>ab</code> 内の <code>static</code> ハンドラ。標準エラー出力にメッセージを出力し、<code>exit(1)</code> を呼び出します。</li>
+<li>**<code>symbol:support/passwd_common.c#abort_on_oom</code>**: パスワード関連ツール共通のハンドラ。<code>write()</code> システムコールを用いて標準エラー出力（<code>STDERR_FILENO</code>）へエラーメッセージを確実に書き出した後、<code>abort()</code> を呼び出します。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **ハンドラの登録**: 各モジュールやツールの初期化フェーズにおいて、<code>apr_pool_abort_set</code> を使用して、対象の <code>apr_pool_t</code> に <code>abort_on_oom</code> 関数をエラーハンドラとして登録します。 2. **OOMの発生**: APRのメモリプール管理機能がメモリ割り当てに失敗します。 3. **ハンドラの起動**: 登録された <code>abort_on_oom</code> がAPR内部からコールバックとして呼び出されます。 4. **プロセスの終了**:</p>
+<ul>
+<li>サーバーコアおよびHTTP/2では、<code>ap_abort_on_oom()</code> を経由してプロセスを終了します。</li>
+<li>サポートツール（<code>ab</code> や <code>passwd_common</code>）では、標準エラー出力へのメッセージ書き込みを行った後、<code>exit(1)</code> または <code>abort()</code> を呼び出してプロセスを即座に終了させます。</li>
+</ul>
+<p>※なお、APR内部からこのハンドラが呼び出される具体的なトリガー条件や、<code>ap_abort_on_oom()</code> 内部の完全なエンドツーエンドの制御フローの詳細は、提供されたコンテキストからは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**非復帰（No Return）**: <code>abort_on_oom</code> は呼び出し元に正常に復帰してはなりません。関数定義上は <code>int</code> を返しますが、内部で <code>exit()</code>、<code>abort()</code>、または <code>ap_abort_on_oom()</code> を呼び出すため、実際には到達不能（NOTREACHED）コードとなります。</li>
+<li>**登録の必須性**: メモリ不足時に本関数が実行されるためには、対象の <code>apr_pool_t</code> に対して <code>apr_pool_abort_set</code> を用いて明示的に登録されている必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**重複定義とスコープの混同**: <code>abort_on_oom</code> という同名の関数が複数のソースファイルで定義されています。一部は <code>static</code> として定義されていますが（<a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a>、<a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a> など）、<a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a> のように非 <code>static</code> で定義されているものもあり、リンク時の重複定義や意図しないスコープの混同に注意する必要があります。</li>
+<li>**ハンドラ未登録時の挙動**: <code>apr_pool_abort_set</code> による登録を怠ると、メモリ不足が発生した際にこれらのカスタムハンドラが起動されず、デフォルトの挙動に依存することになります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a></li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a>**: HTTP/2接続管理における登録と利用方法を確認できます。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a>**: コアサーバーでの登録と <a class="wiki-source-link" href="../../source/server/util.c.html#L3136" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_abort_on_oom</code></a> の呼び出し関係を確認できます。</li>
+<li>**<a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a>**: スタンドアロンツールでの <code>exit</code> を用いたシンプルな実装を確認できます。</li>
+<li>**<a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a>**: システムコール <a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>write</code></a> と <code>abort</code> を用いた、シグナル安全性を考慮した堅牢な実装を確認できます。</li>
 </ul></body></html>

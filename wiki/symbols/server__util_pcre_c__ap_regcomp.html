@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/util_pcre.c:202</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>正規表現パターンをコンパイルし、HTTPD 共通の <code>ap_regex_t</code> 構造体を初期化する。PCRE1 または PCRE2 ライブラリをラップし、POSIX 互換のインターフェースを提供する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_regcomp(ap_regex_t *preg, const char *pattern, int cflags)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>preg</code>: 初期化対象となる <code>ap_regex_t</code> 構造体へのポインタ。</li>
+<li><code>pattern</code>: コンパイル対象の正規表現文字列。</li>
+<li><code>cflags</code>: コンパイルオプション（<code>AP_REG_ICASE</code>, <code>AP_REG_NEWLINE</code> 等）。</li>
+<li>**出力**:</li>
+<li>成功時: <code>0</code> を返す。</li>
+<li>失敗時: <code>AP_REG_ESPACE</code>（メモリ不足）または <code>AP_REG_INVARG</code>（不正な引数/パターン）を返す。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>cflags</code> に <code>AP_REG_NO_DEFAULT</code> が含まれていない場合、グローバルな <code>default_cflags</code> が自動的に適用される。</li>
+<li>コンパイル成功時、<code>preg-&gt;re_pcre</code> には PCRE コンパイル済みオブジェクトが格納され、<code>preg-&gt;re_nsub</code> にキャプチャグループ数が設定される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>cflags</code> に基づき、PCRE 固有のオプションフラグ（<code>CASELESS</code>, <code>MULTILINE</code> 等）を構築する。 2. PCRE バージョンに応じて <code>pcre2_compile</code> または <code>pcre_compile2</code> を呼び出し、パターンをコンパイルする。 3. コンパイル結果が <code>NULL</code> の場合、エラーコードを判定して適切な HTTPD エラー値を返す。 4. コンパイル成功時、<code>pcre2_pattern_info</code> または <code>pcre_fullinfo</code> を使用してキャプチャグループ数を取得し、<code>preg-&gt;re_nsub</code> に保存する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/lua/lua_config.c</code></li>
+<li><code>modules/lua/lua_request.c</code></li>
+<li><code>modules/lua/mod_lua.c</code></li>
+<li><code>server/util.c</code></li>
+<li><code>server/util_regex.c</code></li>
+<li>**呼び出し先**:</li>
+<li><code>pcre2_compile</code> / <code>pcre_compile2</code> (PCRE ライブラリ)</li>
+<li><code>pcre2_pattern_info</code> / <code>pcre_fullinfo</code> (PCRE ライブラリ)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ap_regex_t</code>: 正規表現のコンパイル済み状態を保持する構造体。</li>
+<li><code>ap_regmatch_t</code>: マッチ結果を格納するための構造体（<code>include/ap_regex.h</code> で定義）。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**メモリ不足**: PCRE が内部エラーコード 21 を返した場合、<code>AP_REG_ESPACE</code> を返す。</li>
+<li>**不正なパターン**: コンパイルに失敗した場合は <code>AP_REG_INVARG</code> を返す。エラー発生位置は <code>preg-&gt;re_erroffset</code> に格納される。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は PCRE1 と PCRE2 の差異を吸収するラッパーである。PCRE2 使用時は <code>pcre2_compile</code> の第 6 引数に <code>NULL</code> を渡しており、コンテキストはデフォルト設定が使用される。</li>
+<li><code>ap_regcomp</code> で確保されたリソースは、必ず <code>ap_regfree</code> を呼び出して解放する必要がある。</li>
 </ul></body></html>

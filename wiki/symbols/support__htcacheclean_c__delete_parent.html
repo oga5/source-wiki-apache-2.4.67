@@ -6,22 +6,41 @@
 <li>定義箇所: <code>support/htcacheclean.c:267</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>キャッシュディレクトリ構造において、不要になった親ディレクトリを再帰的に削除し、inode 統計情報を更新する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>static void delete_parent(const char *path, const char *basename,
+                          apr_off_t *nodes, apr_pool_t *pool)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>path</code>: キャッシュのベースディレクトリパス。</li>
+<li><code>basename</code>: 削除対象のファイルまたはディレクトリのパス名。</li>
+<li><code>nodes</code>: 削除されたディレクトリ数（inode 数）を減算するためのポインタ。</li>
+<li><code>pool</code>: メモリ割り当てに使用する親プール。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>deldirs</code> フラグが真であり、かつ <code>dryrun</code> フラグが偽である場合にのみディレクトリ削除が実行される。</li>
+<li>削除処理には一時的なサブプールが使用され、関数終了時に破棄される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>basename</code> を基に一時プール上でパスを構築する。 2. パスを末尾から <code>/</code> で区切り、ディレクトリ階層を遡る。 3. <code>apr_dir_remove</code> を試行し、成功した場合は <code>nodes</code> をデクリメントする。 4. <code>CACHE_VDIR_SUFFIX</code> を含むディレクトリの場合、対応するファイルも削除を試み、成功時に <code>nodes</code> をデクリメントする。 5. <code>apr_dir_remove</code> が失敗した場合は、そのディレクトリにまだ他のエントリが存在すると判断し、遡行を停止する。 6. <code>benice</code> フラグが有効な場合、<code>DELETE_NICE</code> 回の削除ごとに <code>NICE_DELAY</code> 分の待機を行い、システム負荷を抑制する。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>support/htcacheclean.c</code> 内の <code>delete_entry</code> 関数（352行目および400行目）。</li>
+<li>**呼び出し先**: <code>apr_pool_create</code>, <code>apr_pstrdup</code>, <code>apr_pstrcat</code>, <code>apr_dir_remove</code>, <code>apr_file_remove</code>, <code>apr_pool_destroy</code>, <code>apr_sleep</code>。</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_pool_t</code>: メモリ管理に使用。</li>
+<li><code>apr_off_t</code>: <code>nodes</code> カウンタの型として使用。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>apr_dir_remove</code> の失敗はエラーとして扱わず、ディレクトリが空でない（削除不可）とみなして処理を終了する。</li>
+<li><code>basename</code> に <code>/</code> が含まれない場合、ループは実行されない。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>delete_entry</code> から呼び出され、ファイル削除後のディレクトリ整理を担う。</li>
+<li><code>benice</code> によるスロットリングは、大量のファイル削除時にシステム全体の応答性を維持するために重要である。</li>
 </ul></body></html>

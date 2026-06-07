@@ -1,27 +1,56 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/master-main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>master_main</h1>
 <h2>概念</h2>
-<p><code>master_main</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>master_main</code> は、Apache HTTP Server（httpd-2.4.67）の特定のマルチプロセッシングモジュール（MPM）において、親プロセスのメイン処理を担う関数です。提供された情報によると、特に OS/2 環境向けの MPM（<code>mpmt_os2</code>）において、親プロセスの初期化、子プロセスの生成・監視、およびライフサイクル全体の管理を行う中心的な役割を果たしています。また、Windows環境向けの MPM（<code>winnt</code>）にも同名のシンボルが存在します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この関数は、Webサーバーの親プロセスが起動した後に、リクエストを処理する実際の子プロセス群を適切に管理するために不可欠です。OS/2 環境においては、共有メモリやミューテックスなどのシステムリソースを確保し、設定されたプロセス数に達するまで子プロセスを生成・維持し、異常終了した子プロセスを検知してサーバー全体の安全な停止や再起動を制御する役割を担います。</p>
 <h2>関与するモジュール</h2>
+<p>提供された情報に基づくと、以下のモジュールが関与しています。</p>
 <ul>
 <li><code>module:server/mpm/mpmt_os2</code></li>
 <li><code>module:server/mpm/winnt</code></li>
 </ul>
 <h2>主要エンティティ</h2>
+<p>本トピックに関与する主要なエンティティは以下の通りです。</p>
 <ul>
-<li><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#master_main</code></li>
-<li><code>symbol:server/mpm/winnt/mpm_winnt.c#master_main</code></li>
+<li><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#master_main</code>：OS/2 MPM における親プロセスのメイン処理の実装。</li>
+<li><code>symbol:server/mpm/winnt/mpm_winnt.c#master_main</code>：Windows MPM における同名関数（詳細な振る舞いは提供されたコンテキストからは不明）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>OS/2 MPM (<code>mpmt_os2</code>) における <code>master_main</code> の処理フローは以下の通りです。なお、Windows MPM (<code>winnt</code>) におけるエンドツーエンドの流れは提供された情報からは不明です。</p>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L111" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_run.html&quot;}, '*');"><code>mpmt_os2_run</code></a> から <code>master_main</code> が呼び出されます。 2. **初期化とリソース確保**:</p>
+<ul>
+<li>シグナルハンドラを設定し、<a class="wiki-source-link" href="../../source/server/listen.c.html#L711" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_setup_listeners.html&quot;}, '*');"><code>ap_setup_listeners</code></a> を用いてリスナーソケットを準備します。</li>
+<li><code>DosAllocSharedMem</code> を使用して、リスナーソケット情報を格納する共有メモリ（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html&quot;}, '*');"><code>parent_info_t</code></a>）を確保します。</li>
+<li>OS/2 ミューテックス <code>ap_mpm_accept_mutex</code> を作成します。</li>
+<li>未初期化の場合は、スコアボード用共有メモリを確保・初期化します。</li>
+<p>3. **メインループ（子プロセスの監視と維持）**:</p>
+<li>現在稼働中の子プロセス数をカウントし、目標数（<code>ap_daemons_to_start</code>）に達するまで <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');"><code>spawn_child</code></a> を呼び出して子プロセスを生成します。</li>
+<li><code>DosWaitChild</code> を非ブロックで呼び出し、子プロセスの終了を監視します。</li>
+<li>子プロセスが終了した場合はスコアボードを更新します。致命的なエラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a>）を検知した場合は、ループを抜けてサーバーを停止します。</li>
+<li>終了フラグが立つまで <code>apr_sleep</code> で待機しながらループを繰り返します。</li>
+<p>4. **クリーンアップと終了**:</p>
+<li>終了フラグを検知すると、全子プロセスにシグナル（<code>SIGTERM</code> または <code>SIGHUP</code>）を送信します。</li>
+<li><code>DosFreeMem</code> を用いて共有メモリを解放し、終了ステータス（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> または <a class="wiki-source-link" href="../../source/include/httpd.h.html#L462" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DONE</code></a>）を返します。</li>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<p>OS/2 MPM (<code>mpmt_os2</code>) における重要な不変条件は以下の通りです。なお、Windows MPM (<code>winnt</code>) における不変条件は提供された情報からは不明です。</p>
+<ul>
+<li>**前提条件**:</li>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L711" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_setup_listeners.html&quot;}, '*');"><code>ap_setup_listeners</code></a> によるリスナーソケットのセットアップが成功していること。</li>
+<li>共有メモリ（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html&quot;}, '*');"><code>parent_info_t</code></a>）およびスコアボード用の共有メモリが正常に確保されていること。</li>
+<li>**制限事項**:</li>
+<li>生成可能なプロセス数の上限として、<code>HARD_SERVER_LIMIT</code>（10）がハードコードされて適用されます。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**移植性の欠如**: <code>master_main</code>（特に <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>mpmt_os2.c</code></a> 内の実装）は、OS/2 の <code>Dos</code> 系 API（<code>DosAllocSharedMem</code>, <code>DosCreateMutexSem</code>, <code>DosWaitChild</code>, <code>DosFreeMem</code> など）に強く依存しており、他のプラットフォームへの移植性は考慮されていません。</li>
+<li>**ハードコードされた制限**: プロセス数の上限が <code>HARD_SERVER_LIMIT</code>（10）としてハードコードされているため、これを超えるスケーラビリティが必要な環境では制限となります。</li>
+<li>**リソース解放のタイミング**: 共有メモリの解放（<code>DosFreeMem</code>）は、メインループを抜けた後のクリーンアップ処理でのみ実行されるため、ループ内で異常終了が発生した場合のリーク経路に注意する必要があります。</li>
+<li>**Windows実装との混同**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a> にも同名の <code>master_main</code> が存在しますが、OS/2 側の実装とは文脈や内部処理が異なるため、混同しないよう注意が必要です（Windows側の詳細な挙動や落とし穴は現時点では不明です）。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a>：OS/2 における <code>master_main</code> の具体的な実装と、関連する <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');"><code>spawn_child</code></a> などの関数。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a>：Windows 環境における <code>master_main</code> の実装。</li>
 </ul></body></html>

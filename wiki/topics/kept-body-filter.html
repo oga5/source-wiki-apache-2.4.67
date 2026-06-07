@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/kept-body-filter.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/mod_request.h.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');">KEPT_BODY_FILTER</a></h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/kept-body-filter.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');">kept_body_filter</a></h1>
 <h2>概念</h2>
-<p><a class="wiki-source-link" href="../../source/include/mod_request.h.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>KEPT_BODY_FILTER</code></a> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');"><code>kept_body_filter</code></a> は、Apache HTTP Server（<code>mod_request</code>）において、<code>r-&gt;kept_body</code> に保存されたリクエストボディを、サブリクエストなどの入力ストリームとして再挿入するための入力フィルタです。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>サブリクエストや内部リダイレクトの処理において、元のリクエストで一度読み込まれ保持されたリクエストボディ（<code>r-&gt;kept_body</code>）を再利用できるようにするために重要です。これにより、サブリクエストがチャンク転送などを意識することなく、通常の入力ストリームとしてボディデータを再読み込みすることが可能になります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -16,11 +16,28 @@
 <li><code>symbol:modules/filters/mod_request.c#kept_body_filter_init</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **初期化フェーズ (<a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter_init.html&quot;}, '*');"><code>kept_body_filter_init</code></a>)**: サブリクエストの開始時に呼び出されます。<code>f-&gt;r-&gt;kept_body</code> が存在する場合、<code>r-&gt;headers_in</code> から <code>Transfer-Encoding</code> ヘッダーを削除し、保持されているボディの総バイト数を計算して <code>Content-Length</code> ヘッダーとして再設定します。 2. **データ読み出しフェーズ (<a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');"><code>kept_body_filter</code></a>)**: フィルタチェーンの実行エンジン（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> 経由）から呼び出されます。</p>
+<ul>
+<li>初回呼び出し時に、フィルタコンテキスト <code>f-&gt;ctx</code>（<a class="wiki-source-link" href="../../source/modules/filters/mod_request.c.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_ctx_t.html&quot;}, '*');"><code>kept_body_ctx_t</code></a>）を初期化し、残量 <code>ctx-&gt;remaining</code> を設定します。</li>
+<li>要求された <code>readbytes</code> に応じて、<code>r-&gt;kept_body</code> のバケットブリゲードから該当範囲をコピー（<code>apr_bucket_copy</code>）して出力用ブリゲード <code>b</code> に挿入します。</li>
+<li>保持データがない場合や読み出し完了後は、後続のフィルタへ処理を委譲します。</li>
+</ul>
+<p>※ なお、<code>r-&gt;kept_body</code> が生成・保存される詳細なトリガーや、フィルタがチェーンへ登録される具体的な全体フローは、提供されたコンテキストからは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>r-&gt;kept_body</code> が存在する場合にのみ、このフィルタは保持されたデータを処理し、ヘッダーの書き換えを行います。</li>
+<li><code>r-&gt;kept_body</code> はリクエストのライフサイクル（<code>r-&gt;pool</code>）に紐付いており、サブリクエストの終了まで有効であることが保証されています。</li>
+<li><code>f-&gt;ctx</code> は初回呼び出し時に <code>r-&gt;pool</code> から割り当てられ、以降の呼び出しで再利用されます。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**バケットコピー失敗時のフォールバック**:</li>
+<p><code>apr_bucket_copy</code> が失敗した場合、<code>apr_bucket_read</code> による強制読み込みを試みる最小限のフォールバック処理が行われますが、ソースコード内の <code>XXX</code> コメントが示す通り、この挙動の堅牢性には注意が必要です。</p>
+<li>**ヘッダーの書き換え**:</li>
+<p>サブリクエストの初期化フェーズで <code>Transfer-Encoding</code> を除去し <code>Content-Length</code> を固定値に書き換えるため、後続のフィルタやアプリケーションの挙動に影響を与える可能性があります。</p>
+<li>**オーバーフロー**:</li>
+<p><code>kept_body</code> の長さ計算（<code>apr_brigade_length</code>）において、結果が <code>apr_off_t</code> の範囲を超える場合の明示的なエラーハンドリングは実装されていません。</p>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/mod_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>include/mod_request.h</code></a></li>

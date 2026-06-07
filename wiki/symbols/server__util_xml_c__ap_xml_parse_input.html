@@ -6,22 +6,50 @@
 <li>定義箇所: <code>server/util_xml.c:36</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p>HTTP リクエストボディから XML データを読み込み、解析して <code>apr_xml_doc</code> 構造体として取得する。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int ap_xml_parse_input(request_rec *r, apr_xml_doc **pdoc)</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト状態を保持する <code>request_rec</code> 構造体。</li>
+<li><code>pdoc</code>: 解析結果の <code>apr_xml_doc</code> 構造体へのポインタを格納するアドレス。</li>
+<li>**出力**:</li>
+<li>戻り値: 成功時は <code>OK</code>、失敗時は <code>HTTP_BAD_REQUEST</code> や <code>HTTP_REQUEST_ENTITY_TOO_LARGE</code> などの HTTP ステータスコード。</li>
+<li><code>pdoc</code>: 解析された XML ドキュメント（失敗時は <code>NULL</code> または未定義）。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>r-&gt;input_filters</code> を通じてリクエストボディが取得可能であること。</li>
+<li><code>ap_get_limit_xml_body(r)</code> により取得されるサイズ制限が適用される。</li>
+<li>EBCDIC 環境では、解析後に文字コード変換が適用される。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. <code>apr_xml_parser_create</code> でパーサーを初期化し、バケットブリゲードを準備する。 2. <code>ap_get_brigade</code> を使用してリクエストボディをストリーミングで読み込む。 3. 各バケットのサイズを累積し、<code>LimitXMLRequestBody</code> の制限値を超えた場合は <code>HTTP_REQUEST_ENTITY_TOO_LARGE</code> を返して終了する。 4. 読み込んだデータを <code>apr_xml_parser_feed</code> でパーサーに供給する。 5. EOS（End of Stream）到達後、<code>apr_xml_parser_done</code> を呼び出して解析を完了させる。 6. 解析エラー時は <code>apr_xml_parser_geterror</code> で詳細を取得しログ出力する。 7. 成功時は <code>OK</code> を返し、必要に応じて EBCDIC からの変換を行う。</p>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>modules/dav/main/mod_dav.c</code> 内の複数の箇所（WebDAV リクエスト処理時）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_xml_parser_create</code>, <code>apr_xml_parser_feed</code>, <code>apr_xml_parser_done</code>, <code>apr_xml_parser_geterror</code> (APR XML ライブラリ)</li>
+<li><code>ap_get_brigade</code>, <code>ap_get_limit_xml_body</code>, <code>ap_log_rerror</code>, <code>ap_map_http_request_error</code> (Apache HTTP Server コア)</li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>request_rec</code>: リクエストのコンテキスト。</li>
+<li><code>apr_xml_doc</code>: 解析された XML ドキュメント構造。</li>
+<li><code>apr_xml_parser</code>: XML 解析用コンテキスト。</li>
+<li><code>apr_bucket_brigade</code>: リクエストボディのストリーミング用バッファ。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**サイズ超過**: <code>total_read</code> が <code>limit_xml_body</code> を超えた場合、<code>HTTP_REQUEST_ENTITY_TOO_LARGE</code> を返す。</li>
+<li>**解析エラー**: XML 形式が不正な場合、<code>HTTP_BAD_REQUEST</code> を返す。</li>
+<li>**空のドキュメント**: <code>total_read</code> が 0 の場合、パーサーがエラーを返しても <code>OK</code> として扱う。</li>
+<li>**読み込みエラー**: <code>ap_get_brigade</code> が失敗した場合、<code>ap_map_http_request_error</code> に基づくステータスを返す。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li>本関数は <code>apr_xml</code> のラッパーであり、HTTP リクエストのライフサイクルに特化している。</li>
+<li>エラー発生時は必ず <code>apr_xml_parser_done</code> を呼び出し、パーサーのリソースを解放する設計となっている。</li>
+<li>EBCDIC 環境での動作（<code>APR_CHARSET_EBCDIC</code>）が条件付きコンパイルに含まれている点に留意すること。</li>
 </ul></body></html>

@@ -1,9 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/requests-this-child.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>requests_this_child</h1>
 <h2>概念</h2>
-<p><code>requests_this_child</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>requests_this_child</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュール（MPM）において、**個々の子プロセスが起動してから現在までに処理した累積リクエスト数**を追跡・管理するための変数（シンボル）です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>Apache HTTP Serverでは、長期稼働に伴うメモリリークの防止やリソースの健全性を維持するために、1つの子プロセスが処理できる最大リクエスト数（<code>MaxConnectionsPerChild</code> 設定値）を制限する仕組みが備わっています。</p>
+<p><code>requests_this_child</code> は、各子プロセスがこの制限値に達したかどうかを判定し、安全にプロセスを終了（リタイア）させて新しい子プロセスへ交代させるためのカウンタとして極めて重要な役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/prefork</code></li>
@@ -11,15 +12,20 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/prefork/prefork.c#requests_this_child</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#requests_this_child</code></li>
+<li>**<code>symbol:server/mpm/prefork/prefork.c#requests_this_child</code>**  </li>
+<p>シングルスレッド・マルチプロセスモデルである <code>prefork</code> MPMにおいて、子プロセスが処理したリクエスト数をカウントします。</p>
+<li>**<code>symbol:server/mpm/worker/worker.c#requests_this_child</code>**  </li>
+<p>マルチスレッド・マルチプロセスモデルである <code>worker</code> MPMにおいて、子プロセス内の複数のワーカースレッドが共同で処理したリクエストの総数をカウントします。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>現時点では、リクエストを受信した際における <code>requests_this_child</code> の具体的なインクリメントのタイミングや、<code>MaxConnectionsPerChild</code> との比較によるプロセス終了処理の厳密なコードレベルでのエンドツーエンドの流れは完全には解析されていません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<p>現時点では、この変数が満たすべき厳密な不変条件（例：スレッド間での排他制御の有無や、アトミック操作の保証など）は完全には特定されていません。</p>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**マルチスレッド環境での競合**: <code>worker</code> MPMのようなマルチスレッドモデルでは、複数のスレッドが同時に <code>requests_this_child</code> を更新しようとするため、適切なアトミック操作やロックが施されていない場合、カウントの不整合（ロストアップデート）が発生する可能性があります（具体的な同期機構の実装状況は未検証です）。</li>
+<li>**プロセスの早期終了**: 設定値が極端に小さく見積もられている場合、プロセスの頻繁な再起動が発生し、パフォーマンス低下を招く原因になります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>

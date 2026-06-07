@@ -6,22 +6,49 @@
 <li>定義箇所: <code>support/passwd_common.c:179</code></li>
 </ul>
 <h2>目的</h2>
-<p>静的シンボル索引から生成された初期シンボルページです。</p>
+<p><code>passwd_ctx</code> 構造体で指定されたアルゴリズムに基づき、パスワードのハッシュ化を行い、結果をコンテキスト内のバッファに格納します。</p>
 <h2>シグネチャまたは形状</h2>
-<p>まだ抽出していません。</p>
+<pre><code>int mkhash(struct passwd_ctx *ctx);</code></pre>
 <h2>入力と出力</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**入力**: <code>passwd_ctx *ctx</code>（アルゴリズム、パスワード、出力バッファ、メモリプール等を含むコンテキスト）。</li>
+<li>**出力**: 成功時は <code>0</code> を返し、失敗時はエラーコード（<code>ERR_GENERAL</code>, <code>ERR_PWMISMATCH</code>, <code>ERR_RANDOM</code> 等）を返します。ハッシュ化された文字列は <code>ctx-&gt;out</code> に書き込まれます。</li>
+</ul>
 <h2>前提条件と不変条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>ctx-&gt;passwd</code> が <code>NULL</code> の場合、内部で <code>get_password(ctx)</code> が呼び出され、パスワードが取得されます。</li>
+<li>処理の最後には、メモリ上のパスワード（<code>pw</code>）を <code>memset</code> でゼロクリアし、機密情報を破棄します。</li>
+<li><code>errfile</code> グローバル変数が初期化されている必要があります。</li>
+</ul>
 <h2>アルゴリズムまたは振る舞い</h2>
-<p>まだ解析していません。</p>
+<p>1. **警告**: <code>ALG_BCRYPT</code>, <code>ALG_CRYPT_SHA256</code>, <code>ALG_CRYPT_SHA512</code> 以外のアルゴリズムでコスト値（<code>ctx-&gt;cost</code>）が指定されている場合、警告を出力します。 2. **ハッシュ計算**: <code>ctx-&gt;alg</code> に基づき以下のいずれかを選択します。</p>
+<ul>
+<li><code>ALG_APSHA</code>: <code>apr_sha1_base64</code> を使用。</li>
+<li><code>ALG_APMD5</code>: <code>generate_salt</code> でソルトを生成後、<code>apr_md5_encode</code> を使用。</li>
+<li><code>ALG_PLAIN</code>: 平文をそのままコピー。</li>
+<li><code>ALG_CRYPT</code>: <code>crypt()</code> を使用（プラットフォーム依存）。8文字を超えるパスワードの切り詰め警告機能あり。</li>
+<li><code>ALG_CRYPT_SHA256/512</code>: <code>crypt()</code> を使用し、SHA-2 形式のソルトを生成。</li>
+<li><code>ALG_BCRYPT</code>: <code>apr_bcrypt_encode</code> を使用。</li>
+<p>3. **終了処理**: <code>memset</code> でパスワードバッファをクリアしてリターンします。</p>
+</ul>
 <h2>呼び出し元と呼び出し先</h2>
-<p>まだ索引化していません。</p>
+<ul>
+<li>**呼び出し元**: <code>support/htdbm.c:254</code>, <code>support/htpasswd.c:82</code></li>
+<li>**呼び出し先**: <code>get_password</code>, <code>generate_salt</code>, <code>apr_sha1_base64</code>, <code>apr_md5_encode</code>, <code>apr_cpystrn</code>, <code>crypt</code>, <code>apr_psprintf</code>, <code>apr_generate_random_bytes</code>, <code>apr_bcrypt_encode</code>, <code>memset</code>, <code>apr_file_printf</code></li>
+</ul>
 <h2>関連データ構造</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li><code>struct passwd_ctx</code>: ハッシュ化の制御パラメータと結果を保持する主要構造体。</li>
+</ul>
 <h2>失敗モードと境界条件</h2>
-<p>まだ解析していません。</p>
+<ul>
+<li>**アルゴリズム未対応**: <code>default</code> ケースに到達した場合、<code>abort()</code> によりプロセスが異常終了します。</li>
+<li>**ハッシュ生成失敗**: <code>crypt()</code> や <code>apr_md5_encode</code> 等の関数が失敗した場合、エラーメッセージを <code>ctx-&gt;errstr</code> に格納し、適切なエラーコードを返します。</li>
+<li>**メモリ不足**: <code>apr_psprintf</code> 等の APR 関数がメモリ不足を返した場合、エラーとして処理されます。</li>
+</ul>
 <h2>保守担当者向けメモ</h2>
 <ul>
-<li>後続フェーズで、ソース本文の文脈と caller/callee 情報を使ってこのページを強化する。</li>
+<li><code>switch</code> 文内の各アルゴリズムは、プラットフォームのサポート状況に応じて <code>#if</code> で条件付きコンパイルされています。</li>
+<li><code>crypt()</code> を使用する際は、プラットフォームごとの挙動の違いに注意してください。</li>
+<li>機密情報（パスワード）を扱うため、エラー発生時や処理終了時には必ず <code>memset</code> によるゼロクリアが行われていることを確認してください。</li>
 </ul></body></html>

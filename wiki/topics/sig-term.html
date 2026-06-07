@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/sig-term.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>sig_term</h1>
 <h2>概念</h2>
-<p><code>sig_term</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>sig_term</code> は、Apache HTTP Server の複数のプラットフォーム（Unix、OS/2、NetWare）およびマルチプロセッシングモジュール（MPM）において、サーバーの停止シグナル（<code>SIGTERM</code> など）を受信した際に、安全かつ適切なシャットダウンプロセスを開始するためのシグナルハンドラ関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>サーバープロセスに対して外部から終了要求（シグナル）が送られた際、リソースのクリーンアップやスレッドの安全な終了、あるいはグレースフル（段階的）な停止と即時停止の切り替えを制御し、サーバー全体のライフサイクルを正常に終了させるための起点となるため重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:os/unix</code></li>
@@ -12,17 +12,35 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:os/unix/unixd.c#sig_term</code></li>
-<li><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#sig_term</code></li>
-<li><code>symbol:server/mpm/mpmt_os2/mpmt_os2_child.c#sig_term</code></li>
-<li><code>symbol:server/mpm/netware/mpm_netware.c#sig_term</code></li>
+<li><code>symbol:os/unix/unixd.c#sig_term</code> (Unix環境用)</li>
+<li><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#sig_term</code> (OS/2親プロセス用)</li>
+<li><code>symbol:server/mpm/mpmt_os2/mpmt_os2_child.c#sig_term</code> (OS/2子プロセス用)</li>
+<li><code>symbol:server/mpm/netware/mpm_netware.c#sig_term</code> (NetWare環境用)</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>各プラットフォームにおけるシグナル受信時の処理フローは以下の通りです。ただし、シグナル受信後にメインループやスレッド管理側がこれらのフラグを検知して最終的にプロセスを終了するまでの詳細な全体フロー（エンドツーエンドの完全な流れ）は、提供された情報からは未解明です。</p>
+<ul>
+<li>**Unix**:</li>
+<p>1. <code>SIGTERM</code> または <a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>AP_SIG_GRACEFUL_STOP</code></a> を受信します。 2. <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>retained_data</code></a> の <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>mpm_state</code></a> を <a class="wiki-source-link" href="../../source/include/ap_mpm.h.html#L142" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>AP_MPMQ_STOPPING</code></a> に、<code>shutdown_pending</code> を <code>1</code> に設定します。 3. 強制停止（ungraceful）の場合は <code>is_ungraceful</code> を <code>1</code> に設定します。</p>
+<li>**OS/2 (親プロセス)**:</li>
+<p>1. <code>SIGTERM</code> を受信します。 2. グローバル変数 <code>shutdown_pending</code> を <code>1</code> に設定します。 3. <code>SIGTERM</code> ハンドラをデフォルト（<code>SIG_DFL</code>）にリセットします。</p>
+<li>**OS/2 (子プロセス)**:</li>
+<p>1. <code>SIGTERM</code> を受信します。 2. <code>shutdown_pending</code> を <code>1</code>、<code>is_graceful</code> を <code>0</code>（即時終了）に設定します。 3. ハンドラをデフォルトにリセットします。</p>
+<li>**NetWare**:</li>
+<p>1. <code>SIGTERM</code> または <code>SIGABRT</code> を受信します。 2. <code>shutdown_pending</code> を <code>1</code> に設定します。 3. <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L172" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>wait_to_finish</code></a> が真である間、<code>apr_thread_yield()</code> を呼び出してスレッドの終了を待機します。</p>
+</ul>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**Unix**: <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>retained_data</code></a> が初期化されている必要があります。初期化されていない場合は処理を行わずに即座に終了します。</li>
+<li>**OS/2**: 2回目以降の <code>SIGTERM</code> 受信時には、ハンドラが <code>SIG_DFL</code> にリセットされているため、システムのデフォルト動作（即時終了）が適用されます。</li>
+<li>**NetWare**: <code>shutdown_pending</code> がすでに <code>1</code> の場合は、二重処理を防ぐため即座に早期リターンします。</li>
+<li>**共通**: シグナルハンドラとして実行されるため、非同期シグナル安全（async-signal-safe）な操作のみを行う必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**プラットフォーム間の動作差異**: 同名の <code>sig_term</code> 関数であっても、プラットフォームやプロセスの役割（親・子）によって、グレースフル停止の扱い（<code>is_graceful</code> や <code>is_ungraceful</code> の設定）や、ハンドラのリセット有無、スレッド待機処理（<code>apr_thread_yield()</code>）の有無などの実装が大きく異なります。これらを混同して共通化しようとすると、プラットフォーム固有のシグナル処理が破損する恐れがあります。</li>
+<li>**NetWareでのデッドロック**: NetWare環境において <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L172" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>wait_to_finish</code></a> の状態が他のスレッド管理ロジックによって適切に更新されない場合、<code>sig_term</code> 内の待機ループが終了せず、デッドロックに陥る可能性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a></li>

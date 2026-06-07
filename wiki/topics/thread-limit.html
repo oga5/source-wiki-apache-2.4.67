@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/thread-limit.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>thread_limit</h1>
 <h2>概念</h2>
-<p><code>thread_limit</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>thread_limit</code> は、Apache HTTP Serverの各種マルチプロセッシングモジュール（MPM）において、生成可能なスレッド数の上限を制御するための概念です。設定ファイル内の <code>ThreadLimit</code> ディレクティブに対応し、内部の静的変数 <code>thread_limit</code> およびそれを設定する関数 <code>set_thread_limit</code> を通じて管理されます。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>マルチスレッド動作を行うMPM（winnt、event、worker、netwareなど）において、リソース消費や並行処理能力を適切に制限・管理するために重要です。設定ファイルからグローバルなコンテキストで安全に上限値を読み込み、システムに適用する役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -13,23 +13,29 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#set_thread_limit</code></li>
-<li><code>symbol:server/mpm/event/event.c#thread_limit</code></li>
-<li><code>symbol:server/mpm/netware/mpm_netware.c#set_thread_limit</code></li>
-<li><code>symbol:server/mpm/winnt/mpm_winnt.c#set_thread_limit</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#set_thread_limit</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#thread_limit</code></li>
+<li>**<code>symbol:server/mpm/winnt/mpm_winnt.c#set_thread_limit</code>**: <code>ThreadLimit</code> ディレクティブの値を解析し、内部変数 <code>thread_limit</code> に設定する関数。</li>
+<li>**<code>symbol:server/mpm/event/event.c#set_thread_limit</code> / <code>thread_limit</code>**: event MPMにおける設定関数および変数。</li>
+<li>**<code>symbol:server/mpm/netware/mpm_netware.c#set_thread_limit</code>**: netware MPMにおける設定関数。</li>
+<li>**<code>symbol:server/mpm/worker/worker.c#set_thread_limit</code> / <code>thread_limit</code>**: worker MPMにおける設定関数および変数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. 設定ファイルの解析中に <code>ThreadLimit</code> ディレクティブが検出されると、対応するMPMの <code>set_thread_limit</code> 関数が呼び出されます。 2. 関数内部で <a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> を呼び出し、現在の設定コンテキストがグローバル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L970" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>GLOBAL_ONLY</code></a>）であるかを検証します。 3. コンテキストが適切であれば、引数として渡された文字列を <code>atoi</code> を用いて整数に変換し、静的変数 <code>thread_limit</code> に代入します。</p>
+<p>※ 設定された <code>thread_limit</code> が、その後のスレッド生成やプール初期化の段階でどのように参照・適用されるかといった、実行時における詳細なエンドツーエンドのフローは、提供された情報からは未だ完全には判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**グローバルコンテキストの強制**: <code>set_thread_limit</code> は、必ずグローバルな設定コンテキスト（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L970" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>GLOBAL_ONLY</code></a>）でのみ実行されなければなりません。</li>
+<li>**入力値の形式**: 設定値として渡される引数は、<code>atoi</code> で変換可能な数値文字列である必要があります。</li>
+</ul>
+<p>※ 変換後の整数値に対する最小値・最大値などの範囲制限や、他の設定値との相関関係に関する不変条件は、提供された情報からは未だ完全には判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**コンテキストエラー**: <code>ThreadLimit</code> ディレクティブをバーチャルホストやディレクトリコンテキストなど、グローバル以外の場所に記述した場合、<a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> によりエラーが返され、サーバーの起動や再起動が失敗します。</li>
+<li>**バリデーションの欠如**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>mpm_winnt.c</code></a> などの実装では、設定値の変換に <code>atoi</code> を使用しており、範囲チェックが明示的に行われていません。不正な数値や極端な値を指定した場合の境界条件の挙動に注意する必要があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a> （<code>set_thread_limit</code> の具体的な実装と <a class="wiki-source-link" href="../../source/include/http_config.h.html#L128" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>AP_INIT_TAKE1</code></a> による登録処理）</li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
 </ul></body></html>

@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/read-chr.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>read_chr</h1>
 <h2>概念</h2>
-<p><code>read_chr</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>read_chr</code> は、HTTP/2 や ACME (Managed Domains) などのモジュールにおいて、特定のヘッダー（例: <code>Link</code> ヘッダー）や文字列を解析する際に使用される、文字消費型のユーティリティ関数です。解析対象のコンテキストにおいて、現在のインデックスが指す文字が期待する文字と一致する場合に、インデックスを1つ進めて真（<code>1</code>）を返します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この関数は、境界外アクセスを防ぎながら、文字列パーサーが特定の区切り文字や記号（カンマ、セミコロン、等号など）を安全かつ簡潔に消費できるようにします。これにより、複雑なヘッダー解析コードの可読性と堅牢性が向上します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/http2</code></li>
@@ -16,14 +16,21 @@
 <li><code>symbol:modules/md/md_util.c#read_chr</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>各モジュール（<a class="wiki-source-link" href="../../source/modules/http2/mod_http2.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.c.html&quot;}, '*');"><code>http2</code></a> や <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>md</code></a>）における具体的なエンドツーエンドの解析フロー（どのタイミングでどのヘッダーが渡され、どのように全体が処理されるか）の詳細は、提供された情報からはまだ完全には明らかになっていません。</p>
+<p>ただし、個別関数レベルの動作フローは以下の通りです： 1. 解析状態を保持する <code>link_ctx</code> 構造体（文字列 <code>s</code>、長さ <code>slen</code>、現在のインデックス <code>i</code>）と、比較対象の文字 <code>c</code> を受け取ります。 2. 現在のインデックス <code>ctx-&gt;i</code> が文字列の長さ <code>ctx-&gt;slen</code> 未満であることを確認します。 3. 現在位置の文字 <code>ctx-&gt;s[ctx-&gt;i]</code> が <code>c</code> と一致する場合、<code>ctx-&gt;i</code> をインクリメントして <code>1</code> を返します。 4. 一致しない場合、または終端に達している場合は、状態を変更せずに <code>0</code> を返します。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**境界外アクセスの防止**: <code>ctx-&gt;i</code> が <code>ctx-&gt;slen</code> 以上の場合、文字の比較は行われず、必ず <code>0</code> が返されます。これにより、バッファオーバーランが発生しないことが保証されます。</li>
+<li>**状態の非破壊性（不一致時）**: 文字が一致しない場合、インデックス <code>ctx-&gt;i</code> は変更されません。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li><code>read_chr</code> は文字が一致したときのみインデックスを進めるため、一致しなかった場合に呼び出し側で適切にエラーハンドリングや別の解析ロジック（例: <code>skip_ws</code> などの他のユーティリティの適用）を行わないと、解析がスタックする可能性があります。</li>
+<li>複数モジュールに同名の <code>read_chr</code> 関数が存在しますが、これらは各ファイル内で <code>static</code> 関数として定義されており、それぞれのコンテキスト（<code>link_ctx</code> などの構造体定義）に依存しています。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> （<code>link_ctx</code> 構造体と <code>read_chr</code> の具体的な実装）</li>
 <li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a></li>
 </ul></body></html>

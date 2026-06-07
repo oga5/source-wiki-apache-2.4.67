@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-varbuf.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');">ap_varbuf</a></h1>
 <h2>概念</h2>
-<p><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> は、Apache HTTP Server において可変長バッファ（Resizable Buffer）を管理するための主要なデータ構造です。メモリ管理に APR（Apache Portable Runtime）プール（<code>apr_pool_t</code>）を利用し、文字列やバイナリデータの動的な拡張と再利用を効率的に行う仕組みを提供します。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>動的な文字列操作やバイナリデータの蓄積において、メモリの再割り当て（リサイズ）や解放を安全かつ効率的に行う必要があります。<a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> は、APR プールと連携してメモリ管理を抽象化し、メモリリークを防ぎつつ、必要に応じてバッファを自動的または明示的に拡張する一貫した手段を提供するため重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,16 +11,26 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/util_varbuf.h#ap_varbuf</code></li>
-<li><code>symbol:server/util.c#ap_varbuf_free</code></li>
-<li><code>symbol:server/util.c#ap_varbuf_init</code></li>
+<li><code>symbol:include/util_varbuf.h#ap_varbuf</code>（構造体定義）</li>
+<li><code>symbol:server/util.c#ap_varbuf_init</code>（初期化関数）</li>
+<li><code>symbol:server/util.c#ap_varbuf_free</code>（解放関数）</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>提供された情報に基づく基本的なライフサイクルは以下の通りですが、具体的な関数レベルの呼び出し元・呼び出し先の詳細なエンドツーエンドフローは完全には判明していません。</p>
+<p>1. **初期化**: <code>ap_varbuf_init()</code> を呼び出し、構造体と <code>apr_pool_t</code> を関連付けます。 2. **拡張**: 必要に応じて <code>ap_varbuf_grow()</code> を呼び出し、メモリを指数関数的に再割り当てして既存データをコピーします。 3. **操作**: <code>ap_varbuf_strmemcat()</code> などの関数を用いて <code>buf</code> にデータを書き込み、<code>strlen</code> を更新します。 4. **解放**: 関連付けられたプールがクリアされる際に自動的にメモリが解放されます。また、<code>ap_varbuf_free()</code> を使用して明示的に解放することも可能です。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**<code>avail</code> と <code>buf</code> の関係**: <code>avail</code>（確保済みサイズ）が 0 の場合、<code>buf</code> は定数の <code>\0</code> を指す必要があります。</li>
+<li>**生存期間の整合性**: <code>avail</code> が 0 でない場合、<code>buf</code> は関連付けられた <code>pool</code> と同じ生存期間を持つメモリ領域を指さなければなりません。</li>
+<li>**サイズ変更の制限**: <code>avail</code> の値を直接変更することは禁止されています。バッファサイズの変更は必ず <code>ap_varbuf_grow()</code> を介して行う必要があります。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**プールの生存期間**: <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> 構造体自体はスタック上に配置可能ですが、内部で参照している <code>pool</code> が生存している必要があります。</li>
+<li>**直接のメンバ操作**: <code>avail</code> を直接書き換えてはなりません。必ず提供されている API（<code>ap_varbuf_grow()</code> など）を使用してください。</li>
+<li>**パフォーマンスの低下**: <code>strlen</code> に <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>AP_VARBUF_UNKNOWN</code></a> が設定されている場合、操作時に関数内部で <code>strlen</code> の再計算が発生するため、頻繁に呼び出すとパフォーマンスに影響を与える可能性があります。</li>
+<li>**エラーハンドリングの誤解**: <code>ap_varbuf_grow()</code> はメモリ不足時にプールのアボート関数を呼び出すため、呼び出し側で個別のエラーチェックは不要です。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>include/util_varbuf.h</code></a></li>

@@ -1,27 +1,53 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-resource-private.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_resource_private</h1>
 <h2>概念</h2>
-<p><code>dav_resource_private</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>dav_resource_private</code> は、Apache HTTP Server の WebDAV モジュール（<code>mod_dav</code>）において、WebDAV リソース（<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_resource</code></a>）に関連付けられたリポジトリ（プロバイダー）固有のプライベート情報を保持するための構造体です。</p>
+<p><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> においては不透明な（opaque）構造体として前方宣言されており、具体的なメンバ構成は各プロバイダーの実装に委ねられています。一方、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a> では、ファイルシステムをリポジトリとするプロバイダー（<code>mod_dav_fs</code>）向けの具体的な構造体として定義されています。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p><code>mod_dav</code> のコアロジックと、具体的なリポジトリプロバイダー（<code>mod_dav_fs</code> など）の実装を疎結合に保つために重要です。</p>
+<p><code>mod_dav</code> コアは本構造体の内部構造を直接操作せず、プロバイダー側が <code>dav_resource-&gt;info</code> を <code>dav_resource_private*</code> にキャストして自身に必要なメタデータ（ファイルシステム上の絶対パスやリクエストコンテキストなど）を取り出すことで、プロバイダーに依存しない共通の WebDAV 処理を実現しています。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/dav/fs</code></li>
-<li><code>module:modules/dav/main</code></li>
+<li><code>module:modules/dav/fs</code> (<code>mod_dav_fs</code> プロバイダーの実装)</li>
+<li><code>module:modules/dav/main</code> (<code>mod_dav</code> コアモジュール)</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/dav/fs/repos.c#dav_resource_private</code></li>
-<li><code>symbol:modules/dav/main/mod_dav.h#dav_resource_private</code></li>
+<li>**<code>symbol:modules/dav/main/mod_dav.h#dav_resource_private</code>**</li>
+<p>不透明な構造体としての <code>typedef</code> 宣言。</p>
+<li>**<code>symbol:modules/dav/fs/repos.c#dav_resource_private</code>**</li>
+<p><code>mod_dav_fs</code> における具体的な構造体定義。以下のメンバを保持します。</p>
+<li><code>apr_pool_t *pool</code>: リクエストに関連付けられたメモリプール。</li>
+<li><code>const char *pathname</code>: リソースのフルパス。</li>
+<li><code>apr_finfo_t finfo</code>: ファイルシステム情報（サイズ、権限、時刻等）。</li>
+<li><code>request_rec *r</code>: Apache のリクエストレコード。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>詳細なエンドツーエンドの全体フローは完全には明らかになっていませんが、提供された情報に基づく部分的な流れは以下の通りです：</p>
+<p>1. **リソースの生成と初期化**: <code>mod_dav_fs</code> のリソース取得処理（<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L667" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>dav_fs_get_resource</code></a> 相当の処理など）において、<code>dav_resource_private</code> のメモリが割り当てられ、初期化されます。 2. **親構造体への格納**: 生成された <code>dav_resource_private</code> は、親となる <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_resource</code></a> 構造体の <a class="wiki-source-link" href="../../source/modules/generators/mod_info.c.html#L1010" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_info.c.html&quot;}, '*');"><code>info</code></a> メンバに格納されます。 3. **プロバイダー処理での参照**: <code>mod_dav_fs</code> 内の各関数（<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_copymove_file.html&quot;}, '*');"><code>dav_fs_copymove_file</code></a> など）は、<code>resource-&gt;info</code> から本構造体へのポインタを取得（キャスト）し、保持されている <code>pathname</code> や <code>finfo</code> を使用して、ファイル操作やプロパティ管理、ディレクトリ走査などの実処理を実行します。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**生存期間の同期**:</li>
+<p><code>dav_resource_private</code> は、親となる <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_resource</code></a> のライフサイクルと同期して管理される必要があります。</p>
+<li>**有効なポインタの保持**:</li>
+<li><code>pool</code> は、リクエストの生存期間と同期した有効な <code>apr_pool_t</code> である必要があります。</li>
+<li><code>r</code> は、有効な Apache <code>request_rec</code> を指している必要があります。</li>
+<li>**メモリ管理**:</li>
+<p><code>pathname</code> の文字列は <code>pool</code> から割り当てられているため、明示的な解放は不要ですが、リクエスト終了時のプール破棄に伴い無効化されます。</p>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**NULL アクセスによるクラッシュ**:</li>
+<p><code>resource-&gt;info</code> が <code>NULL</code> の状態でプロバイダー固有のデータにアクセスしようとすると、セグメンテーション違反が発生します。</p>
+<li>**ダングリングポインタ**:</li>
+<p><code>pool</code> が破棄された後に本構造体またはそのメンバ（<code>pathname</code> など）を参照すると、未定義の動作を引き起こします。</p>
+<li>**不整合なキャスト**:</li>
+<p>プロバイダーの実装が不整合な場合、キャスト後のデータアクセスで未定義の動作を引き起こす可能性があります。</p>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a></li>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a>**:</li>
+<p>不透明型としての宣言および <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>dav_resource</code></a> 構造体の定義を確認できます。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>**:</li>
+<p><code>mod_dav_fs</code> における具体的な構造体定義と、それを利用したファイルシステムリポジトリ操作の実装を確認できます。</p>
 </ul></body></html>

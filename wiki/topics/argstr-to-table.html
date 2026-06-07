@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/argstr-to-table.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>argstr_to_table</h1>
 <h2>概念</h2>
-<p><code>argstr_to_table</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>argstr_to_table</code> は、HTTP のクエリ文字列形式（例: <code>key=value&amp;key2=value2</code>）の文字列を解析（パース）し、キーと値のペアを Apache Portable Runtime のテーブル構造体である <code>apr_table_t</code> に格納するための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>この関数は、クエリパラメータの解析処理を共通化し、URL デコード（<a class="wiki-source-link" href="../../source/server/util.c.html#L1939" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_unescape_url</code></a>）やキー・値の抽出、およびデフォルト値の設定（値がないキーに対して <code>&quot;1&quot;</code> を割り当てるなど）をカプセル化します。これにより、モジュールが受信したパラメータを容易に扱えるようになります。また、<a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a> と <a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html&quot;}, '*');"><code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code></a> の複数箇所に同名の関数が存在しており、同様の解析処理がシステム内の異なる文脈で必要とされていることを示しています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/proxy/balancers</code></li>
@@ -15,13 +15,22 @@
 <li><code>symbol:server/util_script.c#argstr_to_table</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p><a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html&quot;}, '*');"><code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code></a> における具体的な処理の流れは以下の通りです：</p>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html#L92" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__readfile_heartbeats.html&quot;}, '*');"><code>readfile_heartbeats</code></a> 関数内（179行目付近）から <code>argstr_to_table</code> が呼び出されます。 2. **トークン分割**: <code>apr_strtok</code> を使用して、入力文字列 <a class="wiki-source-link" href="../../source/server/util_expr_scan.c.html#L617" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_scan.c.html&quot;}, '*');"><code>str</code></a> を <code>&amp;</code> を区切り文字として分割し、各パラメータを走査します。 3. **キーと値の分離**: 各トークン内で <code>=</code> を検索し、キーと値に分割します。 <code>=</code> が見つからない場合、値は <code>&quot;1&quot;</code> とみなされます。 4. **URL デコード**: <a class="wiki-source-link" href="../../source/server/util.c.html#L1939" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_unescape_url</code></a> を呼び出して、分割されたキーと値の URL エンコードを解除します。 5. **テーブルへの格納**: <code>apr_table_set</code> を使用して、解析されたキーと値を <code>apr_table_t</code> に追加します。</p>
+<p>なお、<a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a> に定義されている <code>argstr_to_table</code> については、現時点では詳細なエンドツーエンドの流れや呼び出し元は判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**入力文字列の破壊的変更**: 入力されるクエリ文字列 <a class="wiki-source-link" href="../../source/server/util_expr_scan.c.html#L617" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_scan.c.html&quot;}, '*');"><code>str</code></a> は、内部で <code>apr_strtok</code> によって直接分割（ヌル文字の挿入など）されるため、呼び出し元で保持している元の文字列が変更されても問題ない状態（書き込み可能なメモリ領域）である必要があります。</li>
+<li>**デフォルト値の割り当て**: 値が存在しないキー（例: <code>key&amp;key2</code>）が解析された場合、そのキーに対応する値は一貫して <code>&quot;1&quot;</code> としてテーブルに格納されます。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**読み取り専用メモリの書き換え**: 読み取り専用のメモリ領域（文字列リテラルなど）を <a class="wiki-source-link" href="../../source/server/util_expr_scan.c.html#L617" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_scan.c.html&quot;}, '*');"><code>str</code></a> 引数として渡すと、<code>apr_strtok</code> による書き換えが発生してセグメンテーションフォールトなどの未定義動作を引き起こします。</li>
+<li>**重複実装の存在**: <a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html&quot;}, '*');"><code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code></a> と <a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a> に同名の関数が別個に定義されています。これらは類似のロジックを持つ可能性がありますが、別定義であるため、一方を変更する際にもう一方との整合性に注意する必要があります。</li>
+<li>**URL デコードの失敗**: URL エンコードが不正な場合、<a class="wiki-source-link" href="../../source/server/util.c.html#L1939" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_unescape_url</code></a> の挙動に依存するため、予期しないデコード結果になる可能性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html&quot;}, '*');"><code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html&quot;}, '*');"><code>modules/proxy/balancers/mod_lbmethod_heartbeat.c</code></a> の <code>argstr_to_table</code> 定義（64行目）および <a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_heartbeat.c.html#L92" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_heartbeat_c__readfile_heartbeats.html&quot;}, '*');"><code>readfile_heartbeats</code></a>（179行目）</li>
+<li><a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a> の <code>argstr_to_table</code> 定義</li>
 </ul></body></html>

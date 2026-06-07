@@ -1,29 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-lock-indirect.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>DAV_LOCK_INDIRECT</h1>
 <h2>概念</h2>
-<p><code>DAV_LOCK_INDIRECT</code> は複数モジュールに現れるため、横断トピック候補として検出されました。</p>
+<p><code>DAV_LOCK_INDIRECT</code>（およびそれに対応する <code>dav_lock_indirect</code> 構造体）は、WebDAVにおける「間接ロック（Indirect Lock）」の情報を保持・管理するためのデータ構造および概念です。</p>
+<p>WebDAVでは、親コレクション（ディレクトリ）に適用されたロックが、その配下のリソース（ファイルやサブコレクション）に継承されます。この継承されたロックを「間接ロック」と呼び、リソースごとのロック状態の追跡やアクセス制御の検証に使用されます。</p>
 <h2>なぜ重要か</h2>
-<p>まだ推論していません。</p>
+<p>間接ロックを正しく管理することは、WebDAVの階層的なロックモデルを維持するために不可欠です。<code>dav_lock_indirect</code> 構造体は、親から継承されたロックのトークン、対応する直接ロック（Direct Lock）を検索するためのキー、および有効期限（タイムアウト）を保持します。これにより、リソースへのアクセス要求があった際に、親コレクションのロック状態を再帰的に解決（Resolve）し、アクセスを許可するかどうかを正しく判定できます。</p>
 <h2>関与するモジュール</h2>
+<p>提供された情報に基づくと、以下のモジュールが関与しています。</p>
 <ul>
-<li><code>module:modules/dav/fs</code></li>
-<li><code>module:modules/dav/lock</code></li>
+<li><code>module:modules/dav/fs</code> (ファイルシステムベースのDAVロックプロバイダ実装)</li>
+<li><code>module:modules/dav/lock</code> (ジェネリックなDAVロック管理実装)</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/dav/fs/lock.c#DAV_LOCK_INDIRECT</code></li>
-<li><code>symbol:modules/dav/fs/lock.c#dav_lock_indirect</code></li>
-<li><code>symbol:modules/dav/lock/locks.c#DAV_LOCK_INDIRECT</code></li>
-<li><code>symbol:modules/dav/lock/locks.c#dav_lock_indirect</code></li>
+<li>**<code>struct dav_lock_indirect</code>** (<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> および <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>):</li>
+<p>間接ロックの情報を保持する構造体であり、以下の形状を持ちます。 ``<code>c typedef struct dav_lock_indirect { dav_locktoken *locktoken; apr_datum_t key; struct dav_lock_indirect *next; time_t timeout; } dav_lock_indirect; </code>``</p>
+<li><code>locktoken</code>: ロックを一意に識別するためのUUIDラッパー。</li>
+<li><code>key</code>: 対応する直接ロックをDBMから検索するための識別子。</li>
+<li><code>next</code>: 同一リソースに関連付けられた間接ロックのリストを形成するポインタ。</li>
+<li><code>timeout</code>: ロックの有効期限。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>まだ推論していません。</p>
+<p>1. **DBMからのロードと構築**: リクエスト処理時、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a>（<code>modules/dav/fs</code>）または <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a>（<code>modules/dav/lock</code>）が、DBMにシリアライズされて保存されていたバイナリデータから <code>dav_lock_indirect</code> 構造体を構築します。 2. **期限切れの判定**: ロード処理の過程で、構造体内の <code>timeout</code> が現在時刻（<code>time(NULL)</code>）と比較され、期限切れのロックは自動的にリストから除外されます。 3. **ロックの解決（Resolve）**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_resolve</code></a> または <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L716" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_resolve</code></a> が呼び出され、<code>dav_lock_indirect</code> の <code>key</code> を使用して親リソースの直接ロックを特定し、トークンの一致を確認して間接ロックの有効性を検証します。 4. **DBMへの保存（永続化）**: ロック状態の変更時、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> などの関数により、<code>dav_lock_indirect</code> の内容がバイナリ形式にシリアライズされ、DBMへ書き込まれます。</p>
+<p>*注意: <code>modules/dav/fs</code> と <code>modules/dav/lock</code> の間での具体的な呼び出し関係や、詳細なエンドツーエンドの制御フローの全貌は、提供された情報からは完全には特定されていません。*</p>
 <h2>重要な不変条件</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**単方向リストの形成**: <code>next</code> ポインタは、同一リソースに関連付けられた間接ロックの有効な単方向リストを形成しなければなりません。</li>
+<li>**メモリ管理**: すべての <code>dav_lock_indirect</code> インスタンスは、リクエスト処理に関連付けられたメモリプール（<code>request_rec</code> に紐付くプール）から割り当てられ、リクエスト終了時に自動的に解放されます。明示的な解放処理は不要です。</li>
+<li>**有効期限の整合性**: <code>timeout</code> を過ぎた間接ロックは、ロード処理時に除外され、有効なロックとして解決されてはなりません。</li>
+</ul>
 <h2>よくある落とし穴</h2>
-<p>まだ推論していません。</p>
+<ul>
+<li>**シリアライズ不整合**: <code>dav_lock_indirect</code> 構造体は、DBMへのバイナリシリアライズ/デシリアライズロジック（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> / <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> など）と密結合しています。構造体のメンバを変更する場合、オフセット計算やシリアライズ処理も同時に更新しなければ、データの破損や不整合を引き起こします。</li>
+<li>**キー破損による解決失敗**: 構造体内の <code>key</code> が無効または破損している場合、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_resolve</code></a> による直接ロックの解決が失敗し、ロックの検証ができなくなります。</li>
+<li>**DBMデータ破損時のオフセット不整合**: DBMから読み込んだバイナリデータが破損している場合、デシリアライズ時のオフセット計算が狂い、メモリ不整合を引き起こす可能性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>: ファイルシステムベースのロックプロバイダにおける <code>dav_lock_indirect</code> の定義、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_resolve</code></a> などの実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>: ジェネリックなロック管理における <code>dav_lock_indirect</code> の定義、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L716" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_resolve</code></a> などの実装。</li>
 </ul></body></html>
