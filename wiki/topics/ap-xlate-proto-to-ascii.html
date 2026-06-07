@@ -1,10 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-xlate-proto-to-ascii.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_xlate_proto_to_ascii</h1>
 <h2>概念</h2>
-<p><code>ap_xlate_proto_to_ascii</code> は、EBCDIC環境において、HTTPヘッダーなどのプロトコルレベルのデータをローカルの文字セットからASCII形式へインプレース（同一バッファ内）で変換するための関数、またはマクロです。</p>
+<p><code>ap_xlate_proto_to_ascii</code> は、EBCDIC環境において、プロトコルレベルのデータ（HTTPヘッダーやチャンク情報など）をローカルの文字セットからASCII形式へインプレース（同一バッファ内）で変換するための関数です。非EBCDIC環境では空のマクロとして定義され、実質的な処理は行われません。</p>
 <h2>なぜ重要か</h2>
-<p>Apache HTTP Server（httpd）をEBCDICベースのシステムで動作させる際、ネットワーク上を流れるプロトコルデータはASCII形式である必要があります。この関数を使用することで、プラットフォーム間の文字コードの違いを吸収し、EBCDIC環境でも正しくプロトコル通信を行うことができます。</p>
-<p>また、非EBCDIC環境では空のマクロとして定義されるため、呼び出し側のコードでプラットフォームごとの条件分岐（<code>#ifdef</code> 等）を記述することなく、共通のコードベースを維持できる設計になっています。</p>
+<p>Apache HTTP Server（httpd）をEBCDICベースのメインフレーム環境などで動作させる際、ネットワーク上を流れるプロトコルデータはASCII形式である必要があります。この関数を使用することで、プラットフォーム間の文字コードの差異を吸収し、EBCDIC環境でも標準的なASCIIプロトコル通信を正しく処理できるようになります。</p>
+<p>また、非EBCDIC環境ではマクロによって処理がスキップされるため、呼び出し側のコードでプラットフォームごとの条件分岐（<code>#ifdef</code> など）を記述する必要がなくなり、コードの移植性と見通しが向上します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -13,31 +13,41 @@
 <h2>主要エンティティ</h2>
 <ul>
 <li><code>symbol:include/util_ebcdic.h#ap_xlate_proto_to_ascii</code></li>
-<p>EBCDIC環境下での関数宣言、および非EBCDIC環境下での空マクロ定義を提供します。</p>
+<p>非EBCDIC環境における空マクロ定義、およびEBCDIC環境における関数プロトタイプ宣言を提供します。</p>
 <li><code>symbol:server/util_ebcdic.c#ap_xlate_proto_to_ascii</code></li>
-<p>EBCDIC環境下における実際の変換処理を実装しています。静的に管理される変換ハンドル <code>ap_hdrs_to_ascii</code> を使用して、バッファ内のデータをASCIIに変換します。</p>
+<p>EBCDIC環境における変換処理の実装を提供します。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. 各種モジュール（<a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/byterange_filter.c.html&quot;}, '*');"><code>byterange_filter.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>chunk_filter.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>http_filters.c</code></a>、<a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_ident.c.html&quot;}, '*');"><code>mod_ident.c</code></a>、<a class="wiki-source-link" href="../../source/modules/proxy/ajp_msg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp_msg.c.html&quot;}, '*');"><code>ajp_msg.c</code></a> など）が、送信または処理するプロトコルデータ（ヘッダー等）をバッファに準備します。 2. <code>ap_xlate_proto_to_ascii(buffer, len)</code> を呼び出します。 3. **EBCDIC環境の場合**:</p>
+<p>1. **初期化**: サーバー起動時の初期化フローにおいて、<a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a> が呼び出され、グローバルな変換ハンドル <code>ap_hdrs_to_ascii</code>（<code>apr_xlate_t</code> 型）が初期化されます。 2. **呼び出し**: 各種フィルタやプロトコル処理モジュール（<a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/byterange_filter.c.html&quot;}, '*');"><code>modules/http/byterange_filter.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>、<a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_ident.c.html&quot;}, '*');"><code>modules/metadata/mod_ident.c</code></a>、<a class="wiki-source-link" href="../../source/modules/proxy/ajp_msg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp_msg.c.html&quot;}, '*');"><code>modules/proxy/ajp_msg.c</code></a> など）から、変換対象のバッファと長さ（<code>len</code>）を指定して <code>ap_xlate_proto_to_ascii</code> が呼び出されます。 3. **変換処理**:</p>
 <ul>
-<li>内部で <code>apr_xlate_conv_buffer</code> が呼び出され、<code>ap_hdrs_to_ascii</code> ハンドルを使用して <a class="wiki-source-link" href="../../source/modules/filters/mod_buffer.c.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_buffer.c.html&quot;}, '*');"><code>buffer</code></a> 内のデータがインプレースでASCIIに変換されます。</li>
-<p>4. **非EBCDIC環境の場合**:</p>
-<li>マクロ展開により何も処理を行わず、そのまま次の処理へ進みます。</li>
+<li><code>inbytes_left</code> および <code>outbytes_left</code> に <code>len</code> を設定します。</li>
+<li>APRライブラリ関数 <code>apr_xlate_conv_buffer</code> を呼び出し、<code>ap_hdrs_to_ascii</code> ハンドルを用いてバッファ内のデータをインプレースでASCIIに変換します。</li>
+<li>変換結果は元のバッファに直接上書きされます。</li>
 </ul>
-<p>※なお、変換ハンドル <code>ap_hdrs_to_ascii</code> が初期化されるまでの詳細な起動シーケンスや、呼び出し元モジュールにおける具体的なバッファ生成から送信に至るまでの完全なエンドツーエンドのフローは、提供された情報からは完全には明らかになっていません。</p>
+<p>※なお、呼び出し元モジュールにおけるデータの生成から送信に至る全体的なエンドツーエンドのフローの詳細は、提供されたコンテキストからは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**環境依存の動作**: <code>APR_CHARSET_EBCDIC</code> が定義されている環境でのみ実際の変換処理が実行されます。定義されていない環境では、空のマクロとして展開され、オーバーヘッドは発生しません。</li>
-<li>**初期化の依存性**: EBCDIC環境で本関数を呼び出す前に、変換ハンドル <code>ap_hdrs_to_ascii</code> が <a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a> によって適切に初期化されている必要があります。</li>
-<li>**インプレース変換**: 変換は入力された <a class="wiki-source-link" href="../../source/modules/filters/mod_buffer.c.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_buffer.c.html&quot;}, '*');"><code>buffer</code></a> に対して直接上書き（インプレース）で行われます。</li>
+<li>**環境依存性**: 本関数が実際に動作するのは <code>APR_CHARSET_EBCDIC</code> が定義されている環境のみです。</li>
+<li>**初期化の依存**: 変換処理を実行する前に、グローバル変数 <code>ap_hdrs_to_ascii</code> が <a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a> によって適切に初期化されている必要があります。</li>
+<li>**インプレース変換**: 変換は常に渡されたバッファ内で直接行われ、新しいバッファの割り当ては行われません。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**エラーハンドリングの欠如**: <code>apr_xlate_conv_buffer</code> の内部で変換エラーが発生した場合、<code>ap_xlate_proto_to_ascii</code> 自体は <code>void</code> を返すため、呼び出し側で明示的なエラーハンドリングを行うことができません。</li>
-<li>**初期化順序への依存**: 起動時の初期化フローにおいて、<a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a> が実行される前に本関数が呼び出された場合、未初期化の <code>ap_hdrs_to_ascii</code> ハンドルが使用され、予期しない動作を引き起こす可能性があります。</li>
+<li>**エラーハンドリングの欠如**: <code>apr_xlate_conv_buffer</code> の内部で発生した変換エラーについて、<code>ap_xlate_proto_to_ascii</code> 内部では明示的なエラーハンドリングや呼び出し元へのエラー通知（戻り値による通知など）は行われません。</li>
+<li>**初期化順序への依存**: <code>ap_hdrs_to_ascii</code> の初期化フロー（<a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a>）よりも前に本関数が呼び出された場合、未定義の動作やクラッシュにつながる可能性があります。</li>
+<li>**非EBCDIC環境での無効化**: 非EBCDIC環境では空のマクロとなるため、この関数を呼び出してもバッファの内容は一切変更されません。この挙動を前提としたコード設計が必要です。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>include/util_ebcdic.h</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_ebcdic.c.html&quot;}, '*');"><code>server/util_ebcdic.c</code></a></li>
-</ul></body></html>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

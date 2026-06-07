@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/apr-off-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>apr_off_t</h1>
 <h2>概念</h2>
-<p><code>apr_off_t</code> は、Apache Portable Runtime (APR) が提供するプラットフォーム非依存の符号付き整数型です。主にファイルシステムやネットワークストリームにおける「バイト単位のオフセット、位置、またはデータ長（転送量）」を表現するために使用されます。</p>
+<p><code>apr_off_t</code> は、Apache Portable Runtime (APR) によって定義されるプラットフォーム非依存の符号付き整数型です。ファイルシステムやネットワークストリームにおける「バイト単位のオフセット、ファイルサイズ、またはデータ転送量（長さ）」を表現するために使用されます。</p>
 <h2>なぜ重要か</h2>
-<p>Apache HTTP Server（httpd）およびそのモジュール（特に <code>mod_http2</code>）において、プラットフォーム（32bit/64bit環境など）に依存せず、一貫したサイズで大容量ファイルやデータストリームの転送量を管理するために不可欠です。これにより、コンテンツ長（<code>Content-Length</code>）の計算、ファイルポインタのシーク、バケットブリゲードやバケットビームを介したデータ転送量の追跡が安全かつ統一的に行えます。</p>
+<p>Apache HTTP Server（httpd）および <code>mod_http2</code> などのモジュールにおいて、32ビットや64ビットといったプラットフォームごとの環境差を吸収し、一貫したデータ長やファイル位置の管理を行うために不可欠です。これにより、大容量ファイルのシーク操作や、HTTP/2 接続におけるデータ転送量の正確な追跡・制御が安全に行えます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,32 +11,46 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li>**<code>symbol:include/util_filter.h#apr_off_t</code>**: フィルタチェーンやバケットブリゲード（<code>apr_bucket_brigade</code>）におけるデータ転送量や、ファイル読み込み時のオフセット指定に使用されます。</li>
-<li>**<code>symbol:modules/http2/h2.h#apr_off_t</code>**: <code>h2_io_data_cb</code> コールバック関数の引数などで、データ長やオフセットを表現します。</li>
-<li>**<code>symbol:modules/http2/h2_bucket_beam.h#apr_off_t</code>**: <code>h2_beam_io_callback</code> の引数として、転送または消費されたデータのバイト数を通知するために使用されます。</li>
-<li>**<code>symbol:modules/http2/h2_util.h#apr_off_t</code>**: <code>h2_util_pass_cb</code> コールバック関数の引数（データ長 <code>len</code>）などで使用されます。</li>
-<li>**<code>symbol:modules/http2/mod_http2.h#apr_off_t</code>**: <a class="wiki-source-link" href="../../source/modules/http2/mod_http2.h.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__mod_http2_h__http2_output_consumed.html&quot;}, '*');"><code>http2_output_consumed</code></a> 関数などのデータ転送量を扱うインターフェースで使用されます。</li>
+<li>**<code>symbol:include/util_filter.h#apr_off_t</code>**</li>
+<p>フィルタチェーンや、HTTP コア（<code>request_rec</code> の <code>clength</code> や <code>bytes_sent</code> など）で広く参照される基本定義です。</p>
+<li>**<code>symbol:modules/http2/h2.h#apr_off_t</code>**</li>
+<p><code>h2_io_data_cb</code> コールバック関数の引数など、HTTP/2 内部のデータ入出力処理で使用されます。</p>
+<li>**<code>symbol:modules/http2/h2_bucket_beam.h#apr_off_t</code>**</li>
+<p><code>h2_beam_io_callback</code> などのコールバックを介して、転送または消費されたデータのバイト数を通知するために使用されます。</p>
+<li>**<code>symbol:modules/http2/h2_util.h#apr_off_t</code>**</li>
+<p><code>h2_util_pass_cb</code> コールバック関数の引数（データ長 <code>len</code>）などで使用されます。</p>
+<li>**<code>symbol:modules/http2/mod_http2.h#apr_off_t</code>**</li>
+<p><a class="wiki-source-link" href="../../source/modules/http2/mod_http2.h.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__mod_http2_h__http2_output_consumed.html&quot;}, '*');"><code>http2_output_consumed</code></a> 関数など、モジュール外部やコアと連携してデータ転送量を扱うインターフェースで使用されます。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>具体的なエンドツーエンドのデータ転送フロー全体や、各コールバック（<code>h2_io_data_cb</code>, <code>h2_beam_io_callback</code>, <code>h2_util_pass_cb</code> など）がどの順序で相互に呼び出されるかという詳細な実行時フローは、提供されたシンボル情報からは完全には明らかになっていません。</p>
-<p>ただし、基本的には HTTP/2 接続において、バケットビーム（<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>）を介してデータが転送・消費される際、消費されたバイト数が <code>apr_off_t</code> 型の引数として各コールバックや <a class="wiki-source-link" href="../../source/modules/http2/mod_http2.h.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__mod_http2_h__http2_output_consumed.html&quot;}, '*');"><code>http2_output_consumed</code></a> に渡され、最終的に送信済みバイト数の管理やフロー制御に反映される流れが想定されます。</p>
+<p>具体的なエンドツーエンドのデータ転送フロー全体や、各コールバック（<code>h2_io_data_cb</code>, <code>h2_beam_io_callback</code>, <code>h2_util_pass_cb</code> など）が呼び出される詳細なライフサイクルおよび相互作用の全容は、提供された情報からは完全には明らかになっていません。</p>
+<p>ただし、基本フローとして、<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> などのバケット伝送機構やユーティリティ関数を介してデータが転送される際、消費または転送されたバイト数が <code>apr_off_t</code> 型の引数として各コールバックに渡され、最終的に HTTP/2 接続やリクエストの送信バイト数管理に反映される仕組みとなっています。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**符号付き整数**: <code>apr_off_t</code> は符号付き整数型であり、正の値は有効なバイト数やオフセットを示します。</li>
-<li>**負の値の特殊性**: 負の値は、エラー状態や無効なオフセット、あるいは特定の API における特別な制御シグナルを示すために使用される場合があります。</li>
-<li>**プラットフォーム依存のサイズ**: プラットフォーム（特に 32bit と 64bit 環境）によってサイズが異なる可能性があり、64bit 環境では通常 64bit 整数として扱われ、大規模なファイルやストリームをサポートします。</li>
+<li>**符号付き整数としての性質**: <code>apr_off_t</code> は符号付き整数型であり、正の数は有効なバイト数やオフセットを表します。</li>
+<li>**負の値の特殊性**: 負の値は、エラー状態や無効なオフセット、あるいは特定の API における特別な状態を示すために使用される場合があります。</li>
+<li>**プラットフォーム依存のサイズ**: 64ビット環境では通常64ビット整数として扱われ、大規模なファイルやデータストリームをサポートしますが、具体的なサイズや範囲はプラットフォームの APR 定義に依存します。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**オーバーフロー**: 非常に大きなファイルやデータストリームを扱う際、プラットフォームの <code>apr_off_t</code> の最大値（特に 32bit 環境での制限）を超えると、値が切り詰められたりオーバーフローが発生したりするリスクがあります。</li>
-<li>**負の値の誤用**: 負の値を想定していない（または負の値をエラーとして扱う）API に対して、誤って負の値を渡すと、予期しない動作やエラーを引き起こす可能性があります。</li>
-<li>**バイナリ互換性**: 32bit と 64bit 環境で型サイズが異なる場合があるため、プラットフォームを跨ぐシリアライズや通信、あるいはバイナリ互換性が重要な箇所での取り扱いには注意が必要です。</li>
+<li>**オーバーフロー**: 非常に大きなファイルやストリームを扱う際、プラットフォーム（特に32ビット環境）の <code>apr_off_t</code> の最大値を超えると、値が切り詰められたりオーバーフローが発生したりするリスクがあります。</li>
+<li>**負の値の誤用**: 負の値を許容しない、あるいは想定していない API に対して負の値を渡すと、予期しない動作やエラーを引き起こす可能性があります。</li>
+<li>**バイナリ互換性**: 32ビット環境と64ビット環境で型サイズが異なる場合があるため、プラットフォームを跨ぐシリアライズや通信、バイナリ互換性が要求される箇所での取り扱いに注意が必要です。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>modules/http2/h2.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>modules/http2/h2_util.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/mod_http2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.h.html&quot;}, '*');"><code>modules/http2/mod_http2.h</code></a></li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> (フィルタおよびコアでの <code>apr_off_t</code> の利用)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>modules/http2/h2.h</code></a> (HTTP/2 内部コールバックでの利用)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.h</code></a> (データビーム機構における消費量報告)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>modules/http2/h2_util.h</code></a> (HTTP/2 ユーティリティコールバック)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/mod_http2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.h.html&quot;}, '*');"><code>modules/http2/mod_http2.h</code></a> (HTTP/2 モジュール公開インターフェース)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

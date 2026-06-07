@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/create-mconfig-for-server.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>create_mconfig_for_server</h1>
 <h2>概念</h2>
-<p><code>create_mconfig_for_server</code> は、Apache HTTP Server の個別モジュール（<code>mod_suexec</code> や <code>mod_speling</code> など）において、サーバーレベルの設定構造体を生成・初期化するための静的（<code>static</code>）なコールバック関数です。各モジュール内で同名の関数として定義され、Apache のモジュール設定登録（<code>create_server_config</code> フック）に紐付けられます。</p>
+<p><code>create_mconfig_for_server</code> は、Apache HTTP Server の各モジュールにおいて、サーバーレベルの設定構造体を生成・初期化するために定義されている静的（<code>static</code>）なコールバック関数です。</p>
 <h2>なぜ重要か</h2>
-<p>Apache HTTP Server はマルチモジュール構成を採用しており、各モジュールが独自の設定データを管理する必要があります。<code>create_mconfig_for_server</code> は、サーバー起動時や設定読み込みフェーズにおいて、各モジュール専用の設定構造体をメモリプールから安全に割り当て、初期状態を構築するために不可欠な役割を果たします。</p>
+<p>Apache のモジュール構成において、各モジュールが独自のサーバー設定（<code>server_rec</code> に紐づく設定）を保持するために、モジュール初期化時に呼び出される <code>create_server_config</code> フックとして機能します。これにより、各モジュール専用の設定構造体が適切にメモリプールから割り当てられ、初期化されます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/generators</code></li>
@@ -11,32 +11,39 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/generators/mod_suexec.c#create_mconfig_for_server</code></li>
-<li><code>mod_suexec</code> 用の設定構造体（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a>）を生成・初期化する関数。</li>
-<li><code>symbol:modules/mappers/mod_speling.c#create_mconfig_for_server</code></li>
-<li><code>mod_speling</code> 用のサーバーレベル設定構造体を生成・初期化する関数。</li>
+<li>**<code>symbol:modules/generators/mod_suexec.c#create_mconfig_for_server</code>**</li>
+<li><code>mod_suexec</code> 用の設定構造体（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a>）を生成・初期化します。</li>
+<li>**<code>symbol:modules/mappers/mod_speling.c#create_mconfig_for_server</code>**</li>
+<li><code>mod_speling</code> 用のサーバーレベル設定構造体を生成・初期化します。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **モジュールの登録**: Apache の起動フェーズにおいて、各モジュール（<code>suexec_module</code>、<code>speling_module</code>）のサーバー設定生成ハンドラとして <code>create_mconfig_for_server</code> が登録されます。 2. **設定構造体の生成**: Apache コアがサーバー設定を初期化する際、登録された本関数が呼び出されます。 3. **内部処理**:</p>
-<ul>
-<li>引数として渡されたメモリプール <code>apr_pool_t *p</code> を、同一ファイル内で定義されている <code>mkconfig</code> 関数に渡します。</li>
-<li><code>mkconfig</code> が必要なメモリを割り当て、初期化した設定構造体を生成します。</li>
-<p>4. **返却**: 生成された設定構造体へのポインタ（<code>void *</code>）がそのまま呼び出し元（Apache コア）へ返却されます。</p>
-</ul>
-<p>※なお、Apache コアがこれらのフックを呼び出す全体的なライフサイクルや、他のモジュールにおける同様の初期化フローとの詳細な相互作用など、エンドツーエンドの完全な流れは現時点では提供された情報からは未解明です。</p>
+<p>1. Apache のサーバー設定フェーズにおいて、各モジュールの定義構造体（<code>suexec_module</code> など）の <code>create_server_config</code> フックに登録された本関数が呼び出されます。 2. 本関数は、引数として渡されたメモリプール <code>apr_pool_t *p</code> を使用して、同一ファイル内で定義されている <code>mkconfig</code> 関数を呼び出します。 3. <code>mkconfig</code> 関数が設定構造体を生成・初期化し、そのポインタを返します。 4. 本関数は、受け取った設定構造体へのポインタ（<code>void *</code>）をそのまま呼び出し元へ返却します。</p>
+<p>*注意: Apache コアがこれらのフックを呼び出す全体的なエンドツーエンドの制御フローの詳細は、提供されたコンテキストからは完全には明らかになっていません。*</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**シグネチャの不変性**: Apache のモジュール API 規約に従い、<code>static void *create_mconfig_for_server(apr_pool_t *p, server_rec *s)</code> という形状を維持する必要があります。</li>
-<li>**未使用引数**: どちらの実装においても、引数 <code>server_rec *s</code> は関数内部で直接使用されていませんが、API 規約との互換性を保つためにシグネチャ上に保持されています。</li>
-<li>**メモリプール依存**: 設定構造体のメモリ割り当ては、引数として渡される有効なメモリプール <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> に依存して行われなければなりません。</li>
+<li>**引数の制約**: </li>
+<li>メモリプール <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> は有効（非NULL）でなければなりません。</li>
+<li><code>server_rec *s</code> 引数は、APIのシグネチャ規約上定義されていますが、現在の実装（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>mod_suexec.c</code></a> および <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>mod_speling.c</code></a>）では使用されていません。</li>
+<li>**依存関係**:</li>
+<li>同一ファイル内に <code>mkconfig</code> 関数が存在し、利用可能である必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**同名関数の混同**: <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>mod_suexec.c</code></a> と <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>mod_speling.c</code></a> に定義されている <code>create_mconfig_for_server</code> は、どちらも <code>static</code> 宣言されたファイル局所的な関数であり、互いに直接の呼び出し関係はありません。静的解析ツール等で同名シンボルとして検出されますが、それぞれ独立したモジュールの初期化処理です。</li>
-<li>**メモリ割り当て失敗**: 内部で呼び出される <code>mkconfig</code> でのメモリ割り当てに失敗した場合、APR（Apache Portable Runtime）のメモリ管理規約に従い、通常はプロセスが終了するか例外が発生します。</li>
+<li>**未使用引数**: <code>server_rec *s</code> はシグネチャに含まれているものの関数内では使用されていないため、コードの変更やリファクタリング時に誤って削除しないよう注意が必要です。</li>
+<li>**メモリ割り当ての失敗**: <code>mkconfig</code> 内でのメモリ割り当て失敗時の挙動は APR (Apache Portable Runtime) のメモリ管理規約に依存しており、通常はプロセス終了などの致命的エラーとなります。</li>
+<li>**同名関数の混同**: <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>mod_suexec.c</code></a> と <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>mod_speling.c</code></a> に同名の <code>static</code> 関数が存在しますが、これらはそれぞれ独立して定義されており、直接の呼び出し関係はありません。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a> （<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> の定義や <code>mkconfig</code> の実装、<code>suexec_module</code> への登録箇所）</li>
-<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>modules/mappers/mod_speling.c</code></a> （<code>mkconfig</code> の実装やモジュール設定登録箇所）</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a> （<code>create_mconfig_for_server</code> の定義および <code>suexec_module</code> への登録箇所）</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>modules/mappers/mod_speling.c</code></a> （<code>create_mconfig_for_server</code> の定義およびモジュール設定登録箇所）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

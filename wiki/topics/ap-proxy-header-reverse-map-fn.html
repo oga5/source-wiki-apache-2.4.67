@@ -1,37 +1,48 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-proxy-header-reverse-map-fn.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_proxy_header_reverse_map_fn</h1>
 <h2>概念</h2>
-<p><code>ap_proxy_header_reverse_map_fn</code> は、Apache HTTP Server（httpd）のプロキシ機能において、バックエンドサーバーから受信したレスポンスヘッダー（<code>Location</code>、<code>Set-Cookie</code> など）に含まれるURLやパスを、クライアント向けに適切に書き換える（リバースマッピングする）ためのコールバック関数を定義する関数ポインタ型（<code>typedef</code>）です。</p>
+<p><code>ap_proxy_header_reverse_map_fn</code> は、Apache HTTP Server（httpd）のプロキシ機能において、バックエンドサーバーから返された特定の HTTP レスポンスヘッダー（<code>Location</code>、<code>Set-Cookie</code>、<code>Content-Location</code> など）の値を、クライアントから見て適切な形式（プロキシの外部公開URLなど）に逆マッピング（書き換え）するためのコールバック関数を定義する関数ポインタ型（<code>typedef</code>）です。</p>
 <h2>なぜ重要か</h2>
-<p>リバースプロキシ構成（<code>ProxyPassReverse</code> など）において、バックエンドサーバーが返した内部向けのURLやCookieのドメイン・パス情報をそのままクライアントに送信すると、クライアントが正しくアクセスできなくなります。この関数ポインタ型を介して、<code>Location</code> や <code>Set-Cookie</code> などのヘッダー値を動的に書き換えることで、プロキシの透過性を維持し、クライアントがシームレスに通信できるようにします。</p>
+<p>プロキシ環境において、バックエンドサーバーが自身の内部URLやドメインをレスポンスヘッダー（リダイレクト先を示す <code>Location</code> やクッキーの <code>Set-Cookie</code> など）に含めて返してしまうと、クライアントが直接バックエンドにアクセスしようとしてエラーになります。この関数型を介して適切なマッピング処理（<code>ProxyPassReverse</code> 設定に基づく変換など）を動的に適用することで、プロキシの透過性を維持し、クライアントとバックエンド間のシームレスな通信を保証します。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/http2</code></li>
-<li><code>module:modules/proxy</code></li>
+<li><code>module:modules/proxy</code> (コアとなる定義および HTTP/1.1 プロキシ処理)</li>
+<li><code>module:modules/http2</code> (HTTP/2 プロキシ処理におけるヘッダー変換)</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http2/h2_proxy_session.c#ap_proxy_header_reverse_map_fn</code></li>
-<li><code>symbol:modules/proxy/mod_proxy_http.c#ap_proxy_header_reverse_map_fn</code></li>
-<li><code>transform_hdrs</code>: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>mod_proxy_http.c</code></a> および <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a> 内で定義されている、ヘッダー名と本関数ポインタを保持する静的構造体配列。</li>
-<li><a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L882" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_location_reverse_map</code></a> / <a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L1000" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_cookie_reverse_map</code></a>: 本関数ポインタ型に適合する具体的な変換処理の実装。</li>
+<li>**<code>ap_proxy_header_reverse_map_fn</code>** (<code>modules/proxy/mod_proxy.h:733</code> で定義される関数ポインタ型)</li>
+<li>**<code>symbol:modules/proxy/mod_proxy_http.c#ap_proxy_header_reverse_map_fn</code>**: HTTP/1.1 プロキシ処理において、レスポンスヘッダーを書き換えるために参照されます。</li>
+<li>**<code>symbol:modules/http2/h2_proxy_session.c#ap_proxy_header_reverse_map_fn</code>**: HTTP/2 プロキシセッションにおいて、同様のヘッダー書き換えを行うために参照されます。</li>
+<li>**<code>transform_hdrs</code>**: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>mod_proxy_http.c</code></a> および <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a> 内で定義されている静的構造体配列。ヘッダー名（<code>Location</code>、<code>Set-Cookie</code> など）と、この関数ポインタ型に適合する具体的な変換関数をペアで管理します。</li>
+<li>**適合する実装関数**: <a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L882" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_location_reverse_map</code></a> や <a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L1000" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_cookie_reverse_map</code></a> など。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **レスポンス受信**: プロキシモジュール（<code>mod_proxy_http</code> や <code>mod_http2</code> のプロキシセッション）がバックエンドサーバーからレスポンスヘッダーを受信します。 2. **ヘッダーの走査**: 受信したヘッダーを処理する際（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>mod_proxy_http.c</code></a> の <code>process_proxy_header</code> や <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a> のヘッダー処理ロジックなど）、定義された <code>transform_hdrs</code> テーブルを走査します。 3. **マッピング関数の適用**: <code>Location</code>、<code>Content-Location</code>、<code>URI</code>、<code>Destination</code>、<code>Set-Cookie</code> などの対象ヘッダーが見つかった場合、対応する <code>ap_proxy_header_reverse_map_fn</code> 型の関数（<a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L882" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_location_reverse_map</code></a> や <a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L1000" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_cookie_reverse_map</code></a>）を呼び出します。 4. **ヘッダーの書き換え**: 関数によって書き換えられた新しいヘッダー値が、クライアントへのレスポンスに適用されます。</p>
-<p>*注意: HTTP/2 プロキシセッション（<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a>）における直接的な呼び出し箇所など、一部の具体的な制御フローの詳細は提供されたソース抜粋外であるため、完全なエンドツーエンドの実行経路は未解明です。*</p>
+<p>1. **レスポンス受信**: プロキシモジュール（<code>mod_proxy_http</code> または <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.h.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_h__h2_proxy_session.html&quot;}, '*');"><code>h2_proxy_session</code></a>）がバックエンドサーバーからレスポンスヘッダーを受信します。 2. **ヘッダーの走査**: 受信したヘッダーを処理する際、各モジュール内に定義された <code>transform_hdrs</code> テーブルを走査し、変換対象のヘッダー名（<code>Location</code>, <code>Content-Location</code>, <code>URI</code>, <code>Destination</code>, <code>Set-Cookie</code> など）と一致するか確認します。 3. **コールバックの実行**: 一致するヘッダーが見つかった場合、対応する <code>ap_proxy_header_reverse_map_fn</code> 型の関数（<a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L882" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_location_reverse_map</code></a> など）を呼び出します。 4. **ヘッダー値の書き換え**: 関数は、リクエスト情報（<code>request_rec</code>）やプロキシ設定に基づき、バックエンドのURL/パスをクライアント向けの適切な値に書き換えて返します。 5. **クライアントへの送信**: 書き換えられたヘッダーがクライアントへ送信されます。</p>
+<p>*注意: 提供されたソースコードの抜粋外にある詳細な制御フロー（具体的な呼び出しタイミングや、変換後のヘッダーがどのようにクライアントへ送出されるかの全体像）の完全なエンドツーエンドの流れは未確定です。*</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**生存期間の保証**: 呼び出し側は、この関数が返す変換後の文字列が、現在のリクエスト（<code>request_rec *r</code>）の生存期間中有効であることを期待します。</li>
-<li>**テーブル管理**: <code>transform_hdrs</code> 配列において、対象となる特定のヘッダー名と、この関数型を実装する関数が必ずペアで登録されている必要があります。</li>
+<li>**メモリの有効性**: この関数が返す変換後の文字列（<code>const char *</code>）は、該当するリクエスト（<code>request_rec</code>）の生存期間中、有効であり続けなければなりません。</li>
+<li>**マッピングの対応関係**: <code>transform_hdrs</code> 配列において、対象となるヘッダー名と、この関数型に適合する実装関数が正しくペアとして登録されている必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**シグネチャの不一致**: 提供された情報において、<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a> 側と <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>mod_proxy_http.c</code></a> 側で参照されている <code>ap_proxy_header_reverse_map_fn</code> のシグネチャ（引数の数や役割：<code>url</code> のみか、<code>rem</code> と <code>loc</code> の両方か）に差異がみられます。プラットフォームやバージョン、呼び出し規約（<code>__stdcall</code> など）の指定によるバイナリ互換性の問題に注意する必要があります。</li>
-<li>**変換対象外の挙動**: 変換対象のヘッダー値が <code>NULL</code> や空文字列の場合、または変換ルールに一致しない場合の挙動は各実装関数に依存します（通常は元の値をそのまま返すか、変換を行いません）。</li>
+<li>**NULL や空文字列の扱い**: 変換対象のヘッダー値が <code>NULL</code> または空文字列の場合の挙動は、呼び出される具体的な実装関数（<a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L882" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>ap_proxy_location_reverse_map</code></a> など）に依存するため、呼び出し側での事前チェックや実装側での安全なハンドリングが必要です。</li>
+<li>**呼び出し規約の不一致**: プラットフォームによっては <code>__stdcall</code> などの特定の呼び出し規約が指定されている定義が存在するため、関数を実装・登録する際はバイナリ互換性に注意する必要があります。</li>
+<li>**変換ルールの不一致**: 変換ルールに一致しない場合、関数は元の値をそのまま返すか、変換を行わない設計となっているため、意図しないヘッダーがそのままクライアントに露出する可能性があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>modules/proxy/mod_proxy.h</code></a> （<code>ap_proxy_header_reverse_map_fn</code> の定義箇所）</li>
-<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_http.c</code></a> （<code>transform_hdrs</code> の定義と <code>process_proxy_header</code> での利用）</li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_session.c</code></a> （HTTP/2 プロキシにおけるヘッダー変換の実装）</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>modules/proxy/mod_proxy.h</code></a> (関数ポインタ型の定義箇所)</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_http.c</code></a> (HTTP/1.1 プロキシでの <code>transform_hdrs</code> の定義と使用例)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_session.c</code></a> (HTTP/2 プロキシでの <code>transform_hdrs</code> の定義と使用例)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

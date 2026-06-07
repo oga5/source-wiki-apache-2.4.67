@@ -3,7 +3,7 @@
 <h2>概念</h2>
 <p><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> は、Apache HTTP Server において可変長バッファ（Resizable Buffer）を管理するための主要なデータ構造です。メモリ管理に APR（Apache Portable Runtime）プール（<code>apr_pool_t</code>）を利用し、文字列やバイナリデータの動的な拡張と再利用を効率的に行う仕組みを提供します。</p>
 <h2>なぜ重要か</h2>
-<p>動的な文字列操作やバイナリデータの蓄積において、メモリの再割り当て（リサイズ）や解放を安全かつ効率的に行う必要があります。<a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> は、APR プールと連携してメモリ管理を抽象化し、メモリリークを防ぎつつ、必要に応じてバッファを自動的または明示的に拡張する一貫した手段を提供するため重要です。</p>
+<p>動的な文字列操作やバッファ拡張を行う際、手動でのメモリ再割り当てやコピー処理はバグ（バッファオーバーフローやメモリリークなど）の温床になりやすいという課題があります。<a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> を使用することで、APR プールと連携した安全かつ自動的なメモリ管理が可能になり、開発者はメモリの再割り当てロジックを個別に実装することなく、安全にバッファ操作を行えるようになります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,28 +11,36 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/util_varbuf.h#ap_varbuf</code>（構造体定義）</li>
-<li><code>symbol:server/util.c#ap_varbuf_init</code>（初期化関数）</li>
-<li><code>symbol:server/util.c#ap_varbuf_free</code>（解放関数）</li>
+<li><code>symbol:include/util_varbuf.h#ap_varbuf</code>：可変長バッファを管理する構造体定義。</li>
+<li><code>symbol:server/util.c#ap_varbuf_init</code>：構造体とプールを関連付ける初期化関数。</li>
+<li><code>symbol:server/util.c#ap_varbuf_free</code>：確保したメモリを明示的に解放する関数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供された情報に基づく基本的なライフサイクルは以下の通りですが、具体的な関数レベルの呼び出し元・呼び出し先の詳細なエンドツーエンドフローは完全には判明していません。</p>
-<p>1. **初期化**: <code>ap_varbuf_init()</code> を呼び出し、構造体と <code>apr_pool_t</code> を関連付けます。 2. **拡張**: 必要に応じて <code>ap_varbuf_grow()</code> を呼び出し、メモリを指数関数的に再割り当てして既存データをコピーします。 3. **操作**: <code>ap_varbuf_strmemcat()</code> などの関数を用いて <code>buf</code> にデータを書き込み、<code>strlen</code> を更新します。 4. **解放**: 関連付けられたプールがクリアされる際に自動的にメモリが解放されます。また、<code>ap_varbuf_free()</code> を使用して明示的に解放することも可能です。</p>
+<p>提供された情報からは、具体的なリクエスト処理フェーズにおけるエンドツーエンドの完全な呼び出しフローは明らかになっていません。ただし、基本的な利用ライフサイクルは以下の通りです。</p>
+<p>1. **初期化**: <code>ap_varbuf_init()</code> により、バッファ構造体と <code>apr_pool_t</code> を関連付けます。 2. **拡張と操作**: <code>ap_varbuf_grow()</code> などの関数を介して、必要に応じてメモリを自動的・指数関数的に再割り当てし、データを書き込みます。 3. **解放**: 関連付けられた APR プールがクリアされる際に自動的にメモリが解放されます。明示的に解放する場合は <code>ap_varbuf_free()</code> を呼び出します。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**<code>avail</code> と <code>buf</code> の関係**: <code>avail</code>（確保済みサイズ）が 0 の場合、<code>buf</code> は定数の <code>\0</code> を指す必要があります。</li>
-<li>**生存期間の整合性**: <code>avail</code> が 0 でない場合、<code>buf</code> は関連付けられた <code>pool</code> と同じ生存期間を持つメモリ領域を指さなければなりません。</li>
-<li>**サイズ変更の制限**: <code>avail</code> の値を直接変更することは禁止されています。バッファサイズの変更は必ず <code>ap_varbuf_grow()</code> を介して行う必要があります。</li>
+<li><code>avail</code>（確保済みサイズ）が 0 の場合、<code>buf</code> は定数の <code>\0</code> を指す必要があります。</li>
+<li><code>avail</code> が 0 でない場合、<code>buf</code> は関連付けられた <code>pool</code> と同じ生存期間を持つメモリ領域を指す必要があります。</li>
+<li><code>avail</code> の値を直接変更することは禁止されており、変更は必ず <code>ap_varbuf_grow()</code> を介して行う必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**プールの生存期間**: <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> 構造体自体はスタック上に配置可能ですが、内部で参照している <code>pool</code> が生存している必要があります。</li>
-<li>**直接のメンバ操作**: <code>avail</code> を直接書き換えてはなりません。必ず提供されている API（<code>ap_varbuf_grow()</code> など）を使用してください。</li>
-<li>**パフォーマンスの低下**: <code>strlen</code> に <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>AP_VARBUF_UNKNOWN</code></a> が設定されている場合、操作時に関数内部で <code>strlen</code> の再計算が発生するため、頻繁に呼び出すとパフォーマンスに影響を与える可能性があります。</li>
-<li>**エラーハンドリングの誤解**: <code>ap_varbuf_grow()</code> はメモリ不足時にプールのアボート関数を呼び出すため、呼び出し側で個別のエラーチェックは不要です。</li>
+<li>**寿命の不一致**: <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> 構造体自体はスタック上に配置可能ですが、内部で参照している <code>pool</code> が生存している必要があります。プールの寿命を超えてバッファにアクセスしないよう注意が必要です。</li>
+<li>**直接書き換えの禁止**: <code>avail</code> メンバーを直接書き換えてはなりません。必ず <code>ap_varbuf_grow()</code> を使用してください。</li>
+<li>**パフォーマンスの低下**: <code>strlen</code> に <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>AP_VARBUF_UNKNOWN</code></a> が設定されている場合、関数は内部で <code>strlen</code> を再計算するため、頻繁な呼び出しはパフォーマンスに影響を与える可能性があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>include/util_varbuf.h</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a></li>
-</ul></body></html>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

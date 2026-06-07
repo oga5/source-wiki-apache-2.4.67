@@ -1,29 +1,36 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/default-user.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>DEFAULT_USER</h1>
 <h2>概念</h2>
-<p><code>DEFAULT_USER</code> は、Apache HTTP Server（httpd）のUnix系オペレーティングシステム向けの実装において、サーバープロセスが特権（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>など）を放棄した後に実行されるデフォルトのシステムユーザーを定義するためのシンボル（マクロ）です。</p>
+<p><code>DEFAULT_USER</code> は、Apache HTTP Server（httpd-2.4.67）のUnix系オペレーティングシステム向け実装において、サーバープロセスが起動後に特権を放棄して動作するためのデフォルトの実行ユーザー名を定義するマクロまたは定数です。</p>
 <h2>なぜ重要か</h2>
-<p>Unix環境におけるWebサーバーのセキュリティモデルでは、特権ポート（80や443など）をバインドするために<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>権限で起動した後、リクエストの処理を行う子プロセスやスレッドの権限を速やかに非特権ユーザーに切り替える必要があります。<code>DEFAULT_USER</code> は、明示的な設定がない場合にフォールバック先となる安全なデフォルトユーザーを定義するために重要です。</p>
+<p>Unix系システムにおいて、Webサーバーを特権（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>root</code></a>）権限のまま動作させ続けることはセキュリティ上の重大なリスクとなります。<code>DEFAULT_USER</code> は、設定ファイル等で実行ユーザーが明示的に指定されていない場合に、安全な非特権ユーザーとしてプロセスを動作させるためのフォールバック値を提供するために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/arch/unix</code></li>
-<li><code>module:os/unix</code></li>
+<li><code>module:modules/arch/unix</code>：Unixプラットフォーム向けのデーモンセキュリティやプロセス管理（<code>mod_unixd</code>）を担当するモジュール。</li>
+<li><code>module:os/unix</code>：Unix固有のOS依存処理を抽象化するレイヤー。</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:os/unix/unixd.h#DEFAULT_USER</code></li>
-<li>Unix固有のプラットフォームヘッダーファイルで、<code>DEFAULT_USER</code> のマクロ定義やデフォルト値を宣言します。</li>
-<li><code>symbol:modules/arch/unix/mod_unixd.c#DEFAULT_USER</code></li>
-<li>Unix環境用のコアセキュリティデーモンヘルパーモジュール（<code>mod_unixd</code>）内で、デフォルトユーザーの適用や初期化に使用されます。</li>
+<li><code>symbol:os/unix/unixd.h#DEFAULT_USER</code>：Unix環境におけるデーモン共通のデフォルトユーザー定義。</li>
+<li><code>symbol:modules/arch/unix/mod_unixd.c#DEFAULT_USER</code>：<code>mod_unixd</code> モジュール内でのデフォルトユーザー値の参照または適用。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、<code>DEFAULT_USER</code> がどのようにパースされ、実行時設定に適用され、最終的にシステムコール（<code>setuid</code> など）に渡されるかという具体的なエンドツーエンドの流れは、提供されたソースコードのコンテキストからは完全には特定されていません。</p>
+<p>現時点では、設定ファイル（<code>httpd.conf</code>）の <code>User</code> ディレクティブが省略された際に、この <code>DEFAULT_USER</code> がどのように評価され、最終的にプロセスの権限移行（<code>setuid</code> など）へ適用されるかという具体的なエンドツーエンドの処理フローは判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、<code>DEFAULT_USER</code> に関連する具体的な不変条件（例：コンパイル時に必ず定義されている必要があるか、特定のユーザーID形式を満たす必要があるかなど）は判明していません。</p>
+<p>現時点では、<code>DEFAULT_USER</code> に関連する具体的な不変条件（ビルド時に必ず特定のシステムユーザーが存在しなければならない等の制約）は判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>ビルド環境やターゲットプラットフォーム（OS）によって <code>DEFAULT_USER</code> のデフォルト値（例: <code>&quot;nobody&quot;</code> や <code>&quot;#-1&quot;</code>）が異なる場合があり、適切な実行ユーザーがシステムに存在しない場合、サーバーの起動失敗や予期しない権限エラーを引き起こす可能性があります。ただし、具体的なエラーハンドリングの挙動は現時点では未検証です。</p>
+<p>現時点では、このシンボルやデフォルト値の適用に起因する具体的な落とし穴や、ビルド・実行時のエラーに関する情報は判明していません。</p>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>os/unix/unixd.h</code></a>：<code>DEFAULT_USER</code> の定義値と、関連するUnix固有の構造体定義を確認してください。</li>
-<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');"><code>modules/arch/unix/mod_unixd.c</code></a>：<code>DEFAULT_USER</code> がどのように参照され、実行時のユーザー設定に反映されるかの実装を確認してください。</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>os/unix/unixd.h</code></a>：<code>DEFAULT_USER</code> がどのような値（例: <code>&quot;nobody&quot;</code> など）として定義されているかを確認します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');"><code>modules/arch/unix/mod_unixd.c</code></a>：このデフォルト値が設定解析処理やプロセス初期化処理の中でどのように参照されているかを解析します。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

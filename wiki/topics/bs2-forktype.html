@@ -1,16 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/bs2-forktype.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>bs2_ForkType</h1>
 <h2>概念</h2>
-<p><code>bs2_ForkType</code> は、BS2000（OSD/POSIX）環境において、Apache HTTP Server が子プロセスを生成（fork）する際の手法を識別・管理するために定義された列挙型（<code>enum</code>）です。</p>
-<p>この列挙型は以下の4つの状態を持ちます：</p>
-<ul>
-<li><code>bs2_unknown</code>: 初期化前の状態。</li>
-<li><code>bs2_noFORK</code>: <code>-X</code> フラグ指定時など、フォークを行わない状態。</li>
-<li><code>bs2_FORK</code>: ユーザーID（uid）が 0 以外の場合など、標準の <code>fork()</code> を使用する状態。</li>
-<li><code>bs2_UFORK</code>: ユーザーIDの切り替えが必要な場合に、BS2000 特有の <code>ufork()</code> を使用する状態。</li>
-</ul>
+<p><code>bs2_ForkType</code> は、BS2000（OSD/POSIX）環境において、Apache HTTP Server が子プロセスを生成（fork）する際に使用する手法を識別・管理するための列挙型（<code>enum</code>）です。</p>
 <h2>なぜ重要か</h2>
-<p>BS2000 という特殊なメインフレーム環境において、適切なプロセス生成戦略（標準の <code>fork()</code>、ユーザーID切り替えを伴う <code>ufork()</code>、あるいはフォークなし）を正しく判定・キャッシュし、OS固有の制約（ユーザー名の大文字変換など）に対応しながら安全にプロセスを起動するために不可欠な定義です。</p>
+<p>BS2000環境では、実行環境のフラグ（<code>-X</code> など）や実行ユーザーの権限（uid が 0 か否かなど）に応じて、プロセス生成の戦略を切り替える必要があります。特にユーザーIDの切り替えを伴うプロセス生成には、BS2000特有の <code>ufork()</code> を使用する必要があり、これらを適切に識別・制御するためにこの型が重要となります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:os/bs2000</code></li>
@@ -18,28 +11,35 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li>**<code>symbol:os/bs2000/os.c#bs2_ForkType</code>**: BS2000 固有の OS 制御コード内で定義されている列挙型。</li>
-<li>**<code>symbol:os/unix/unixd.c#bs2_ForkType</code>**: Unix 互換レイヤーのデーモン制御コード内で定義されている列挙型。</li>
-<li>**<code>os_forktype()</code>**: 引数（<code>int one_process</code> など）や実行環境の権限に基づき、<code>bs2_ForkType</code> を判定して返却する関数。</li>
-<li>**<code>static bs2_ForkType forktype</code>**: 各ソースファイル内で判定結果をキャッシュするために定義されている静的変数。</li>
+<li><code>symbol:os/bs2000/os.c#bs2_ForkType</code></li>
+<li><code>symbol:os/unix/unixd.c#bs2_ForkType</code></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **判定**: プロセス起動時、<code>os_forktype()</code> が呼び出され、実行環境のフラグ（<code>-X</code> など）やユーザー権限（uid が 0 か否かなど）に基づいて、適切な <code>bs2_ForkType</code> の値を判定します。 2. **キャッシュ**: 判定された値は、各ソースファイル内の静的変数 <code>forktype</code> にキャッシュされます。 3. **実行**: <code>os_fork()</code> などのプロセス生成処理において、キャッシュされた <code>forktype</code> の値（<code>bs2_FORK</code>、<code>bs2_UFORK</code>、<code>bs2_noFORK</code>）に応じて、実際のプロセス生成ロジック（<code>fork()</code> の実行、<code>ufork()</code> の実行、あるいはフォークのスキップ）が分岐・実行されます。</p>
-<p>*注意: <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> 側における詳細な呼び出しフローや、<code>bs2_unknown</code> のまま処理が進行した場合の具体的なエンドツーエンドの挙動の全容は、提供された情報からは完全には明らかになっていません。*</p>
+<p>1. <code>os_forktype()</code> 関数が呼び出され、引数（<code>one_process</code> など）や実行環境の条件（ユーザー権限など）に基づいて <code>bs2_ForkType</code> の値を決定します。 2. 決定された値は、各ソースファイル内の静的変数 <code>forktype</code> にキャッシュされます。 3. <code>os_fork()</code> などのプロセス生成処理において、キャッシュされた <code>forktype</code> の値（<code>bs2_noFORK</code>, <code>bs2_FORK</code>, <code>bs2_UFORK</code>）に応じて、実際のフォーク処理（<code>fork()</code> または <code>ufork()</code> の実行、あるいはフォークしない）が分岐実行されます。</p>
+<p>※ただし、詳細な呼び出しシーケンスや全体的なエンドツーエンドの制御フローの全容は、提供された情報からは完全には判明していません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**プラットフォーム制約**: <code>_OSD_POSIX</code> マクロが定義されている BS2000 環境下でのみ有効です。</li>
-<li>**初期状態**: <code>bs2_unknown</code> は初期化前の状態を示し、プロセス生成処理が実際に行われる前に適切な値へ更新される必要があります。</li>
+<li><code>_OSD_POSIX</code> マクロが定義されている環境でのみ有効です。</li>
+<li><code>bs2_unknown</code> は初期化前の初期状態を示します。</li>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> と <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> の両方に同名の定義が存在し、それぞれで静的変数 <code>forktype</code> を用いて状態を保持しています。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**重複定義の不整合**: <a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> と <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> の両方に同名の <code>bs2_ForkType</code> 列挙型が定義されています。コードを修正する際は、両方のファイルで整合性が崩れないように注意する必要があります。</li>
-<li>**初期化未完了時の挙動**: 静的変数 <code>forktype</code> が <code>bs2_unknown</code> のまま処理が進行した場合、後続のプロセス生成ロジックが意図しない挙動をとる可能性があります。</li>
-<li>**OS固有の制約**: <code>ufork()</code> はユーザー名の大文字変換などの OS 固有の制約を伴います。この列挙型を用いた条件分岐を変更する際は、BS2000 のジョブ環境設定への影響を考慮する必要があります。</li>
-<li>**非互換性**: 本シンボルは BS2000 プラットフォーム固有のレガシーな実装であり、一般的な Unix/Linux 環境では使用されません。</li>
+<li>初期化されていない状態（<code>bs2_unknown</code>）のまま処理が進行した場合の具体的な挙動やフォールバックロジックは、提供された情報からは判明していません。</li>
+<li><code>ufork()</code> はユーザー名の大文字変換などの OS 固有の制約を伴うため、この列挙型を用いた条件分岐を変更する際は、BS2000 のジョブ環境設定への影響を考慮する必要があります。</li>
+<li>本シンボルは BS2000 プラットフォーム固有の実装であり、一般的な Unix/Linux 環境では使用されません。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> 内の <code>os_forktype()</code> および <code>os_fork()</code> の実装</li>
-<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> 内の <code>os_forktype()</code> の実装</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

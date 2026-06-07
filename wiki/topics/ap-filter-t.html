@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-filter-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_filter_t</h1>
 <h2>概念</h2>
-<p><code>ap_filter_t</code> は、Apache HTTP Server のフィルタチェーンにおいて、インストールされた個々のフィルタインスタンスを表現する構造体です。</p>
+<p><code>ap_filter_t</code> は、Apache HTTP Server のフィルタチェーンにおいて、インストールされた個々のフィルタインスタンスを表現する構造体です（<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>）。接続（<code>conn_rec</code>）やリクエスト（<code>request_rec</code>）に関連付けられ、パイプラインを流れるデータを処理する役割を持ちます。</p>
 <h2>なぜ重要か</h2>
-<p>この構造体は、Apache の入出力フィルタリング機構の中核を担います。リクエストやレスポンスのデータストリーム（<code>apr_bucket_brigade</code>）を順次加工・伝播するためのインターフェースを提供し、モジュール（例: <code>mod_include</code>）がコンテンツを動的に書き換えるなどの処理を可能にします。</p>
+<p>Apache のモジュールアーキテクチャにおいて、データの入力・出力をモジュール化し、段階的に加工・制御するための基盤となるからです。<code>ap_filter_t</code> を介して、複数のフィルタが <code>apr_bucket_brigade</code> 形式のデータストリームを順次処理（データの変形、ヘッダーの付与、コンテンツ長の計算など）していくことができます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,25 +11,35 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/util_filter.h#ap_filter_t</code></li>
-<li><code>symbol:modules/filters/mod_include.c#ap_filter_t</code></li>
+<li><code>symbol:include/util_filter.h#ap_filter_t</code>: フィルタインスタンスを定義する構造体。</li>
+<li><code>symbol:modules/filters/mod_include.c#ap_filter_t</code>: フィルタインスタンスを利用する具体的な実装例（SSIフィルタなど）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供された情報からは、フィルタチェーン全体の初期化から破棄に至る完全なエンドツーエンドの流れは未だ判明していません。</p>
-<p>ただし、部分的なデータフローとして、フィルタは <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a>（出力）や <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a>（入力）を介して <code>apr_bucket_brigade</code> データを順次処理します。フィルタは <code>ctx</code> ポインタを用いて状態を保持し、必要に応じて <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を用いてデータを一時保存しながら、次段のフィルタへとデータを渡します。</p>
+<p>提供されたコンテキストからは、フィルタチェーンの構築から破棄にいたる完全なエンドツーエンドの流れは定義されていません。</p>
+<p>部分的に判明している流れは以下の通りです： 1. フィルタは、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> や <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を介して、<code>apr_bucket_brigade</code> データストリームを順次受け取ります。 2. 各フィルタインスタンスは、<code>ctx</code> ポインタ（状態保持用）や <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を用いてデータを一時保存しながら処理を行います。 3. 処理されたデータは、チェーン内の次のフィルタへと引き渡されます。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>フィルタは <a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a> に基づいて、フィルタチェーン内で適切にソートされていなければなりません。</li>
-<li><code>AP_FTYPE_CONNECTION</code> 以上の型を持つフィルタは、サブリクエスト内では使用できません。</li>
+<li>**フィルタのソート順**: フィルタは <a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a> に基づいてチェーン内でソートされます。</li>
+<li>**サブリクエストの制限**: <code>AP_FTYPE_CONNECTION</code> 以上のフィルタは、サブリクエスト内では使用できません。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**ブリゲードの所有権**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> に渡される <code>apr_bucket_brigade</code> の所有権は呼び出し元にあるため、フィルタ内でデータを保持し続ける必要がある場合は、必ず <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を使用してデータを退避させる必要があります。</li>
-<li>**リソースの解放**: ストリームの終了マーカー（EOS）に到達した際、各フィルタは内部状態を適切にフラッシュし、確保したリソースを解放しなければなりません。</li>
-<li>**メンバへの直接アクセス**: 本構造体は不透明ポインタとして扱われることが多いため、詳細なメンバ定義に依存したコードを書く際は、<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> の完全な定義を確認する必要があります。</li>
+<li>**ブリゲードの所有権**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> に渡されるブリゲードの所有権は呼び出し元にあります。そのため、フィルタ内でデータを保持・退避させる場合は、必ず <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を使用する必要があります。</li>
+<li>**リソースの解放**: ストリーム終了マーカー（EOSなど）の到達時に、各フィルタは内部状態を適切にフラッシュし、確保したリソースを解放しなければなりません。</li>
+<li>**不透明な構造体**: <code>ap_filter_t</code> は不透明ポインタとして扱われることが多いため、詳細なメンバへアクセスする際は <a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> の完全な定義を参照する必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> (<code>symbol:include/util_filter.h#ap_filter_t</code>): 構造体の定義とAPI宣言。</li>
-<li><a class="wiki-source-link" href="../../source/modules/filters/mod_include.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_include.c.html&quot;}, '*');"><code>modules/filters/mod_include.c</code></a> (<code>symbol:modules/filters/mod_include.c#ap_filter_t</code>): 実際のフィルタモジュールにおける具体的な利用例。</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> (<code>symbol:include/util_filter.h#ap_filter_t</code>)</li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_include.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_include.c.html&quot;}, '*');"><code>modules/filters/mod_include.c</code></a> (<code>symbol:modules/filters/mod_include.c#ap_filter_t</code>)</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>server/util_filter.c</code></a> (フィルタチェーンの順序制御やエラーハンドリングの実装コード)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

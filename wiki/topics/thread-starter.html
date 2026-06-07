@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/thread-starter.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>thread_starter</h1>
 <h2>概念</h2>
-<p><code>thread_starter</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）である Event MPM および Worker MPM において、子プロセス内のスレッド（リスナーおよびワーカー）を生成・管理するための情報を保持するコンテナ構造体（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。</p>
+<p><code>thread_starter</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュール（MPM）である <code>event</code> および <code>worker</code> において、子プロセス内のスレッド（リスナーおよびワーカー）を生成・管理するための情報を保持する構造体（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。</p>
 <h2>なぜ重要か</h2>
-<p>この構造体は、子プロセスの初期化時にスレッドプールをセットアップするための共通コンテキストとして機能します。リスナースレッドやワーカースレッドの生成に必要な属性（<code>threadattr</code>）、スレッドハンドル（<code>threads</code>、<code>listener</code>）、および子プロセスの識別番号（<code>child_num_arg</code>）を1つにまとめ、スレッド生成を制御する関数（<code>create_listener_thread</code> など）へ一貫したインターフェースで情報を渡す役割を担っています。</p>
+<p>この構造体は、子プロセスの起動時にスレッドプールを初期化する際のコンテキストとして機能します。リスナースレッドやワーカー用スレッドの生成、管理、および終了処理に必要な情報（スレッドハンドル、属性、プロセス識別子など）を1つのコンテナにまとめ、スレッド生成関数（<code>create_listener_thread</code> など）へ一括して渡す役割を担うため、マルチスレッド型MPMの並行処理基盤において重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:server/mpm/event</code></li>
@@ -11,25 +11,44 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#thread_starter</code></li>
-<li><code>symbol:server/mpm/worker/worker.c#thread_starter</code></li>
+<li>**<code>symbol:server/mpm/event/event.c#thread_starter</code>**</li>
+<p><code>event</code> MPMにおける定義。接続管理スレッドのライフサイクルと密接に関連します。</p>
+<li>**<code>symbol:server/mpm/worker/worker.c#thread_starter</code>**</li>
+<p><code>worker</code> MPMにおける定義。<code>child_main</code> 関数などでインスタンス化されます。</p>
 </ul>
+<p>両モジュールにおいて、以下の同一のシグネチャで定義されています。</p>
+<pre><code>typedef struct {
+    apr_thread_t **threads;
+    apr_thread_t *listener;
+    int child_num_arg;
+    apr_threadattr_t *threadattr;
+} thread_starter;</code></pre>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **インスタンス化と初期化**: 子プロセスのメイン処理（Worker MPM では <code>child_main</code> など）において、<code>thread_starter</code> 構造体がインスタンス化され、メモリが割り当てられます。 2. **パラメータの設定**: 生成されるワーカー数に応じたスレッド配列（<code>threads</code>）や、APR（Apache Portable Runtime）のスレッド属性（<code>threadattr</code>）などの各フィールドが適切に設定されます。 3. **スレッド生成の実行**: 構造体が <code>create_listener_thread</code> などの関数に引数として渡されます。 4. **スレッドの起動**: 構造体内の情報を元に、<code>apr_thread_create</code> などの APR 関数が呼び出され、実際のリスナーおよびワーカースレッドが生成・制御されます。</p>
-<p>※なお、スレッド生成後の詳細なライフサイクル管理や、エラー発生時の詳細なリカバリフローなど、エンドツーエンドの完全な流れは提供された情報からは判明していません。</p>
+<p>1. **初期化とインスタンス化**: 子プロセスの起動時（例: <code>worker</code> MPMの <code>child_main</code> 内）に、<code>thread_starter</code> 構造体がインスタンス化され、メモリが割り当てられます。 2. **コンテキストの設定**: スレッド生成に必要な属性（<code>threadattr</code>）や、ワーカー数を格納するスレッド管理用配列（<code>threads</code>）などの各フィールドが初期化されます。 3. **スレッドの生成**: この構造体は <code>create_listener_thread</code> などの関数に引数として渡されます。内部で APR のスレッド生成関数（<code>apr_thread_create</code> など）が呼び出され、リスナーおよびワーカー用スレッドが生成・起動されます。</p>
+<p>なお、スレッド生成後の詳細なライフサイクルや、エラーハンドリングを含む完全なエンドツーエンドのフローの全容は、提供された情報からは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**メモリの確保**: <code>thread_starter</code> 構造体および <code>threads</code> 配列は、スレッド生成処理に渡される前に、<code>apr_palloc</code> 等を用いて適切にメモリ領域が確保されていなければなりません。</li>
-<li>**属性の初期化**: <code>threadattr</code> は、APR のスレッド属性として事前に適切に初期化されている必要があります。</li>
+<li>**メモリ確保の保証**: <code>threads</code> 配列は、生成されるワーカー数に応じたメモリ領域が確保されている必要があります。また、構造体自体も <code>apr_palloc</code> 等を用いて適切にメモリが割り当てられている必要があります。</li>
+<li>**属性の初期化**: <code>threadattr</code> は、APR のスレッド属性として適切に初期化されている必要があります。</li>
+<li>**事前初期化の徹底**: スレッド生成処理（<code>create_listener_thread</code> 等）に渡される前に、構造体内のすべてのフィールドが適切に初期化されていなければなりません。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**メモリ割り当ての失敗**: <code>apr_palloc</code> 等によるメモリ確保が失敗した場合、構造体へのアクセスは未定義動作となります。</li>
-<li>**不完全な初期化**: <code>threadattr</code> や <code>threads</code> 配列が正しく設定されていない場合、スレッドの起動に失敗する原因となります。</li>
-<li>**モジュール間の混同**: <code>event</code> MPM と <code>worker</code> MPM で同名の構造体が定義されています。これらは類似のアーキテクチャと共通の設計思想を持っていますが、それぞれのモジュール（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> と <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a>）内で独立して定義・管理されています。変更を加える際は、対象モジュール特有のライフサイクルやメモリ管理への影響を確認する必要があります。</li>
+<li>**メモリ割り当て失敗**: <code>apr_palloc</code> 等によるメモリ確保に失敗した場合、構造体へのアクセスは未定義動作となります。</li>
+<li>**初期化不備による生成失敗**: <code>threadattr</code> や <code>threads</code> 配列が正しく設定されていない場合、スレッドの起動に失敗する可能性があります。</li>
+<li>**モジュール間の混同**: <code>event</code> MPM と <code>worker</code> MPM で同名の構造体が定義されており、設計思想は共通していますが、それぞれのモジュール内でのメモリ管理、ライフサイクル、および接続管理方式が異なります。コード変更時には、対象のMPMファイルを正確に区別して作業する必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （Event MPM における構造体定義とスレッド生成フロー）</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （Worker MPM における構造体定義と <code>child_main</code> での利用箇所）</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>（<code>event</code> MPMにおける構造体定義とスレッド生成フロー）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>（<code>worker</code> MPMにおける構造体定義と <code>child_main</code> での利用箇所）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

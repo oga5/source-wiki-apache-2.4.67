@@ -1,38 +1,47 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/skip-ws.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>skip_ws</h1>
 <h2>概念</h2>
-<p><code>skip_ws</code> は、Apache HTTP Server（httpd）の特定モジュールにおいて、解析対象の文字列バッファから連続する空白文字（スペース <code>&#x27; &#x27;</code> やタブ <code>&#x27;\t&#x27;</code>）をスキップし、次の非空白文字（トークン）へ読み取り位置を進めるためのユーティリティ関数です。</p>
+<p><code>skip_ws</code> は、文字列解析において現在の読み取り位置から連続する空白文字（スペース <code>&#x27; &#x27;</code> およびタブ <code>&#x27;\t&#x27;</code>）をスキップし、次の非空白文字へポインタを進めるためのユーティリティ関数です。主に HTTP/2 関連の <code>Link</code> ヘッダー解析などで使用されます。</p>
 <h2>なぜ重要か</h2>
-<p>HTTP/2 などのプロトコル処理において、<code>Link</code> ヘッダーなどの特定のヘッダーフィールドや文字列データを正しくパースするためには、トークン間の不要な空白文字を正確に除去する必要があります。<code>skip_ws</code> は、このような構文解析処理において、境界条件（文字列の終端や空文字列など）を安全に扱いながら読み取り位置を前進させる役割を担っています。</p>
+<p>HTTP ヘッダー（特に <code>Link</code> ヘッダー）の解析において、トークン間に存在する任意の空白文字を正確に読み飛ばすことは、プロトコル仕様に準拠した正しいパースを行うために不可欠です。この共通処理をカプセル化することで、コードの重複を防ぎ、解析処理の堅牢性を高めています。</p>
 <h2>関与するモジュール</h2>
+<p>提供された情報に基づき、以下のモジュールが関与しています。</p>
 <ul>
 <li><code>module:modules/http2</code></li>
 <li><code>module:modules/md</code></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http2/h2_push.c#skip_ws</code>: <code>link_ctx</code> 構造体を用いて <code>Link</code> ヘッダー解析時の空白をスキップする静的関数。</li>
-<li><code>symbol:modules/http2/h2_proxy_util.c#skip_ws</code>: <a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>h2_push.c</code></a> と同様に空白スキップ処理を行う、または参照する関数。</li>
-<li><code>symbol:modules/md/md_util.c#skip_ws</code>: <code>modules/md</code> モジュール内で空白スキップを行う関数（詳細な実装仕様は提供されたコンテキストからは未詳）。</li>
+<li><code>symbol:modules/http2/h2_push.c#skip_ws</code>: <code>link_ctx</code> 構造体を用いて、文字列内の空白（スペース・タブ）をスキップする静的関数。</li>
+<li><code>symbol:modules/http2/h2_proxy_util.c#skip_ws</code>: <a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>h2_push.c</code></a> で定義された <code>skip_ws</code> を呼び出す、または同様の処理を行うエンティティ。</li>
+<li><code>symbol:modules/md/md_util.c#skip_ws</code>: <code>modules/md</code> モジュール内に存在する <code>skip_ws</code> 関連のエンティティ（詳細な実装や役割は提供されたコンテキストからは不明です）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p><code>modules/http2</code> における具体的な処理の流れは以下の通りです。</p>
-<p>1. <code>Link</code> ヘッダーなどの解析対象文字列と、現在のオフセット（<code>ctx-&gt;i</code>）、文字列長（<code>ctx-&gt;slen</code>）を保持する <code>link_ctx</code> 構造体を準備します。 2. <code>skip_ws(ctx)</code> が呼び出されると、現在の位置 <code>ctx-&gt;i</code> からスペース <code>&#x27; &#x27;</code> またはタブ <code>&#x27;\t&#x27;</code> が続く限りインクリメントを繰り返します。 3. 空白のスキップ処理が完了した後、読み取り位置が文字列の終端に達していなければ非ゼロ（真）を返し、終端に達していればゼロ（偽）を返します。</p>
-<p>なお、<code>modules/md</code> における <code>skip_ws</code> の具体的なエンドツーエンドの流れや、モジュール間を跨ぐ全体的な統合フローの詳細は、提供されたコンテキストからは不明です。</p>
+<p><code>modules/http2</code> における具体的な流れは以下の通りです。 1. <code>Link</code> ヘッダーなどの解析対象文字列と、現在のオフセット位置 <code>i</code>、文字列長 <code>slen</code> を保持する <code>link_ctx</code> 構造体が用意されます。 2. <code>skip_ws(ctx)</code> が呼び出されます。 3. <code>ctx-&gt;s[ctx-&gt;i]</code> がスペース <code>&#x27; &#x27;</code> またはタブ <code>&#x27;\t&#x27;</code> である間、インデックス <code>ctx-&gt;i</code> をインクリメントします。 4. スキップ処理後、インデックスが文字列の終端に達していなければ真（非ゼロ）、達していれば偽（ゼロ）を返します。</p>
+<p>なお、<code>modules/md</code> における <code>skip_ws</code> の具体的なエンドツーエンドの流れや、システム全体における詳細な統合フローは現時点では不明です。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**インデックスの範囲制限**: <code>link_ctx</code> を使用する実装において、現在の読み取り位置 <code>ctx-&gt;i</code> は常に <code>0</code> 以上かつ文字列長 <code>ctx-&gt;slen</code> 以下の範囲内に収まる必要があります。</li>
-<li>**終端判定の整合性**: 空白のみで文字列が終了した場合、または最初から空文字列であった場合、<code>ctx-&gt;i</code> は <code>ctx-&gt;slen</code> と等しくなり、関数は必ず <code>0</code>（偽）を返さなければなりません。</li>
-<li><code>modules/md</code> 側における不変条件の詳細は、提供されたコンテキストからは不明です。</li>
+<li><code>modules/http2/h2_push.c#skip_ws</code> において、入力となる <code>link_ctx</code> 構造体のポインタは有効でなければなりません。</li>
+<li>解析中のインデックス <code>ctx-&gt;i</code> は、常に <code>0</code> 以上 <code>ctx-&gt;slen</code>（文字列の長さ）以下の範囲内に維持される必要があります。</li>
+<li>その他のモジュール（<code>modules/md</code> など）における不変条件は現時点では不明です。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**バッファオーバーラン**: 文字列の長さ（<code>ctx-&gt;slen</code>）のチェックを怠ると、空白文字の判定中にバッファの境界を越えてアクセスする危険性があります。<code>skip_ws</code> ではループ条件として <code>ctx-&gt;i &lt; ctx-&gt;slen</code> を厳格に評価する必要があります。</li>
-<li>**モジュール間の重複と差異**: <code>skip_ws</code> は <a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>h2_push.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a>、および <a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>md_util.c</code></a> にそれぞれ定義または参照されています。これらは同名の個別実装であるため、一方の仕様変更（例えば、スキップ対象とする空白文字の定義変更など）が他方に自動的に適用されない、あるいは予期せぬ動作の不一致を招く可能性があります。</li>
+<li>**文字列終端の判定**: 空白文字のみで文字列が終了した場合、<code>ctx-&gt;i</code> は <code>ctx-&gt;slen</code> と等しくなり、戻り値は <code>0</code>（偽）を返します。呼び出し側でこの戻り値を適切にハンドリングしないと、終端以降の不正なメモリアクセスや解析エラーに繋がる可能性があります。</li>
+<li>**モジュール間の差異**: <code>modules/http2</code> と <code>modules/md</code> のそれぞれに <code>skip_ws</code> が存在しますが、これらが同一のシグネチャや振る舞いを持つか、あるいは完全に独立した実装であるかは提供された情報からは特定できません。変更を加える際は、対象のモジュールに閉じた影響範囲であるかを確認する必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> （<code>skip_ws</code> 実装および <code>link_ctx</code> 構造体の定義）</li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a></li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> の <code>skip_ws</code> 定義および <code>link_ctx</code> 構造体の定義</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> における <code>skip_ws</code> の呼び出し箇所</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> における <code>skip_ws</code> の定義と利用箇所</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

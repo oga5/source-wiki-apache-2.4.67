@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/attr-char.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>attr_char</h1>
 <h2>概念</h2>
-<p><code>attr_char</code> は、HTTPヘッダーやトークン解析において、特定の文字が「属性（attribute）」の一部として許容される文字であるかを判定するための関数です。英数字に加えて、特定の記号のみを許容する厳格なホワイトリスト方式の判定ロジックを提供します。</p>
+<p><code>attr_char</code> は、HTTPヘッダーやトークンの解析において、特定の文字が「属性（attribute）」の一部として許容される文字であるかどうかを判定するためのヘルパー関数です。</p>
 <h2>なぜ重要か</h2>
-<p>HTTP仕様（RFC）に準拠したトークン解析を正確に行うために重要です。特定の記号や英数字のみを厳格に制限することで、不正な文字によるパースエラーを防止し、モジュール間（HTTP/2やMDなど）で一貫した属性文字のバリデーションを可能にします。</p>
+<p>HTTP/2（Server Pushやプロキシ処理など）やManaged Domains（MD）モジュールにおいて、仕様（RFC）に準拠した厳格なトークン解析を行うために重要です。許容される文字をホワイトリスト方式で制限することで、不正な文字の混入を防ぎ、安全なパース処理を保証します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:modules/http2</code></li>
@@ -11,32 +11,35 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http2/h2_proxy_util.c#attr_char</code></li>
-<li><code>symbol:modules/http2/h2_push.c#attr_char</code></li>
-<li><code>symbol:modules/md/md_util.c#attr_char</code></li>
+<li><code>symbol:modules/http2/h2_push.c#attr_char</code> (定義および呼び出し元)</li>
+<li><code>symbol:modules/http2/h2_proxy_util.c#attr_char</code> (呼び出し元)</li>
+<li><code>symbol:modules/md/md_util.c#attr_char</code> (呼び出し元)</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供された情報からは、各モジュール（HTTP/2プロキシ、HTTP/2プッシュ、MDユーティリティ）における具体的なエンドツーエンドの処理フロー（どのようにトークンが抽出され、どのタイミングで <code>attr_char</code> が呼び出されるか）の全体像は完全には明らかになっていません。</p>
-<p>判明している範囲では、以下の呼び出し元からトークン解析のループ処理内で呼び出されます：</p>
-<ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> の 888行目付近</li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> の 217行目付近</li>
-<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> の 1397行目付近</li>
-</ul>
+<p>各モジュールにおけるトークン解析の全体的なエンドツーエンドの流れは、提供されたコンテキストからは完全には明らかになっていません。</p>
+<p>現時点で判明している部分的な流れは以下の通りです： 1. <a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>h2_push.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a>、または <a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>md_util.c</code></a> 内の解析処理において、ヘッダーやトークンの文字列を1文字ずつ走査します。 2. 各文字に対して <code>attr_char(c)</code> を呼び出し、属性文字として有効かどうかを判定します。 3. 判定結果（<code>1</code> または <code>0</code>）に基づいて、トークンの切り出しやバリデーションを継続または終了します。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**ホワイトリストによる文字制限**: 許容される文字は、英数字（<a class="wiki-source-link" href="../../source/server/gen_test_char.c.html#L20" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>apr_isalnum</code></a> が真を返すもの）および特定の記号（<code>!</code>, <code>#</code>, <code>$</code>, <code>&amp;</code>, <code>+</code>, <code>-</code>, <code>.</code>, <code>^</code>, <code>_</code>, `<code> </code> `<code>, </code>|<code>, </code>~`）のみに限定されます。</li>
-<li>**非許容文字の排除**: <code>NULL</code> 文字や制御文字、および上記に含まれない記号に対しては、常に <code>0</code>（非許容）を返します。</li>
+<li>**厳格なホワイトリスト制限**: 許容される文字は、英数字（<a class="wiki-source-link" href="../../source/server/gen_test_char.c.html#L20" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>apr_isalnum</code></a> が真を返すもの）および特定の記号（<code>!</code>, <code>#</code>, <code>$</code>, <code>&amp;</code>, <code>+</code>, <code>-</code>, <code>.</code>, <code>^</code>, <code>_</code>, `<code> </code> `<code>, </code>|<code>, </code>~`）のみに限定されます。</li>
+<li>**制御文字・NULL文字の排除**: <code>NULL</code> 文字や制御文字は <a class="wiki-source-link" href="../../source/server/gen_test_char.c.html#L20" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>apr_isalnum</code></a> が偽を返すため、常に非許容（<code>0</code>）となります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**文字コード依存性**: 入力が <code>char</code> 型の範囲外である場合、判定処理が依存している <a class="wiki-source-link" href="../../source/server/gen_test_char.c.html#L20" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>apr_isalnum</code></a> の挙動に影響を受ける可能性があります。</li>
-<li>**RFC仕様との乖離**: 許容する記号リストを変更する場合、HTTP仕様（RFC）で定義されている属性トークンの仕様と不整合を起こさないよう注意する必要があります。</li>
-<li>**パフォーマンスへの影響**: トークン解析のループ内で頻繁に呼び出されるため、この関数内での非効率な処理の追加は全体のパフォーマンス低下を招く恐れがあります。</li>
+<li>**RFC仕様との乖離**: 許容する記号を変更する場合、HTTP仕様（RFC）で定義されているトークン規則と整合性が取れなくなる可能性があります。</li>
+<li>**境界値の挙動**: 入力が <code>char</code> 型の範囲外である場合、内部で依存している <a class="wiki-source-link" href="../../source/server/gen_test_char.c.html#L20" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>apr_isalnum</code></a> の挙動に依存するため、予期しない判定結果を招く恐れがあります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> （<code>attr_char</code> の具体的な実装と、HTTP/2プッシュ処理での使用例）</li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> （HTTP/2プロキシユーティリティでの使用例）</li>
-<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> （Managed Domainsユーティリティでの使用例）</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a> （<code>attr_char</code> の具体的な実装と、<a class="wiki-source-link" href="../../source/modules/http2/h2_push.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push.html&quot;}, '*');"><code>h2_push</code></a> 内でのトークン解析処理）</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a> （プロキシユーティリティにおける呼び出しコンテキスト）</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a> （Managed Domains ユーティリティにおける呼び出しコンテキスト）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

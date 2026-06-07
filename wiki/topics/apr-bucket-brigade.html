@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/apr-bucket-brigade.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>apr_bucket_brigade</h1>
 <h2>概念</h2>
-<p><code>apr_bucket_brigade</code> は、Apache HTTP Server のフィルタチェーンにおいて、データ（バケット）のストリームを保持、管理、および転送するための抽象的なコンテナ（バケットの連結リスト）です。</p>
+<p><code>apr_bucket_brigade</code> は、Apache HTTP Server のフィルタチェーンにおいて、データ（バケット）のストリームを保持・管理・転送するための抽象的なコンテナ（バケットの連結リスト）です。<code>apr_buckets.h</code> で定義される不透明な構造体であり、フィルタ関数やハンドラ関数の引数としてポインタ型で使用されます。</p>
 <h2>なぜ重要か</h2>
-<p><code>apr_bucket_brigade</code> は、Apache のフィルタフレームワークにおけるデータ転送の基本単位です。各フィルタは、このブリゲードを介してデータを受け取り、変換、追加、削除などの操作を施した上で後続のフィルタへ伝播させます。これにより、効率的かつ柔軟なストリームデータのパイプライン処理が可能になります。</p>
+<p>Apache のフィルタフレームワークにおけるデータ転送の基本単位だからです。フィルタチェーン内を順次通過するデータストリームとして機能し、各フィルタはこれを通じてバケットを順次処理し、データの変換、追加、削除、あるいは SSI（Server Side Includes）における変数展開などを実行します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,31 +11,38 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li>**<code>symbol:include/util_filter.h#apr_bucket_brigade</code>**: フィルタ関数（<code>ap_out_filter_func</code> など）の引数として使用され、フィルタチェーン内でのデータ操作や所有権管理の基準を定義します。</li>
-<li>**<code>symbol:modules/filters/mod_include.h#apr_bucket_brigade</code>**: Server Side Includes (SSI) フィルタにおいて、ハンドラ関数（<code>include_handler_fn_t</code>）が条件分岐や変数展開の結果を格納・出力するために使用されます。</li>
+<li>**<code>symbol:include/util_filter.h#apr_bucket_brigade</code>**</li>
+<p>フィルタ関数（<code>ap_out_filter_func</code> 等）の引数として渡され、処理対象のデータストリームを提供・管理するための定義です。</p>
+<li>**<code>symbol:modules/filters/mod_include.h#apr_bucket_brigade</code>**</li>
+<p>SSI フィルタのハンドラシグネチャ（<code>include_handler_fn_t</code>）の引数として使用され、条件分岐や変数展開の結果を格納・転送するために定義されています。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **入力と受け渡し**: <a class="wiki-source-link" href="../../source/server/core_filters.c.html#L453" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__ap_core_output_filter.html&quot;}, '*');"><code>ap_core_output_filter</code></a>、<a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html#L399" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;}, '*');"><code>ap_byterange_filter</code></a>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>ap_http_header_filter</code></a> などのフィルタ関数が、引数として <code>apr_bucket_brigade</code> を受け取ります。 2. **フィルタ処理**:</p>
-<ul>
-<li>各フィルタはブリゲード内のバケット（<a class="wiki-source-link" href="../../source/modules/http2/h2_util.h.html#L476" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>apr_bucket</code></a>）を順次処理します。</li>
-<li><code>mod_include</code> では、登録されたハンドラが <a class="wiki-source-link" href="../../source/modules/filters/mod_include.h.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_include_h__include_ctx_t.html&quot;}, '*');"><code>include_ctx_t</code></a> を参照して処理を行い、その結果をブリゲードに挿入します。</li>
-<p>3. **後続への伝達**: 処理されたブリゲードは、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を通じて次のフィルタへと渡されます。 4. **終端処理**: ストリームの終了時（EOS）には、各フィルタが内部状態をフラッシュし、リソースを解放します。</p>
-</ul>
-<p>*注意: フィルタチェーン全体における具体的なバケットの生成から最終的なネットワーク送信に至る完全なエンドツーエンドのライフサイクルは、提供されたコンテキストからは一部未検証です。*</p>
+<p>1. **入力と受け渡し**: フィルタ関数（<a class="wiki-source-link" href="../../source/server/core_filters.c.html#L453" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__ap_core_output_filter.html&quot;}, '*');"><code>ap_core_output_filter</code></a>、<a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html#L399" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;}, '*');"><code>ap_byterange_filter</code></a>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>ap_http_header_filter</code></a> など）や SSI ハンドラ（<code>include_handler_fn_t</code>）が、引数として <code>apr_bucket_brigade</code> を受け取ります。 2. **バケットの処理**: フィルタはブリゲード内のバケットを順次処理し、必要に応じて変換、追加、削除、分割を行います。SSI フィルタ実行時には、ハンドラが <a class="wiki-source-link" href="../../source/modules/filters/mod_include.h.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_include_h__include_ctx_t.html&quot;}, '*');"><code>include_ctx_t</code></a> を参照して展開した結果をブリゲードに挿入します。 3. **後続への転送**: 処理されたブリゲードは、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介して後続のフィルタへ渡されます。 4. **終端と解放**: ストリームの終了時（EOS 検出時など）には、各フィルタが内部状態をフラッシュし、リソースを解放します。</p>
+<p>*注意: フィルタチェーン全体の詳細なライフサイクルや、すべての具体的なフィルタ間におけるエンドツーエンドの完全なデータフローは、提供されたモジュール情報の範囲内では完全には網羅されていません。*</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**所有権の帰属**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介してデータを渡す際、ブリゲードの所有権は呼び出し元に帰属します。</li>
-<li>**データの保持**: フィルタ内でデータを保持（退避）する必要がある場合は、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を使用して明示的に所有権を管理しなければなりません。</li>
+<li>**所有権の管理**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介してデータを渡す際、ブリゲードの所有権は呼び出し元に帰属します。フィルタ内でデータを保持する必要がある場合は、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を使用して明示的に所有権を管理しなければなりません。</li>
+<li>**データ転送の基本単位**: フィルタ処理の過程でバケットの挿入、削除、分割が行われることがありますが、一貫してデータ転送の基本コンテナとして機能し続ける必要があります。</li>
 </ul>
+<p>*注意: その他の詳細な内部状態や排他制御に関する不変条件は、提供されたコンテキストからは不明です。*</p>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**メモリ管理の誤り**: メモリ所有権の管理を誤ると、解放済みメモリへのアクセスやメモリリークが発生する原因になります。</li>
-<li>**EOS（終端）処理の不備**: ストリームの終端（EOS）に達した際の処理が適切に行われない場合、フィルタチェーンが停止したり、データが欠損したりする可能性があります。</li>
-<li>**エラー伝播の無視**: バケットの読み込みエラーやメモリ不足が発生した際、<code>apr_status_t</code> 型の戻り値によるエラー伝播を適切に処理しないと、システムの不安定化を招きます。</li>
+<li>**メモリ管理の誤り**: メモリ所有権の管理（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> の適切な使用など）を誤ると、解放済みメモリへのアクセスやメモリリークが発生する原因になります。</li>
+<li>**エラー伝播の欠落**: メモリ不足やバケット読み込みエラーが発生した際、<code>apr_status_t</code> 型の戻り値を通じて適切にエラーを伝播させないと、システムの不安定化を招きます。</li>
+<li>**終端（EOS）処理の不備**: ストリームの終端（EOS）に達した際の処理が適切に行われない場合、フィルタチェーンが停止したり、データが欠損したりする可能性があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li>**<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>**: フィルタ関数のシグネチャや、ブリゲードを扱う基本APIが定義されています。</li>
-<li>**<a class="wiki-source-link" href="../../source/modules/filters/mod_include.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_include.h.html&quot;}, '*');"><code>modules/filters/mod_include.h</code></a>**: SSI フィルタにおけるブリゲードの具体的な利用方法（<code>include_handler_fn_t</code>）が定義されています。</li>
-<li>**<code>apr_buckets.h</code>** (外部依存): バケットおよびブリゲードの内部構造や、詳細な操作関数群（作成、分割、削除など）を理解するために参照する必要があります。</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> : フィルタ関数のシグネチャや <code>ap_filter_t</code> との関連性について。</li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_include.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_include.h.html&quot;}, '*');"><code>modules/filters/mod_include.h</code></a> : SSI ハンドラ（<code>include_handler_fn_t</code>）におけるブリゲードの利用方法について。</li>
+<li>APR（Apache Portable Runtime）の <code>apr_buckets.h</code> : バケットおよびブリゲードの具体的な操作関数群の定義。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

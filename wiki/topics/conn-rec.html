@@ -1,10 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/conn-rec.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>conn_rec</h1>
 <h2>概念</h2>
-<p><code>conn_rec</code> は、Apache HTTP Server においてクライアントとサーバー間の個別の接続（Connection）状態を保持・管理するための中心的なデータ構造（構造体）です。接続ごとのIPアドレス、ソケット、フィルタチェーン、Keep-Alive 状態などのコンテキストを保持し、接続の確立から終了までのライフサイクルを通じて各処理フェーズに受け渡されます。</p>
+<p><code>conn_rec</code> は、Apache HTTP Server においてクライアントとサーバー間の個別の接続（Connection）状態を保持するための中心的なデータ構造です。コアシステム（<a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a>）で定義され、HTTP/2 モジュール（<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>modules/http2/h2_workers.h</code></a>）などの各モジュールにおいて、ワーカーが処理する個別の接続状態を表現・管理するために広く参照されます。</p>
 <h2>なぜ重要か</h2>
-<p><code>conn_rec</code> は、Apache HTTP Server の接続処理の基盤として以下の役割を担います。</p>
-<p>1. **接続状態の一元管理**: フィルタチェーンやソケット情報、メモリプール（APRプール）などの接続固有のコンテキストを保持し、<a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> などのコア関数を通じて処理フローを制御します。 2. **HTTP/2 ワーカーとの連携**: HTTP/2 モジュール（<code>h2_workers</code>）において、ワーカーが非同期または並行して処理する個別の接続状態を表現し、ストリーム処理やフィルタ処理を実行するために不可欠です。</p>
+<p>この構造体は、接続のライフサイクルを通じて維持されるコンテキストであり、IPアドレス、ソケット情報、フィルタチェーン、Keep-Alive 状態などの接続ごとの重要な状態を保持します。HTTP/2 などのマルチスレッドや非同期処理を行うモジュールにおいても、ワーカーが適切な接続コンテキストを取得・処理し、ライフサイクルを管理するための基盤として機能するため極めて重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -12,27 +11,36 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/httpd.h#conn_rec</code>: コアで定義される、接続状態を保持する中心的な <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>。</li>
-<li><code>symbol:modules/http2/h2_workers.h#conn_rec</code>: HTTP/2 ワーカーが処理対象の接続コンテキストとして参照する <code>typedef</code>。</li>
+<li><code>symbol:include/httpd.h#conn_rec</code>: 接続状態を保持する中心的な構造体定義。</li>
+<li><code>symbol:modules/http2/h2_workers.h#conn_rec</code>: HTTP/2 ワーカーが処理する接続コンテキストとしての参照。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供された情報に基づく、接続処理のおおよその流れは以下の通りです。</p>
-<p>1. **接続の確立と初期化**: 接続が確立されると <code>conn_rec</code> が生成され、APRプール管理下で初期化されます。 2. **ワーカーによる取得**: HTTP/2 の文脈では、<code>h2_workers</code> のワーカーが <code>next</code> コールバックを介して <code>conn_rec</code> を取得します。 3. **処理の実行**: ワーカーは取得した <code>conn_rec</code> に対して、HTTP/2 ストリーム処理やフィルタ処理を実行します。コアの <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> などの接続管理関数もこの構造体を操作します。 4. **処理の完了と解放**: 処理終了後、<a class="wiki-source-link" href="../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a> コールバック（<code>ap_conn_producer_done</code> など）が呼び出され、接続の解放や後処理が行われます。</p>
-<p>※なお、接続の確立から破棄に至る詳細な内部状態遷移や、コアとHTTP/2モジュール間における完全なエンドツーエンドの制御フローの全容は、提供された情報からは未確定です。</p>
+<p>提供された情報に基づく、接続処理の基本的な流れは以下の通りです：</p>
+<p>1. **接続の確立と受け渡し**: 接続が確立されると、<code>conn_rec</code> が作成され、<a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> などの関数を通じて接続の処理フローへ渡されます。 2. **ワーカーによる取得**: HTTP/2 モジュール（<code>h2_workers</code>）の文脈では、ワーカーが <code>next</code> コールバックを介して <code>conn_rec</code> を取得します。 3. **処理の実行**: ワーカーは取得した <code>conn_rec</code> に対して、HTTP/2 のストリーム処理やフィルタ処理を実行します。 4. **完了と解放**: 処理終了後、<a class="wiki-source-link" href="../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a> コールバック（<code>ap_conn_producer_done</code> など）が呼び出され、接続の解放や後処理が行われます。</p>
+<p>※なお、接続の確立から破棄に至る詳細なコア側のエンドツーエンドの全フローや、内部の具体的な状態遷移の全容は、提供された情報からは完全には特定されていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**ライフサイクルとメモリ管理**: <code>conn_rec</code> 内の多くのフィールドは、Apache Portable Runtime (APR) のプール管理下にあり、接続のライフサイクルを通じて維持される必要があります。</li>
-<li>**排他制御**: 複数のスレッドから同一の <code>conn_rec</code> を同時に操作することは禁止されており、HTTP/2 モジュール内では <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> による排他制御が前提となります。</li>
-<li>**ワーカー処理中の有効性**: <code>h2_workers</code> の文脈において、ワーカーが取得した <code>conn_rec</code> は、処理が完了するまで有効でなければなりません。</li>
+<li>**ライフサイクルの維持**: <code>conn_rec</code> は接続のライフサイクルを通じて維持されるコンテキストであり、構造体内の多くのフィールドは Apache Portable Runtime (APR) のプール管理下にあります。</li>
+<li>**ワーカー処理中の有効性**: <code>h2_workers</code> が取得した <code>conn_rec</code> は、処理が完了するまで有効である必要があります。</li>
+<li>**排他制御**: 複数のスレッドから同一の <code>conn_rec</code> を操作することは禁止されており、<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> による排他制御が前提となります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**直接的な構造体変更の制限**: <code>conn_rec</code> は非常に広範かつ重要なデータ構造であるため、モジュール開発時に不必要な変更を加えることは避けるべきです。構造体の変更は <a class="wiki-source-link" href="../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a> で定義されるモジュールマジックナンバー（MMN）の更新を伴い、バイナリ互換性に影響を与える可能性があります。</li>
-<li>**スレッドセーフティ**: <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> による適切な排他制御を欠いた状態で、複数スレッドから同一の <code>conn_rec</code> を操作すると、予期せぬ競合状態を引き起こす原因となります。</li>
+<li>**スレッドセーフティ**: 同一の <code>conn_rec</code> を複数スレッドから同時に操作すると競合が発生するため、必ず <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> 等による適切な排他制御を行う必要があります。</li>
+<li>**構造体の変更と互換性**: <code>conn_rec</code> は非常に広範かつ中心的なデータ構造です。モジュール開発時に不必要な変更を加えることは避け、構造体を変更する場合は <a class="wiki-source-link" href="../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a> で定義されるモジュールマジックナンバー（MMN）の更新を伴うバイナリ互換性の影響に注意する必要があります。</li>
+<li>**メモリ管理**: 接続切断やメモリ不足（OOM）時の挙動は、APR プール管理および <a class="wiki-source-link" href="../../source/server/util.c.html#L3136" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_abort_on_oom</code></a> の仕様に依存するため、メモリのライフサイクル管理に注意してください。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a> (<code>symbol:include/httpd.h#conn_rec</code> の定義と関連フィールド)</li>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>modules/http2/h2_workers.h</code></a> (<code>symbol:modules/http2/h2_workers.h#conn_rec</code> とワーカーによる接続処理のインターフェース)</li>
-<li><a class="wiki-source-link" href="../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>include/http_connection.h</code></a> (接続管理関数の定義)</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a> (構造体の定義と基本コンテキスト)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>modules/http2/h2_workers.h</code></a> (HTTP/2 ワーカーにおける接続管理)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

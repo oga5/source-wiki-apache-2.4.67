@@ -1,9 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-regkey-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_regkey_t</h1>
 <h2>概念</h2>
-<p><code>ap_regkey_t</code> は、Windows（Win32）環境においてレジストリキーのハンドル（<code>HKEY</code>）と APR（Apache Portable Runtime）のメモリプール（<code>apr_pool_t</code>）を統合し、レジストリ操作のライフサイクルを管理するための構造体です。公開ヘッダー上では不透明な構造体（opaque <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');">struct</a>）として定義され、実装ファイル内で具体的なメンバが定義されています。</p>
+<p><code>ap_regkey_t</code> は、Windows（Win32）環境においてレジストリキーのハンドル（<code>HKEY</code>）と APR（Apache Portable Runtime）のメモリプール（<code>apr_pool_t</code>）を紐付けて管理するための構造体です。</p>
+<p>ヘッダーファイル <a class="wiki-source-link" href="../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>include/ap_regkey.h</code></a> では不透明な構造体（opaque <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');">struct</a>）として宣言され、実装ファイル <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/ap_regkey.c.html&quot;}, '*');"><code>os/win32/ap_regkey.c</code></a> で具体的なメンバが定義されています。</p>
 <h2>なぜ重要か</h2>
-<p>Windows 上で動作する Apache HTTP Server において、レジストリ操作に伴うリソース管理（レジストリハンドルのクローズなど）を APR のプール管理機構と統合するためです。これにより、メモリプールが破棄される際に自動的に <code>RegCloseKey</code> が呼び出され、リソースリークを防ぐことができます。</p>
+<p>Windows プラットフォーム上で動作する Apache HTTP Server において、Win32 API のレジストリ操作を抽象化し、APR のメモリ管理およびライフサイクル管理システムと統合するために重要です。これにより、レジストリハンドルのクローズ漏れなどのリソースリークを防ぎ、安全なリソース管理を実現します。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><code>module:include</code></li>
@@ -11,25 +12,35 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:include/ap_regkey.h#ap_regkey_t</code>: 不透明な構造体としての宣言。</li>
+<li><code>symbol:include/ap_regkey.h#ap_regkey_t</code>: 外部公開用の不透明な構造体宣言。</li>
 <li><code>symbol:os/win32/ap_regkey.c#ap_regkey_t</code>: <code>apr_pool_t *pool</code> と <code>HKEY hkey</code> を保持する具体的な構造体定義。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **生成と初期化**: <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_open.html&quot;}, '*');"><code>ap_regkey_open</code></a> などの関数を呼び出すことで、親キーとパスを指定して <code>ap_regkey_t</code> のインスタンスが生成されます。この際、指定された <code>apr_pool_t</code> にクリーンアップハンドラ（<a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__regkey_cleanup.html&quot;}, '*');"><code>regkey_cleanup</code></a>）が登録されます。 2. **レジストリ操作**: 生成された <code>ap_regkey_t</code> ポインタを介して、<a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_value_get.html&quot;}, '*');"><code>ap_regkey_value_get</code></a> や <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_value_set.html&quot;}, '*');"><code>ap_regkey_value_set</code></a> などの関数を呼び出し、レジストリ値の取得や設定を行います。 3. **クローズと解放**: <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_close.html&quot;}, '*');"><code>ap_regkey_close</code></a> を呼び出して明示的にハンドルを解放しクリーンアップ登録を解除するか、関連付けられた <code>apr_pool_t</code> が破棄される際、自動的に <code>RegCloseKey</code> が実行されてハンドルが閉じられます。</p>
-<p>*注意: 具体的な HTTPD モジュール群からこれらの関数が呼び出される詳細なエンドツーエンドの制御フローは、提供されたソース情報からは不明です。*</p>
+<p>1. **生成と初期化**: <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_open.html&quot;}, '*');"><code>ap_regkey_open</code></a> などの関数を呼び出すことで、親キーとパスを指定して <code>ap_regkey_t</code> のインスタンスが生成されます。 2. **クリーンアップ登録**: インスタンス化の際、関連付けられた <code>apr_pool_t</code> に対して <code>apr_pool_cleanup_register</code> が実行され、クリーンアップハンドラ（<a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__regkey_cleanup.html&quot;}, '*');"><code>regkey_cleanup</code></a>）が登録されます。 3. **レジストリ操作**: 生成された <code>ap_regkey_t</code> ポインタを介して、<a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_value_get.html&quot;}, '*');"><code>ap_regkey_value_get</code></a> や <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_value_set.html&quot;}, '*');"><code>ap_regkey_value_set</code></a> などの関数を用いてレジストリ値の読み書きを行います。 4. **解放**: <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_close.html&quot;}, '*');"><code>ap_regkey_close</code></a> を呼び出して明示的にハンドルを解放しクリーンアップ登録を解除するか、関連付けられた <code>apr_pool_t</code> が破棄される際、登録されたクリーンアップハンドラによって自動的に <code>RegCloseKey</code> が実行され、ハンドルが閉じられます。</p>
+<p>*注意: 具体的にどの HTTPD モジュールがどのような順序でこれらの関数を呼び出すかといった、システム全体における具体的なエンドツーエンドの呼び出しフローの詳細は、提供された情報からは不明です。*</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**プラットフォーム制限**: <code>WIN32</code> マクロが定義されている環境でのみ有効です。</li>
-<li>**ハンドルの有効性**: 保持している <code>HKEY</code> ハンドルは、関連付けられた <code>apr_pool_t</code> が破棄されるか、または <code>ap_regkey_close()</code> が明示的に呼び出されるまで有効でなければなりません。プール破棄後に本構造体を参照した場合、ハンドルは無効となります。</li>
+<li>**プラットフォーム制限**: 本構造体および関連機能は、<code>WIN32</code> マクロが定義されている Windows 環境でのみ有効です。</li>
+<li>**ハンドルの有効性**: <code>hkey</code> は、関連付けられた <code>pool</code> が破棄されるか、<code>ap_regkey_close()</code> が明示的に呼び出されるまで有効でなければなりません。プール破棄後に本構造体を参照した場合、<code>hkey</code> は無効なハンドルとなり、後続のレジストリ操作は失敗します。</li>
+<li>**自動クリーンアップ**: プール破棄時には、登録されたクリーンアップハンドラを介して必ず自動的に <code>RegCloseKey</code> が実行されます。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**非再帰的な削除**: <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_remove.html&quot;}, '*');"><code>ap_regkey_remove</code></a> は非再帰的であり、サブキーが存在するレジストリキーを削除しようとすると失敗します。</li>
-<li>**列挙機能の欠如**: 本モジュールにはレジストリキーや値を列挙（enumerate）する機能は含まれていません。</li>
-<li>**プールの生存期間**: <code>ap_regkey_t</code> を扱う際は、適切なライフサイクルを持つ <code>apr_pool_t</code> を使用する必要があります。プールが破棄された後に構造体へアクセスすると、無効なハンドル操作による失敗を招きます。</li>
+<li>**非再帰的な削除**: <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_remove.html&quot;}, '*');"><code>ap_regkey_remove</code></a> は非再帰的に動作するため、サブキーが存在するレジストリキーを削除しようとすると失敗します。</li>
+<li>**列挙機能の欠如**: 本モジュールにはレジストリキーや値を列挙する機能が含まれていないため、列挙が必要な場合は注意が必要です。</li>
+<li>**プールのライフサイクル**: <code>ap_regkey_t</code> を扱う際は、ハンドルの生存期間に合致した適切なライフサイクルを持つ <code>apr_pool_t</code> を選択して関連付ける必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>include/ap_regkey.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/ap_regkey.c.html&quot;}, '*');"><code>os/win32/ap_regkey.c</code></a></li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>include/ap_regkey.h</code></a> (API 定義と不透明な構造体の宣言)</li>
+<li><a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/ap_regkey.c.html&quot;}, '*');"><code>os/win32/ap_regkey.c</code></a> (構造体の具体的な定義と Win32 API を用いた実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

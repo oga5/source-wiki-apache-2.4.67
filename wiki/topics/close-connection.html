@@ -1,12 +1,12 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/close-connection.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_connection</h1>
 <h2>概念</h2>
-<p><code>close_connection</code> は、Apache HTTP Server（httpd）プロジェクトにおいて、接続（コネクション）を適切に切断・終了するための処理を指します。この処理は、サーバー側のマルチプロセッシングモジュール（MPM）である <code>event</code> MPM と、クライアント側のベンチマークツールである <code>ab</code> (ApacheBench) の両方に同名のシンボルとして存在しており、それぞれの文脈で接続のクローズ処理を担っています。</p>
+<p><code>close_connection</code> は、Apache HTTP Server（httpd）プロジェクトにおいて、確立されたネットワーク接続を安全かつ適切に切断・クローズするための処理です。この処理は、サーバー側のマルチプロセッシングモジュール（MPM）と、クライアント側のベンチマークツール（Apache Bench）の双方に同名のシンボルとして存在し、それぞれの文脈で接続のライフサイクル管理を担っています。</p>
 <h2>なぜ重要か</h2>
-<p>接続の適切なクローズは、リソース管理とシステムの安定性において極めて重要です。</p>
+<p>接続のクローズ処理が適切に行われない場合、ソケットやメモリなどのシステムリソースがリークし、サーバーのパフォーマンス低下や、クライアント（ベンチマークツール）の正確な測定の妨げになります。</p>
 <ul>
-<li>**サーバー側 (<code>event</code> MPM)**: 非同期イベント駆動モデルにおいて、クライアントとの接続を正しく解放しなければ、ソケットやメモリなどのシステムリソースが枯渇（リーク）する原因になります。</li>
-<li>**クライアント側 (<code>ab</code>)**: ベンチマーク測定中に各接続を正しく閉じることで、正確な統計情報の収集や、並行接続数の正確な制御が可能になります。</li>
+<li>**サーバー側（event MPM）**: 非同期イベント駆動モデルにおいて、アクティブな接続やキープアライブ状態の接続を適切に解放し、システムリソースを再利用可能にするために不可欠です。</li>
+<li>**クライアント側（ab）**: ベンチマーク測定中に、各リクエストの完了後に接続を正しく閉じることで、正確な接続統計（レスポンスタイムなど）を記録し、次のテスト接続を円滑に開始するために重要です。</li>
 </ul>
 <h2>関与するモジュール</h2>
 <ul>
@@ -15,17 +15,28 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/mpm/event/event.c#close_connection</code>：<code>event</code> MPM において、クライアントとの接続を終了し、関連するリソースを解放するためのサーバー側関数。</li>
-<li><code>symbol:support/ab.c#close_connection</code>：ベンチマークツール <code>ab</code> において、対象サーバーとの接続を閉じ、必要に応じて次のリクエストを処理するためのクライアント側関数。</li>
+<li><code>symbol:server/mpm/event/event.c#close_connection</code>: event MPM において、クライアントとの接続を終了し、関連するリソースを解放する関数。</li>
+<li><code>symbol:support/ab.c#close_connection</code>: Apache Bench (<code>ab</code>) において、対象サーバーとのソケット接続を閉じ、ベンチマークの統計情報を更新する関数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、サーバー側（<code>event</code> MPM）およびクライアント側（<code>ab</code>）のそれぞれにおける、<code>close_connection</code> が呼び出される具体的なトリガーや、呼び出し後の詳細な内部フロー（ソケットのシャットダウン、バッファのフラッシュ、メモリプールの破棄など）の全容は解析されておらず、不明です。</p>
+<p>現時点では、詳細なソースコードの実装や、これら2つの <code>close_connection</code> 関数が呼び出される具体的なトリガー、および内部の呼び出しシーケンスなどのエンドツーエンドの流れは完全には解析されていません。</p>
+<p>一般的には、以下のような流れが想定されます： 1. **event MPM 側**: リクエスト処理の完了、タイムアウト、またはクライアント側からの切断検知に伴い、<code>close_connection</code> が呼び出され、ソケットのシャットダウンとクリーンアップが行われます。 2. **ab 側**: 指定された数のリクエストが完了した際、またはエラーが発生した際に、<code>close_connection</code> が呼び出されてソケットが閉じられ、次の接続試行や測定結果の集計へ移行します。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、<code>close_connection</code> の実行前後で維持されるべき具体的な不変条件（例：ソケットディスクリプタの無効化状態、関連する接続構造体の生存期間など）は解析されておらず、不明です。</p>
+<p>現時点では、各モジュールにおける <code>close_connection</code> 実行時の具体的な不変条件（例：ロックの保持状態、ソケットディスクリプタの有効性、スレッドセーフティの保証など）は特定されていません。</p>
 <h2>よくある落とし穴</h2>
-<p>現時点では、これらの関数を呼び出す際、あるいはカスタマイズする際における具体的な落とし穴（例：ハーフクローズ状態の誤認、タイムアウト処理との競合、二重解放など）は解析されておらず、不明です。</p>
+<p>現時点では、具体的なコードベースにおける落とし穴（リソースの二重解放、ハーフクローズ状態のハンドリング不備、シグナル割り込み時の挙動など）は特定されていません。</p>
 <h2>次に読む場所</h2>
+<p>詳細な実装仕様や動作条件を確認するためには、以下のソースファイルを参照してください。</p>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> の <code>close_connection</code> 関数の実装：サーバー側での非同期接続クローズのライフサイクルを理解するため。</li>
-<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a> の <code>close_connection</code> 関数の実装：クライアント側（ベンチマークツール）での接続終了と統計処理への影響を理解するため。</li>
-</ul></body></html>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>
