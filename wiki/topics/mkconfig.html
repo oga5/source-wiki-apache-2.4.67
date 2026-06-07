@@ -1,38 +1,34 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/mkconfig.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>mkconfig</h1>
 <h2>概念</h2>
-<p><code>mkconfig</code> は、Apache HTTP Serverの特定モジュールにおいて、モジュール固有の設定構造体をメモリ上に確保し、初期状態に設定するための内部ヘルパー関数（静的関数）です。同名の関数が複数のモジュールで独立して定義されています。</p>
+<p><code>mkconfig</code> は、Apache HTTP Serverの特定モジュールにおいて、モジュール固有の設定構造体をメモリ上に確保し、初期値を設定するための静的（<code>static</code>）なヘルパー関数です。同名の関数が複数のモジュールで個別に定義されています。</p>
 <h2>なぜ重要か</h2>
-<p>各モジュールが動作するために必要な設定情報を安全に初期化するために重要です。メモリプール（<code>apr_pool_t</code>）を利用して構造体の領域を確保し、メンバ変数に適切なデフォルト値を設定することで、未初期化メモリに起因する予期しない動作を防ぎます。</p>
+<p>各モジュール（<code>mod_suexec</code> や <code>mod_speling</code>）が動作するにあたり、リクエスト処理や動作制御に必要な設定値を保持する構造体を、APR（Apache Portable Runtime）のメモリプールを用いて安全に初期化するために重要です。これにより、未初期化メモリによる予期しない動作を防ぎます。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/generators</code></li>
-<li><code>module:modules/mappers</code></li>
+<li><a class="wiki-entity-link" href="../modules/modules__generators.html" target="wiki-view"><code>module:modules/generators</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__mappers.html" target="wiki-view"><code>module:modules/mappers</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li>**<code>symbol:modules/generators/mod_suexec.c#mkconfig</code>**: <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> 構造体を <code>apr_palloc</code> で確保し、<code>active</code> フラグを <code>0</code>（無効）に初期化します。</li>
-<li>**<code>symbol:modules/mappers/mod_speling.c#mkconfig</code>**: <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a> 構造体を <code>apr_pcalloc</code> で確保し、<code>enabled</code> を <code>0</code>、<code>check_case_only</code> を <code>0</code>、<code>check_basename_match</code> を <code>1</code>（有効）に初期化します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__generators__mod_suexec_c__mkconfig.html" target="wiki-view"><code>symbol:modules/generators/mod_suexec.c#mkconfig</code></a>**: <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> 構造体のメモリを <code>apr_palloc</code> で確保し、<code>active</code> フラグを <code>0</code>（無効）に初期化します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__mappers__mod_speling_c__mkconfig.html" target="wiki-view"><code>symbol:modules/mappers/mod_speling.c#mkconfig</code></a>**: <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a> 構造体のメモリを <code>apr_pcalloc</code> で確保し、<code>enabled</code> を <code>0</code>、<code>check_case_only</code> を <code>0</code>、<code>check_basename_match</code> を <code>1</code>（有効）に初期化します。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>各モジュールの設定処理フェーズにおいて、Apache コアの設定機構からこれらの関数が呼び出されます。</p>
-<p>1. メモリプール <code>apr_pool_t</code> が引数として渡されます。 2. 各 <code>mkconfig</code> 関数内で、プールから構造体用のメモリを確保します。 3. 構造体の各メンバにデフォルト値を代入します。 4. 初期化された構造体へのポインタ（<code>void *</code>）を返します。</p>
-<p>※ Apache の設定解析フェーズ全体における、これら関数が呼び出される具体的なコールスタックや、詳細なエンドツーエンドの制御フローは提供された情報からは完全には特定されていません。</p>
+<p>各モジュールの初期化フェーズにおいて、Apacheのコアまたは設定パーサーからこれらの関数が呼び出され、設定構造体が生成されます。 ただし、具体的な設定ファイルのパースからこれら <code>mkconfig</code> が呼び出され、最終的にリクエスト処理へ適用されるまでの詳細なエンドツーエンドの制御フロー全体は、提供された情報からは未解明です。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**メモリ確保の成否**: メモリ確保（<code>apr_palloc</code> / <code>apr_pcalloc</code>）が失敗した場合、APR（Apache Portable Runtime）の仕様に従い、プロセスが終了する可能性があります。</li>
+<li>**メモリ確保の成否**: いずれの関数もAPRのプール（<code>apr_pool_t</code>）からメモリを確保します。メモリ不足が発生した場合、APRの仕様に従ってプロセスが終了する可能性があります。</li>
 <li>**初期値の保証**:</li>
-<li><code>mod_suexec</code> の <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> では、<code>active</code> メンバは常に <code>0</code> で初期化されます。</li>
-<li><code>mod_speling</code> の <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a> では、<code>enabled</code> と <code>check_case_only</code> は <code>0</code>、<code>check_basename_match</code> は <code>1</code> に初期化されます。</li>
+<li><code>mod_suexec</code> の <code>mkconfig</code> では、戻り値の <code>active</code> メンバは常に <code>0</code> で初期化されます。</li>
+<li><code>mod_speling</code> の <code>mkconfig</code> では、<code>apr_pcalloc</code> によるゼロ初期化に加え、<code>check_basename_match</code> が明示的に <code>1</code> に設定されます。</li>
 </ul>
 <h2>よくある落とし穴</h2>
-<ul>
-<li>**静的スコープと重複検出**: 両関数は <code>static</code> として定義されており、それぞれのソースファイル内に閉じられたスコープを持ちます。解析ツール等の出力において、<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>mod_suexec.c</code></a> の <code>mkconfig</code> が <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>mod_speling.c</code></a> から呼び出されている（またはその逆）ように見える記述がありますが、これは同名関数に対する誤検出（ヒューリスティックな重複判定）である可能性が高く、実際には相互の依存関係はありません。コードの保守やリファクタリング時には、これらが独立した関数であることを認識する必要があります。</li>
-</ul>
+<p>これらの関数は <code>static</code> 宣言されたファイルローカルな関数です。解析ツールなどのヒューリスティックな判定により、<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>mod_suexec.c</code></a> 内の <code>mkconfig</code> と <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>mod_speling.c</code></a> 内の <code>mkconfig</code> が相互に呼び出し合っているように検出される場合がありますが、実際にはそれぞれのモジュール内で独立して定義・実行される別個の関数です。コードの変更やリファクタリングを行う際は、これらが共有コードではない点に注意してください。</p>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a>（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> の初期化実装）</li>
-<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>modules/mappers/mod_speling.c</code></a>（<a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a> の初期化実装）</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a> （<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a> の初期化ロジック）</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>modules/mappers/mod_speling.c</code></a> （<a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a> の初期化ロジック）</li>
 </ul><script>
 (function() {
   function notifyParent() {

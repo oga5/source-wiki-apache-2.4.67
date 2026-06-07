@@ -1,43 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/os-forktype.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>os_forktype</h1>
 <h2>概念</h2>
-<p><code>os_forktype</code> は、BS2000環境（<code>_OSD_POSIX</code> マクロ定義下）において、現在の実行環境（デバッグモードの有無や実行ユーザーの権限）に適したプロセス生成手法（<code>bs2_ForkType</code>）を判定し、その結果をキャッシュして返却する関数です。</p>
+<p><code>os_forktype</code> は、Apache HTTP Server（httpd-2.4.67）のBS2000メインフレーム環境（<code>_OSD_POSIX</code>）において、現在の実行コンテキスト（デバッグモードの有無や実行ユーザーの権限）に適したプロセス生成手法（<code>bs2_ForkType</code>）を決定するための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>BS2000環境において、特権ユーザー（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>）か非特権ユーザーか、あるいは単一プロセス実行（デバッグモード等）が強制されているかによって、最適なプロセス生成手法（<code>bs2_noFORK</code>, <code>bs2_FORK</code>, <code>bs2_UFORK</code>）が異なります。<code>os_forktype</code> はこれらを動的に判定し、適切なプロセス生成を保証するために重要です。</p>
+<p>BS2000環境では、プロセスの起動方法（forkの挙動）が実行時の権限やデバッグ設定によって異なります。<code>os_forktype</code> は、システムコール <code>getuid()</code> やデバッグフラグ（<code>one_process</code>）を評価し、最適なフォークタイプ（<code>bs2_noFORK</code>, <code>bs2_FORK</code>, <code>bs2_UFORK</code>）を動的に判定・キャッシュすることで、安全かつ適切なプロセス生成を保証します。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:os/bs2000</code></li>
-<li><code>module:os/unix</code></li>
+<li><a class="wiki-entity-link" href="../modules/os__bs2000.html" target="wiki-view"><code>module:os/bs2000</code></a>：BS2000 OS固有の処理を担当します。</li>
+<li><a class="wiki-entity-link" href="../modules/os__unix.html" target="wiki-view"><code>module:os/unix</code></a>：UNIX/POSIX互換レイヤーのプロセス管理を担当します。</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:os/bs2000/os.c#os_forktype</code>: <code>static bs2_ForkType os_forktype(int one_process)</code> として定義される関数。プロセス生成手法を判定・キャッシュします。</li>
-<li><code>symbol:os/unix/unixd.c#os_forktype</code>: <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> 内のプロセス管理処理から呼び出される参照。</li>
+<li><a class="wiki-entity-link" href="../symbols/os__bs2000__os_c__os_forktype.html" target="wiki-view"><code>symbol:os/bs2000/os.c#os_forktype</code></a>：BS2000環境におけるフォークタイプの判定ロジックを実装する静的関数です。</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html#L648" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>symbol:os/unix/unixd.c#os_forktype</code></a>：<a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> で定義された判定処理を呼び出す、または関連するプロセス管理処理です。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> 内のプロセス生成処理、または <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> 内のプロセス管理処理から <code>os_forktype(one_process)</code> が呼び出されます。 2. **キャッシュ確認**: 静的変数 <code>forktype</code> が <code>bs2_unknown</code> 以外（初期化済み）であれば、キャッシュされた値を即座に返します。 3. **判定**: 未初期化の場合、以下の順に判定します。</p>
+<p>1. **呼び出し**: プロセス生成時または管理時に、<a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> 内のプロセス生成処理や <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> 内のプロセス管理処理から <code>os_forktype(one_process)</code> が呼び出されます。 2. **キャッシュ確認**: 静的変数 <code>forktype</code> がすでに <code>bs2_unknown</code> 以外に初期化されている場合は、即座にキャッシュされた値を返します。 3. **動的判定**:</p>
 <ul>
-<li><code>one_process</code> が真の場合: <code>bs2_noFORK</code> を設定。</li>
-<li>実行ユーザーが非特権（<code>getuid() != 0</code>）の場合: <code>bs2_FORK</code> を設定。</li>
-<li>特権ユーザーの場合: <code>bs2_UFORK</code> を設定。</li>
-<p>4. **キャッシュと返却**: 決定した値を <code>forktype</code> に格納し、呼び出し元に返します。</p>
+<li><code>one_process</code> が真（デバッグモード等で単一プロセス実行を強制）の場合：<code>bs2_noFORK</code> を選択します。</li>
+<li>実行ユーザーが非特権（<code>getuid() != 0</code>）の場合：<code>bs2_FORK</code> を選択します。</li>
+<li>特権ユーザー（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>等）の場合：<code>bs2_UFORK</code> を選択します。</li>
+<p>4. **キャッシュと返却**: 決定された値を静的変数 <code>forktype</code> に格納し、呼び出し元に返します。</p>
 </ul>
-<p>※なお、呼び出し元である <a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> や <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> の具体的なプロセス生成・管理処理の全体像や、返された <code>bs2_ForkType</code> がどのようにプロセス生成システムコール等に適用されるかの詳細なエンドツーエンドのフローは、提供された情報からは不明です。</p>
+<p>*注意: <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> から <a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> の静的関数である <code>os_forktype</code> がどのように直接的または間接的に呼び出されるか、および具体的なプロセス生成の全体的なライフサイクル（エンドツーエンドの完全なフロー）の詳細は、提供された情報からは完全には明らかになっていません。*</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**キャッシュの不変性**: 静的変数 <code>forktype</code> は一度 <code>bs2_unknown</code> 以外の値に決定されると、以降の呼び出しでは再判定を行わず、常に同じ値を返します。</li>
-<li>**権限依存**: 特権ユーザー（<code>getuid() == 0</code>）かつ <code>one_process</code> が偽の場合にのみ <code>bs2_UFORK</code> が選択されます。</li>
+<li>**キャッシュの一貫性**: 静的変数 <code>forktype</code> は一度 <code>bs2_unknown</code> 以外の値に設定されると、以降の呼び出しでは再評価されずにその値が維持されます。OSのリリースや実行環境の権限がプロセス実行中に変化しないことを前提としています。</li>
+<li>**環境依存性**: 本関数は <code>_OSD_POSIX</code> マクロが定義された環境でのみ有効に機能します。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**実行権限の動的変更への非追従**: <code>forktype</code> は静的変数にキャッシュされるため、プロセス起動後に実行権限（UID）が変更されても、<code>os_forktype</code> の返す値は更新されません。</li>
-<li>**環境制限**: 本関数は <code>_OSD_POSIX</code> マクロが定義された環境でのみ有効です。</li>
-<li>**エラーハンドリング**: 関数自体はエラーを返さないため、<code>getuid()</code> の結果や実行環境の権限設定が意図しない状態であっても、そのまま判定結果（<code>bs2_ForkType</code>）が返されます。</li>
+<li>**実行権限の動的変更**: <code>forktype</code> は静的変数としてキャッシュされるため、プロセス起動後に実行権限（UID）が変更された場合、その変更は反映されず、古い権限に基づいたフォークタイプが使用され続ける可能性があります。</li>
+<li>**権限設定の不整合**: <code>getuid()</code> の結果に依存しているため、実行環境の権限設定が正しくない場合、意図しない <code>bs2_ForkType</code> が選択され、プロセス生成に影響を与える可能性があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a>: <code>os_forktype</code> の定義（48行目）およびプロセス生成処理の実装。</li>
-<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>: <code>os_forktype</code> を呼び出すプロセス管理処理の実装。</li>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a>：<code>os_forktype</code> の具体的な実装と、BS2000固有のプロセス生成処理。</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>：<code>os_forktype</code> を利用するUNIX互換プロセス管理処理。</li>
 </ul><script>
 (function() {
   function notifyParent() {

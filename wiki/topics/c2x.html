@@ -1,32 +1,32 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/c2x.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>c2x</h1>
 <h2>概念</h2>
-<p><code>c2x</code> は、Apache HTTP Server（httpd）において、文字（character）を16進数（hexadecimal）表現（例えば <code>%XX</code> 形式のエスケープシーケンス）に変換するためのユーティリティ関数、またはそれに類するヘルパーシンボルです。主にURLエンコードやエスケープ処理の文脈で使用されます。</p>
+<p><code>c2x</code> は、Apache HTTP Server（httpd-2.4.67）において、文字（character）を16進数（hex）表現（例えば <code>%XX</code> のようなエスケープ形式）に変換するための内部的なユーティリティ関数、またはマクロです。複数のモジュールやソースファイルに同名のシンボルとして定義されています。</p>
 <h2>なぜ重要か</h2>
-<p>URLやリクエストパスのパース、および書き換え（Rewrite）処理において、特殊文字や非ASCII文字を安全に転送・処理するためには、適切なエスケープ（16進数への変換）が不可欠です。<code>c2x</code> は、サーバーコア（<a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a>）とマッパーモジュール（<a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>mod_rewrite.c</code></a>）の双方で、この文字変換処理を支える低レベルなビルディングブロックとして機能します。</p>
+<p>URLやURIのエンコード（エスケープ処理）、およびリライトルールの適用時において、制御文字や特殊文字を安全な16進数表現に変換する処理は不可欠です。<code>c2x</code> は、コアサーバーの共通処理とリクエストのマッピング処理の双方で、この低レベルな文字列変換を迅速に行うために重要な役割を果たしています。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/mappers</code></li>
-<li><code>module:server</code></li>
+<li><a class="wiki-entity-link" href="../modules/modules__mappers.html" target="wiki-view"><code>module:modules/mappers</code></a>: リクエストの書き換えやマッピングを制御するモジュール群。</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view"><code>module:server</code></a>: サーバーのコア機能や共通のユーティリティ関数を提供するモジュール。</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:server/util.c#c2x</code>: サーバー全体で利用される、文字から16進表現への変換を行う共通ユーティリティ関数。</li>
-<li><code>symbol:modules/mappers/mod_rewrite.c#c2x</code>: <code>mod_rewrite</code> 内でURL書き換え時のエスケープ処理等に使用されるローカルな <code>c2x</code> 実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html#L713" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>symbol:modules/mappers/mod_rewrite.c#c2x</code></a>: <code>mod_rewrite</code> 内で、リライトルール適用時のエスケープ処理などに使用されるローカルな変換処理。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L2022" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>symbol:server/util.c#c2x</code></a>: サーバー全体で共有されるユーティリティ（<code>util.c</code>）内で、URIや文字列のエスケープ処理に使用される変換処理。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、具体的な呼び出し階層や、リクエスト受信から <code>c2x</code> が呼び出されてエスケープ処理が完了するまでの完全なエンドツーエンドの制御フローは詳細には判明していません。一般的には、<code>mod_rewrite</code> によるルール適用時や、コアシステムでのURI処理・ログ出力時などに、対象文字列の各文字に対して順次適用されると推測されます。</p>
+<p>具体的なエンドツーエンドのデータフロー（どのリクエストフェーズでどの関数を経由して <code>c2x</code> が呼び出されるか）の詳細は、提供されたコンテキストからは現時点で特定されていません。一般的には、クライアントからのリクエストURIを解析・再構築する際、あるいは <code>mod_rewrite</code> によるルール適用に伴う再マッピングの過程で、文字列のエンコードが必要になったタイミングで呼び出されます。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、<code>c2x</code> の動作における詳細な不変条件（入力バッファのサイズ制限、スレッドセーフ性、特定の文字セットに対する挙動など）は特定されていません。</p>
+<p><code>c2x</code> の実行における具体的な不変条件（入力文字の検証ルール、出力バッファの最小サイズ、スレッドセーフ性など）は、提供された情報からは現時点で未確定です。</p>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**バッファサイズ計算の誤り**: 1文字（1バイト）を <code>%XX</code>（3バイト）に拡張するため、出力バッファのサイズ計算を誤るとバッファオーバーランを引き起こす可能性があります。</li>
-<li>**重複定義と挙動の差異**: <a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a> と <a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>mod_rewrite.c</code></a> の双方に同名の <code>c2x</code> シンボルが存在するため、それぞれのスコープやエスケープ対象とする文字の基準に微妙な違いがあるかどうかに注意する必要があります。</li>
+<li>**個別実装の差異**: <code>c2x</code> は <a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a> と <a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>mod_rewrite.c</code></a> のそれぞれに定義されているため、静的（<code>static</code>）関数としてスコープが閉じている場合、それぞれのファイルで挙動や前提条件（バッファ管理など）が微妙に異なる可能性があります。</li>
+<li>**バッファサイズ不足**: 1文字を複数文字（16進数表現）に拡張して書き出すため、呼び出し側で出力先バッファの境界チェックが正しく行われていない場合、バッファオーバーフローを誘発するリスクがあります（具体的な安全対策の有無はソースコードの直接確認が必要です）。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>modules/mappers/mod_rewrite.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>modules/mappers/mod_rewrite.c</code></a> 内の <code>c2x</code> の定義と、それが呼び出されているエスケープ関連関数</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a> 内の <code>c2x</code> の定義と、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L1849" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_escape_uri</code></a> などのコアエスケープAPIの実装</li>
 </ul><script>
 (function() {
   function notifyParent() {

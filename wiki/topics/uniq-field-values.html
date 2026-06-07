@@ -1,36 +1,38 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/uniq-field-values.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>uniq_field_values</h1>
 <h2>概念</h2>
-<p><code>uniq_field_values</code> は、HTTP ヘッダー（主に <code>Vary</code> ヘッダー）の値を解析し、カンマや空白で区切られたトークンから重複を除去して配列（<code>apr_array_header_t</code>）に格納するためのコールバック関数です。</p>
+<p><code>uniq_field_values</code> は、HTTP ヘッダー（主に <code>Vary</code> ヘッダー）の値を解析し、重複を除去して配列に格納するためのコールバック関数です。カンマ区切りのヘッダー値文字列をトークンに分割し、大文字小文字を区別せずに重複を排除した一意な値のリストを作成します。</p>
 <h2>なぜ重要か</h2>
-<p>HTTP/1.1 および HTTP/2 の処理において、<code>Vary</code> などのヘッダーフィールドは複数の値や重複した値を含むことがあります。この関数は、それらの値を正規化し、重複のないクリーンなリストを作成することで、キャッシュ制御やプロトコル変換などの後続処理を正確に行うために重要です。</p>
+<p>HTTP 仕様において、<code>Vary</code> などのヘッダーは複数の同一フィールド名、または単一のフィールド内にカンマ区切りで複数の値を持つことができます。キャッシュ処理やプロトコル変換（HTTP/2など）において、これらの値を一意に整理（正規化）して処理することは、正確なキャッシュ制御や効率的なヘッダー処理を行うために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/http</code></li>
-<li><code>module:modules/http2</code></li>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view"><code>module:modules/http</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view"><code>module:modules/http2</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/http2/h2_c2_filter.c#uniq_field_values</code> : 重複除去を行うコールバック関数の定義。</li>
-<li><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a> : <code>apr_table_do</code> を介して本関数を呼び出す利用元。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L857" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>symbol:modules/http/http_filters.c#uniq_field_values</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_c2_filter_c__uniq_field_values.html" target="wiki-view"><code>symbol:modules/http2/h2_c2_filter.c#uniq_field_values</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. 各モジュール（<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a> または <a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a>）において、<code>apr_table_do(uniq_field_values, ...)</code> が呼び出されます。 2. <code>uniq_field_values</code> は、入力されたヘッダー値（<code>val</code>）をメモリプール上に複製し、カンマおよび空白を区切り文字としてトークン化します。 3. 各トークンについて、すでに格納先の配列（<code>apr_array_header_t</code>）内に存在するかを <a class="wiki-source-link" href="../../source/server/util.c.html#L3542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_cstr_casecmp</code></a> を用いて大文字小文字を区別せずに比較します。 4. 配列内に存在しないトークンのみを <code>apr_array_push</code> で配列に追加します。 5. 常に <code>1</code> を返して <code>apr_table_do</code> の処理を継続させます。</p>
-<p>なお、この関数が呼び出される前後の具体的なコンテキストや、システム全体における完全なエンドツーエンドのデータフローの詳細は、提供された情報からは完全には特定されていません。</p>
+<p>1. 各モジュールのフィルター処理（<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a> および <a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a>）において、対象となるヘッダーテーブルに対して <code>apr_table_do(uniq_field_values, ...)</code> が呼び出されます。 2. <code>apr_table_do</code> は、ヘッダーテーブル内の各エントリに対して <code>uniq_field_values</code> を実行します。 3. <code>uniq_field_values</code> は、渡されたヘッダー値（<code>val</code>）をメモリプール上に複製し、カンマや空白を区切り文字としてトークンに分割します。 4. 分割された各トークンについて、すでに格納先配列（<code>apr_array_header_t</code>）に存在するかを <a class="wiki-source-link" href="../../source/server/util.c.html#L3542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_cstr_casecmp</code></a> を用いて大文字小文字を区別せずに線形探索します。 5. 配列内に存在しないトークンのみを <code>apr_array_push</code> で配列に追加します。 6. すべてのヘッダー値の処理が完了すると、重複のない一意な値のリストが格納された配列が得られます。</p>
+<p>なお、この処理の前後における具体的な上位の呼び出しシーケンスや、抽出された配列がその後どのように利用されるかといった完全なエンドツーエンドの流れは、提供されたコンテキストからは未だ完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**引数 <code>d</code> の型と初期化**: 渡される <code>d</code> は、有効な <code>apr_array_header_t</code> 構造体へのポインタであり、その <code>pool</code> が有効に設定されている必要があります。</li>
-<li>**戻り値の不変性**: <code>apr_table_do</code> によるテーブル走査を継続させるため、関数は常に <code>1</code> を返さなければなりません。</li>
+<li>**入力データの構造**: <code>uniq_field_values</code> の第1引数 <code>d</code> は、有効な <code>apr_array_header_t</code> 構造体へのポインタであり、その <code>pool</code> メンバが有効なメモリプールを指している必要があります。</li>
+<li>**戻り値の不変性**: <code>apr_table_do</code> によるテーブル走査を継続させるため、本関数は常に <code>1</code> を返します。</li>
+<li>**比較の不変性**: トークンの重複判定は、常に <a class="wiki-source-link" href="../../source/server/util.c.html#L3542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_cstr_casecmp</code></a> を用いた大文字小文字を区別しない（case-insensitive）比較で行われます。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**線形探索によるパフォーマンス**: 重複チェックのために配列内を <a class="wiki-source-link" href="../../source/server/util.c.html#L3542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>ap_cstr_casecmp</code></a> で線形探索しています。ヘッダー値のトークン数が非常に多い場合、パフォーマンスに影響を与える可能性があります。</li>
-<li>**メモリ消費**: トークン分割のために <code>apr_pstrdup</code> を使用して文字列を複製するため、呼び出し元のメモリプールの寿命によっては一時的なメモリ消費が増加する可能性があります。</li>
+<li>**パフォーマンスの懸念**: 重複チェックは、配列内の既存要素に対する線形探索（ループ処理）によって行われます。ヘッダー値のトークン数が非常に多い場合、探索の計算量が累積し、パフォーマンスに影響を与える可能性があります。</li>
+<li>**メモリ消費**: 解析対象の文字列は <code>apr_pstrdup</code> を用いてプール上に複製されるため、処理するヘッダーの量に応じてメモリ消費が増加します。</li>
+<li>**キーの無視**: 本関数は <code>apr_table_do</code> のコールバック仕様に合わせるため <code>key</code> 引数を受け取りますが、関数内部では使用されず無視されます。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a> : 関数の具体的な実装と HTTP/2 フィルタでの使用例。</li>
-<li><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a> : HTTP フィルタにおける <code>apr_table_do</code> を介した呼び出し例。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a></li>
 </ul><script>
 (function() {
   function notifyParent() {

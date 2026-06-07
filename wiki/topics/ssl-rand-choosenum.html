@@ -1,33 +1,33 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ssl-rand-choosenum.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ssl_rand_choosenum</h1>
 <h2>概念</h2>
-<p><code>ssl_rand_choosenum</code> は、Apache HTTP Server（httpd）のSSLモジュールおよびベンチマークツール <code>ab</code>（ApacheBench）において、指定された範囲 <code>[l, h]</code> 内の擬似乱数（整数値）を生成するために使用されるヘルパー関数です。</p>
+<p><code>ssl_rand_choosenum</code> は、指定された範囲 <code>[l, h]</code> 内の整数を擬似乱数として生成するヘルパー関数です。この関数は、Apache HTTP Server（httpd）のSSLモジュール（<a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a>）およびベンチマークツールである <code>ab</code>（ApacheBench）の双方において、ほぼ同様のアルゴリズムで個別に実装されています。</p>
 <h2>なぜ重要か</h2>
-<p>この関数は、SSL/TLS接続の初期化時における乱数シード生成（例：<code>ssl_rand_seed</code> 内でのスタックメモリのオフセット決定など）や、<code>ab</code> ツール内でのランダムな処理において、特定の範囲に収まる数値を生成するために利用されます。暗号学的に安全な乱数生成器ではないものの、処理のランダム性を確保するための補助的な役割を担っています。</p>
+<p>この関数は、SSL接続の初期化やシード生成プロセス（例：<code>ssl_rand_seed</code>）において、スタックメモリのオフセット決定など、ランダムな変動要素を導入するために使用されます。これにより、特定の処理における予測不可能性を向上させる役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/ssl</code></li>
-<li><code>module:support</code></li>
+<li><a class="wiki-entity-link" href="../modules/modules__ssl.html" target="wiki-view"><code>module:modules/ssl</code></a> (SSLエンジンモジュール)</li>
+<li><a class="wiki-entity-link" href="../modules/support.html" target="wiki-view"><code>module:support</code></a> (Apacheサポートツール)</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><code>symbol:modules/ssl/ssl_engine_rand.c#ssl_rand_choosenum</code></li>
-<li><code>symbol:support/ab.c#ssl_rand_choosenum</code></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__ssl__ssl_engine_rand_c__ssl_rand_choosenum.html" target="wiki-view"><code>symbol:modules/ssl/ssl_engine_rand.c#ssl_rand_choosenum</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/support__ab_c__ssl_rand_choosenum.html" target="wiki-view"><code>symbol:support/ab.c#ssl_rand_choosenum</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、システム全体における完全なエンドツーエンドの呼び出しフローや、これら2つの実装がどのように相互作用するか（あるいは独立して動作しているか）の詳細は完全には明らかになっていません。</p>
-<p>判明している範囲では、以下の流れで処理が行われます： 1. 呼び出し元（<a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');"><code>ssl_engine_rand.c</code></a> 内のシード生成処理や <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> 内の処理）が、範囲の下限 <code>l</code> と上限 <code>h</code> を指定して <code>ssl_rand_choosenum</code> を呼び出します。 2. <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> の実装では、呼び出し時に <code>srand((unsigned int)time(NULL))</code> を用いて乱数生成器を初期化します。 3. <code>rand()</code> を用いて <code>0.0</code> から <code>1.0</code> の範囲の浮動小数点数を生成し、範囲幅 <code>(h - l)</code> を乗算します。 4. 得られた浮動小数点数を <code>apr_snprintf</code> を用いて文字列（<code>%.0f</code> など）にフォーマットし、<code>atoi</code> を経由して整数に変換した上で <code>1</code> を加算します。 5. 最終的な値が範囲 <code>[l, h]</code> に収まるように境界調整を行い、呼び出し元に返却します。</p>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');"><code>ssl_engine_rand.c</code></a> または <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> 内の処理から、範囲の下限 <code>l</code> と上限 <code>h</code> を指定して <code>ssl_rand_choosenum(l, h)</code> が呼び出されます。 2. **初期化（<a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> のみ）**: <code>srand((unsigned int)time(NULL))</code> を呼び出して乱数生成器を初期化します。 3. **乱数生成とスケーリング**: <code>rand()</code> を用いて <code>0</code> から <code>RAND_MAX</code> の範囲の乱数を生成し、<code>RAND_MAX</code> で割ることで <code>0.0</code> から <code>1.0</code> の間の浮動小数点数を得ます。これに範囲幅 <code>(h - l)</code> を乗算します。 4. **文字列を経由した整数変換**: <code>apr_snprintf</code> を用いて浮動小数点数を文字列（<code>%.0f</code> など）としてフォーマットし、それを <code>atoi()</code> で整数に変換した上で <code>1</code> を加算します。 5. **範囲補正**: 最終的な値が <code>l</code> 未満であれば <code>l</code> に、<code>h</code> を超えていれば <code>h</code> に調整して返却します。</p>
+<p>※なお、呼び出し元（<code>ab.c:655</code> や <code>ssl_engine_rand.c:118</code>）における具体的な上位コンテキストとの統合や、システム全体における完全なエンドツーエンドのデータフローの詳細は、提供された情報からは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**範囲の保証**: 戻り値は必ず <code>l &lt;= result &lt;= h</code> の範囲内に収まるように補正されます。</li>
-<li>**入力の逆転時の挙動**: 下限 <code>l</code> が上限 <code>h</code> より大きい場合（<code>l &gt; h</code>）、補正ロジックにより常に <code>h</code> が返されます。</li>
+<li>**範囲保証**: 戻り値は必ず <code>l &lt;= result &lt;= h</code> の範囲内に収まります。計算後に境界チェックと補正ロジックが必ず実行されます。</li>
+<li>**入力順序の前提**: <code>l &lt;= h</code> であることが前提となります。もし <code>l &gt; h</code> の状態で呼び出された場合、補正ロジックの挙動により常に <code>h</code> が返されます。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**暗号学的強度の欠如**: <code>rand()</code> に依存しているため、暗号学的に強力な乱数が必要な用途には適していません。</li>
-<li>**時間依存の初期化（<a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');">ab.c</a>）**: <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a> の実装では <code>time(NULL)</code> をシードとする <code>srand()</code> を呼び出すため、秒未満の非常に短い間隔で連続して呼び出された場合、同一の乱数列が生成される可能性があります。</li>
-<li>**非スレッドセーフ**: <code>rand()</code> および <code>srand()</code> はマルチスレッド環境においてスレッドセーフではない可能性があります。</li>
-<li>**パフォーマンスオーバーヘッド**: 浮動小数点数から整数への変換に <code>apr_snprintf</code> と <code>atoi</code> を経由しているため、純粋な整数演算と比較してパフォーマンス上のオーバーヘッドが存在します。</li>
+<li>**暗号学的な脆弱性**: 標準ライブラリの <code>rand()</code> に依存しているため、暗号学的に安全な乱数が必要な用途には適していません。</li>
+<li>**時間依存による重複（<a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a>）**: <a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> の実装では <code>time(NULL)</code> で乱数シードを初期化するため、秒単位以下の高速な連続呼び出しが行われた場合、同一の乱数列が生成される特性があります。</li>
+<li>**非スレッドセーフ**: <code>rand()</code> および <code>srand()</code> はマルチスレッド環境においてスレッドセーフではない可能性があり、競合が発生する恐れがあります。</li>
+<li>**パフォーマンスのオーバーヘッド**: 浮動小数点数から整数への変換に <code>apr_snprintf</code> による文字列フォーマットと <code>atoi</code> による再変換を経由しているため、純粋な整数演算に比べて処理のオーバーヘッドが存在します。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>

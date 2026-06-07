@@ -1,44 +1,43 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/shm-cleanup-wrapper.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>shm_cleanup_wrapper</h1>
 <h2>概念</h2>
-<p><code>shm_cleanup_wrapper</code> は、Apache HTTP Server のモジュールにおいて、APR（Apache Portable Runtime）のプールクリーンアップ機構を介して共有メモリセグメントを安全に破棄するためのコールバック関数です。複数のモジュール（<code>mod_example_ipc</code> および <code>mod_lua</code>）で同名の関数が定義されており、それぞれのモジュールが管理するグローバルな共有メモリポインタを対象にクリーンアップ処理を行います。</p>
+<p><code>shm_cleanup_wrapper</code> は、Apache HTTP Server のモジュールにおいて、APR（Apache Portable Runtime）のプールライフサイクルに合わせて共有メモリセグメントを安全に破棄するためのクリーンアップ用ラッパー関数です。</p>
 <h2>なぜ重要か</h2>
-<p>Apache HTTP Server のプロセス終了時やプールの破棄時に、割り当てられた共有メモリリソースが解放されずに残る（リソースリークが発生する）のを防ぐために重要です。APR プールのライフサイクルにクリーンアップ処理を登録することで、明示的な解放処理を自動化し、安全なリソース管理を実現します。</p>
+<p>Apache HTTP Server では、プロセスの終了時やプールの破棄時にリソースを適切に解放する必要があります。<code>shm_cleanup_wrapper</code> は、APR のクリーンアップ機構（<code>apr_pool_cleanup_register</code>）に登録されるコールバック関数として機能し、共有メモリの解放漏れを防ぐ役割を果たします。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><code>module:modules/examples</code> (<a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a>)</li>
-<li><code>module:modules/lua</code> (<a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a>)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__examples.html" target="wiki-view"><code>module:modules/examples</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__lua.html" target="wiki-view"><code>module:modules/lua</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li>**<code>symbol:modules/examples/mod_example_ipc.c#shm_cleanup_wrapper</code>**: <code>mod_example_ipc</code> 内で定義されている静的（<code>static</code>）関数。グローバル変数 <code>exipc_shm</code> を破棄します。</li>
-<li>**<code>symbol:modules/lua/mod_lua.c#shm_cleanup_wrapper</code>**: <code>mod_lua</code> 内で定義されている関数。グローバル変数 <code>lua_ivm_shm</code> を破棄します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__examples__mod_example_ipc_c__shm_cleanup_wrapper.html" target="wiki-view"><code>symbol:modules/examples/mod_example_ipc.c#shm_cleanup_wrapper</code></a>**: <code>mod_example_ipc</code> 内のグローバル共有メモリ <code>exipc_shm</code> を破棄するための静的（<code>static</code>）関数。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__lua__mod_lua_c__shm_cleanup_wrapper.html" target="wiki-view"><code>symbol:modules/lua/mod_lua.c#shm_cleanup_wrapper</code></a>**: <code>mod_lua</code> 内のグローバル共有メモリ <code>lua_ivm_shm</code> を破棄するための関数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **登録**: 各モジュールの初期化時等に、<code>apr_pool_cleanup_register</code> を使用して、対象の <code>shm_cleanup_wrapper</code> を APR プールのクリーンアップハンドラとして登録します。</p>
+<p>1. **登録**: 各モジュールの初期化時等に、<code>apr_pool_cleanup_register</code> を用いて、対象のプールに <code>shm_cleanup_wrapper</code> を登録します。</p>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a> では <code>mod_example_ipc.c:186</code> 付近で登録されます。</li>
-<li><a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> では <code>mod_lua.c:2059</code> 付近で登録されます。</li>
-<p>2. **実行**: プールが破棄される際、APR のライフサイクル管理によって <code>shm_cleanup_wrapper</code> が自動的に呼び出されます。 3. **破棄**:</p>
-<li><code>mod_example_ipc</code> の場合: <code>exipc_shm</code> が非 <code>NULL</code> であれば <code>apr_shm_destroy</code> を呼び出して共有メモリを破棄します。</li>
-<li><code>mod_lua</code> の場合: <code>lua_ivm_shm</code> が非 <code>NULL</code> であれば <code>apr_shm_destroy</code> を呼び出して共有メモリを破棄します。</li>
-<li>いずれの場合も、ポインタが <code>NULL</code> の場合は何もせず <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> を返します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a> では <code>modules/examples/mod_example_ipc.c:186</code> にて登録されます。</li>
+<li><a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> では <code>modules/lua/mod_lua.c:2059</code> にて登録されます。</li>
+<p>2. **実行**: プールが破棄される際、APR のクリーンアップ処理から本関数が呼び出されます。 3. **破棄**:</p>
+<li><a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a> の実装では、グローバル変数 <code>exipc_shm</code> が非 <code>NULL</code> の場合に <code>apr_shm_destroy</code> を呼び出して共有メモリを破棄します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> の実装では、グローバル変数 <code>lua_ivm_shm</code> が非 <code>NULL</code> の場合に <code>apr_shm_destroy</code> を呼び出して共有メモリを破棄します。</li>
 </ul>
-<p>※なお、両モジュール間での具体的な連携や、静的解析で検出された相互参照（例: <a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> から <a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a> のシンボルへの参照など）が、意図的なものであるか、あるいは単なるコードのコピー＆ペーストや誤検出によるものかといった詳細なエンドツーエンドの相互作用は完全には解明されていません。</p>
+<p>なお、モジュール間を跨ぐような直接的な呼び出しや、これら以外の詳細なエンドツーエンドの制御フローは現時点では未確定です。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**対象ポインタの検証**: 共有メモリの破棄を実行する前に、対象となるグローバルポインタ（<code>exipc_shm</code> または <code>lua_ivm_shm</code>）が非 <code>NULL</code> であることを確認しなければなりません。</li>
-<li>**APR クリーンアップのシグネチャ適合**: APR プールのクリーンアップハンドラとして登録するため、引数として <code>void *</code> を受け取り、<code>apr_status_t</code> を返すシグネチャを維持する必要があります（渡される引数は関数内では使用されません）。</li>
+<li>**グローバルポインタの検証**: 共有メモリを破棄する前に、対象のグローバル変数（<code>exipc_shm</code> または <code>lua_ivm_shm</code>）が <code>NULL</code> でないことを確認する必要があります。<code>NULL</code> の場合は何もせず <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> を返さなければなりません。</li>
+<li>**シグネチャの一致**: APR のクリーンアップコールバックとして登録するため、引数は <code>void *</code> を受け取り、戻り値は <code>apr_status_t</code> である必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**シンボルの衝突と誤参照**: <a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> の <code>shm_cleanup_wrapper</code> には <code>static</code> 修飾子が付与されていないため、グローバルスコープでシンボルが衝突したり、他モジュールから誤って参照されたりするリスクがあります。</li>
-<li>**二重解放の危険性**: 共有メモリが既に破棄されている、または不正なポインタである状態で <code>apr_shm_destroy</code> が呼び出されると、エラーや予期しない動作を引き起こす可能性があります。ただし、ポインタが適切に管理（<code>NULL</code> 初期化など）されていれば、安全に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> が返されます。</li>
+<li>**シンボル名の衝突と誤参照**: <a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a> と <a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> の両方に同名の <code>shm_cleanup_wrapper</code> が定義されています。静的解析において、<a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>mod_example_ipc.c</code></a> から <a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a> のシンボルへの参照、あるいはその逆の参照が検出されることがありますが、これが意図的な依存関係なのか、単なるコードのコピー＆ペーストによる誤検出なのかは注意深く検証する必要があります。</li>
+<li>**直接呼び出しの回避**: 本関数は APR プールのライフサイクル管理に委ねるコールバックとして設計されているため、手動で直接呼び出すべきではありません。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>modules/examples/mod_example_ipc.c</code></a> の <code>shm_cleanup_wrapper</code> 実装および登録箇所</li>
-<li><a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>modules/lua/mod_lua.c</code></a> の <code>shm_cleanup_wrapper</code> 実装および登録箇所</li>
+<li><a class="wiki-source-link" href="../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');"><code>modules/examples/mod_example_ipc.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>modules/lua/mod_lua.c</code></a></li>
 </ul><script>
 (function() {
   function notifyParent() {
