@@ -1,42 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-locktoken.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_locktoken</h1>
 <h2>概念</h2>
-<p><code>dav_locktoken</code> は、Apache HTTP Server の WebDAV（<code>mod_dav</code>）モジュール群において、WebDAV ロックを一意に識別するためのトークンを保持するラッパー構造体です。内部的には APR（Apache Portable Runtime）の <code>apr_uuid_t</code> 型の UUID を保持するシンプルなデータコンテナとして定義されています。</p>
+<p><code>dav_locktoken</code> は、Apache HTTP Server の WebDAV（<code>mod_dav</code>）モジュール群において、WebDAV ロックを一意に識別するためのトークンを保持するラッパー構造体です。内部的には <code>apr_uuid_t</code> 型の UUID を保持するシンプルな構造となっています。</p>
 <h2>なぜ重要か</h2>
-<p>WebDAV プロトコルでは、リソースの同時編集を防ぐために排他/共有ロックを管理する必要があります。<code>dav_locktoken</code> は、各ロックを一意に識別するための識別子（トークン）として機能し、ロックの作成、検索、比較、解決、および永続化（ファイルシステム等への保存）を行う際の基盤となります。</p>
+<p>WebDAV プロトコルにおけるロック操作（リソースの排他制御など）において、各ロックを一意に識別、照合、比較、および永続化するための基盤となる識別子として機能します。<code>mod_dav</code> のロックプロバイダインターフェースにおいて、ロックの作成、検索、解決を行う際の共通のキーとして重要な役割を果たします。</p>
 <h2>関与するモジュール</h2>
+<p>提供された情報に基づくと、以下のモジュールが関与しています。</p>
 <ul>
-<li><code>modules/dav/fs</code></li>
-<li><code>modules/dav/lock</code></li>
-<li><code>modules/dav/main</code></li>
+<li><code>modules/dav/fs</code>（ファイルシステムベースのロック実装）</li>
+<li><code>modules/dav/lock</code>（汎用的なロック管理実装）</li>
+<li><code>modules/dav/main</code>（WebDAV のメインモジュール）</li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
 <li>**<code>struct dav_locktoken</code>** (<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> および <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>):</li>
-<p>``<code>c struct dav_locktoken { apr_uuid_t uuid; }; </code>`` UUID を保持する構造体。</p>
+<p>``<code>c struct dav_locktoken { apr_uuid_t uuid; }; </code>`` UUID を保持するデータコンテナ。</p>
 <li>**<code>dav_lock_discovery</code>**: 直接ロック情報を保持する構造体。メンバとして <code>dav_locktoken</code> を含みます。</li>
 <li>**<code>dav_lock_indirect</code>**: 間接ロック情報を保持する構造体。メンバとして <code>dav_locktoken</code> を含みます。</li>
-<li>**関連関数群** (例: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L242" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_parse_locktoken.html&quot;}, '*');"><code>dav_fs_parse_locktoken</code></a>, <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L273" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_format_locktoken.html&quot;}, '*');"><code>dav_fs_format_locktoken</code></a>, <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_compare_locktoken.html&quot;}, '*');"><code>dav_fs_compare_locktoken</code></a>, <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a>): トークンの解析、フォーマット、比較、およびロードを行います。</li>
+<li>**<code>apr_uuid_t</code>**: APR（Apache Portable Runtime）が提供する UUID 型。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>WebDAV クライアントからのロック要求やロック確認要求に対する、<code>dav_locktoken</code> を用いた詳細なエンドツーエンドの処理フロー（生成から検証、破棄に至る全体像）は、提供された情報からは完全には明らかになっていません。</p>
-<p>現時点で判明している部分的な流れは以下の通りです： 1. ロックの作成や解決のプロセスにおいて、<code>apr_uuid_t</code> を用いて一意な UUID が生成され、<code>dav_locktoken</code> に格納されます。 2. <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a> などの関数により、永続化されたロック情報からトークンが構築・比較されます。 3. <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L242" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_parse_locktoken.html&quot;}, '*');"><code>dav_fs_parse_locktoken</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_compare_locktoken.html&quot;}, '*');"><code>dav_fs_compare_locktoken</code></a> などの専用関数を介して、トークンの解析や一致判定が行われます。</p>
+<p>提供された情報からは、HTTP リクエストの受信からレスポンス送信に至るまでの完全なエンドツーエンドの制御フロー（HTTP LOCK/UNLOCK リクエストがどのように解析され、どの関数を経由して <code>dav_locktoken</code> が生成・検証されるかなど）の詳細は明らかになっていません。</p>
+<p>ただし、部分的な流れとして、ロックの作成、検索、解決のプロセスにおいて、リソースに関連付けられたロックを特定するために本構造体が参照されます。また、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L242" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_parse_locktoken.html&quot;}, '*');"><code>dav_fs_parse_locktoken</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L273" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_format_locktoken.html&quot;}, '*');"><code>dav_fs_format_locktoken</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_compare_locktoken.html&quot;}, '*');"><code>dav_fs_compare_locktoken</code></a> などの専用関数を介して、トークンの生成、解析、比較が行われることが分かっています。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**UUID による一意性**: <code>dav_locktoken</code> は <code>apr_uuid_t</code> を介して、システム全体で一意であることが期待されます。</li>
-<li>**読み取り専用の扱い**: ロック操作の文脈において、この構造体へのポインタは一般的に <code>const</code>（<code>const dav_locktoken *</code>）として扱われます。</li>
-<li>**データコンテナとしての性質**: 構造体自体は単一の <code>apr_uuid_t uuid</code> フィールドのみを持つ単純なコンテナであり、ロジックは含みません。</li>
+<li>**一意性の保証**: 内部に保持する <code>apr_uuid_t</code> を介して、ロックトークンの一意性が保証されることが期待されます。</li>
+<li>**読み取り専用の扱い**: ロック操作の文脈において、この構造体へのポインタは <code>const</code> として扱われることが一般的です。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**直接操作の回避**: <code>dav_locktoken</code> 自体は単なるデータ保持用の構造体です。トークンの生成、解析、比較を行う際は、構造体のメンバを直接操作するのではなく、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_compare_locktoken.html&quot;}, '*');"><code>dav_fs_compare_locktoken</code></a> などの専用のヘルパー関数を使用する必要があります。</li>
-<li>**モジュール間の重複定義**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方に同名の構造体が定義されているため、モジュール境界を越えて変更を行う場合は、双方の実装および <code>mod_dav</code> のロックプロバイダインターフェースへの影響を慎重に考慮する必要があります。</li>
+<li>**構造体の重複定義**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方で同名の <code>struct dav_locktoken</code> が定義されているため、モジュール間での変更や拡張を行う際には、双方の実装および <code>mod_dav</code> のロックプロバイダインターフェースへの影響を慎重に考慮する必要があります。</li>
+<li>**無効な UUID の処理**: 構造体自体は単なるデータコンテナであるため、無効な UUID が渡された場合の具体的なエラーハンドリングや失敗モードは、それを利用する関数（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_compare_locktoken.html&quot;}, '*');"><code>dav_fs_compare_locktoken</code></a> など）の仕様に依存します。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>: ファイルシステムベースのロック実装における <code>dav_locktoken</code> の定義と、関連するヘルパー関数（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L242" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_parse_locktoken.html&quot;}, '*');"><code>dav_fs_parse_locktoken</code></a> など）の実装。</li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>: 汎用ロックモジュールにおける <code>dav_locktoken</code> の定義。</li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a>: <code>mod_dav</code> のコアヘッダーにおけるロックプロバイダインターフェースの定義。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>（ファイルシステムロックにおける <code>dav_locktoken</code> の定義と関連操作関数）</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>（汎用ロック管理における <code>dav_locktoken</code> の定義）</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a>（ロックプロバイダインターフェースの定義）</li>
 </ul><script>
 (function() {
   function notifyParent() {

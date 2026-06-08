@@ -1,42 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/requests-this-child.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>requests_this_child</h1>
 <h2>概念</h2>
-<p><code>requests_this_child</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、個々の子プロセス（child process）が起動してから現在までに処理したリクエストの累計数を保持・追跡するための変数です。</p>
+<p><code>requests_this_child</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、**現在の子プロセスが起動してから処理した累積リクエスト数**を追跡・カウントするための変数（シンボル）です。</p>
 <h2>なぜ重要か</h2>
-<p>この変数は、子プロセスの寿命（ライフサイクル）を管理するために極めて重要です。Apacheでは、メモリリークの蓄積を防ぐなどの目的で、1つの子プロセスが一定数のリクエストを処理した後に自動的に終了・再生成（リサイクル）される仕組み（<code>MaxConnectionsPerChild</code> 設定など）があります。<code>requests_this_child</code> は、その制限値に達したかどうかを判定するための基準値として機能します。</p>
+<p>Apache HTTP Serverでは、長期運用に伴うメモリリークの防止やリソースの健全性を維持するために、1つの子プロセスが処理できる最大リクエスト数（<code>MaxConnectionsPerChild</code> 設定値）に制限を設ける仕組みがあります。<code>requests_this_child</code> は、この制限値に達したかどうかを各子プロセスが自己判定し、適切に引退（終了）プロセスへ移行するために不可欠なカウンター役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view"><code>module:server/mpm/prefork</code></a></li>
-<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view"><code>module:server/mpm/worker</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html#L380" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#requests_this_child</code></a>: <code>prefork</code> MPMにおいて、各子プロセスが処理したリクエスト数をカウントする変数。</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#requests_this_child</code></a>: <code>worker</code> MPMにおいて、各子プロセス（およびその配下のスレッド群）が処理したリクエストの総数をカウントする変数。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html#L380" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#requests_this_child</code></a></li>
+<li>シングルスレッド・マルチプロセスモデルである <code>prefork</code> MPM 内で、個別プロセスが処理したリクエスト数を管理します。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#requests_this_child</code></a></li>
+<li>マルチスレッド・マルチプロセスモデルである <code>worker</code> MPM 内で、プロセス内の全スレッドが共同で処理した合計リクエスト数を管理します。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **初期化**: 子プロセスがフォーク（起動）された際、<code>requests_this_child</code> は <code>0</code> に初期化されます。 2. **リクエストの処理とインクリメント**:</p>
-<ul>
-<li><code>prefork</code> では、子プロセスがリクエストを1件処理するたびに、この変数がインクリメントされます。</li>
-<li><code>worker</code> では、複数のワーカースレッドがリクエストを処理し、共通の <code>requests_this_child</code> カウンタをインクリメントします。</li>
-<p>3. **限界値の判定**: 各リクエスト処理の終了時、またはループの評価時に、<code>requests_this_child</code> が設定された最大接続数（<code>MaxConnectionsPerChild</code>）に達したかどうかがチェックされます。 4. **プロセスの終了**: 制限に達した場合、子プロセスは新規接続の受け入れを停止し、現在処理中のリクエストを完了させた後に安全に終了します。</p>
-</ul>
-<p>*注意: 具体的な排他制御（アトミック操作やミューテックス）の有無や、シグナルハンドリングを伴う詳細な終了シーケンスのコードレベルでの完全なエンドツーエンドのフローは、提供されたメタデータからは完全には特定されていません。*</p>
+<p>1. **初期化**: 子プロセスの起動時、またはメインループの開始時に <code>requests_this_child</code> が <code>0</code> に初期化されます。 2. **インクリメント**: 子プロセス（またはその配下のスレッド）が接続を受け入れ、リクエストの処理を完了するたびに、このカウンターがインクリメントされます。 3. **限界値の評価**: インクリメント後、設定された最大リクエスト数（<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a> など）に達したかどうかが評価されます。 4. **プロセスの終了**: 制限に達した場合、子プロセスは新規接続の受け入れを停止し、既存の処理を終えた後に安全に終了します。</p>
+<p>*注意: 提供されたコンテキストからは、具体的なインクリメントのタイミングや、シグナルハンドリングを伴う終了処理の厳密なコードレベルでのエンドツーエンドフローは完全には特定されていません。*</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li><code>requests_this_child</code> は、子プロセスの生存期間中、単調非減少（減少することはない）です。</li>
-<li><code>MaxConnectionsPerChild</code> が <code>0</code>（無制限）に設定されている場合、この値がいくら増加しても子プロセスがリクエスト数制限によって自動終了することはありません。</li>
+<li><code>requests_this_child</code> は、設定された最大接続数（<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a>）に達するまで単調増加します。</li>
+<li><code>prefork</code> MPM ではプロセスごとに独立してカウントされます。</li>
 </ul>
-<p>*注意: スレッド間での同期やメモリバリアに関する厳密な不変条件は、提供されたメタデータからは完全には特定されていません。*</p>
+<p>*注意: スレッドセーフなアトミック操作の有無や、特定条件下でのリセット処理など、詳細な不変条件は提供されたコンテキストからは完全には特定されていません。*</p>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**マルチスレッド環境での競合**: <code>worker</code> MPMなどのマルチスレッド環境では、複数のスレッドが同時に <code>requests_this_child</code> を更新しようとするため、適切なアトミック操作やロックによる保護が行われていない場合、カウントの不整合（ロストアップデート）が発生する可能性があります。</li>
-<li>**早期終了**: 設定された最大値に達する前に、メモリ不足や親プロセスからのシグナル（Graceful Restartなど）によってプロセスが終了する場合、<code>requests_this_child</code> が最大値に達することはありません。</li>
+<li>**マルチスレッド環境での競合**: <code>worker</code> MPM のようなマルチスレッドモデルでは、複数のワーカースレッドが同時に <code>requests_this_child</code> を更新しようとするため、適切な排他制御（アトミック操作やロック）が行われていない場合、カウントの不整合（ロストアップデート）が発生する可能性があります。</li>
+<li>**設定値 <code>0</code>（無制限）の扱い**: <code>MaxConnectionsPerChild</code> が <code>0</code>（無制限）に設定されている場合、このカウンターによるプロセス終了のトリガーをバイパスする必要があります。</li>
 </ul>
+<p>*注意: 実際のソースコードにおける具体的な競合対策やバイパスロジックの有無は、提供されたコンテキストからは完全には特定されていません。*</p>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a>: <code>prefork</code> MPMにおけるリクエスト処理ループとカウンタのインクリメント処理の実装。</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>: <code>worker</code> MPMにおけるマルチスレッド環境下でのカウンタ管理と、スレッド間での安全な更新処理の実装。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>
+<li><code>prefork</code> MPM におけるプロセスのライフサイクルとカウンターの更新処理の実装を確認できます。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
+<li><code>worker</code> MPM におけるマルチスレッド環境下でのカウンターの同期および終了判定の実装を確認できます。</li>
 </ul><script>
 (function() {
   function notifyParent() {

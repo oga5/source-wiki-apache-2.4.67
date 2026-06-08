@@ -1,13 +1,13 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/unblock-signal.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>unblock_signal</h1>
 <h2>概念</h2>
-<p><code>unblock_signal</code> は、Apache HTTP Server (<code>httpd-2.4.67</code>) のマルチプロセッシングモジュール (MPM) において、特定のシグナルのブロック状態を解除（アンブロック）するための関数または処理です。これにより、スレッドやプロセスが特定のシステムシグナルを適切に受信して処理できるようになります。</p>
+<p><code>unblock_signal</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、特定のシグナルのブロックを解除（アンブロック）するために使用される関数またはマクロです。</p>
 <h2>なぜ重要か</h2>
-<p>マルチスレッドおよびマルチプロセスモデルを採用する <code>event</code> や <code>worker</code> などの MPM では、シグナルハンドリングの制御が極めて重要です。特定のスレッド（例えばシグナルリスナースレッド）のみがシグナルを処理するように設計されている場合、不要なスレッドでのシグナル受信を防ぐためにシグナルをブロックし、適切なタイミングや特定のスレッドで <code>unblock_signal</code> を用いてブロックを解除する必要があります。これにより、プロセスの安全なシャットダウンや再起動（Graceful Restart）が保証されます。</p>
+<p>マルチスレッドおよびマルチプロセスモデルを採用する <code>event</code> や <code>worker</code> などのMPMにおいて、シグナル（プロセスの終了や再起動を促すシグナルなど）を特定の管理スレッドで適切に捕捉・処理できるように、シグナルマスクを制御することは極めて重要です。不要なスレッドでのシグナル受信を防ぎつつ、必要なスレッドで確実に受信できるようにするために <code>unblock_signal</code> が機能します。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view"><code>module:server/mpm/event</code></a></li>
-<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view"><code>module:server/mpm/worker</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
@@ -15,15 +15,15 @@
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#unblock_signal</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、これらの MPM 内で <code>unblock_signal</code> が呼び出される具体的なトリガーや、シグナルが配信されてからハンドラが実行されるまでの詳細なエンドツーエンドの流れは判明していません。</p>
+<p>現時点では、<code>unblock_signal</code> が呼び出される具体的なタイミングや、どのシグナルがどの順序で処理されるかといった詳細なエンドツーエンドの流れは解析されておらず、未確定です。一般的には、各MPMのリスナースレッドやシグナル処理専用スレッドの初期化フェーズにおいて、特定のシグナルのブロックを解除するために呼び出されると推測されます。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、どのシグナルがどのスレッドで常にアンブロックされていなければならないか、といった具体的な不変条件は判明していません。</p>
+<p>現時点では、この関数が維持すべき具体的な不変条件（例えば、どのスレッドがどのシグナルを排他的に受信すべきかなど）は判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>現時点では、<code>unblock_signal</code> の呼び出しに関連する具体的な落とし穴や、誤ったシグナルマスク操作によるデッドロックなどの詳細なリスクは判明していません。</p>
+<p>マルチスレッド環境におけるシグナルマスクの操作は、プラットフォームごとの <code>pthread_sigmask</code> の挙動の違いや、シグナルが意図しないスレッドに配送される問題（シグナルレースコンディションなど）を引き起こしやすいため注意が必要です。ただし、本コードベースにおける具体的な落とし穴の詳細は現時点では未確定です。</p>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> の <code>unblock_signal</code> 実装</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> の <code>unblock_signal</code> 実装</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> の <code>unblock_signal</code> 実装およびその呼び出し箇所</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> の <code>unblock_signal</code> 実装およびその呼び出し箇所</li>
 </ul><script>
 (function() {
   function notifyParent() {

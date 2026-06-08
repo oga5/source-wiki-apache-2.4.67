@@ -1,53 +1,39 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-lock-discovery.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lock_discovery</h1>
 <h2>概念</h2>
-<p><code>dav_lock_discovery</code> は、WebDAV リソースに対する「直接ロック（Direct Lock）」の情報をメモリ上で保持するための構造体です。</p>
-<p>この構造体は <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方に定義されており、同一の形状（固定長データを格納する <code>dav_lock_discovery_fixed</code>、ロックトークン、所有者、認証ユーザー、および次の要素へのポインタ）を持っています。DBM（データベース）に永続化されたバイナリ形式のロックレコードと、メモリ上のリンクドリスト表現との相互変換（シリアライズ/デシリアライズ）において中心的な役割を果たします。</p>
+<p><code>dav_lock_discovery</code> は、Apache HTTP ServerのWebDAV機能において、特定のリソースに対する「直接ロック（Direct Lock）」の情報をメモリ上で保持・管理するための構造体です。この構造体は、単方向のリンクドリスト（<code>next</code> ポインタを使用）として構成され、同一リソースに対する複数のロック情報を表現します。</p>
 <h2>なぜ重要か</h2>
-<p>WebDAV における排他制御（ロック管理）において、どのリソースが誰によって、どのような条件（有効期限やスコープなど）でロックされているかを追跡・検証・永続化するための共通のデータ表現だからです。ファイルシステムベースのロック（<code>modules/dav/fs</code>）と、より汎用的なロック管理（<code>modules/dav/lock</code>）の双方がこの構造体を介してロック情報を処理します。</p>
+<p>WebDAV仕様におけるロックの検出（Lock Discovery）および管理を支える中心的なデータ構造だからです。クライアントから要求されたロック状態の永続化（DBMへの保存）や、リクエスト処理時のロック状態の復元（DBMからの読み込み・期限切れロックのフィルタリング）において、メモリ上の表現として直接使用されます。</p>
 <h2>関与するモジュール</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view"><code>module:modules/dav/fs</code></a></li>
-<li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view"><code>module:modules/dav/lock</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__lock.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html&quot;}, '*');"><code>module:modules/dav/lock</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lock_discovery.html" target="wiki-view"><code>symbol:modules/dav/fs/lock.c#dav_lock_discovery</code></a> (構造体)</li>
-<li><a class="wiki-entity-link" href="../symbols/modules__dav__lock__locks_c__dav_lock_discovery.html" target="wiki-view"><code>symbol:modules/dav/lock/locks.c#dav_lock_discovery</code></a> (構造体)</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lock_discovery.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lock_discovery.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L123&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lock_discovery</code></a> : ファイルシステムベースのWebDAVロック管理で直接ロック情報を保持する構造体。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__lock__locks_c__dav_lock_discovery.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_lock_discovery.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html#L118&quot;}, '*');"><code>symbol:modules/dav/lock/locks.c#dav_lock_discovery</code></a> : 汎用的なWebDAVロック管理で直接ロック情報を保持する構造体。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **読み込みとリスト構築**:</p>
-<ul>
-<li>ロック情報の読み込み時（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> による）、DBM からバイナリデータが読み込まれます。</li>
-<li>現在時刻と比較して期限切れのロックは除外され、有効なロックのみが <code>dav_lock_discovery</code> 構造体のインスタンスとしてデシリアライズされます。</li>
-<li><code>next</code> ポインタを用いて、同一リソースに対する複数のロックがリンクドリストとして構築されます。</li>
-</ul>
-<p>2. **参照と操作**:</p>
-<ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L993" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_get_locks</code></a> などのロック操作関数が、この構築されたリストを参照してロック状態を判定します。</li>
-</ul>
-<p>3. **シリアライズと保存**:</p>
-<ul>
-<li>ロック情報の更新時（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L414" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_save_lock_record</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> による）、<code>dav_lock_discovery</code> のリストを走査し、各要素をバイナリ形式に変換（シリアライズ）して DBM へ書き込み、永続化します。</li>
-</ul>
-<p>※なお、WebDAV プロトコル全体におけるリクエスト受信からレスポンス送信に至る完全なエンドツーエンドの制御フロー（例：LOCK リクエストのハンドリング全体）の詳細は、提供されたコンテキストからは完全には明らかになっていません。</p>
+<p>WebDAVロックのライフサイクルにおける大まかな流れは以下の通りですが、リクエストの受付からレスポンス返却に至る完全なエンドツーエンドの制御フローの詳細は提供されたコンテキストからは未だ不明です。</p>
+<p>1. **ロックの読み込み（デシリアライズ）**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a> または <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> がDBMからバイナリデータを読み込みます。この際、現在時刻と比較して期限切れのロックを排除しながら、有効なロック情報から <code>dav_lock_discovery</code> のリンクドリストを再構築します。 2. **ロック情報の参照・操作**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> 内の関数（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L993" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_get_locks</code></a> など）が、この構造体のリストを走査してロック状態を検証または操作します。 3. **ロックの保存（シリアライズ）**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L414" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>dav_fs_save_lock_record</code></a> または <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> がリストを走査し、各 <code>dav_lock_discovery</code> 要素をバイナリ形式にシリアライズしてDBMへ書き込み、永続化します。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**メモリ管理**: すべての <code>dav_lock_discovery</code> インスタンスは、関連するリクエスト（<code>request_rec</code>）のメモリプール（<code>r-&gt;pool</code>）から割り当てられなければなりません。</li>
-<li>**リスト構造**: <code>next</code> ポインタによる単方向リンクドリストを形成し、同一リソースに対する複数の直接ロックを管理します。</li>
-<li>**固定長データとの分離**: ロックの有効期限やスコープなどの固定長データは、内部メンバ <code>f</code>（<code>dav_lock_discovery_fixed</code> 構造体）に格納されます。</li>
-<li>**シリアライズの整合性**: 構造体の各フィールドは、DBM への書き込み・読み込み時に <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>locks.c</code></a> 内のオフセット計算（<code>dav_size_direct</code> など）と厳密に整合していなければなりません。</li>
+<li>**リスト構造**: <code>next</code> ポインタを介して単方向リンクドリストを形成し、同一リソースに対する複数の直接ロックを管理します。</li>
+<li>**固定長データの分離**: 有効期限やスコープなどの固定長データは、構造体先頭の <code>f</code> メンバ（<code>dav_lock_discovery_fixed</code> 構造体）に格納されます。</li>
+<li>**メモリ管理**: すべてのインスタンスは、関連するリクエスト（<code>request_rec</code>）のメモリプール（<code>r-&gt;pool</code>）から割り当てられます。</li>
+<li>**シリアライズ整合性**: 構造体の各フィールドは、DBMへの書き込み時に <code>dav_size_direct</code> などのサイズ計算ロジックと厳密に整合している必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**データ構造の不整合**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方に同名の構造体が存在し、密接に関連しています。一方を変更する際、シリアライズ/デシリアライズのロジックや他方での参照ロジックとの間でバイナリ互換性やオフセット計算の不整合が生じるリスクがあります。</li>
-<li>**DBM の制限**: DBM が読み取り専用で開かれている場合、この構造体を用いた保存操作（シリアライズと書き込み）は失敗します。また、DBM 自体の破損に対する自己修復機能は本構造体側にはありません。</li>
-<li>**メモリ消費**: メモリ管理は Apache のプール機構に依存しているため明示的な解放は不要ですが、長期間実行されるプロセスや大量のロックを扱う処理において、メモリ消費が累積する可能性があります。</li>
+<li>**データ破損の危険性**: <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> 内のオフセット計算やシリアライズロジックと、構造体の定義が一致しない場合、DBMからの読み込み時にデータ破損が発生する可能性があります。構造体を拡張する際はバイナリの後方互換性に注意が必要です。</li>
+<li>**書き込み失敗**: DBMが読み取り専用で開かれている場合、この構造体を用いた保存操作は失敗します。</li>
+<li>**メモリ消費**: メモリ管理はApacheのプール機構に依存しているため明示的な解放（<code>free</code>）は不要ですが、長期間実行されるプロセスや大量のロックを扱う処理ではメモリ消費量に注意する必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> : ファイルシステム固有のロック永続化・復元処理の実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> : 汎用的なロックのシリアライズ・デシリアライズロジックの実装。</li>
 </ul><script>
 (function() {
   function notifyParent() {
