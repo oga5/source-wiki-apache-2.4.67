@@ -3,7 +3,7 @@
 <h2>概念</h2>
 <p><code>handle_headers</code> は、FastCGI バックエンドから受信したストリームデータから HTTP ヘッダの終端（空行）を検出するためのステートマシンとして機能する関数です。</p>
 <h2>なぜ重要か</h2>
-<p>FastCGI プロトコルにおいて、バックエンドから返されるレスポンスのヘッダ部とボディ部を正しく分離するために不可欠です。ネットワークから受信するデータが断片化している場合でも、呼び出し間で解析状態を維持することで、正確にヘッダの終端（<code>\r\n\r\n</code> または <code>\n\n</code>）を検出できます。</p>
+<p>FastCGI プロトコルにおいて、バックエンドからのレスポンスヘッダは複数回に分割されて（断片化して）届く可能性があります。この関数は、呼び出し間で解析状態（<code>state</code>）を維持しながらストリームをバイト単位で走査し、<code>\r\n\r\n</code> または <code>\n\n</code> といったヘッダの終端シーケンスを正確に検出することで、ヘッダ部とボディ部の境界を識別する役割を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/modules__aaa.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__aaa.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_access_compat.c.html&quot;}, '*');"><code>module:modules/aaa</code></a></li>
@@ -11,27 +11,26 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/mod_proxy_fcgi.c.html#L543&quot;}, '*');"><code>symbol:modules/proxy/mod_proxy_fcgi.c#handle_headers</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html#L409" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>symbol:modules/aaa/mod_authnz_fcgi.c#handle_headers</code></a> （<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> の同関数を呼び出す、または同様のヘッダ処理を行う箇所）</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/mod_proxy_fcgi.c.html#L543&quot;}, '*');"><code>symbol:modules/proxy/mod_proxy_fcgi.c#handle_headers</code></a>: 実際のヘッダ終端検出ロジックが実装されている関数。</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html#L409" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>symbol:modules/aaa/mod_authnz_fcgi.c#handle_headers</code></a>: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> 内の実装を呼び出す、または同様の処理を行う関連エンティティ。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>FastCGI 処理における完全なエンドツーエンドのライフサイクル（リクエストの受信からバックエンドへの転送、最終的なレスポンス返却まで）の全容は、提供された情報からは完全には明らかになっていません。</p>
-<p>現時点で判明している部分的な流れは以下の通りです： 1. **データ受信**: FastCGI バックエンドからレスポンスデータを受信します。 2. **ヘッダ解析の実行**: 受信したバッファ（<code>readbuf</code>）と現在の解析状態（<code>state</code>）を引数として <code>handle_headers</code> を呼び出します。 3. **状態遷移**: <code>handle_headers</code> はバッファをバイト単位で走査し、<code>\r</code> または <code>\n</code> の出現パターンに応じて <code>state</code> を更新します。 4. **終端検出**: <code>\r\n\r\n</code> または <code>\n\n</code> に相当するシーケンスを検出すると、状態が <code>HDR_STATE_DONE_WITH_HEADERS</code> に移行し、関数は <code>1</code> を返します。終端に達しない場合は <code>0</code> を返します。 5. **後続処理**: 呼び出し元（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> や <a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>mod_authnz_fcgi.c</code></a>）は、戻り値が <code>1</code> になるまでデータの受信と解析を繰り返します。</p>
+<p>1. FastCGI バックエンドからデータを受信します。 2. 受信したデータバッファ（<code>readbuf</code>）と、現在の解析状態を保持する変数（<code>state</code>）を <code>handle_headers</code> に渡します。 3. <code>handle_headers</code> はバッファを走査し、改行コード（<code>\r</code> や <code>\n</code>）の出現パターンに応じて <code>state</code> を更新します。 4. ヘッダの終端（<code>HDR_STATE_DONE_WITH_HEADERS</code>）を検出した場合は <code>1</code> を返し、それ以外の場合は <code>0</code> を返して次のデータ受信を待機します。</p>
+<p>※なお、FastCGI レスポンス全体の処理や、ヘッダ検出後の具体的な転送処理など、詳細なエンドツーエンドの全体フローは提供された情報からは完全には判明していません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**状態の一貫性**: 解析状態を示す <code>state</code> 変数は、ヘッダ解析の進行状況を追跡するために、呼び出し間で一貫して保持・維持されなければなりません。</li>
-<li>**バッファの有効性**: 入力される <code>readbuf</code> は、<code>readlen</code> で指定されたサイズ分の有効なデータを含んでいる必要があります。</li>
-<li>その他のシステムレベルの不変条件については、提供された情報からは未検証です。</li>
+<li>**状態の維持**: データの断片化に対応するため、呼び出し側は <code>state</code> 変数を初期化後、ヘッダ解析が完了するまで一貫して保持・更新し続ける必要があります。</li>
+<li>**バッファの整合性**: 入力される <code>readbuf</code> は、指定された <code>readlen</code> 分の有効なデータを含んでいなければなりません。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**状態のリセット**: データの断片化により複数回に分けて <code>handle_headers</code> が呼び出される際、呼び出し側で誤って <code>state</code> を初期化してしまうと、ヘッダの終端を正しく検出できなくなります。</li>
-<li>**状態定義の不整合**: ヘッダの解析ロジックや状態遷移を変更する場合、<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> 内で定義されている <code>HDR_STATE</code> 定数の遷移図とコードの実装を正確に同期させる必要があります。</li>
+<li>**状態のリセット**: 改行シーケンスの途中でそれ以外の文字が出現した場合、状態は <code>HDR_STATE_READING_HEADERS</code> にリセットされます。</li>
+<li>**断片化の考慮**: 1回の呼び出しでヘッダ終端に達しない場合（戻り値が <code>0</code> の場合）、状態を破棄せずに次のデータ受信時にも同じ <code>state</code> を引き継いで呼び出す必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a> （<code>handle_headers</code> の具体的な実装と <code>HDR_STATE_*</code> 定数の定義）</li>
-<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>modules/aaa/mod_authnz_fcgi.c</code></a> （認証・承認モジュールにおける <code>handle_headers</code> の呼び出しと利用方法）</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a> (特に <code>handle_headers</code> の定義箇所: 543行目付近、および呼び出し元: 822行目付近)</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>modules/aaa/mod_authnz_fcgi.c</code></a> (呼び出し元: 557行目付近)</li>
 </ul><script>
 (function() {
   function notifyParent() {

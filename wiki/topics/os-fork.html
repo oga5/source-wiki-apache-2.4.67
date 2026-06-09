@@ -1,9 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/os-fork.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>os_fork</h1>
 <h2>概念</h2>
-<p><code>os_fork</code> は、Apache HTTP Server（httpd-2.4.67）において、実行環境（OS）の特性に応じた適切なプロセス生成（フォーク）処理を抽象化・カプセル化するための関数です。プラットフォームごとのプロセス生成手法の違いを吸収し、共通のインターフェースを提供します。</p>
+<p><code>os_fork</code> は、動作するオペレーティングシステム環境の特性に応じて、適切なプロセス生成手法を選択・実行するためのラッパー関数です。特に BS2000（OSD/POSIX）環境においては、標準の <code>fork()</code> と、ユーザー切り替えを伴う固有の <code>ufork()</code> を動的に切り替えてプロセスを生成する役割を担います。</p>
 <h2>なぜ重要か</h2>
-<p>マルチプロセスモデルを採用するWebサーバー（例: <code>prefork</code> MPM）において、リクエストを処理するための子プロセスを安全かつ適切に生成することは不可欠です。 例えば、BS2000（OSD/POSIX）環境では標準の <code>fork()</code> だけでなく、特定のユーザー権限でプロセスを起動するための <code>ufork()</code> を使い分ける必要があり、<code>os_fork</code> を通じてこれらのプラットフォーム固有の挙動を隠蔽します。</p>
+<p>Apache HTTP Server などのマルチプロセスモデル（MPM）において、プラットフォーム固有のプロセス生成ロジックや制約（BS2000 における大文字ユーザー名要件や権限管理など）を隠蔽し、上位レイヤーに対して統一的なプロセス生成インターフェースを提供するために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/os__bs2000.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__bs2000.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/ebcdic.c.html&quot;}, '*');"><code>module:os/bs2000</code></a></li>
@@ -11,38 +11,39 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/os__bs2000__os_c__os_fork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__bs2000__os_c__os_fork.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/os.c.html#L98&quot;}, '*');"><code>symbol:os/bs2000/os.c#os_fork</code></a>: BS2000環境における <code>os_fork</code> の実装。実行環境に応じて <code>fork()</code> または <code>ufork()</code> を選択します。</li>
-<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html#L698" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>symbol:os/unix/unixd.c#os_fork</code></a>: Unix環境における <code>os_fork</code> の実装（詳細な振る舞いは提供されたコンテキストからは未詳）。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/os__bs2000__os_c__os_fork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__bs2000__os_c__os_fork.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/os.c.html#L98&quot;}, '*');"><code>symbol:os/bs2000/os.c#os_fork</code></a>**: BS2000 環境向けの実装。<code>fork()</code> または <code>ufork()</code> を選択的に呼び出します。</li>
+<li>**<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html#L698" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>symbol:os/unix/unixd.c#os_fork</code></a>**: Unix 環境向けの実装（詳細な内部仕様は現時点で未提供）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **プロセスの生成要求**: <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> などの呼び出し元から、対象のユーザー名（<code>user</code>）を指定して <code>os_fork(user)</code> が呼び出されます。 2. **BS2000環境における処理**:</p>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> などの呼び出し元から、対象ユーザー名（<code>user</code>）を指定して <code>os_fork</code> が呼び出されます。 2. **BS2000 環境での処理**:</p>
 <ul>
-<li><code>os_forktype(0)</code> を呼び出し、プロセス生成モード（<code>bs2_ForkType</code>）を判定します。</li>
-<li>モードが <code>bs2_FORK</code> の場合、標準の <code>fork()</code> を実行します。</li>
-<li>モードが <code>bs2_UFORK</code> の場合、指定された <code>user</code> 名を大文字に変換（<code>ap_str_toupper()</code>）し、<code>ufork(username)</code> を実行します。</li>
-<li>それ以外のモードでは、PIDを <code>0</code> に設定します。</li>
-<p>3. **Unix環境における処理**:</p>
-<li>Unix環境（<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>）における具体的なエンドツーエンドの流れや、Unix固有の <code>os_fork</code> の内部実装の詳細は、提供されたコンテキストからは未詳です。</li>
+<li><code>os_forktype(0)</code> を呼び出し、現在のプロセス生成モード（<code>bs2_ForkType</code>）を判定します。</li>
+<li>**<code>bs2_FORK</code> の場合**: 標準の <code>fork()</code> を実行します。</li>
+<li>**<code>bs2_UFORK</code> の場合**: <code>user</code> 引数を <code>ap_str_toupper()</code> で大文字に変換し、<code>ufork(username)</code> を実行します。</li>
+<li>**その他の場合**: PID を <code>0</code> に設定します。</li>
+<li>**エラーハンドリング**: <code>ufork()</code> が <code>EPERM</code> を返した場合、緊急ログを出力して <code>exit(1)</code> によりプロセスを終了します。</li>
 </ul>
+<p>※ Unix 環境（<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html#L698" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>symbol:os/unix/unixd.c#os_fork</code></a>）における具体的なエンドツーエンドの流れや、他プラットフォームとの統合フローの全貌は現時点では不明です。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**BS2000環境における不変条件**:</li>
-<li><code>bs2_UFORK</code> モードで動作する場合、渡される <code>user</code> 引数は大文字に変換されて <code>ufork()</code> に渡されなければなりません。また、<code>user</code> 名の長さは <code>USER_LEN</code> に制限されます。</li>
-<li>**Unix環境における不変条件**:</li>
-<li>提供されたコンテキストからは未詳です。</li>
+<li>**BS2000 環境における不変条件**:</li>
+<li><code>bs2_UFORK</code> モードの際、<code>ufork()</code> に渡されるユーザー名は必ず大文字に変換されていなければなりません。</li>
+<li><code>ufork()</code> 実行時に <code>EPERM</code>（権限エラー）が発生した場合、プロセスは必ず <code>exit(1)</code> で即座に終了しなければなりません。</li>
+<li>入力される <code>user</code> 名の長さは <code>USER_LEN</code> 以下に制限されます。</li>
+<li>**Unix 環境における不変条件**:</li>
+<li>現時点では情報が不足しており不明です。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**BS2000環境における権限エラー**:</li>
-<li><code>ufork()</code> の実行時に <code>EPERM</code>（権限エラー）が発生した場合、設定不備とみなされ、サーバーはエラーログを出力して <code>exit(1)</code> により緊急停止します。実行ユーザーの権限設定に注意する必要があります。</li>
-<li>**Unix環境における落とし穴**:</li>
-<li>提供されたコンテキストからは未詳です。</li>
+<li>**BS2000 環境での権限不備**: <code>ufork()</code> 実行時に <code>EPERM</code> が返されると、サーバープロセスが緊急停止（<code>exit(1)</code>）するため、実行ユーザーの権限設定や OS 側の設定不備がシステム全体の停止に直結します。</li>
+<li>**ユーザー名の長さ制限**: <code>user</code> 引数の長さが <code>USER_LEN</code> を超過した場合の境界挙動に注意する必要があります。</li>
+<li>**Unix 環境の挙動**: <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> における <code>os_fork</code> の具体的な失敗モードや制限事項は現時点では不明です。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a>: BS2000環境における <code>os_fork</code> の具体的な実装と <code>ufork</code> のハンドリング。</li>
-<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>: Unix環境における <code>os_fork</code> の実装。</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a>: 子プロセス生成時に <code>os_fork</code> を呼び出す主要な箇所。</li>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> （BS2000 環境における <code>os_fork</code> の具体的な実装と <code>bs2_ForkType</code> の定義）</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> （Unix 環境における <code>os_fork</code> の実装内容の確認）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> （<code>os_fork</code> を呼び出す MPM 側の処理）</li>
 </ul><script>
 (function() {
   function notifyParent() {

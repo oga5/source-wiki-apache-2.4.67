@@ -1,31 +1,42 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/num-listensocks.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>num_listensocks</h1>
 <h2>概念</h2>
-<p><code>num_listensocks</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュール（MPM）において、サーバーがクライアントからの接続要求を待ち受ける（listenする）ソケットの総数を保持する変数またはシンボルです。</p>
+<p><code>num_listensocks</code> は、Apache HTTP Server（httpd-2.4.67）の各種マルチプロセッシングモジュール（MPM）において、サーバーがクライアントからの接続要求を待ち受ける（listenする）ソケットの総数を保持・管理するための変数（シンボル）です。</p>
 <h2>なぜ重要か</h2>
-<p>サーバーが複数のIPアドレスやポートでリクエストを待ち受ける場合、リスニングソケットの数に応じて接続処理の挙動を切り替える必要があります。例えば、ソケットが1つの場合は単純な <code>accept</code> で済みますが、複数ある場合は <code>select</code> や <code>poll</code>、<code>epoll</code> などのI/O多重化システムコールを使用して監視する必要があります。<code>num_listensocks</code> は、これらの制御ロジックを決定するための基準値として機能します。</p>
+<p>サーバーが複数のIPアドレスやポートでリクエストを待ち受ける場合、複数のリスニングソケットを適切に監視・制御する必要があります。<code>num_listensocks</code> は、監視対象となるソケットの数を特定し、ソケットの多重化（<code>poll</code> や <code>epoll</code> などによる監視）を行うか、あるいは単一のソケットに対して直接 <code>accept</code> を行うかといった、接続受け入れ処理の最適化や制御ロジックの分岐を決定するために重要です。</p>
 <h2>関与するモジュール</h2>
-<p>本トピックに関与するモジュールは以下の通りです。</p>
+<p>本変数に関与するモジュールは以下の通りです。</p>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
-<p>本トピックに関連する主要なソースコード上のシンボルは以下の通りです。</p>
+<p>本トピックに関連する主要なコードエンティティは以下の通りです。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#num_listensocks</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html#L381" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#num_listensocks</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L134" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#num_listensocks</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、提供された情報からは <code>num_listensocks</code> が初期化され、更新され、参照される具体的なエンドツーエンドの制御フロー（設定ファイルのパースからソケット作成、イベントループでの利用に至る詳細なライフサイクル）は判明していません。</p>
+<p>1. **初期化**: サーバー起動時または再起動時に、設定ファイル（<code>httpd.conf</code> など）の <code>Listen</code> ディレクティブに基づいてリスニングソケットが生成され、その個数が各MPMの <code>num_listensocks</code> に設定されます。 2. **接続待ち受けループ**:</p>
+<ul>
+<li><code>prefork</code>、<code>worker</code>、<code>event</code> の各MPMは、<code>num_listensocks</code> の値を確認します。</li>
+<li>リスニングソケットが複数存在する場合（<code>num_listensocks &gt; 1</code>）、複数のソケットを同時に監視するためのポーリング機構が使用されます。</li>
+</ul>
+<p>※なお、動的な再設定（Graceful Restartなど）時における値の更新プロセスや、各MPM間での具体的な初期化関数の呼び出し順序など、詳細なエンドツーエンドのフローは現時点では完全には特定されていません。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、各MPMにおける <code>num_listensocks</code> の値と実際のソケット記述子配列の整合性などに関する、具体的な不変条件は判明していません。</p>
+<ul>
+<li><code>num_listensocks</code> の値は、実際にシステムに登録され、有効化されているリスニングソケットの総数と一致している必要があります。</li>
+</ul>
+<p>※ただし、スレッド間での同期要件や、シリアライズロック（Accept Lock）の有効化条件など、具体的なコードレベルでの不変条件は現時点では特定されていません。</p>
 <h2>よくある落とし穴</h2>
-<p>現時点では、この変数に関連する具体的なバグ、スレッドセーフティの問題、または設定上の落とし穴は判明していません。</p>
+<ul>
+<li>**単一ソケットと複数ソケットの挙動の差異**: <code>num_listensocks</code> が <code>1</code> であるか複数であるかによって、接続のシリアライズ（ロック）の必要性が変わります。この値の判定に誤りがあると、不要なロックによるパフォーマンス低下や、逆に複数ソケット時の競合状態（接続の取りこぼしなど）を招く可能性があります。</li>
+</ul>
+<p>※具体的な不具合事例や、プラットフォーム固有の落とし穴の詳細は現時点では特定されていません。</p>
 <h2>次に読む場所</h2>
-<p>各MPMにおける <code>num_listensocks</code> の具体的な初期化と参照方法を調査するために、以下のソースファイルを参照してください。</p>
+<p>各MPMにおける <code>num_listensocks</code> の具体的な初期化と参照方法を理解するために、以下のソースファイルを参照してください。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>

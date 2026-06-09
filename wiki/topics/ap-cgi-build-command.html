@@ -1,14 +1,9 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-cgi-build-command.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_cgi_build_command</h1>
 <h2>概念</h2>
-<p><code>ap_cgi_build_command</code> は、Apache HTTP Server (httpd) において、プラットフォーム固有のCGIスクリプトや実行ファイルの起動に必要なコマンドラインおよび引数配列（<code>argv</code>）を構築するための関数です。NetWare環境（<a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_netware.c.html&quot;}, '*');"><code>mod_netware.c</code></a>）およびWindows環境（<a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_win32.c.html&quot;}, '*');"><code>mod_win32.c</code></a>）でそれぞれ個別に実装されており、OSごとの実行特性の違いを吸収する役割を持っています。</p>
+<p><code>ap_cgi_build_command</code> は、Apache HTTP Serverにおいて、プラットフォーム固有のCGI実行コマンドラインおよび引数リスト（<code>argv</code>）を構築するための関数です。NetWareやWindowsなどの非UNIX系OS環境において、CGIスクリプトや実行ファイルを適切に起動するためのインタープリタの特定、パスの解決、引数のトークン化などの処理を抽象化します。</p>
 <h2>なぜ重要か</h2>
-<p>CGIの実行プロセスはオペレーティングシステムによって大きく異なります。</p>
-<ul>
-<li>**Windows** では、ファイルの拡張子判別、レジストリ（<code>ScriptInterpreterSource</code>）の検索、ファイル先頭のシバン（<code>#!</code>）行の解析、およびWindows固有のコマンドラインエスケープ処理が必要です。</li>
-<li>**NetWare** では、拡張子に基づいたNLM（NetWare Loadable Module）ハンドラの検索や、アドレス空間の分離制御（<code>e_info-&gt;addrspace</code>）が必要になります。</li>
-</ul>
-<p><code>ap_cgi_build_command</code> は、これらの複雑なプラットフォーム固有ロジックをカプセル化し、<code>mod_cgi</code> などの汎用CGI実行モジュールに対して統一されたインターフェースを提供するために重要です。</p>
+<p>UNIX系OSとは異なり、WindowsやNetWare環境では、CGIスクリプト（例: <code>.pl</code>, <code>.py</code>, <code>.bat</code>）を直接実行する仕組みや、シバン（<code>#!</code>）の解釈、レジストリによる関連付け、NLM（NetWare Loadable Module）の起動方法などがOS固有の仕様に依存します。<code>ap_cgi_build_command</code> は、これらのプラットフォーム固有の差異を吸収し、<code>mod_cgi</code> などのジェネリックなCGI実行モジュールに対して統一されたインターフェースを提供するために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/modules__arch__netware.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__arch__netware.html&quot;, &quot;source&quot;: &quot;source/modules/arch/netware/libprews.c.html&quot;}, '*');"><code>module:modules/arch/netware</code></a></li>
@@ -20,31 +15,36 @@
 <li><a class="wiki-entity-link" href="../symbols/modules__arch__win32__mod_win32_c__ap_cgi_build_command.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__ap_cgi_build_command.html&quot;, &quot;source&quot;: &quot;source/modules/arch/win32/mod_win32.c.html#L369&quot;}, '*');"><code>symbol:modules/arch/win32/mod_win32.c#ap_cgi_build_command</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> が <code>APR_RETRIEVE_OPTIONAL_FN</code> を介して、プラットフォーム固有の <code>ap_cgi_build_command</code> を動的に取得して呼び出します。 2. **コマンド構築（プラットフォーム別）**:</p>
+<p>1. **呼び出しのトリガー**: <a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> が、オプション関数（Optional Function）として登録された <code>ap_cgi_build_command</code> を <code>APR_RETRIEVE_OPTIONAL_FN</code> を介して動的に取得し、呼び出します。 2. **プラットフォーム固有の解析**:</p>
 <ul>
-<li>**NetWare環境**:</li>
-<p>1. リクエスト設定（<a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a>）から拡張子に対応するハンドラを検索します。 2. ハンドラが見つかった場合、<code>[ハンドラ] [ファイル名]</code> の形式でコマンド文字列を生成します。 3. <code>apr_tokenize_to_argv</code> で引数をトークン化し、<a class="wiki-source-link" href="../../source/server/config.c.html#L1594" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_server_root_relative</code></a> で絶対パスを解決します。</p>
-<li>**Windows環境**:</li>
-<p>1. ファイル拡張子（<code>.exe</code>, <code>.com</code>, <code>.bat</code>, <code>.cmd</code>）を判定し、標準的な実行形式であればインタープリタを空に設定します。 2. 必要に応じて、レジストリまたはファイル先頭のシバン（<code>#!</code>）行からインタープリタを特定します。 3. <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> を用いて引数テンプレートを展開・配列化し、環境変数をWindows向けに調整します。 3. **結果の返却**: 構築されたコマンドパス（<code>cmd</code>）、引数配列（<code>argv</code>）、および実行情報（<a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.h.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgi_h__cgi_exec_info_t.html&quot;}, '*');"><code>cgi_exec_info_t</code></a>）を呼び出し元に返します。</p>
+<li>**NetWareの場合**: リクエストされたファイルの拡張子に基づき、<a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a> 内の <code>file_type_handlers</code> から対応するハンドラ（NLMなど）を検索します。</li>
+<li>**Windowsの場合**: ファイル拡張子（<code>.exe</code>, <code>.bat</code> など）の判定、レジストリ（<code>ScriptInterpreterSource</code> 設定に基づく）の検索、またはファイル先頭のシバン（<code>#!</code>）行の解析を行い、適切なインタープリタを特定します。</li>
+<p>3. **コマンド・引数の構築**:</p>
+<li>**NetWareの場合**: <code>[ハンドラ] [ファイル名]</code> の形式でコマンドを生成し、<code>apr_tokenize_to_argv</code> で引数配列に変換後、<a class="wiki-source-link" href="../../source/server/config.c.html#L1594" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_server_root_relative</code></a> で絶対パスを解決します。</li>
+<li>**Windowsの場合**: <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> を用いて引数テンプレートを展開・配列化し、<a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__prep_string.html&quot;}, '*');"><code>prep_string</code></a> で環境変数をWindows向けに調整します。</li>
+<p>4. **結果の返却**: 構築されたコマンドパス（<code>cmd</code>）と引数配列（<code>argv</code>）を呼び出し元に返し、CGIプロセスが起動されます。</p>
 </ul>
-<p>※なお、呼び出し元である <code>mod_cgi</code> 側での具体的なプロセス起動処理や、エラーハンドリングの完全なエンドツーエンドの統合フローの詳細は、提供されたコンテキストからは未詳です。</p>
+<p>※なお、<code>mod_cgi</code> 側での具体的なプロセス起動処理や、その他のプラットフォーム（UNIX等）における詳細なエンドツーエンドの統合フローの全容は、提供されたコンテキストからは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**メモリ管理の局所性**: すべての動的メモリ確保は、引数 <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> で渡される <code>apr_pool_t</code> に依存して行われなければなりません。</li>
-<li>**エラー時の契約**: コマンドの構築やインタープリタの特定に失敗した場合（ハンドラ未登録、ファイル読み込み失敗、実行形式不明など）、関数は <code>APR_EBADF</code> などのエラー用ステータスコードを返し、処理を中断しなければなりません。</li>
-<li>**オプショナル関数としての公開**: 本関数は <code>APR_REGISTER_OPTIONAL_FN</code> を介して登録され、外部モジュールから動的に呼び出せる状態になっている必要があります。</li>
+<li>**メモリ管理**: すべての動的メモリ確保は、引数として渡されるメモリプール（<code>apr_pool_t *p</code>）に依存して行われなければなりません。</li>
+<li>**インターフェースの一貫性**: プラットフォームごとの実装（NetWare、Windows）は、同一の関数シグネチャ（<code>apr_status_t ap_cgi_build_command(...)</code>）を持ち、<code>mod_cgi</code> から透過的に呼び出せる必要があります。</li>
+<li>**NetWareの不変条件**: <a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a> がリクエストのディレクトリ設定から取得可能であること、および拡張子に対応するハンドラが登録されている必要があります。</li>
+<li>**Windowsの不変条件**: <code>e_info-&gt;cmd_type</code> が <code>APR_SHELLCMD</code> 以外でインタープリタが特定された場合、<code>APR_PROGRAM_PATH</code> に設定される必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**Windowsにおける文字コード変換の限界**: <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__prep_string.html&quot;}, '*');"><code>prep_string</code></a> によるUTF-8からWindowsローカルコードページへの変換は限定的な実装に留まっており、特定の環境変数以外で文字化けや予期しない挙動が発生する可能性があります。</li>
-<li>**Windowsの引数エスケープの複雑さ**: <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> 内の引数解析は複雑なエスケープ処理を伴うため、Windowsのコマンドライン引数ルールに反する変更を加えると、セキュリティ脆弱性や起動失敗を招く恐れがあります。</li>
-<li>**NetWareのハンドラ未登録**: 拡張子に対応するコマンドが <code>file_type_handlers</code> に登録されていない場合、即座に <code>APR_EBADF</code> エラーとなるため、設定ファイルの不備が直接CGIの起動失敗につながります。</li>
+<li>**NetWare環境**: 拡張子に対応するコマンドが <code>file_type_handlers</code> に登録されていない場合、<code>APR_EBADF</code> を返して処理が失敗します。</li>
+<li>**Windows環境**:</li>
+<li>シバン解析において、UTF-8のBOM（<code>\xEF\xBB\xBF</code>）の考慮漏れや、ファイル読み込み失敗（<code>apr_file_open</code> の失敗）により、インタープリタが特定できず <code>APR_EBADF</code> となることがあります。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__prep_string.html&quot;}, '*');"><code>prep_string</code></a> によるUTF-8からWindowsローカルコードページへの変換は限定的な実装に留まるため、文字コード関連の不整合が発生する可能性があります。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> 内の引数解析は複雑なエスケープ処理を含むため、Windowsのコマンドライン引数ルールに反する入力を与えると予期しない挙動を示す恐れがあります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_netware.c.html&quot;}, '*');"><code>modules/arch/netware/mod_netware.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_win32.c.html&quot;}, '*');"><code>modules/arch/win32/mod_win32.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> （呼び出し元としての利用方法）</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_netware.c.html&quot;}, '*');"><code>modules/arch/netware/mod_netware.c</code></a> (NetWareにおけるコマンド構築とアドレス空間制御の実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_win32.c.html&quot;}, '*');"><code>modules/arch/win32/mod_win32.c</code></a> (Windowsにおけるレジストリ・シバン解析、引数展開の実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> (本関数を呼び出すCGIジェネレータモジュール)</li>
 </ul><script>
 (function() {
   function notifyParent() {

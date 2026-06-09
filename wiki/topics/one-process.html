@@ -1,11 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/one-process.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>one_process</h1>
 <h2>概念</h2>
-<p><code>one_process</code> は、Apache HTTP Server (httpd) の各種マルチプロセッシングモジュール (MPM) において、サーバーを単一のプロセス（シングルプロセスモード）で実行するかどうかを制御・判定するためのシンボル（通常はグローバル変数またはフラグ）です。</p>
+<p><code>one_process</code> は、Apache HTTP Server (<code>httpd-2.4.67</code>) の各種マルチプロセッシングモジュール (MPM) において定義・参照されているグローバル変数またはシンボルです。通常、サーバーを単一プロセスモード（デバッグモードなど）で実行するかどうかを制御・判定するために使用されます。</p>
 <h2>なぜ重要か</h2>
-<p>通常、Apacheはリクエストを並行処理するために複数の子プロセスやスレッドを生成しますが、デバッグ時や特定の制限された環境下では、単一のプロセス内で動作させることが望ましい場合があります（例: <code>-X</code> コマンドライン引数によるデバッグ起動）。<code>one_process</code> フラグは、各MPMがマルチプロセス/マルチスレッドの生成を抑制し、単一プロセス内での実行を強制するために重要です。</p>
+<p>Apache HTTP Serverは通常、リクエストを並行処理するために複数のプロセスやスレッドを生成します。しかし、デバッグや特定の制限環境下での動作においては、単一のプロセスで動作させることが極めて有用です。<code>one_process</code> シンボルは、各MPM（<code>event</code>, <code>mpmt_os2</code>, <code>prefork</code>, <code>worker</code>）において、この単一プロセス動作モードを識別し、プロセスのフォークやスレッド生成の挙動を切り替えるためのフラグとして機能します。</p>
 <h2>関与するモジュール</h2>
-<p>本トピックに関与するモジュールは以下の通りです。</p>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__mpmt_os2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__mpmt_os2.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/mpmt_os2</code></a></li>
@@ -13,7 +12,6 @@
 <li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
-<p>本トピックに関連する主要なソースコード上のシンボルは以下の通りです。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L443" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#one_process</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#one_process</code></a></li>
@@ -21,13 +19,12 @@
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L216" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#one_process</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供されたソースコードのコンテキストからは、<code>one_process</code> がどのように初期化され、コマンドライン引数からどのようにパースされ、各MPMのメインループやプロセス生成処理に伝播するかの具体的なエンドツーエンドの流れはまだ完全に特定されていません。</p>
+<p>現時点では、コマンドライン引数（例: <code>-X</code> オプション）の解析から、これら各MPMファイル内の <code>one_process</code> 変数へ値が設定され、最終的にプロセス生成処理がスキップされるまでの具体的な制御フローの詳細は未確定です。</p>
 <h2>重要な不変条件</h2>
-<p><code>one_process</code> が有効である場合、各MPMは追加の子プロセスをフォーク（fork）したり、独立したデーモンプロセスを生成したりしてはならないという不変条件が存在すると推測されますが、具体的なコードレベルでの不変条件やアサーションの存在は現時点では確認されていません。</p>
+<p>現時点では、<code>one_process</code> が有効な場合に維持されるべき具体的な不変条件（例: 生成される子プロセス数が厳密に0または1であること、シグナルハンドリングの挙動など）は未確定です。</p>
 <h2>よくある落とし穴</h2>
-<p><code>one_process</code> モード（シングルプロセスモード）では、シグナルハンドリングやリソースのクリーンアップ、スレッドの挙動が通常のマルチプロセス実行時と異なる場合があります。しかし、具体的な不具合や落とし穴の詳細については、提供されたモジュール情報からは現時点では特定されていません。</p>
+<p>現時点では、<code>one_process</code> モードを使用する際の実装上あるいは運用上の具体的な落とし穴（例: マルチスレッドMPMにおけるスレッド生成への影響や、リソースリークの検知挙動の違いなど）は未確定です。</p>
 <h2>次に読む場所</h2>
-<p>各MPMにおける <code>one_process</code> の定義と参照箇所を確認するために、以下のファイルを調査してください。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a></li>

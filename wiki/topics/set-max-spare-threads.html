@@ -1,28 +1,31 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/set-max-spare-threads.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>set_max_spare_threads</h1>
 <h2>概念</h2>
-<p><code>set_max_spare_threads</code> は、Apache HTTP Server (httpd) のマルチプロセッシングモジュール (MPM) において、アイドル状態（予備）として維持できる最大スレッド数を制御するための設定ディレクティブ処理関数、またはそれに関連する内部シンボルです。</p>
+<p><code>set_max_spare_threads</code> は、Apache HTTP Server (httpd) のマルチプロセッシングモジュール (MPM) において、アイドル状態（スペア）として維持できる最大スレッド数を設定・制御するための関数または設定ハンドラです。</p>
 <h2>なぜ重要か</h2>
-<p>この関数は、サーバーの負荷が低下した際に余分なスレッドを破棄し、システムリソース（メモリやCPU）の消費を最適化するために重要です。各MPM（event、worker、mpmt_os2）がそれぞれのスレッド管理モデルに適した方法で最大予備スレッド数を設定・維持できるようにします。</p>
+<p>この機能は、サーバーの負荷が低下した際に過剰なアイドルスレッドを保持し続けることを防ぎ、システムリソース（メモリやCPUリソースなど）を効率的に解放・管理するために重要です。</p>
 <h2>関与するモジュール</h2>
+<p>本機能は以下のモジュールに関与しています。</p>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__mpmt_os2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__mpmt_os2.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/mpmt_os2</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
+<p>本機能に関連する主要なソースコードシンボルは以下の通りです。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L4043" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#set_max_spare_threads</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L566" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#set_max_spare_threads</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L2378" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#set_max_spare_threads</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>設定ファイル（<code>httpd.conf</code> など）の解析時に <code>MaxSpareThreads</code> ディレクティブが検出されると、対応するMPMの <code>set_max_spare_threads</code> 関数が呼び出され、設定値が内部変数に格納されます。 ただし、この設定値が実行時のスレッドプール管理やスレッドの動的終了処理にどのように反映されるかといった、詳細なエンドツーエンドの流れは現時点では判明していません。</p>
+<p>設定ファイル（httpd.confなど）のディレクティブ解析から、各MPM（event, mpmt_os2, worker）の内部スレッド管理ライフサイクルへ設定値がどのように適用され、スレッドの動的な終了がどのようにトリガーされるかについて、具体的なエンドツーエンドの制御フローは現時点では未検証です。</p>
 <h2>重要な不変条件</h2>
-<p>一般的に、設定される最大予備スレッド数は最小予備スレッド数（<code>MinSpareThreads</code>）以上である必要があります。しかし、各MPMの <code>set_max_spare_threads</code> 内部で保証されている具体的なバリデーションルールや不変条件の詳細は、現時点では判明していません。</p>
+<p>設定値のバリデーションルール（例: 最小スペアスレッド数 <code>MinSpareThreads</code> との大小関係など）や、各MPMの実装における具体的な不変条件は現時点では判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>設定値が極端に小さすぎるとスレッドの頻繁な生成・破棄（スラッシング）が発生してパフォーマンスが低下し、大きすぎると不要なメモリを消費し続ける原因になります。ただし、本シンボルの実装に起因する具体的な落とし穴や制約は、現時点では判明していません。</p>
+<p>設定値が極端に小さすぎる場合や大きすぎる場合に発生し得る挙動（スレッドの頻繁な生成・破棄によるオーバーヘッドなど）や、設定適用時の典型的な落とし穴については、現時点では判明していません。</p>
 <h2>次に読む場所</h2>
+<p>具体的な挙動や実装の詳細を把握するためには、以下のソースファイルを参照してください。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a></li>

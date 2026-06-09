@@ -1,11 +1,10 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/thread-limit.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>thread_limit</h1>
 <h2>概念</h2>
-<p><code>thread_limit</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）において、生成可能なスレッド数の上限を規定する設定ディレクティブ <code>ThreadLimit</code> の値を保持し、適用するための内部変数および設定処理に関連する概念です。</p>
+<p><code>thread_limit</code> は、Apache HTTP Serverの各種マルチプロセッシングモジュール（MPM）において、設定ディレクティブ <code>ThreadLimit</code> の値を保持するための内部的な静的変数、およびその値を設定するための仕組みです。</p>
 <h2>なぜ重要か</h2>
-<p>各MPM（event, worker, winnt, netwareなど）は、クライアントからのリクエストを並行処理するためにスレッドを使用します。<code>ThreadLimit</code> ディレクティブを介して <code>thread_limit</code> 変数を適切に設定することは、サーバーの最大同時処理能力を制御し、システムリソースの過剰消費を防ぐために極めて重要です。</p>
+<p>この仕組みは、各MPM（event、netware、winnt、worker）が生成可能なスレッド数の上限を制御するために重要です。設定ファイルから渡された設定値を解析し、内部変数 <code>thread_limit</code> に安全に反映させる役割を担っています。</p>
 <h2>関与するモジュール</h2>
-<p>本トピックには、以下のMPMモジュールが関与しています。</p>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__netware.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__netware.html&quot;, &quot;source&quot;: &quot;source/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/netware</code></a></li>
@@ -13,7 +12,6 @@
 <li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
-<p>本トピックに関連する主要なエンティティ（変数および設定関数）は以下の通りです。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L4093" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#set_thread_limit</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L174" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#thread_limit</code></a></li>
@@ -23,24 +21,23 @@
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L126" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#thread_limit</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **設定のロード**: Apacheの起動時または再起動時に、設定ファイルから <code>ThreadLimit</code> ディレクティブが読み込まれます。 2. **ディレクティブの解析**: 各MPMに定義された <code>set_thread_limit</code> 関数（例: <code>server/mpm/winnt/mpm_winnt.c#set_thread_limit</code>）が呼び出されます。 3. **コンテキスト検証**: <a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> を呼び出し、現在の設定コンテキストがグローバル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L970" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>GLOBAL_ONLY</code></a>）であるかを検証します。 4. **値の適用**: 渡された引数文字列を <code>atoi</code> で整数に変換し、静的変数 <code>thread_limit</code> に代入します。</p>
-<p>※ 設定された <code>thread_limit</code> 変数が、その後のスレッド生成やプール初期化の段階でどのように参照され、制限を強制するかの具体的なエンドツーエンドの実行フローは、提供された情報からは未検証です。</p>
+<p>1. **設定の解析**: Apacheの起動または再起動時に、設定ディレクティブ <code>ThreadLimit</code> が検出されると、<a class="wiki-source-link" href="../../source/include/http_config.h.html#L128" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>AP_INIT_TAKE1</code></a> などの登録を介して <code>set_thread_limit</code> 関数が呼び出されます。 2. **コンテキスト検証**: <a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> を使用して、現在の設定コンテキストがグローバル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L970" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>GLOBAL_ONLY</code></a>）であるかを検証します。 3. **値の変換と格納**: 入力された文字列引数を <code>atoi</code> によって整数に変換し、静的変数 <code>thread_limit</code> に代入します。</p>
+<p>※ なお、設定された <code>thread_limit</code> 変数が、各MPMのスレッド生成やリソース割り当てにおいてどのように参照・適用されるかという具体的なエンドツーエンドの制御フローは、提供されたコンテキストからは明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**グローバルコンテキストの強制**: <code>ThreadLimit</code> の設定は、グローバルコンテキストでのみ行う必要があります。これは <a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> によって厳格に検証されます。</li>
-<li>**値の型**: 設定値は <code>atoi</code> を用いて文字列から整数に変換されます。ただし、変換後の値に対する具体的な境界値チェック（上限・下限のバリデーション）の有無や不変条件は、提供された情報からは未検証です。</li>
+<li>**グローバルコンテキストの強制**: <code>set_thread_limit</code> は、必ずグローバルな設定コンテキストでのみ実行されなければなりません（<a class="wiki-source-link" href="../../source/server/core.c.html#L1301" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_check_cmd_context</code></a> による検証）。</li>
+<li>※ <code>thread_limit</code> の値自体の許容範囲（最小値や最大値など）に関する不変条件は、提供されたコンテキストからは不明です。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**不適切な設定コンテキスト**: <code>ThreadLimit</code> を <code>&lt;VirtualHost&gt;</code> や <code>&lt;Directory&gt;</code> などの非グローバルなコンテキストで設定しようとすると、設定エラーとなりサーバーの起動に失敗します。</li>
-<li>**入力値のバリデーション**: <code>atoi</code> による単純な変換が行われるため、不正な文字列や範囲外の数値が指定された場合の挙動に注意する必要があります。保守時には、必要に応じて適切な範囲チェックを追加することが推奨されます。</li>
+<li>**複数MPM間での重複定義と一貫性**: <code>set_thread_limit</code> および <code>thread_limit</code> は、複数のMPM（winnt, event, worker, netware）で個別に定義・参照されています。特定のMPMで型や範囲チェックなどの仕様変更を行う場合、他のMPMの実装との整合性に注意する必要があります。</li>
+<li>**簡易な型変換**: 値の変換に標準Cライブラリの <code>atoi</code> を使用しているため、不正な入力値や極端な数値に対する厳密なバリデーションが関数単体では行われません。</li>
 </ul>
 <h2>次に読む場所</h2>
-<p>各MPMにおける <code>thread_limit</code> の定義と設定処理の具体的な実装を確認するには、以下のファイルを参照してください。</p>
 <ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a> （<code>set_thread_limit</code> の具体的な実装例）</li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
 </ul><script>
 (function() {
