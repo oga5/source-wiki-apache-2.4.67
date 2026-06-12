@@ -1,9 +1,13 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/next-id.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>next_id</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/next-id.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>next_id</h1>
 <h2>概念</h2>
-<p><code>next_id</code> は、Apache HTTP Server（httpd）の複数の独立したモジュールにおいて、一意の識別子（ID）を順次生成・管理するために使用されるシンボルです。具体的には、HTTP/2 セッション管理を行う <a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a> と、詳細なリクエストログを記録する <a class="wiki-source-link" href="../../source/modules/loggers/mod_log_forensic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_forensic.c.html&quot;}, '*');"><code>modules/loggers/mod_log_forensic.c</code></a> の2つのファイルに同名のシンボルが存在します。</p>
+<p><code>next_id</code> は、Apache HTTP Server（httpd）の異なるモジュールにおいて、次に生成または割り当てるべき一意の識別子（ID）を追跡・管理するために使用されるシンボルです。具体的には、HTTP/2 セッションにおけるストリーム等の識別子管理と、フォレンジックログ（<code>mod_log_forensic</code>）におけるリクエスト追跡用のID管理という、2つの異なる文脈で個別に利用されています。</p>
 <h2>なぜ重要か</h2>
-<p>各モジュールにおいて、処理対象（HTTP/2 のストリームや、フォレンジックログの対象となるリクエストなど）を一意に識別することは、正確なプロトコル制御やセキュリティ監査、デバッグにおいて極めて重要です。<code>next_id</code> は、これらの識別子を重複なく、順序立てて割り当てるためのカウンタとして機能します。</p>
+<p>並行処理が行われるWebサーバー環境において、個々のセッション、ストリーム、あるいはリクエストを正確に識別・追跡することは極めて重要です。</p>
+<ul>
+<li>**HTTP/2 (<code>mod_http2</code>)**: 1つの接続内で複数のストリームを多重化して処理するため、新しく作成されるストリーム等に対して一意のIDを順次割り当てる必要があります。</li>
+<li>**フォレンジックログ (<code>mod_log_forensic</code>)**: Webサーバーのデバッグやセキュリティ監査のために、各リクエストの開始と終了を厳密に追跡するための一意なフォレンジックIDを生成する必要があります。</li>
+</ul>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
@@ -11,15 +15,15 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L911" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>symbol:modules/http2/h2_session.c#next_id</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/loggers/mod_log_forensic.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_forensic.c.html&quot;}, '*');"><code>symbol:modules/loggers/mod_log_forensic.c#next_id</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L911" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>symbol:modules/http2/h2_session.c#next_id</code></a>: HTTP/2 セッション処理において、次に割り当てるべきIDを管理するシンボル。</li>
+<li><a class="wiki-source-link" href="../../source/modules/loggers/mod_log_forensic.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_forensic.c.html&quot;}, '*');"><code>symbol:modules/loggers/mod_log_forensic.c#next_id</code></a>: フォレンジックログ出力において、次のユニークなリクエストIDを生成・管理するシンボル。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供されたコンテキストからは、これらの <code>next_id</code> シンボルが具体的にどのように初期化され、どのタイミングでインクリメントされ、どのように消費されるかという詳細なエンドツーエンドの流れは判明していません。</p>
+<p>提供されたソースコードの断片や詳細なコンテキストからは、これらの <code>next_id</code> が具体的にどのように初期化され、どのようなタイミングでインクリメントされ、どのように消費されるかという詳細なエンドツーエンドの制御フローは判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>提供されたコンテキストからは、値の重複防止策、スレッドセーフなインクリメントの保証、あるいはカウンタが最大値に達した際のオーバーフロー挙動などに関する具体的な不変条件は判明していません。</p>
+<p>各モジュールにおける <code>next_id</code> の値の範囲（例: 32ビット整数のラップアラウンド動作）や、マルチスレッド環境におけるスレッドセーフなアクセス（アトミック操作やミューテックスによる保護など）に関する具体的な不変条件は、現時点では不明です。</p>
 <h2>よくある落とし穴</h2>
-<p><code>next_id</code> という名前は共通していますが、<code>modules/http2</code> と <code>modules/loggers</code> における実装は完全に独立しています。これらがシステム全体で単一のID空間を共有していると誤解しないよう注意が必要です。また、マルチスレッド環境下での競合状態（Race Condition）を防ぐための排他制御やアトミック操作がどのように適用されているかについては、個別のソースコードの実装を確認する必要があります。</p>
+<p>具体的な実装の詳細が提供されていないため、現時点で確定している落とし穴はありません。ただし、一般的にこのようなID生成カウンタにおいては、複数スレッドからの同時アクセスによる競合（レースコンディション）や、値が最大値に達した際のオーバーフロー（ラップアラウンド）に伴うIDの重複が潜在的なリスクとして考えられます。</p>
 <h2>次に読む場所</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a></li>

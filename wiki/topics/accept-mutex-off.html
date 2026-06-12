@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/accept-mutex-off.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>accept_mutex_off</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/accept-mutex-off.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>accept_mutex_off</h1>
 <h2>概念</h2>
-<p><code>accept_mutex_off</code> は、Apache HTTP Server (httpd) のマルチプロセッシングモジュール（MPM）である <code>prefork</code> や、関連するテストツールにおいて、接続の受け入れ（<code>accept</code>）時に使用したプロセス間排他制御（ミューテックスまたはロック）を解放するための関数です。</p>
+<p><code>accept_mutex_off</code> は、Apache HTTP Server (httpd) において、複数の子プロセスが同時に <code>accept()</code> を呼び出す際の競合を防ぐために取得したプロセス間ミューテックス（またはロック）を解放するための関数です。本番用のマルチプロセッシングモジュール（MPM）である <code>prefork</code> と、ロックの性能測定を行うテストプログラム <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> の両方に同名の関数が存在し、それぞれ異なるロック解放アプローチ（APRミューテックスと <code>fcntl</code>）を実装しています。</p>
 <h2>なぜ重要か</h2>
-<p>複数の子プロセスが同時に <code>accept()</code> を呼び出すことによる競合（サンダリングハード問題など）を防ぐために、プロセス間でミューテックスによる排他制御が行われます。<code>accept_mutex_off</code> は、接続を正常に受け入れた後にこのロックを速やかに解放し、他のプロセスが次の接続を受け入れられる状態にするために極めて重要です。これが正しく機能しないと、デッドロックやプロセスのハングアップ、あるいは致命的なエラーによるプロセスの強制終了が発生します。</p>
+<p>マルチプロセスモデル（特に <code>prefork</code> MPM）では、複数の子プロセスが同一のリスニングソケットに対して <code>accept()</code> を呼び出す際、接続処理の直列化（シリアライズ）が必要です。<code>accept_mutex_off</code> は、接続を受け入れた直後にロックを速やかに解放し、待機している他の子プロセスが次の接続を受け入れられるようにするために極めて重要です。これが正しく機能しないと、デッドロックが発生するか、特定のプロセスのみが処理を独占することになります。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a></li>
@@ -11,44 +11,43 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/prefork.c.html#L262&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#accept_mutex_off</code></a>: <code>prefork</code> MPMにおいて、APR（Apache Portable Runtime）の <code>apr_proc_mutex_unlock</code> を用いてプロセス間ミューテックスを解放する関数。</li>
-<li><a class="wiki-entity-link" href="../symbols/test__time-sem_c__accept_mutex_off.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__time-sem_c__accept_mutex_off.html&quot;, &quot;source&quot;: &quot;source/test/time-sem.c.html#L124&quot;}, '*');"><code>symbol:test/time-sem.c#accept_mutex_off</code></a>: テスト環境において、<code>fcntl</code> システムコールを用いてプロセス間のファイルロックを解放する関数。</li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/prefork.c.html#L262&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#accept_mutex_off</code></a>: <code>prefork</code> MPM におけるミューテックス解放関数。<code>apr_proc_mutex_unlock</code> を呼び出します。</li>
+<li><a class="wiki-entity-link" href="../symbols/test__time-sem_c__accept_mutex_off.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__time-sem_c__accept_mutex_off.html&quot;, &quot;source&quot;: &quot;source/test/time-sem.c.html#L124&quot;}, '*');"><code>symbol:test/time-sem.c#accept_mutex_off</code></a>: <code>fcntl</code> を用いたロック解放を行うテスト用関数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **prefork MPMにおける流れ**:</p>
+<p>1. **prefork MPM における流れ**:</p>
 <ul>
-<li>子プロセスが <code>SAFE_ACCEPT</code> マクロを介して <code>accept()</code> 処理を行います。</li>
-<li><code>accept()</code> の直後に <code>SAFE_ACCEPT</code> マクロ経由で <code>accept_mutex_off()</code> が呼び出されます。</li>
-<li><code>accept_mutex_off()</code> は、グローバルな <code>my_bucket</code> から <code>my_bucket-&gt;mutex</code> を取得し、<code>apr_proc_mutex_unlock</code> を呼び出してロックを解放します。</li>
-<li>解放に成功した場合は <code>APR_SUCCESS</code> を返します。</li>
-<li>解放に失敗した場合、現在のプロセス世代（<code>retained-&gt;mpm-&gt;my_generation</code>）とスコアボード上の実行世代を比較します。世代が異なる場合はデバッグログを出力して処理を継続し、世代が一致している場合は緊急ログを出力して <a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a> でプロセスを強制終了します。</li>
+<li>子プロセスは <code>SAFE_ACCEPT</code> マクロを介してロックを取得し、<code>accept()</code> で接続を待ち受けます。</li>
+<li>接続が確立されると、<code>SAFE_ACCEPT</code> マクロ経由で <code>accept_mutex_off()</code> が呼び出されます。</li>
+<li><code>accept_mutex_off()</code> は <code>my_bucket-&gt;mutex</code> に対して <code>apr_proc_mutex_unlock</code> を実行し、ロックを解放します。</li>
+<li>ロック解放に失敗した場合、プロセスの世代（<code>retained-&gt;mpm-&gt;my_generation</code>）を確認し、現在の世代と一致していれば致命的エラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a>）としてプロセスを終了します。世代が異なる（グレースフル再起動中など）場合は、デバッグログを出力して処理を継続します。</li>
 </ul>
 <p>2. **テスト（<a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');">time-sem.c</a>）における流れ**:</p>
 <ul>
 <li>計測ループ内、または <code>SAFE_ACCEPT</code> マクロ経由で <code>accept_mutex_off()</code> が呼び出されます。</li>
-<li>グローバル変数 <code>fcntl_fd</code> および <code>unlock_it</code>（<code>struct flock</code> 型）を使用して、<code>fcntl</code> システムコール（<code>F_SETLKW</code>）を呼び出し、ロックを解除します。</li>
-<li><code>fcntl</code> がエラー（負の値）を返した場合は、<code>perror</code> でエラーを出力し、<code>exit(1)</code> で即座にプログラムを終了します。</li>
+<li><code>fcntl</code> システムコールに <code>F_SETLKW</code> コマンドと <code>unlock_it</code>（<code>struct flock</code>）を渡し、ファイル記述子 <code>fcntl_fd</code> のロックを解除します。</li>
+<li>解除に失敗した場合は、<code>perror</code> でエラーを出力し、<code>exit(1)</code> で即座に終了します。</li>
 </ul>
-<p>※なお、<a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a> と <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> の間での具体的な連携や、テストコードがどのように <code>prefork</code> のマクロと結合して動作するかといった詳細なエンドツーエンドの統合フローは、提供された情報からは完全には明らかになっていません。</p>
+<p>*注意: <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> の関数が <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a> の <code>SAFE_ACCEPT</code> マクロからどのように切り替えられて呼び出されるか、そのビルド時や実行時の詳細な統合フローは現時点では完全には判明していません。*</p>
 <h2>重要な不変条件</h2>
 <ul>
 <li>**prefork MPM**:</li>
 <li>呼び出し時に <code>my_bucket</code> が初期化されており、有効なミューテックスを保持している必要があります。</li>
-<li>本関数は <code>accept()</code> 処理の直後に呼び出されることを想定しています。</li>
+<li>本関数は <code>accept()</code> 処理の直後に呼び出されることが前提となっています。</li>
 <li>**テスト（<a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');">time-sem.c</a>）**:</li>
 <li><code>fcntl_fd</code> が有効なファイル記述子として初期化されている必要があります。</li>
 <li><code>unlock_it</code> が <code>fcntl</code> の <code>F_SETLKW</code> 操作に適した <code>struct flock</code> 構造体として設定されている必要があります。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**マクロ展開の誤認**: <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a> において、本関数は直接呼び出されるのではなく <code>SAFE_ACCEPT</code> マクロ（591行目、613行目、647行目）を通じて呼び出されるため、ソースコード上で直接の関数呼び出しを検索する際に見落とす可能性があります。</li>
-<li>**エラー時の致命的終了**: ロック解放失敗時の挙動として、世代が一致している場合は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a> による強制終了や、テスト環境での <code>exit(1)</code> による即時終了が発生するため、ミューテックスの管理不全はプロセスの生存に直結します。</li>
-<li>**同名関数の混同**: <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> と <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a> に同名の <code>accept_mutex_off</code> が存在しますが、これらは別個の実装です。また、テスト環境ではコンパイルオプションによって異なるロック方式（SysV sem, pthread mutex等）の同名関数が有効化される可能性があるため、ビルド構成に注意する必要があります。</li>
+<li>**マクロ展開の不透明性**: <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a> 内では、本関数は直接呼び出されず <code>SAFE_ACCEPT</code> マクロ（591行目、613行目、647行目など）を介して呼び出されるため、静的解析やコード検索の際に見落とす可能性があります。</li>
+<li>**エラーハンドリングの差異**: <code>prefork</code> MPM では世代交代を考慮してエラーをデバッグログに留める緩和策がありますが、テストコード（<a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>time-sem.c</code></a>）ではエラー発生時に即座に <code>exit(1)</code> でプロセスが終了するため、テスト環境と本番環境でのエラー耐性の違いに注意が必要です。</li>
+<li>**ビルド構成による競合**: <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> 内には、コンパイルオプションによって異なるロック方式（SysV sem, pthread mutex等）に対応した同名の関数が複数定義されている可能性があり、ビルド構成の確認を怠ると意図しない実装が評価される恐れがあります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> (特に <code>SAFE_ACCEPT</code> マクロの定義と呼び出し箇所)</li>
+<li><a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> (各種ロック方式のテスト実装)</li>
 </ul><script>
 (function() {
   function notifyParent() {

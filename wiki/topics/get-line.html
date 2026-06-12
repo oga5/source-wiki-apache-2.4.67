@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/get-line.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>get_line</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/get-line.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>get_line</h1>
 <h2>概念</h2>
-<p><code>get_line</code> は、Apache HTTP Server 内の複数の異なるコンテキストにおいて、入力ストリームやファイルから改行区切りのデータ（1行）を読み取るために定義されている、同名かつ独立したヘルパー関数群です。</p>
+<p><code>get_line</code> は、Apache HTTP Server（httpd）の複数の独立したコンテキストにおいて、入力ストリーム（バケットブリゲードまたはファイル）から1行分のデータを読み込み、改行コードの処理やバッファへの格納を行うために定義されているヘルパー関数群です。これらは同名ですが、シグネチャや対象とする入力ソース、エラーハンドリングの挙動が異なり、それぞれのモジュール内で独立して実装されています。</p>
 <h2>なぜ重要か</h2>
-<p>各モジュール（HTTP/2 フィルタ、SSL/OCSP ユーティリティ、htdigest サポートツール）は、それぞれ異なるデータソース（バケットブリゲードやファイルストリーム）やメモリ管理方式（APR プール、一時ブリゲード）を使用します。<code>get_line</code> は、それぞれのコンテキストに最適化されたバッファリング、改行コード（CRLF/LF）の除去、およびエラーハンドリングをカプセル化するために重要です。</p>
+<p>各コンテキストにおいて、プロトコル仕様（HTTP/1.1のCRLF、OCSPレスポンスの改行、htdigestファイルの改行）に準拠した行単位のパースを安全かつ効率的に行うために重要です。バケットブリゲードからの部分的な読み込み（ノンブロッキング処理）への対応や、バッファオーバーフローの防止など、堅牢なストリーム処理の基礎を担っています。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
@@ -12,58 +12,54 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_c2_filter_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__get_line.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_c2_filter.c.html#L418&quot;}, '*');"><code>symbol:modules/http2/h2_c2_filter.c#get_line</code></a>: HTTP/1.1 形式のレスポンスデータ（ブリゲード）から 1 行を読み取り、指定バッファへコピーする関数。</li>
-<li><a class="wiki-entity-link" href="../symbols/modules__ssl__ssl_util_ocsp_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__get_line.html&quot;, &quot;source&quot;: &quot;source/modules/ssl/ssl_util_ocsp.c.html#L154&quot;}, '*');"><code>symbol:modules/ssl/ssl_util_ocsp.c#get_line</code></a>: OCSP レスポンダからの HTTP レスポンスストリームから 1 行を読み取り、メモリプール上に改行除去済みの文字列を生成して返す関数。</li>
-<li><a class="wiki-entity-link" href="../symbols/support__htdigest_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htdigest_c__get_line.html&quot;, &quot;source&quot;: &quot;source/support/htdigest.c.html#L100&quot;}, '*');"><code>symbol:support/htdigest.c#get_line</code></a>: ファイルストリームから 1 行を読み込み、指定されたバッファに格納する静的関数。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http2__h2_c2_filter_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__get_line.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_c2_filter.c.html#L418&quot;}, '*');"><code>symbol:modules/http2/h2_c2_filter.c#get_line</code></a>**: HTTP/1.1 形式のレスポンスデータ（ブリゲード）から CRLF で終了する 1 行を読み取り、指定されたバッファへコピーする。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__ssl__ssl_util_ocsp_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__get_line.html&quot;, &quot;source&quot;: &quot;source/modules/ssl/ssl_util_ocsp.c.html#L154&quot;}, '*');"><code>symbol:modules/ssl/ssl_util_ocsp.c#get_line</code></a>**: OCSP レスポンダから送信された HTTP レスポンスのストリームから 1 行単位で文字列を読み取り、改行コードを除去してメモリプール上に返却する。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/support__htdigest_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htdigest_c__get_line.html&quot;, &quot;source&quot;: &quot;source/support/htdigest.c.html#L100&quot;}, '*');"><code>symbol:support/htdigest.c#get_line</code></a>**: ファイルストリームから 1 行を読み込み、指定されたバッファに格納する。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>これら 3 つの関数は、それぞれ独立したコンテキストで動作しており、**システム全体を横断する単一のエンドツーエンドのフローは存在しません**。それぞれの個別フローは以下の通りです。</p>
-<p>1. **HTTP/2 フィルタ (<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>)**</p>
+<p>これら3つの <code>get_line</code> 関数は、それぞれ独立したフローで呼び出されており、システム全体を横断する単一のエンドツーエンドフローは存在しません。それぞれの独立した流れは以下の通りです。</p>
+<p>1. **HTTP/2 接続フィルタフロー (<code>modules/http2</code>)**:</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html#L629" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter_catch_h1_out</code></a> などの解析ロジックから呼び出されます。</li>
-<li><code>apr_brigade_split_line</code> を使用して入力ブリゲードから 1 行分を <code>parser-&gt;tmp</code> に切り出します。</li>
-<li><code>apr_brigade_flatten</code> でバッファにコピーし、行末の CRLF を除去します。</li>
-<li>行が不完全な場合は <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> で <code>parser-&gt;saveto</code> に退避し、次回呼び出し時に継続処理します。</li>
+<li>入力ブリゲード <code>bb</code> から <code>apr_brigade_split_line</code> を使用して1行分を <code>parser-&gt;tmp</code> へ切り出します。</li>
+<li>切り出したデータを <code>apr_brigade_flatten</code> で <code>line</code> バッファにコピーし、行末の CRLF を除去します。</li>
+<li>データが不完全な場合は <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>ap_save_brigade</code></a> を用いて <code>parser-&gt;saveto</code> に退避し、次回呼び出し時に処理を再開します。</li>
 </ul>
-<p>2. **SSL/OCSP ユーティリティ (<a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>ssl_util_ocsp.c</code></a>)**</p>
+<p>2. **OCSP クライアントフロー (<code>modules/ssl</code>)**:</p>
 <ul>
-<li>OCSP レスポンスの解析処理から呼び出されます。</li>
-<li><code>apr_brigade_split_line</code> を使用して、入力ブリゲードから最大 8192 バイトを一時ブリゲード <code>bbout</code> に切り出します。</li>
-<li><code>apr_brigade_pflatten</code> でメモリプール上にフラット化し、行末の LF（および直前の CR）をヌル文字 <code>\0</code> に置換して返します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>ssl_util_ocsp.c</code></a> 内の OCSP レスポンス解析処理から呼び出されます。</li>
+<li>ソースブリゲード <code>bbin</code> から <code>apr_brigade_split_line</code> で最大 8192 バイトまでを <code>bbout</code> に切り出します。</li>
+<li><code>apr_brigade_pflatten</code> を使用してメモリプール <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> 上にフラット化し、行末の LF（および直前の CR）をヌル文字に置換して返却します。</li>
 </ul>
-<p>3. **htdigest ツール (<a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>htdigest.c</code></a>)**</p>
+<p>3. **htdigest ユーティリティフロー (<code>support</code>)**:</p>
 <ul>
-<li>ファイルから行を読み込むループ内で呼び出されます。</li>
-<li><code>apr_file_getc</code> を用いて、改行文字（<code>\n</code>）に達するかバッファ制限（<code>n - 2</code> 文字）に達するまで 1 文字ずつ読み込み、バッファをヌル終端します。</li>
+<li><code>htdigest</code> のメイン処理ループから呼び出されます。</li>
+<li><code>apr_file_getc</code> を用いてファイルから1文字ずつ読み込み、改行文字（<code>\n</code>）に達するか、バッファサイズ制限に達するまでバッファ <code>s</code> に格納します。</li>
 </ul>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**HTTP/2**:</li>
-<li><code>parser-&gt;tmp</code> は行の断片の一時保持用、<code>parser-&gt;saveto</code> は不完全な行の次回持ち越し用として一貫して使用されます。</li>
-<li>正常終了時、行末の CRLF は除去され、バッファは必ずヌル終端されます。</li>
-<li>**SSL/OCSP**:</li>
-<li>一時ブリゲード <code>bbout</code> は、呼び出しのたびに必ず <code>apr_brigade_cleanup</code> で初期化されます。</li>
-<li>読み取られた行は必ず <code>APR_ASCII_LF</code> で終了している必要があります。</li>
-<li>**htdigest**:</li>
-<li>バッファ <code>s</code> は少なくとも <code>n</code> バイトの領域を確保している必要があります。</li>
-<li>最大 <code>n - 2</code> 文字までしか読み込まず、バッファオーバーフローを防ぎます。</li>
+<li>**改行コードの除去と終端**:</li>
+<li><code>modules/http2</code> の実装では、行末の CRLF が除去され、<code>line</code> はヌル終端されます。</li>
+<li><code>modules/ssl</code> の実装では、行末の LF（および直前の CR）が除去され、ヌル終端されます。</li>
+<li><code>support</code> の実装では、改行文字（<code>\n</code>）自体はバッファに保持されたままヌル終端されます。</li>
+<li>**バッファ境界の維持**:</li>
+<li><code>modules/http2</code> では、行の長さがバッファサイズ <code>len</code> を超える場合に <code>APR_ENOSPC</code> を返します。</li>
+<li><code>modules/ssl</code> では、8192 バイトを超える行はエラー（<code>NULL</code> 返却）となります。</li>
+<li><code>support</code> では、バッファサイズ <code>n - 2</code> を超える文字は読み込まずに切り捨てられます。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**名前の混同**:</li>
-<li>これらはシグネチャ、戻り値、エラーハンドリング、およびメモリ管理方法が全く異なります。同名ですが、直接の呼び出し関係や共通の親インターフェースはありません。</li>
-<li>**バッファサイズ制限**:</li>
-<li>HTTP/2 では <a class="wiki-source-link" href="../../source/include/httpd.h.html#L307" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HUGE_STRING_LEN</code></a> を超える行、SSL/OCSP では 8192 バイトを超える行、htdigest では <code>n - 2</code> バイトを超える行は、それぞれエラー（<code>APR_ENOSPC</code> や <code>NULL</code>）または読み込み中断となります。</li>
-<li>**htdigest の戻り値**:</li>
-<li><code>htdigest</code> の <code>get_line</code> が返す <code>1</code> は、エラーだけでなく EOF（ファイル終端）も意味するため、呼び出し側で詳細な状態判別を行う際には注意が必要です。</li>
-<li>**未定義の挙動**:</li>
-<li>HTTP/2 の実装において、LF のみで CRLF が存在しない場合の挙動は未定義（ソースコード上に警告コメントあり）となっています。</li>
+<li>**共通APIではない点**: 同名ですが、シグネチャや戻り値の型（<code>apr_status_t</code>、<code>char *</code>、<code>int</code>）が全く異なるため、混同しないよう注意が必要です。</li>
+<li>**不完全なデータの扱い**:</li>
+<li><code>modules/http2</code> の <code>get_line</code> は、ノンブロッキング読み込み時に <code>APR_EAGAIN</code> を返す可能性があり、呼び出し側で退避バッファ（<code>parser-&gt;saveto</code>）の適切な管理が必要です。</li>
+<li><code>modules/ssl</code> の <code>get_line</code> は、行末が LF で終わらない場合（行が長すぎる場合など）にエラーログを出力して <code>NULL</code> を返します。</li>
+<li><code>support</code> の <code>get_line</code> は、EOF とエラーの双方で <code>1</code> を返すため、呼び出し側で詳細な状態判別ができません。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a>（HTTP/2 接続フィルタにおける HTTP/1 応答解析）</li>
-<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>modules/ssl/ssl_util_ocsp.c</code></a>（OCSP レスポンダとの通信処理）</li>
-<li><a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>support/htdigest.c</code></a>（htdigest ユーティリティのファイル解析処理）</li>
+<li>**HTTP/2 フィルタ解析**: <a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a> の <a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html#L629" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter_catch_h1_out</code></a> 周辺の解析ロジック</li>
+<li>**OCSP レスポンス解析**: <a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>modules/ssl/ssl_util_ocsp.c</code></a> の OCSP レスポンス処理関数</li>
+<li>**htdigest ユーティリティ**: <a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>support/htdigest.c</code></a> のファイル読み込みループ処理</li>
 </ul><script>
 (function() {
   function notifyParent() {

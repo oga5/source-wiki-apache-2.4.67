@@ -1,33 +1,44 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-thread-current-after-fork.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_thread_current_after_fork</h1>
-<h2>概念</h2>
-<p><code>ap_thread_current_after_fork</code> は、Apache HTTP Server（httpd-2.4.67）において、プロセスがフォーク（fork）された後に現在のスレッドに関連する状態を適切に再設定・更新するための関数またはシンボルです。ヘッダーファイル <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a> で宣言され、ユーティリティ実装ファイル <a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a> で定義されています。</p>
-<h2>なぜ重要か</h2>
-<p>マルチスレッドプロセスがフォークされると、フォーク後の子プロセスでは呼び出し元スレッドのみが存続し、スレッド固有のデータやランタイムの状態が不整合に陥る可能性があります。<code>ap_thread_current_after_fork</code> は、フォーク後の新しいプロセス環境において「現在のスレッド」のコンテキストを正しく再初期化し、スレッドセーフな動作を維持するために重要であると考えられます。ただし、具体的な内部動作や影響範囲の詳細は現時点では未検証です。</p>
-<h2>関与するモジュール</h2>
-<p>提供されたコンテキストに基づき、以下のモジュールが関与しています。</p>
-<ul>
-<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
-<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
-</ul>
-<h2>主要エンティティ</h2>
-<p>本トピックに関連する主要なエンティティは以下の通りです。</p>
-<ul>
-<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L2498" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>symbol:include/httpd.h#ap_thread_current_after_fork</code></a>（宣言）</li>
-<li><a class="wiki-source-link" href="../../source/server/util.c.html#L3256" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>symbol:server/util.c#ap_thread_current_after_fork</code></a>（実装）</li>
-</ul>
-<h2>エンドツーエンドの流れ</h2>
-<p>フォーク処理の直後にこの関数がどのタイミングで、どの親プロセスまたは子プロセスのコンテキストから呼び出されるかなど、具体的なエンドツーエンドの制御フローは現時点では判明していません。</p>
-<h2>重要な不変条件</h2>
-<p>本シンボルの呼び出し前後で維持されるべき状態や、スレッドセーフティに関する具体的な不変条件は現時点では判明していません。</p>
-<h2>よくある落とし穴</h2>
-<p>フォーク後のスレッド状態の不適切な初期化に伴うデッドロックやメモリリークなど、本関数に関連する具体的な落とし穴や誤用パターンは現時点では判明していません。</p>
-<h2>次に読む場所</h2>
-<p>詳細な実装と具体的な利用箇所を調査するために、以下のファイルを参照してください。</p>
-<ul>
-<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a></li>
-</ul><script>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/ap-thread-current-after-fork.md</title><link rel="stylesheet" href="../../styles.css"></head><body><pre><code># ap_thread_current_after_fork
+
+## 概念
+
+`ap_thread_current_after_fork` は、Apache HTTP Server（`httpd-2.4.67`）において、プロセスがフォーク（`fork()`）された後に、現在のスレッドに関連する状態やキャッシュ情報を再初期化・更新するための関数またはシンボルです。
+
+## なぜ重要か
+
+マルチスレッドプロセスがフォークされると、子プロセスにはフォークを呼び出したスレッドのみが引き継がれます。この際、スレッドローカルストレージやランタイムが保持する「現在のスレッド」に関する情報が不整合を起こす可能性があります。`ap_thread_current_after_fork` は、フォーク後の子プロセスにおいてスレッド状態を正しく再設定し、その後のスレッド関連処理が安全かつ正常に動作し続けるようにするために重要です。
+
+## 関与するモジュール
+
+本機能には以下のモジュールが関与しています。
+
+- `module:include`: サーバー共通のヘッダー定義を提供します。
+- `module:server`: サーバーコアのユーティリティおよび共通処理の実装を提供します。
+
+## 主要エンティティ
+
+本トピックに関連する主要なエンティティは以下の通りです。
+
+- `symbol:include/httpd.h#ap_thread_current_after_fork`: ヘッダーファイル `include/httpd.h` で宣言されている、フォーク後のスレッド状態更新用のAPI。
+- `symbol:server/util.c#ap_thread_current_after_fork`: `server/util.c` において定義されている、上記APIの具体的な実装。
+
+## エンドツーエンドの流れ
+
+現時点では、どのプロセス管理モジュール（MPMなど）がどのタイミングで `ap_thread_current_after_fork` を呼び出すか、および関数内部で実行される具体的な初期化処理のステップなど、詳細なエンドツーエンドの流れは不明です。
+
+## 重要な不変条件
+
+フォーク直後の子プロセスにおいて、他のスレッド関連APIが呼び出される前に本関数が実行され、スレッド状態が整合した状態に更新される必要があります。ただし、具体的な前提条件や事後条件などの不変条件の詳細は現時点では不明です。
+
+## よくある落とし穴
+
+フォーク後に本関数を呼び出し忘れた場合、子プロセス内のスレッド状態が親プロセスの古い情報を参照し続け、未定義動作やリソースの競合、クラッシュを引き起こす可能性があります。具体的な落とし穴や制約の詳細は現時点では不明です。
+
+## 次に読む場所
+
+- `include/httpd.h`：`ap_thread_current_after_fork` の宣言と、関連するマクロやコメントを確認してください。
+- `server/util.c`：`ap_thread_current_after_fork` の具体的な実装コードを確認し、フォーク後にどのような再初期化が行われているかを把握してください。</code></pre><script>
 (function() {
   function notifyParent() {
     if (parent === window) return;

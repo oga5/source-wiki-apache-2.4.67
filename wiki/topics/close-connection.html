@@ -1,13 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/close-connection.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_connection</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/close-connection.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_connection</h1>
 <h2>概念</h2>
-<p><code>close_connection</code> は、Apache HTTP Server（httpd）プロジェクトにおいて、確立されたネットワーク接続（コネクション）を終了・切断するための処理を指します。この処理は、サーバー側（マルチプロセッシングモジュール）とクライアント側（ベンチマークツール）の双方において、それぞれの文脈に応じたコネクションのクローズ処理として実装されています。</p>
+<p><code>close_connection</code> は、Apache HTTP Server（httpd）プロジェクト内の異なるコンテキストにおいて、ネットワーク接続をクローズ（切断）するための処理を表すシンボルです。具体的には、サーバー側のマルチプロセッシングモジュール（MPM）である <code>event</code> MPM と、ベンチマークツールである <code>ab</code>（ApacheBench）の双方に同名の処理が存在します。</p>
 <h2>なぜ重要か</h2>
-<p>ネットワーク接続の適切なクローズは、システムリソース（ソケット記述子、メモリ、スレッドなど）のリークを防ぎ、システムの安定性とパフォーマンスを維持するために極めて重要です。</p>
-<ul>
-<li>**サーバー側（<code>event</code> MPM）**: クライアントとの通信が終了した際、またはタイムアウトやエラーが発生した際に接続を解放し、新しい接続を受け入れるためのリソースを確保します。</li>
-<li>**クライアント側（<code>ab</code> ツール）**: ベンチマーク測定中に、各リクエストの完了時やエラー時に接続を正しく閉じることで、正確な測定統計の維持とリソースの再利用を可能にします。</li>
-</ul>
+<p>サーバー側（<code>event</code> MPM）においては、クライアントとの接続を適切に切断し、ソケットやメモリなどのシステムリソースを解放して再利用可能にすることが、高並行・高性能なイベント駆動型処理を維持するために不可欠です。 一方、クライアント側（<code>ab</code> ツール）においては、ベンチマーク測定中に接続を正しくクローズすることで、正確な接続統計の収集や、クライアント側でのファイル記述子の枯渇を防ぐ役割を果たします。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
@@ -15,20 +11,19 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L881" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#close_connection</code></a>: <code>event</code> MPM において、クライアントとの接続をクローズし、関連する接続状態やリソースをクリーンアップする関数。</li>
-<li><a class="wiki-source-link" href="../../source/support/ab.c.html#L1519" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>symbol:support/ab.c#close_connection</code></a>: ApacheBench（<code>ab</code>）ツールにおいて、サーバーとの接続をクローズし、必要に応じて接続状態の統計を更新する関数。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L881" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#close_connection</code></a>: <code>event</code> MPMにおいて、クライアント接続の終了および関連するリソースのクリーンアップを担当する関数。</li>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html#L1519" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>symbol:support/ab.c#close_connection</code></a>: <code>ab</code> ツールにおいて、ベンチマーク対象サーバーとの接続終了処理を担当する関数。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、これらの関数が呼び出される具体的なトリガーや、内部の完全な呼び出しシーケンス（エンドツーエンドの流れ）の詳細は提供されておらず、未確定です。</p>
-<p>一般的には、リクエストの処理完了、キープアライブのタイムアウト、接続エラーなどのイベントを契機として、それぞれのコンテキストから呼び出されます。</p>
+<p>現時点では、これらの関数が呼び出される具体的なトリガーや、内部での詳細なソケットクローズ処理のシーケンスなど、詳細なエンドツーエンドの流れは不明です。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、接続クローズ処理における具体的な不変条件（例：ソケットクローズ前に特定のバッファがフラッシュされていること、特定のロックが保持されていることなど）は提供されておらず、未確定です。</p>
+<p>現時点では、接続クローズ時におけるリソース解放の順序や状態遷移などの重要な不変条件は不明です。</p>
 <h2>よくある落とし穴</h2>
-<p>現時点では、具体的なコード実装の詳細が提供されていないため、<code>close_connection</code> に関連する特有の落とし穴（例：二重クローズ、ハーフクローズ状態のハンドリング不備、非同期イベントとの競合など）は未確定です。</p>
+<p>現時点では、接続の二重クローズやリソースリークなど、実装上の具体的な落とし穴は不明です。</p>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> 内の <code>close_connection</code> 関数の実装</li>
-<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a> 内の <code>close_connection</code> 関数の実装</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a></li>
 </ul><script>
 (function() {
   function notifyParent() {

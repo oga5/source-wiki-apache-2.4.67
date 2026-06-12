@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-sock-disable-nagle.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_sock_disable_nagle</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/ap-sock-disable-nagle.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_sock_disable_nagle</h1>
 <h2>概念</h2>
-<p><code>ap_sock_disable_nagle</code> は、Apache HTTP Server において指定された APR ソケット（<code>apr_socket_t</code>）の Nagle アルゴリズムを無効化（<code>TCP_NODELAY</code> を有効化）するためのユーティリティ関数です。</p>
+<p><code>ap_sock_disable_nagle</code> は、指定されたソケットに対して <code>TCP_NODELAY</code> オプションを有効化し、Nagle アルゴリズムを無効にするためのユーティリティ関数です。これにより、小さなパケットが送信される際の遅延を防ぐことができます。</p>
 <h2>なぜ重要か</h2>
-<p>HTTP のようなプロトコルにおいて、Nagle アルゴリズムによる小さなパケットの送信遅延を防ぎ、持続的接続（Persistent Connections）におけるパフォーマンス低下を回避するために重要です。</p>
+<p>HTTP のようなプロトコル、特に持続的接続（Persistent Connections）においては、Nagle アルゴリズムによる送信遅延がパフォーマンスの低下を招く原因となります。本関数を適用して <code>TCP_NODELAY</code> を有効にすることで、遅延を回避し、リアルタイムな応答性を確保できます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
@@ -12,21 +12,21 @@
 <h2>主要エンティティ</h2>
 <ul>
 <li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L208" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>symbol:include/mpm_common.h#ap_sock_disable_nagle</code></a>（宣言またはマクロ定義）</li>
-<li><a class="wiki-entity-link" href="../symbols/server__mpm_common_c__ap_sock_disable_nagle.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_sock_disable_nagle.html&quot;, &quot;source&quot;: &quot;source/server/mpm_common.c.html#L210&quot;}, '*');"><code>symbol:server/mpm_common.c#ap_sock_disable_nagle</code></a>（関数実装）</li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm_common_c__ap_sock_disable_nagle.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_sock_disable_nagle.html&quot;, &quot;source&quot;: &quot;source/server/mpm_common.c.html#L210&quot;}, '*');"><code>symbol:server/mpm_common.c#ap_sock_disable_nagle</code></a>（関数定義）</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. 呼び出し元（<a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a> や <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_session.c</code></a> など）が <code>ap_sock_disable_nagle</code> を呼び出します。 2. 関数内部で <code>apr_socket_opt_set</code> を呼び出し、対象ソケットに対して <code>APR_TCP_NODELAY</code> を <code>1</code>（有効）に設定します。 3. 設定結果が <code>APR_SUCCESS</code> 以外の場合、<code>ap_log_error</code> を使用して警告レベル（<a class="wiki-source-link" href="../../source/include/http_log.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_WARNING</code></a>）のエラーログを出力します。</p>
-<p>※なお、これらの呼び出し元がどのようなライフサイクルや条件で本関数をトリガーするのか、システム全体における詳細なエンドツーエンドの制御フローは現時点では完全には明らかになっていません。</p>
+<p>本関数が呼び出された際の流れは以下の通りです。</p>
+<p>1. **オプション設定**: <code>apr_socket_opt_set</code> を呼び出し、対象の <code>apr_socket_t</code> に対して <code>APR_TCP_NODELAY</code> を <code>1</code>（有効）に設定します。 2. **結果の評価**: 設定操作の戻り値（<code>apr_status_t</code>）を確認します。 3. **エラーハンドリング**: 設定が <code>APR_SUCCESS</code> 以外で失敗した場合、<code>ap_log_error</code> を使用して警告レベル（<a class="wiki-source-link" href="../../source/include/http_log.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_WARNING</code></a>）のログを出力します。</p>
+<p>なお、主な呼び出し元として <a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a> や <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_session.c</code></a> が挙げられていますが、これらを含むシステム全体における詳細なエンドツーエンドのライフサイクルや、すべての呼び出しコンテキストにおける完全なフローは現時点では完全には網羅されていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>引数として渡される <code>s</code> は、有効な <code>apr_socket_t</code> オブジェクトである必要があります。</li>
-<li>Nagle アルゴリズムの無効化に失敗した場合でも、サーバーの動作を停止させるような致命的なエラーとは見なされず、処理の継続が保証されます。</li>
-<li>※その他のシステムレベルでの不変条件は現時点では不明です。</li>
+<li>**有効なソケットの要求**: 引数として渡される <code>apr_socket_t *s</code> は、有効な APR ソケットオブジェクトを指している必要があります。</li>
+<li>**非致命的な失敗**: Nagle アルゴリズムの無効化に失敗した場合でも、サーバーの動作を停止させるような致命的なエラーとは見なされず、処理の継続が保証されます。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li><code>apr_socket_opt_set</code> が失敗した場合、警告ログは出力されますが、関数の戻り値がない（<code>void</code>）ため、呼び出し側で設定の成否を直接判定することはできません。</li>
-<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>include/mpm_common.h</code></a> と <a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a> の間で定義と宣言の整合性を維持する必要があります。</li>
+<li>**エラーの非透過性**: 本関数は戻り値を持たない（<code>void</code>）ため、呼び出し元は <code>TCP_NODELAY</code> の設定が実際に成功したかどうかを直接検知できません。失敗時は警告ログが記録されるのみです。</li>
+<li>**定義と宣言の不整合**: <a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>include/mpm_common.h</code></a> と <a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a> の両方に定義・宣言が関与しているため、修正を行う際はこれらの整合性に注意する必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>

@@ -1,11 +1,11 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/perform-idle-server-maintenance.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>perform_idle_server_maintenance</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/perform-idle-server-maintenance.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>perform_idle_server_maintenance</h1>
 <h2>概念</h2>
-<p><code>perform_idle_server_maintenance</code> は、Apache HTTP Server（httpd）の各種マルチプロセッシングモジュール（MPM）において、アイドル状態のサーバープロセスやスレッドの数を監視・調整するための内部メンテナンス処理です。</p>
+<p><code>perform_idle_server_maintenance</code> は、Apache HTTP Server（httpd-2.4.67）の各種マルチプロセッシングモジュール（MPM）において、アイドル状態のサーバープロセスやスレッドの数を監視し、適切に維持管理（プロセスの追加起動や不要なプロセスの終了など）を行うための処理です。</p>
 <h2>なぜ重要か</h2>
-<p>Webサーバーの負荷は常に変動します。リクエストの急増に備えて十分な数のアイドルプロセスやスレッドを維持しつつ、負荷が低いときには余分なリソースを解放してシステム全体のメモリやCPU消費を最適化するために、このメンテナンス処理が極めて重要な役割を果たします。</p>
+<p>サーバーの負荷状況に応じて適切な数のアイドルプロセスやスレッドを維持することは、リソース消費の最適化と、急激なアクセス増加に対するレスポンス性能の確保を両立させるために不可欠です。各MPM（event、netware、prefork、worker）は、それぞれのアーキテクチャに適した方法でこのメンテナンス処理を実装しています。</p>
 <h2>関与するモジュール</h2>
-<p>本処理には、以下のMPMモジュールが関与しています。</p>
+<p>本処理には以下のモジュールが関与しています。</p>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__netware.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__netware.html&quot;, &quot;source&quot;: &quot;source/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/netware</code></a></li>
@@ -13,7 +13,7 @@
 <li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
-<p>各MPMの実装ファイル内に、同名のメンテナンス関数が定義されています。</p>
+<p>本処理に関連する主要なシンボルは以下の通りです。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L2906" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#perform_idle_server_maintenance</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L614" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>symbol:server/mpm/netware/mpm_netware.c#perform_idle_server_maintenance</code></a></li>
@@ -21,14 +21,13 @@
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L1400" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#perform_idle_server_maintenance</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>提供されたモジュールおよびシンボルの情報からは、親プロセスがどのような周期やトリガーでこれらの関数を呼び出すかといった、詳細なエンドツーエンドの制御フローは完全には明らかになっていません。</p>
-<p>一般的には、親プロセスのメインループなどから定期的に呼び出され、現在の稼働中およびアイドル中のプロセス/スレッド数を集計し、設定値（<code>MinSpareThreads</code> や <code>MaxSpareServers</code> など）と比較して、プロセスの新規生成や余剰プロセスの終了指示を行う流れになります。</p>
+<p>各MPMのメインループやタイマー処理から、このメンテナンス関数がどのような周期やトリガーで呼び出されるか、およびその内部での詳細な制御フロー（スコアボードの走査、プロセスのシグナル送信など）の具体的なエンドツーエンドの流れは、提供されたコンテキストからは**まだ判明していません**。</p>
 <h2>重要な不変条件</h2>
-<p>各MPMにおける具体的な不変条件（例えば、維持すべき最小・最大スレッド数の厳密な境界条件や、プロセス生成時の排他制御など）は、提供されたコンテキストからは直接確認できていません。</p>
+<p>各MPMにおける最小/最大アイドルスレッド数（<code>MinSpareThreads</code> / <code>MaxSpareThreads</code>）やプロセス数（<code>MinSpareServers</code> / <code>MaxSpareServers</code>）の閾値判定、およびそれらに伴うプロセスの生成・消滅に関する具体的な不変条件や制約は、提供されたコンテキストからは**まだ判明していません**。</p>
 <h2>よくある落とし穴</h2>
-<p>各MPM（プロセスベースの <code>prefork</code>、スレッドベースの <code>worker</code>、非同期イベント駆動の <code>event</code>）によって、アイドル状態の定義やプロセスの管理方法が異なるため、共通の前提を置くことは危険です。具体的な落とし穴や挙動の詳細については、現時点では未確定です。</p>
+<p>設定値（スレッド数やプロセス数の上限・下限）の不整合によるリソースの過剰消費や、シグナルハンドリングに起因するデッドロックなど、運用上および実装上の具体的な落とし穴は、提供されたコンテキストからは**まだ判明していません**。</p>
 <h2>次に読む場所</h2>
-<p>各MPMにおける具体的なメンテナンスロジックを理解するために、以下のソースファイルを参照してください。</p>
+<p>各MPMにおける具体的なメンテナンス処理の実装を調査するには、以下のファイルを参照してください。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a></li>

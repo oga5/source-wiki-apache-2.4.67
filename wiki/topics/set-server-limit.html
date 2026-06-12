@@ -1,28 +1,34 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/set-server-limit.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>set_server_limit</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/set-server-limit.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>set_server_limit</h1>
 <h2>概念</h2>
-<p><code>set_server_limit</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュール（MPM）において、同時に起動できる最大子プロセス数（<code>ServerLimit</code>）を設定・制御するための関数です。</p>
+<p><code>set_server_limit</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュール（MPM）において、生成可能な最大プロセス数の上限（<code>ServerLimit</code>）を設定・制御するための関数です。この処理は、リソース制限を管理するために各MPMの実装ごとに定義されています。</p>
 <h2>なぜ重要か</h2>
-<p>Apacheの異なる並行処理アーキテクチャ（プロセス駆動の <code>prefork</code>、スレッドハイブリッドの <code>worker</code>、非同期イベント駆動の <code>event</code>）において、システムの物理リソースに応じた適切なプロセス数の上限を設けることは、メモリ枯渇を防ぎ安定した稼働を維持するために極めて重要です。<code>set_server_limit</code> は、それぞれのMPMの実装においてこの上限値を安全に適用する役割を担います。</p>
+<p>Webサーバーの同時接続数やプロセス数を適切に制限することは、システムリソース（メモリやCPU）の枯渇を防ぎ、サーバーの安定性を維持するために極めて重要です。<code>set_server_limit</code> は、各MPM（event、prefork、worker）が動作する上でのプロセス数の上限値を安全に設定する役割を担います。</p>
 <h2>関与するモジュール</h2>
+<p>本機能には、以下のMPMモジュールが関与しています。</p>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
+<p>各モジュールにおける具体的な実装シンボルは以下の通りです。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L4082" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#set_server_limit</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html#L1525" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#set_server_limit</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L2418" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#set_server_limit</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>設定ファイルの読み込みフェーズにおいて <code>ServerLimit</code> ディレクティブが解析された際、有効化されているMPM（<code>event</code>、<code>prefork</code>、または <code>worker</code>）に対応する <code>set_server_limit</code> 関数が呼び出され、設定値が内部変数に反映されます。ただし、具体的なパース処理や初期化シーケンスにおける詳細な実行フローは、現時点では未検証です。</p>
+<p>設定ファイルの解析時に <code>ServerLimit</code> ディレクティブが検出されると、対応するMPMの <code>set_server_limit</code> 関数が呼び出され、内部の制限値が更新されます。</p>
+<p>ただし、設定ファイルからこの関数が呼び出される具体的なコールスタックや、初期化フェーズにおける詳細なエンドツーエンドの実行フローは、提供された情報からは完全には明らかになっておらず、未検証です。</p>
 <h2>重要な不変条件</h2>
-<p>各MPMにおける <code>ServerLimit</code> の設定値は、コンパイル時に定義された最大制限値を超えてはならないといった不変条件が存在すると推測されますが、具体的な境界値チェックや他のディレクティブとの依存関係における不変条件の詳細は、現時点では未検証です。</p>
+<p>各MPMにおける <code>ServerLimit</code> の設定値には、コンパイル時のハードリミットや、他の設定値（<code>MaxRequestWorkers</code> や <code>ThreadsPerChild</code> など）との整合性を保つための不変条件が存在すると推測されます。</p>
+<p>しかし、具体的な境界値チェックや不変条件の詳細は、提供されたソースコードの範囲内では特定されておらず、未検証です。</p>
 <h2>よくある落とし穴</h2>
-<p>設定値が小さすぎる場合に高負荷時のリクエスト処理能力が制限されることや、逆に大きすぎる場合に過剰なメモリ消費を引き起こす可能性が考えられます。しかし、コード実装に起因する具体的な制約や落とし穴の詳細は、現時点では未検証です。</p>
+<p>設定値がコンパイル時の最大値を超えた場合の挙動や、サーバーの再起動（graceful <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');">restart</a>）時における制限値変更の制限など、MPM固有の制約に伴う落とし穴が存在する可能性があります。</p>
+<p>現時点では、具体的な落とし穴の詳細は不明です。</p>
 <h2>次に読む場所</h2>
+<p>各MPMにおける <code>set_server_limit</code> の具体的な実装や制限値の検証ロジックを理解するために、以下のソースファイルを参照してください。</p>
 <ul>
 <li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
 <li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>

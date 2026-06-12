@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/ap-set-module-config.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_set_module_config</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/ap-set-module-config.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_set_module_config</h1>
 <h2>概念</h2>
-<p><code>ap_set_module_config</code> は、Apache HTTP Server (httpd) において、特定のモジュールに関連付けられた設定データやコンテキスト情報を、リクエスト、接続、サーバーなどの設定ベクトル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a>）に登録・設定するためのAPIです。これにより、各モジュールは自身のデータを適切なスコープに関連付けて管理できます。</p>
+<p><code>ap_set_module_config</code> は、Apache HTTP Server (httpd) において、特定の設定ベクトル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a>）に対して各モジュール固有の設定データを関連付ける（格納する）ためのAPIです。</p>
 <h2>なぜ重要か</h2>
-<p>Apacheの高度なモジュール式アーキテクチャでは、コアシステムと各モジュールが疎結合に保たれています。<code>ap_set_module_config</code> を使用することで、モジュールはグローバル変数に頼ることなく、リクエストや接続ごとの固有データを安全に保持・伝播させることができます。これにより、マルチスレッド環境下でのデータの分離と安全なアクセスが保証されます。</p>
+<p>Apacheはマルチモジュール構成を採用しており、各モジュールはリクエスト、接続、サーバー、ディレクトリなどのコンテキストごとに独自の設定データを保持する必要があります。<code>ap_set_module_config</code> を使用することで、モジュールは自身のインデックスをキーとして、適切な設定ベクトルに安全にデータを格納できます。これにより、コアシステムと各モジュール間の疎結合なデータ管理が実現されます。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
@@ -11,19 +11,33 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/http_config.h.html#L552" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>symbol:include/http_config.h#ap_set_module_config</code></a>: APIの宣言、またはインラインマクロ定義を提供します。</li>
-<li><a class="wiki-source-link" href="../../source/server/util_debug.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');"><code>symbol:server/util_debug.c#ap_set_module_config</code></a>: デバッグビルドや特定の検証用途における、実体としての関数実装を提供します。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html#L552" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>symbol:include/http_config.h#ap_set_module_config</code></a></li>
+<p>通常、本APIはマクロとして定義され、設定ベクトルへの直接的な代入を高速に行います。</p>
+<li><a class="wiki-source-link" href="../../source/server/util_debug.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');"><code>symbol:server/util_debug.c#ap_set_module_config</code></a></li>
+<p>デバッグビルドや特定の検証が有効な場合、マクロの代わりにこのソースファイルで定義された関数版の <code>ap_set_module_config</code> が呼び出され、ランタイム時のチェックやデバッグ情報の提供を行います。</p>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>現時点では、提供されたエンティティの範囲内において、設定データが生成されてから <code>ap_set_module_config</code> を経て参照・破棄されるまでの具体的なエンドツーエンドの流れ（呼び出しライフサイクルやトリガーとなるイベント）は完全には明らかになっていません。</p>
+<p>1. **モジュールの初期化と設定作成**: モジュールの作成時や設定ファイルのパース時に、モジュール固有の設定構造体がメモリ上に確保されます。 2. **設定の登録**: <code>ap_set_module_config</code> を呼び出し、対象の設定ベクトル、モジュールの参照、および作成した設定構造体のポインタを渡します。 3. **マクロと関数の切り替え**:</p>
+<ul>
+<li>通常の最適化ビルドでは、<a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a> のマクロにより、設定ベクトル配列への直接アクセスとしてインライン展開されます。</li>
+<li>デバッグビルド等では、<a class="wiki-source-link" href="../../source/server/util_debug.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');"><code>server/util_debug.c</code></a> に実装された実体関数が呼び出され、安全な代入処理が行われます。</li>
+</ul>
+<p>*注意: 具体的な呼び出し元モジュールでのライフサイクルや、詳細なエンドツーエンドのデータフローの全容は、提供されたモジュール情報からは完全には特定されていません。*</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、設定ベクトルへの書き込み時における排他制御や、インデックスの整合性に関する具体的な不変条件は明らかになっていません。</p>
+<ul>
+<li>**インデックスの有効性**: 設定を格納する際、対象モジュールのインデックス（<code>module_index</code>）は、設定ベクトルが確保している配列の境界内でなければなりません。</li>
+<li>**スレッド安全性**: 設定フェーズ（初期化時）における設定ベクトルの書き込みは、リクエスト処理が開始される前に完了している必要があります（リクエスト処理中は原則として読み取り専用となります）。</li>
+</ul>
+<p>*注意: これらの不変条件の厳密な検証ルールや、デバッグ実装におけるアサート条件の詳細は完全には判明していません。*</p>
 <h2>よくある落とし穴</h2>
-<p>現時点では、不適切なモジュールインデックスの指定や、メモリライフサイクルの不一致など、このAPIの使用に伴う具体的な落とし穴は明らかになっていません。</p>
+<ul>
+<li>**コンテキストの混同**: サーバー設定ベクトル（<code>server_rec</code>）に対してディレクトリ設定用のデータを登録するなど、異なるコンテキストの設定ベクトルに誤ってデータをセットしてしまうと、ランタイム時に不正メモリアクセスや予期しない動作を引き起こします。</li>
+<li>**デバッグ版とリリース版の挙動差**: <a class="wiki-source-link" href="../../source/server/util_debug.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');"><code>server/util_debug.c</code></a> によるランタイムチェックは、リリースビルド（マクロ展開）ではスキップされるため、開発環境でのみエラーが検出され、本番環境ではサイレントにメモリが破損する可能性があります。</li>
+</ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a> (APIの定義とマクロの確認)</li>
-<li><a class="wiki-source-link" href="../../source/server/util_debug.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');"><code>server/util_debug.c</code></a> (デバッグ時における具体的な実装動作の確認)</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>：APIのマクロ定義および設定ベクトルの構造を確認するために参照してください。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_debug.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');"><code>server/util_debug.c</code></a>：デバッグ時における <code>ap_set_module_config</code> の具体的な検証ロジックと実装を確認するために参照してください。</li>
 </ul><script>
 (function() {
   function notifyParent() {

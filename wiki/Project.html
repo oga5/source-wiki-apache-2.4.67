@@ -1,40 +1,39 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>Project.md</title><link rel="stylesheet" href="../styles.css"></head><body><h1>httpd-2.4.67</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>Project.md</title><link rel="stylesheet" href="../styles.css"></head><body><h1>httpd-2.4.67</h1>
 <h2>このシステムは何か</h2>
-<p><code>httpd-2.4.67</code> は、モジュール拡張可能なアーキテクチャを持つ、堅牢で移植性の高いオープンソースの HTTP サーバーです。615 個のソースファイルと 72 個の論理モジュールで構成され、静的コンテンツの配信から、動的スクリプト実行、プロキシ、認証・認可、HTTP/2 などの高度なプロトコル処理までを網羅します。</p>
+<p><code>httpd-2.4.67</code> は、モジュール拡張可能なアーキテクチャを持つ、業界標準のオープンソース HTTP サーバーです。615 個のソースファイルと 72 個の論理モジュールで構成され、HTTP/1.1 および HTTP/2 プロトコル、動的コンテンツ生成、認証・認可、プロキシ、キャッシュ、および証明書管理（Managed Domain）を統合的に提供します。</p>
 <h2>アーキテクチャ概観</h2>
-<p>本システムは、コアエンジン（<code>server/</code>）がリクエストのライフサイクルを管理し、フックシステムを通じて各モジュール（<code>modules/</code>）が特定の処理フェーズに介入する疎結合な設計です。プラットフォーム固有の差異は <code>os/</code> 層で吸収され、MPM（Multi-Processing Module）がプロセス/スレッドモデルを切り替えることで、OS に最適化された並列処理を実現します。</p>
+<p>本システムは、コアサーバー（<code>server/</code>）がリクエストのライフサイクルを管理し、フックシステムを通じて各モジュール（<code>modules/</code>）が特定の処理フェーズを拡張する疎結合な設計です。プラットフォーム固有の差異は <code>os/</code> ディレクトリで抽象化され、マルチプロセッシングモデル（MPM）は <code>server/mpm/</code> に分離されています。</p>
 <h2>主要モジュール</h2>
 <ul>
-<li>**コア・基盤**: <code>server/</code> (ライフサイクル管理), <code>include/</code> (公開 API), <code>os/</code> (プラットフォーム抽象化)</li>
-<li>**プロトコル処理**: <code>modules/http/</code> (HTTP/1.1), <code>modules/http2/</code> (HTTP/2), <code>modules/ssl/</code> (TLS)</li>
-<li>**リクエスト処理**: <code>modules/proxy/</code> (転送), <code>modules/generators/</code> (CGI/索引), <code>modules/filters/</code> (変換)</li>
-<li>**認証・認可**: <code>modules/aaa/</code> (認証・認可フレームワーク)</li>
-<li>**管理・診断**: <code>modules/loggers/</code> (ログ), <code>modules/metadata/</code> (ヘッダー操作), <code>modules/debugging/</code> (デバッグ)</li>
+<li>**コア・基盤**: <code>server/</code> (リクエスト処理・設定), <code>include/</code> (公開 API), <code>os/</code> (プラットフォーム抽象化)</li>
+<li>**プロトコル・処理**: <code>modules/http/</code> (HTTP/1.1), <code>modules/http2/</code> (HTTP/2), <code>modules/filters/</code> (ストリーム変換)</li>
+<li>**拡張・機能**: <code>modules/aaa/</code> (認証・認可), <code>modules/proxy/</code> (転送・負荷分散), <code>modules/cache/</code> (キャッシュ), <code>modules/ssl/</code> (TLS), <code>modules/md/</code> (ACME 証明書管理)</li>
+<li>**テスト・支援**: <code>test/</code> (統合テストスイート), <code>support/</code> (運用ツール)</li>
 </ul>
 <h2>実行時ライフサイクル</h2>
-<p>現在、詳細な実行時ライフサイクルは推論中です。一般的には、設定読み込み（<code>pre_config</code>）、プロセス生成（MPM）、リクエスト受信（<code>post_read_request</code>）、翻訳（<code>translate_name</code>）、ハンドラ実行（<code>handler</code>）、フィルタリング、ログ記録というフェーズを辿ります。</p>
+<p>現時点では、サーバー起動時の設定解析、MPM によるプロセス/スレッド生成、リクエスト受信時のフックチェーン実行という大枠のみが特定されています。各フェーズ（<code>post_read_request</code>, <code>translate_name</code>, <code>fixups</code>, <code>handler</code> 等）の詳細な遷移と、モジュール間での <code>request_rec</code> の受け渡しフローは、今後精緻化が必要です。</p>
 <h2>中核データ構造</h2>
 <ul>
-<li><code>request_rec</code>: リクエストごとの状態を保持する中心的な構造体。</li>
+<li><code>request_rec</code>: リクエストごとの状態とメタデータを保持する中心的な構造体。</li>
 <li><code>server_rec</code>: 仮想ホストを含むサーバー設定の基盤。</li>
 <li><code>module</code>: モジュールのエントリポイントとフックを定義する構造体。</li>
-<li><code>apr_pool_t</code>: メモリ管理のための階層的なプール構造。</li>
+<li><code>apr_bucket_brigade</code>: フィルタチェーンにおけるストリーム処理の基本単位。</li>
 </ul>
 <h2>横断的トピック</h2>
-<p>現在、以下のトピックは精緻化の途上です。</p>
 <ul>
-<li>**メモリ管理**: <code>apr_pool_t</code> を用いたリクエスト単位の自動解放戦略。</li>
-<li>**並行制御**: MPM ごとのプロセス/スレッドモデルと共有メモリ（<code>slotmem</code>）による状態共有。</li>
-<li>**セキュリティ**: 権限降格（<code>suexec</code>）や SSL/TLS による通信保護。</li>
+<li>**メモリ管理**: APR (Apache Portable Runtime) のプールベースのメモリ管理が全モジュールで採用されています。</li>
+<li>**並行制御**: 共有メモリ（<code>slotmem</code>）とミューテックスを用いたプロセス間通信が、MPM やプロキシの負荷分散で利用されています。</li>
+<li>**設定管理**: <code>http_config.h</code> に基づく階層的なディレクティブ解析が行われます。</li>
+<p>※セキュリティ要件や詳細なエラー伝播ポリシーについては、現在未定義です。</p>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>include/httpd.h</code> (基本構造の理解) 2. <code>server/core.c</code> (サーバーの全体像) 3. <code>server/request.c</code> (リクエスト処理のライフサイクル) 4. <code>modules/http/http_protocol.c</code> (HTTP プロトコル処理) 5. <code>modules/proxy/mod_proxy.c</code> (モジュール連携の例) 6. <code>server/mpm/event/event.c</code> (並列処理モデルの理解)</p>
+<p>1. <code>include/httpd.h</code> (基本構造の理解) 2. <code>server/core.c</code> および <code>server/config.c</code> (サーバー起動と設定の基礎) 3. <code>server/request.c</code> (リクエスト処理のライフサイクル) 4. <code>modules/http/http_protocol.c</code> (HTTP プロトコル処理) 5. <code>modules/filters/mod_filter.c</code> (フィルタチェーンの仕組み) 6. <code>server/mpm/event/event.c</code> (並列処理モデルの理解)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>実行時ライフサイクルの詳細なフェーズ遷移図の構築。</li>
-<li>モジュール間でのメモリ管理ポリシーの統一性の検証。</li>
-<li>複雑な依存関係を持つモジュール群（<code>proxy</code> や <code>http2</code>）の階層的な可視化。</li>
+<li>各モジュール間でのフック実行順序の競合解決ポリシーの網羅的な可視化。</li>
+<li>複雑なメソッド（<code>COPY</code>/<code>MOVE</code> 等）におけるエラー伝播の最適化。</li>
+<li>実行時ライフサイクルにおける、各フェーズの厳密な遷移図の作成。</li>
 </ul><script>
 (function() {
   function notifyParent() {

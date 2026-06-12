@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/close-worker-sockets.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_worker_sockets</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/close-worker-sockets.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_worker_sockets</h1>
 <h2>概念</h2>
 <p><code>close_worker_sockets</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）である <code>worker</code> および <code>event</code> において、ワーカープロセスが保持しているすべてのソケットを強制的にクローズし、リソースを解放するための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>この関数は、プロセスの強制終了処理時などに呼び出されます。アクティブなワーカーソケットを確実にクローズしてリソースを解放することで、ソケットのリークを防ぎ、システムのクリーンなシャットダウンや再起動を保証するために重要です。</p>
+<p>この関数は、プロセスの強制終了処理時などに呼び出されます。アクティブなソケットを確実にクローズし、関連するシステムリソースを即座に解放することで、リソースリークを防ぎ、プロセスの安全な終了を保証するために重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
@@ -11,27 +11,26 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__close_worker_sockets.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__close_worker_sockets.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L262&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#close_worker_sockets</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L569" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#close_worker_sockets</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__close_worker_sockets.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__close_worker_sockets.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L262&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#close_worker_sockets</code></a>: <code>worker</code> MPMにおける実装。グローバルな <code>worker_sockets</code> 配列を走査し、有効なソケットをクローズします。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L569" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#close_worker_sockets</code></a>: <code>event</code> MPMにおける実装（<code>worker</code> とのアーキテクチャ上の類似性により存在・参照されています）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. 強制終了処理などのトリガーが発生すると、<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a>（または <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a>）の処理から <code>close_worker_sockets()</code> が呼び出されます。 2. 関数内では、<code>0</code> から <code>threads_per_child - 1</code> までのインデックスでループ処理を行います。 3. 各インデックス <code>i</code> において、<code>worker_sockets[i]</code> が <code>NULL</code> でない（有効なソケットが存在する）かを確認します。 4. 有効なソケットが存在する場合、APR（Apache Portable Runtime）ライブラリの <code>apr_socket_close()</code> を呼び出してソケットを閉じます。 5. ソケットを閉じた後、二重解放や不正な参照を防止するために <code>worker_sockets[i]</code> を <code>NULL</code> に設定します。</p>
-<p>なお、強制終了をトリガーする具体的なイベントや、呼び出し元に至るまでの全体的なエンドツーエンドのフローの詳細は、提供された情報からは完全には判明していません。</p>
+<p>1. **トリガー**: プロセスの強制終了処理が発生します。 2. **呼び出し**: <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>（強制終了処理時）または <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>（強制終了処理時）から <code>close_worker_sockets()</code> が呼び出されます。 3. **ループ処理**: <code>0</code> から <code>threads_per_child - 1</code> までのインデックスでループを実行します。 4. **ソケットの確認**: 各インデックス <code>i</code> について、<code>worker_sockets[i]</code> が <code>NULL</code> でないか確認します。 5. **クローズ**: 有効なソケットが存在する場合、<code>apr_socket_close()</code> を呼び出してソケットを閉じます。 6. **クリア**: クローズ後、<code>worker_sockets[i]</code> を <code>NULL</code> に設定します。</p>
+<p>※なお、強制終了処理の全体像や、<code>event</code> MPM側での具体的な呼び出しコンテキストなど、詳細なエンドツーエンドのフローは完全には提供されていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**スレッド数の一致**: ループの終了条件として <code>threads_per_child</code> が使用されるため、この変数が正しく初期化されている必要があります。</li>
-<li>**ソケット配列の整合性**: <code>worker_sockets</code> 配列が各ワーカーのソケット状態を正確に保持している必要があります。</li>
-<li>**安全な初期化（NULLクリア）**: ソケットをクローズした後は、必ず <code>worker_sockets[i]</code> を <code>NULL</code> に設定し、後続の処理での二重解放や不正アクセスを防ぐ必要があります。</li>
+<li>**前提条件**: <code>threads_per_child</code> が正しく初期化されていること、および <code>worker_sockets</code> 配列が各ワーカーのソケット状態を適切に保持していること。</li>
+<li>**事後条件**: 処理された <code>worker_sockets</code> 配列の要素はすべて <code>NULL</code> に設定され、二重解放や不正な参照が防止されること。</li>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**エラーハンドリングの欠如**: <code>apr_socket_close</code> 自体が失敗した場合、本関数内ではエラーハンドリングやログ記録を行っていません。</li>
-<li>**未初期化状態での呼び出し**: <code>worker_sockets</code> 配列や <code>threads_per_child</code> が適切に初期化される前に本関数が呼び出された場合、予期しない動作を引き起こす可能性があります（ただし、通常は <code>NULL</code> チェックにより安全にスキップされます）。</li>
+<li>**エラーハンドリングの欠如**: <code>apr_socket_close</code> が失敗した場合、本関数内ではエラーハンドリングやログ記録を行っていません。</li>
+<li>**未初期化状態での動作**: <code>worker_sockets</code> が初期化されていない場合や、既に閉じられているソケットに対しては <code>NULL</code> チェックにより安全にスキップされますが、初期化フローとの整合性に注意する必要があります。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （<code>close_worker_sockets</code> の定義と、強制終了時における呼び出し箇所）</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （event MPM における同様の強制終了処理と呼び出し箇所）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> (特に <code>close_worker_sockets</code> の定義と強制終了処理での呼び出し箇所)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> (強制終了処理における呼び出し箇所)</li>
 </ul><script>
 (function() {
   function notifyParent() {

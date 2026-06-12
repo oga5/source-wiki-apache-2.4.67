@@ -1,22 +1,21 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/dav-lock-discovery-fixed.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lock_discovery_fixed</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/dav-lock-discovery-fixed.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lock_discovery_fixed</h1>
 <h2>概念</h2>
-<p><code>dav_lock_discovery_fixed</code> は、WebDAVの直接ロック（direct lock）情報をDBMデータベースなどの永続ストレージにバイナリ形式で保存・復元する際に、固定長属性を保持するためのデータ構造（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。</p>
+<p><code>dav_lock_discovery_fixed</code> は、WebDAVの直接ロック（direct lock）情報をDBMデータベースへ永続化・復元する際に、固定長属性を保持・シリアライズするためのデータ構造（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。スコープ、ロックタイプ、深度、有効期限といった固定長の属性をバイナリ形式で扱うためのメモリレイアウトを定義します。</p>
 <h2>なぜ重要か</h2>
-<p>WebDAVのロック情報を永続化する際、メモリ上のロック構造体からバイナリ形式へシリアライズ・デシリアライズするための固定長ヘッダー/データレイアウトとして機能します。これにより、効率的なロック情報の保存と読み込みが可能になります。また、ファイルシステムバックエンドと汎用ロック管理ロジックの双方で一貫したデータ構造を維持するために重要な役割を果たしています。</p>
+<p>WebDAVのロック情報をDBMファイルに効率的に保存・復元するために、メモリ上の構造体をそのままバイナリデータとして扱う必要があります。この構造体は、シリアライズおよびデシリアライズ時の固定長ヘッダーとして機能し、データの永続化レイアウトを決定づける役割を果たします。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a></li>
 <li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__lock.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html&quot;}, '*');"><code>module:modules/dav/lock</code></a></li>
 </ul>
 <h2>主要エンティティ</h2>
+<p>本トピックに関与する主要なエンティティは以下の通りです。</p>
 <ul>
 <li>**<a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lock_discovery_fixed.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lock_discovery_fixed.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L115&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lock_discovery_fixed</code></a>**</li>
-<p>ファイルシステムバックエンドにおける直接ロックの固定長属性を保持する構造体です。</p>
 <li>**<a class="wiki-entity-link" href="../symbols/modules__dav__lock__locks_c__dav_lock_discovery_fixed.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_lock_discovery_fixed.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html#L110&quot;}, '*');"><code>symbol:modules/dav/lock/locks.c#dav_lock_discovery_fixed</code></a>**</li>
-<p>汎用ロック管理ロジックにおいて、DBMファイルへのシリアライズ/デシリアライズ時に使用される構造体です。</p>
 </ul>
-<p>両ファイルにおいて、以下の同一のシグネチャで定義されています。</p>
+<p>これらは、それぞれのファイルで以下のように定義されている同名の構造体です。</p>
 <pre><code>typedef struct dav_lock_discovery_fixed
 {
     char scope;
@@ -25,23 +24,28 @@
     time_t timeout;
 } dav_lock_discovery_fixed;</code></pre>
 <h2>エンドツーエンドの流れ</h2>
-<p>1. **ロック情報の保存（シリアライズ）** メモリ上のロック構造体（<code>dav_lock_discovery</code> など）から <code>dav_lock_discovery_fixed</code> の各フィールド（<code>scope</code>, <code>type</code>, <code>depth</code>, <code>timeout</code>）へ値がコピーされ、DBMレコードのバイナリバッファの一部として書き込まれます（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> など）。 2. **ロック情報の読み込み（デシリアライズ）** DBMから読み込まれたバイナリデータから本構造体へキャストまたはコピーされ、有効期限（<code>timeout</code>）やスコープ、深さ（<code>depth</code>）などの固定長属性が復元されます（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> など）。</p>
-<p>※なお、ファイルシステムロック処理と汎用ロック処理の間における、詳細な呼び出しシーケンスや完全なエンドツーエンドの連携フローの全容は、提供されたコンテキストからは明らかになっていません。</p>
+<p>1. **ロック情報の保存（シリアライズ）** メモリ上のロック構造体（<code>dav_lock_discovery</code>）から、<code>dav_lock_discovery_fixed</code> の各フィールド（<code>scope</code>, <code>type</code>, <code>depth</code>, <code>timeout</code>）へ値がコピーされます。その後、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> などの処理において、DBMレコードのバイナリバッファの一部として書き込まれます。 2. **ロック情報の読み込み（デシリアライズ）** DBMから読み込まれたバイナリデータから、<code>dav_lock_discovery_fixed</code> へキャストまたはコピーされ、有効期限やスコープ、深さが復元されます（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> などの処理）。</p>
+<p>※ なお、ファイルシステムロック処理（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>）とロック管理ロジック（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>）の間における、詳細なエンドツーエンドの呼び出しフロー全体は、提供された情報からは完全には明らかになっていません。</p>
 <h2>重要な不変条件</h2>
 <ul>
-<li>**サイズ計算の同期**: <code>dav_size_direct</code> マクロにより、本構造体のサイズ（またはそれに1バイトを加えた値）がシリアライズ時のデータ長やオフセット計算に使用されます。このマクロの定義と構造体のサイズは常に同期していなければなりません。</li>
-<li>**構造体定義の整合性**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方に同名の構造体が定義されており、両者の間でフィールド構成やレイアウトの整合性が保たれている必要があります。</li>
+<li>**サイズ計算の同期**  </li>
+<p><code>dav_size_direct</code> マクロにより計算されるサイズ（本構造体のサイズに1バイトを加えた値）が、シリアライズ時のデータ長やオフセット計算の基準として使用されます。そのため、本構造体の定義と <code>dav_size_direct</code> マクロの定義は常に同期していなければなりません。</p>
 </ul>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**バイナリ互換性の喪失**: 本構造体のサイズやフィールド順序を変更すると、既存のDBMファイルとの互換性が失われ、保存されたロック情報を正しく読み込めなくなります。</li>
-<li>**プラットフォーム依存性**: <code>time_t</code> や <code>int</code> のサイズ、およびコンパイラによる構造体のパディング（アライメント）はプラットフォームによって異なるため、異なる環境間でDBMファイルを移行する際に互換性の問題が発生する可能性があります。</li>
-<li>**重複定義の同期漏れ**: 2つのファイルに同名の構造体が定義されているため、片方のみを変更するとモジュール間で不整合が発生します。変更を加える際は、必ず両方のファイルを更新する必要があります。</li>
+<li>**バイナリ互換性の喪失**  </li>
+<p>本構造体のサイズやフィールド順序を変更すると、既存のDBMファイルとの互換性が失われます。</p>
+<li>**プラットフォーム依存性**  </li>
+<p><code>time_t</code> や <code>int</code> のサイズ、およびコンパイラによる構造体のパディング（アライメント）がプラットフォーム間で異なる場合、DBMファイルの互換性やバイナリ列のオフセットに影響を与える可能性があります。</p>
+<li>**重複定義の不整合**  </li>
+<p><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方に同名の構造体が定義されているため、一方に変更を加える際は、必ず両方のファイルで整合性を保つ必要があります。</p>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>**  </li>
+<p>ファイルシステムバックエンドにおける <code>dav_lock_discovery_fixed</code> の定義と、<code>dav_size_direct</code> マクロによるサイズ計算を確認してください。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>**  </li>
+<p>ロック管理ロジックにおける <code>dav_lock_discovery_fixed</code> の定義、および <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> / <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> によるシリアライズ・デシリアライズ処理を確認してください。</p>
 </ul><script>
 (function() {
   function notifyParent() {

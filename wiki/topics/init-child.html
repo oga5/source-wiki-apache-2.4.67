@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/init-child.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>init_child</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/init-child.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>init_child</h1>
 <h2>概念</h2>
-<p><code>init_child</code> は、Apache HTTP Server（httpd）のマルチプロセスモデルにおいて、子プロセスがフォーク（生成）された直後に各モジュール固有の初期化処理を行うための関数、またはそれを呼び出すフック機構です。</p>
+<p><code>init_child</code> は、Apache HTTP Server（httpd）のマルチプロセスモデルにおいて、子プロセスがフォーク（生成）された直後に各モジュールが個別に実行する初期化処理（通常は <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.c.html#L3250" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>child_init</code></a> フックに関連する関数）です。</p>
 <h2>なぜ重要か</h2>
-<p>親プロセスからフォークされた子プロセスにおいて、プロセス固有のリソース（ファイル記述子、パイプ、シグナルハンドラ、あるいはモジュール固有の内部状態など）を安全に再初期化・セットアップするために必要となります。ただし、本プロジェクト（httpd-2.4.67）における具体的な初期化ロジックの詳細は、提供された情報からは未検証です。</p>
+<p>親プロセスからフォークされた子プロセスが、安全かつ独立してリクエストを処理できるようにするために重要です。例えば、ログ出力（<code>mod_log_config</code>）やURL書き換え（<code>mod_rewrite</code>）などの機能において、子プロセス専用のリソース（ファイル記述子、パイプ、ロック、内部状態など）を適切に再初期化またはオープンし直す役割を担います。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/modules__loggers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__loggers.html&quot;, &quot;source&quot;: &quot;source/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>module:modules/loggers</code></a></li>
@@ -11,26 +11,20 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/loggers/mod_log_config.c.html#L1540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>symbol:modules/loggers/mod_log_config.c#init_child</code></a>：ログ記録モジュール（<code>mod_log_config</code>）における子プロセス初期化関数。</li>
-<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html#L4864" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>symbol:modules/mappers/mod_rewrite.c#init_child</code></a>：URL書き換えモジュール（<code>mod_rewrite</code>）における子プロセス初期化関数。</li>
+<li><a class="wiki-source-link" href="../../source/modules/loggers/mod_log_config.c.html#L1540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>symbol:modules/loggers/mod_log_config.c#init_child</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html#L4864" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>symbol:modules/mappers/mod_rewrite.c#init_child</code></a></li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p>親プロセスが子プロセスを生成（フォーク）した直後に、Apacheのコアランタイムから各モジュールの <code>init_child</code> フックが呼び出されます。</p>
-<p>現時点では、以下の詳細な流れは未検証です：</p>
-<ul>
-<li>親プロセスから子プロセスへの制御の遷移</li>
-<li><code>init_child</code> が呼び出される正確なタイミングと実行順序</li>
-<li>各モジュール内での具体的な初期化処理（ログファイルの再オープンやパイプの再構築など）の全容</li>
-</ul>
+<p>親プロセスが起動・設定を読み込んだ後、リクエストを処理するために子プロセスをフォークします。フォーク直後の子プロセスのコンテキストにおいて、登録された各モジュールの <code>init_child</code> 関数が呼び出されます。</p>
+<p>ただし、具体的なフックの登録方法や、これら2つの関数が呼び出される正確な順序、および詳細な制御フローなどのエンドツーエンドの流れは、現時点の提供情報からは完全には判明していません。</p>
 <h2>重要な不変条件</h2>
-<p>現時点では、<code>init_child</code> の実行前後で維持されるべき重要な不変条件（状態の整合性、リソースの排他制御など）は判明していません。</p>
+<p>現時点の提供情報からは、<code>init_child</code> の実行前後で維持されるべき具体的な不変条件（状態の整合性やリソースの排他制御など）は判明していません。</p>
 <h2>よくある落とし穴</h2>
-<p>現時点では、<code>init_child</code> の実装や呼び出しに関連する具体的な落とし穴（リソースリーク、デッドロック、シグナルハンドリングの不整合など）は特定されていません。</p>
+<p>現時点の提供情報からは、<code>init_child</code> の実装や実行時における具体的な落とし穴や既知のバグ、注意すべき制約事項は判明していません。</p>
 <h2>次に読む場所</h2>
-<p>各モジュールにおける <code>init_child</code> の具体的な役割と実装を理解するために、以下のソースファイルを参照してください。</p>
 <ul>
-<li><a class="wiki-source-link" href="../../source/modules/loggers/mod_log_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>modules/loggers/mod_log_config.c</code></a></li>
-<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>modules/mappers/mod_rewrite.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/loggers/mod_log_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>modules/loggers/mod_log_config.c</code></a> の <code>init_child</code> 実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>modules/mappers/mod_rewrite.c</code></a> の <code>init_child</code> 実装</li>
 </ul><script>
 (function() {
   function notifyParent() {

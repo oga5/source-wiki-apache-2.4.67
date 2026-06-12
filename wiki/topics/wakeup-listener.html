@@ -1,9 +1,9 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="3"><title>topics/wakeup-listener.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>wakeup_listener</h1>
+<html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="4"><title>topics/wakeup-listener.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>wakeup_listener</h1>
 <h2>概念</h2>
-<p><code>wakeup_listener</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）である <code>worker</code> や <code>event</code> において、ブロッキング状態（待機状態）にあるリスナースレッド（<code>listener_thread</code>）を強制的に解除し、終了処理へと移行させるための関数です。</p>
+<p><code>wakeup_listener</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュール（MPM）である <code>worker</code> や <code>event</code> において、ブロッキング状態にあるリスナースレッド（<code>listener_thread</code>）を強制的に起床させ、終了処理へ移行させるための関数です。</p>
 <h2>なぜ重要か</h2>
-<p>MPMの終了シーケンスにおいて、リスナースレッドがソケットの監視（<code>poll</code>）やワーカーキューの空き待ちなどでブロックし続けるのを防ぎ、安全かつ迅速にプロセスをシャットダウンするために不可欠な役割を担っています。</p>
+<p>MPMの終了シーケンスにおいて、リスナースレッドがソケットの監視（<code>poll</code>）やワーカーの空き待ちなどでブロッキング状態にある場合、プロセスを安全かつ迅速に終了させることができません。<code>wakeup_listener</code> は、シグナル送信やポーリングセットのウェイクアップ、キュー情報の終端処理を組み合わせることで、リスナーを確実に待機状態から脱出させる役割を担うため重要です。</p>
 <h2>関与するモジュール</h2>
 <ul>
 <li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
@@ -11,27 +11,34 @@
 </ul>
 <h2>主要エンティティ</h2>
 <ul>
-<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__wakeup_listener.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__wakeup_listener.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L273&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#wakeup_listener</code></a></li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L581" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#wakeup_listener</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__wakeup_listener.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__wakeup_listener.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L273&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#wakeup_listener</code></a>: <code>worker</code> MPMにおける実装。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L581" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>symbol:server/mpm/event/event.c#wakeup_listener</code></a>: <code>event</code> MPMにおける実装（詳細な内部仕様は提供されたコンテキストからは未解明）。</li>
 </ul>
 <h2>エンドツーエンドの流れ</h2>
-<p><code>worker</code> MPMにおける大まかな流れは以下の通りです。なお、<code>event</code> MPMにおける詳細なエンドツーエンドの流れは提供された情報からは未確定です。</p>
-<p>1. **終了指示のセット**: <code>listener_may_exit</code> フラグを <code>1</code> に設定し、終了要求を明示します。 2. **Pollsetの解除**: <code>worker_pollset</code> が有効かつ <code>listener_is_wakeable</code> が真の場合、<code>apr_pollset_wakeup</code> を呼び出して <code>poll()</code> によるブロッキングを解除します。 3. **キュー待機の解除**: <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L299" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>ap_queue_info_term</code></a> を呼び出し、ワーカーを待機しているリスナーを解放します。 4. **シグナル送信**: <code>listener_os_thread</code> が初期化済みであれば、プラットフォームに応じて <code>pthread_kill</code> または <code>kill(ap_my_pid, LISTENER_SIGNAL)</code> を用いてスレッドにシグナルを送信し、確実にスレッドを起床させます。</p>
-<h2>重要な不変条件</h2>
+<p><code>worker</code> MPMにおける流れは以下の通りです。</p>
+<p>1. プロセスの終了や再起動などのイベントに伴い、<code>wakeup_listener</code> が呼び出されます（<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> 内の複数箇所から呼び出し）。 2. <code>listener_may_exit</code> フラグを <code>1</code> に設定し、リスナーに対して終了指示を出します。 3. <code>worker_pollset</code> が有効かつ <code>listener_is_wakeable</code> が真の場合、<code>apr_pollset_wakeup</code> を呼び出して <code>poll()</code> のブロッキングを解除します。 4. <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L299" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>ap_queue_info_term</code></a> を呼び出し、ワーカーを待機しているリスナーを解放します。 5. <code>listener_os_thread</code> が初期化済みであれば、プラットフォームに応じてスレッドへシグナルを送信します。</p>
 <ul>
-<li><code>wakeup_listener</code> が呼び出されると、<code>listener_may_exit</code> フラグは必ず <code>1</code> に設定されます。</li>
-<li><code>listener_os_thread</code> が初期化されている場合にのみ、スレッドへの直接的なシグナル送信（<code>pthread_kill</code> 等）が実行されます。</li>
-<li><code>event</code> MPMにおける不変条件の詳細は提供された情報からは未確定です。</li>
+<li><code>HAVE_PTHREAD_KILL</code> が定義されている場合: <code>pthread_kill</code> を使用。</li>
+<li>それ以外の場合: <code>kill(ap_my_pid, LISTENER_SIGNAL)</code> を使用。</li>
 </ul>
+<p>※ <code>event</code> MPMにおける詳細なエンドツーエンドの流れや、<code>worker</code> MPMとの差異については、提供されたコンテキストからは未解明です。</p>
+<h2>重要な不変条件</h2>
+<p><code>worker</code> MPMにおける不変条件は以下の通りです。</p>
+<ul>
+<li>呼び出し後、<code>listener_may_exit</code> フラグが必ず <code>1</code> に設定されること。</li>
+<li><code>worker_pollset</code> が有効な場合、<code>apr_pollset_wakeup</code> が呼び出されること。</li>
+<li><code>worker_queue_info</code> に対して <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L299" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>ap_queue_info_term</code></a> が呼び出され、ワーカー待ち状態が解除されること。</li>
+</ul>
+<p>※ <code>event</code> MPMにおける不変条件については、提供されたコンテキストからは未解明です。</p>
 <h2>よくある落とし穴</h2>
 <ul>
-<li>**早期リターンの影響**: リスナースレッドの生成直後など、<code>listener_os_thread</code> がまだ設定されていないタイミングで <code>wakeup_listener</code> が呼び出されると、シグナル送信処理がスキップされて早期リターンします。この際、一部の終了処理が完全に行われない可能性があることがソースコード内で注釈されています。</li>
-<li>**プラットフォーム依存の挙動**: シグナル送信において、<code>HAVE_PTHREAD_KILL</code> の定義有無により <code>pthread_kill</code> と <code>kill</code> のどちらが使用されるかが分かれるため、シグナルハンドリングを変更する際には注意が必要です。</li>
+<li>**初期化前の呼び出しによる不完全な終了**: リスナー生成直後で <code>listener_os_thread</code> が未設定（未初期化）の場合、シグナル送信処理がスキップされて早期リターンします。この際、一部の終了処理が完全に行われない可能性があることがソースコード内に注釈されています。</li>
+<li>**プラットフォーム依存の挙動**: シグナル送信において、<code>pthread_kill</code> を使用する環境と <code>kill</code> を使用する環境で挙動が分かれるため、シグナルハンドリングを変更する際には注意が必要です。</li>
 </ul>
 <h2>次に読む場所</h2>
 <ul>
-<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （<code>wakeup_listener</code> の実装と、その呼び出し元である終了シーケンス周辺）</li>
-<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （<code>event</code> MPMにおける <code>wakeup_listener</code> の実装と参照箇所）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>: <code>worker</code> MPMにおける <code>wakeup_listener</code> の実装およびその呼び出し元。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>: <code>event</code> MPMにおける <code>wakeup_listener</code> の実装および呼び出し関係。</li>
 </ul><script>
 (function() {
   function notifyParent() {
