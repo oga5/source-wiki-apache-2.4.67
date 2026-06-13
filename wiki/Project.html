@@ -1,61 +1,63 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><meta name="source-wiki-viewer-version" content="5"><title>Project.md</title><link rel="stylesheet" href="../styles.css"></head><body><h1>httpd-2.4.67</h1>
 <h2>このシステムは何か</h2>
-<p><code>httpd-2.4.67</code> は、世界で最も広く利用されているオープンソースの HTTP サーバーソフトウェアです。モジュール化されたアーキテクチャを持ち、多様なプラットフォーム（Unix, Windows, NetWare, OS/2等）での動作と、MPM（Multi-Processing Module）による柔軟な並行処理モデルの切り替えを特徴とします。</p>
+<p><code>httpd-2.4.67</code> は、世界で最も広く利用されているオープンソースの HTTP サーバーソフトウェアです。モジュール式のアーキテクチャを採用しており、動的な機能拡張、多様なマルチプロセッシングモデル（MPM）、高度な認証・認可、キャッシュ、プロキシ、および HTTP/2 や WebDAV といった最新のプロトコルをサポートしています。</p>
 <h2>アーキテクチャ概観</h2>
-<p>本システムは、コアサーバー（<code>server</code>）を基盤とし、リクエスト処理パイプライン（フィルタチェーンとフック）を通じて各モジュールが機能を拡張する疎結合な設計です。</p>
+<p>本システムは、コアサーバー（<code>server</code>）を基盤とし、その上にリクエスト処理パイプライン（フィルタチェーン）とフックシステムを構築しています。</p>
 <ul>
 <li>**コア**: プロセス/スレッド管理（MPM）、設定解析、リクエストライフサイクル管理。</li>
-<li>**モジュール**: 認証（<code>aaa</code>）、キャッシュ（<code>cache</code>）、プロキシ（<code>proxy</code>）、WebDAV（<code>dav</code>）、フィルタ（<code>filters</code>）、SSL/TLS（<code>ssl</code>）など、機能ごとにディレクトリ単位で分離されています。</li>
-<li>**プラットフォーム抽象化**: <code>os</code> ディレクトリ配下で OS 固有の差異（プロセス生成、権限管理、文字コード）を吸収しています。</li>
+<li>**フィルタチェーン**: <code>apr_bucket_brigade</code> を介してデータをストリーム処理するパイプライン。</li>
+<li>**モジュール**: フックシステムを通じてコアと疎結合に連携し、認証、キャッシュ、プロキシ、コンテンツ生成などの機能を提供。</li>
+<li>**プラットフォーム抽象化**: <code>os</code> および <code>APR</code> により、Unix、Windows、NetWare 等の OS 差異を吸収。</li>
 </ul>
 <h2>主要モジュール</h2>
 <ul>
-<li><code>server</code>: サーバーの心臓部。MPM、設定、プロトコル処理の基盤。</li>
-<li><code>modules/http</code>: HTTP プロトコル処理のコア。</li>
-<li><code>modules/proxy</code>: プロキシおよびロードバランシング機能。</li>
-<li><code>modules/aaa</code>: 認証・認可フレームワーク。</li>
-<li><code>modules/cache</code>: 透過的なキャッシュサブシステム。</li>
-<li><code>modules/ssl</code>: OpenSSL を統合したセキュア通信機能。</li>
-<li><code>os</code>: 各プラットフォーム固有の抽象化レイヤー。</li>
+<li>**コア**: <code>server</code>, <code>server/mpm</code> (event, worker, prefork, winnt 等)</li>
+<li>**プロトコル/フィルタ**: <code>modules/http</code>, <code>modules/http2</code>, <code>modules/filters</code></li>
+<li>**プロキシ/クラスタ**: <code>modules/proxy</code>, <code>modules/cluster</code></li>
+<li>**認証/認可**: <code>modules/aaa</code></li>
+<li>**WebDAV**: <code>modules/dav</code></li>
+<li>**キャッシュ**: <code>modules/cache</code></li>
+<li>**SSL/TLS**: <code>modules/ssl</code></li>
+<li>**MD (Managed Domains)**: <code>modules/md</code> (ACME 自動証明書管理)</li>
 </ul>
 <h2>実行時ライフサイクル</h2>
-<p>1. **起動・初期化**: <code>main</code> が設定を読み込み、<code>register_hooks</code> を通じて各モジュールがフックを登録。 2. **プロセス/スレッド生成**: MPM（<code>event</code>, <code>worker</code>, <code>prefork</code> 等）が <code>make_child</code> や <code>create_listener_thread</code> を通じて処理主体を生成。 3. **リクエスト処理**:</p>
-<ul>
-<li><code>process_socket</code> で接続を受け入れ、<code>http_request.c</code> がリクエストを解析。</li>
-<li>フィルタチェーン（<code>ap_filter_t</code>）を介してデータが処理され、ハンドラがレスポンスを生成。</li>
-<p>4. **終了**: シグナル受信により <code>just_die</code> や <code>clean_child_exit</code> が呼び出され、リソースを解放して終了。</p>
-</ul>
+<p>1. **起動**: <code>main</code> 関数が設定を読み込み、MPM がリスナーソケットを準備。 2. **プロセス/スレッド生成**: <code>make_child</code> や <code>start_threads</code> によりリクエスト処理主体を生成。 3. **リクエスト受付**: リスナースレッドが接続を待ち受け、<code>process_socket</code> を経由してワーカースレッドへ引き渡し。 4. **リクエスト処理**: <code>request_rec</code> を中心に、翻訳、認証、ハンドラ実行、フィルタリングの各フェーズをフック経由で実行。 5. **終了**: <code>just_die</code> や <code>clean_child_exit</code> を通じて、シグナルに応じた安全なシャットダウンを実行。</p>
 <h2>中核データ構造</h2>
 <ul>
-<li><code>request_rec</code>: 単一リクエストの全状態を保持するコア構造体。</li>
-<li><code>conn_rec</code>: 接続固有のコンテキスト（IP、フィルタチェーン等）。</li>
-<li><code>server_rec</code>: バーチャルホストを含むサーバー設定の基盤。</li>
-<li><code>module</code>: モジュールのエントリポイントを定義する構造体。</li>
+<li><code>request_rec</code>: リクエストごとの状態、URI、ヘッダー、プールを保持。</li>
+<li><code>conn_rec</code>: 接続ごとの状態、ソケット、フィルタチェーンを保持。</li>
+<li><code>server_rec</code>: 仮想ホスト設定を含むサーバー単位のコンテキスト。</li>
 <li><code>apr_pool_t</code>: リソースのライフサイクルを管理するメモリプール。</li>
-<li><code>ap_filter_t</code>: フィルタチェーンの各ノード。</li>
+<li><code>apr_bucket_brigade</code>: フィルタチェーンを流れるデータストリームの連結リスト。</li>
+<li><code>module</code>: モジュールのエントリポイントとフックを定義する構造体。</li>
 </ul>
 <h2>横断的トピック</h2>
 <ul>
-<li>**メモリ管理**: <code>apr_pool_t</code> を用いた階層的なメモリ管理と自動解放。</li>
-<li>**フックシステム**: <code>ap_hooks.h</code> に基づく、モジュール間連携のための疎結合な拡張基盤。</li>
-<li>**MPM**: プロセス/スレッドモデルの抽象化（<code>event</code>, <code>worker</code>, <code>prefork</code> 等）。</li>
+<li>**メモリ管理**: <code>apr_pool_t</code> による階層的なリソース管理と自動解放。</li>
 <li>**フィルタチェーン**: <code>apr_bucket_brigade</code> を用いたストリーム処理パイプライン。</li>
+<li>**フックシステム**: モジュール間連携のための疎結合なコールバック機構。</li>
+<li>**MPM**: プロセス/スレッドモデルの抽象化と並行処理制御。</li>
 <li>**設定管理**: <code>ap_conf_vector_t</code> を用いた階層的な設定マージ。</li>
 </ul>
 <h2>推奨読書順</h2>
-<p>1. <code>include/httpd.h</code> (基本構造と主要構造体の理解) 2. <code>server/main.c</code> (起動から初期化のフロー) 3. <code>server/request.c</code> (リクエスト処理のライフサイクル) 4. <code>include/ap_hooks.h</code> (モジュール連携の基盤) 5. <code>include/util_filter.h</code> (フィルタチェーンの仕組み) 6. <code>server/mpm/event/event.c</code> (並行処理モデルの例) 7. <code>docs/manual/developer/mod_example_1.c</code> (モジュール開発の最小構成)</p>
+<p>1. <code>include/httpd.h</code> (基本構造の理解) 2. <code>server/core.c</code> (サーバーの全体像と設定構造) 3. <code>server/request.c</code> (リクエスト処理のライフサイクル) 4. <code>include/util_filter.h</code> (フィルタチェーンの仕組み) 5. <code>server/mpm/event/event.c</code> (並行処理モデルの理解) 6. <code>modules/http/http_protocol.c</code> (プロトコルの基礎) 7. <code>docs/manual/developer/mod_example_1.c</code> (モジュール開発の基本)</p>
 <h2>未解決の問い</h2>
 <ul>
-<li>各 MPM 実装における <code>server_main_loop</code> の詳細な差異と、将来的な統合の可能性。</li>
-<li><code>mod_proxy</code> 関連モジュールにおける <code>storage</code> シンボルの役割分担の明確化。</li>
-<li><code>apr_off_t</code> のプラットフォーム間でのビット幅差異による潜在的なオーバーフローリスクの網羅的検証。</li>
+<li>各モジュール間でのメモリ管理ポリシーの統一（<code>apr_pool_t</code> の使い分けの最適化）。</li>
+<li>マルチスレッド MPM 環境における一部のレガシーモジュールのスレッドセーフティの完全な検証。</li>
+<li>LLM 合成後に、実行時ライフサイクルと横断トピックを精緻化する。</li>
 </ul><script>
 (function() {
   function notifyParent() {
     if (parent === window) return;
     parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
   }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
   window.addEventListener("load", notifyParent);
   window.addEventListener("hashchange", notifyParent);
 })();

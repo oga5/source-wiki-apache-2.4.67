@@ -9,21 +9,17 @@
   <section class="overview-section overview-summary">
     <h2>Overview</h2>
     <h3>このシステムは何か</h3>
-<p><code>httpd-2.4.67</code> は、世界で最も広く利用されているオープンソースの HTTP サーバーソフトウェアです。モジュール化されたアーキテクチャを持ち、多様なプラットフォーム（Unix, Windows, NetWare, OS/2等）での動作と、MPM（Multi-Processing Module）による柔軟な並行処理モデルの切り替えを特徴とします。</p>
+<p><code>httpd-2.4.67</code> は、世界で最も広く利用されているオープンソースの HTTP サーバーソフトウェアです。モジュール式のアーキテクチャを採用しており、動的な機能拡張、多様なマルチプロセッシングモデル（MPM）、高度な認証・認可、キャッシュ、プロキシ、および HTTP/2 や WebDAV といった最新のプロトコルをサポートしています。</p>
 <h3>アーキテクチャ概観</h3>
-<p>本システムは、コアサーバー（<code>server</code>）を基盤とし、リクエスト処理パイプライン（フィルタチェーンとフック）を通じて各モジュールが機能を拡張する疎結合な設計です。</p>
+<p>本システムは、コアサーバー（<code>server</code>）を基盤とし、その上にリクエスト処理パイプライン（フィルタチェーン）とフックシステムを構築しています。</p>
 <ul>
 <li>**コア**: プロセス/スレッド管理（MPM）、設定解析、リクエストライフサイクル管理。</li>
-<li>**モジュール**: 認証（<code>aaa</code>）、キャッシュ（<code>cache</code>）、プロキシ（<code>proxy</code>）、WebDAV（<code>dav</code>）、フィルタ（<code>filters</code>）、SSL/TLS（<code>ssl</code>）など、機能ごとにディレクトリ単位で分離されています。</li>
-<li>**プラットフォーム抽象化**: <code>os</code> ディレクトリ配下で OS 固有の差異（プロセス生成、権限管理、文字コード）を吸収しています。</li>
+<li>**フィルタチェーン**: <code>apr_bucket_brigade</code> を介してデータをストリーム処理するパイプライン。</li>
+<li>**モジュール**: フックシステムを通じてコアと疎結合に連携し、認証、キャッシュ、プロキシ、コンテンツ生成などの機能を提供。</li>
+<li>**プラットフォーム抽象化**: <code>os</code> および <code>APR</code> により、Unix、Windows、NetWare 等の OS 差異を吸収。</li>
 </ul>
 <h3>実行時ライフサイクル</h3>
-<p>1. **起動・初期化**: <code>main</code> が設定を読み込み、<code>register_hooks</code> を通じて各モジュールがフックを登録。 2. **プロセス/スレッド生成**: MPM（<code>event</code>, <code>worker</code>, <code>prefork</code> 等）が <code>make_child</code> や <code>create_listener_thread</code> を通じて処理主体を生成。 3. **リクエスト処理**:</p>
-<ul>
-<li><code>process_socket</code> で接続を受け入れ、<code>http_request.c</code> がリクエストを解析。</li>
-<li>フィルタチェーン（<code>ap_filter_t</code>）を介してデータが処理され、ハンドラがレスポンスを生成。</li>
-<p>4. **終了**: シグナル受信により <code>just_die</code> や <code>clean_child_exit</code> が呼び出され、リソースを解放して終了。</p>
-</ul>
+<p>1. **起動**: <code>main</code> 関数が設定を読み込み、MPM がリスナーソケットを準備。 2. **プロセス/スレッド生成**: <code>make_child</code> や <code>start_threads</code> によりリクエスト処理主体を生成。 3. **リクエスト受付**: リスナースレッドが接続を待ち受け、<code>process_socket</code> を経由してワーカースレッドへ引き渡し。 4. **リクエスト処理**: <code>request_rec</code> を中心に、翻訳、認証、ハンドラ実行、フィルタリングの各フェーズをフック経由で実行。 5. **終了**: <code>just_die</code> や <code>clean_child_exit</code> を通じて、シグナルに応じた安全なシャットダウンを実行。</p>
   </section>
   <section class="overview-stats" aria-label="Source statistics">
     <div><strong>615</strong><span>Files</span></div>
@@ -47,6 +43,11 @@
     if (parent === window) return;
     parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
   }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
   window.addEventListener("load", notifyParent);
   window.addEventListener("hashchange", notifyParent);
 })();
