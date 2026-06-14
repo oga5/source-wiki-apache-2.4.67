@@ -2,10 +2,14 @@ const viewer = document.querySelector('.viewer');
 const contentPane = document.querySelector('.content-pane');
 const sourceView = document.getElementById('source-view');
 const wikiView = document.getElementById('wiki-view');
+const mobileNavToggle = document.querySelector('.mobile-nav-toggle');
+const mobileNavClose = document.querySelector('.mobile-nav-close');
+const mobilePaneToggle = document.querySelector('.mobile-pane-toggle');
 const blankPage = 'blank.html';
 const overviewPage = 'overview-content.html';
 let pendingExplicitPanel = null;
 let applyingState = false;
+let mobilePane = 'wiki';
 
 function currentMode() {
   return viewer.classList.contains('topic-mode') ? 'topic' : 'source';
@@ -14,6 +18,19 @@ function currentMode() {
 function setMode(mode, update = true) {
   viewer.classList.toggle('topic-mode', mode === 'topic');
   if (update) updateHash();
+}
+
+function setMobilePane(pane) {
+  mobilePane = pane === 'source' ? 'source' : 'wiki';
+  viewer.classList.toggle('mobile-active-source', mobilePane === 'source');
+  viewer.classList.toggle('mobile-active-wiki', mobilePane !== 'source');
+  if (mobilePaneToggle) {
+    mobilePaneToggle.textContent = mobilePane === 'source' ? 'Content' : 'Source';
+  }
+}
+
+function closeMobileNav() {
+  viewer.classList.remove('mobile-nav-open');
 }
 
 function setWikiPanel(panel, explicit, update = true) {
@@ -83,6 +100,7 @@ function applyStateFromHash() {
   setMode(state.mode, false);
   sourceView.src = state.source;
   wikiView.src = state.wiki;
+  setMobilePane(state.mode === 'source' && state.source !== blankPage ? 'source' : 'wiki');
   applyingState = false;
 }
 
@@ -92,6 +110,8 @@ document.querySelectorAll('[data-panel]').forEach((link) => {
     setMode('source', false);
     setSourcePage(link.getAttribute('href'), false);
     setWikiPanel(link.dataset.panel, true, false);
+    setMobilePane(link.getAttribute('href') ? 'source' : 'wiki');
+    closeMobileNav();
     updateHash();
   });
 });
@@ -101,6 +121,8 @@ document.querySelectorAll('.topic-link').forEach((link) => {
     setMode('topic', false);
     pendingExplicitPanel = null;
     setWikiPanel(link.getAttribute('href'), false, false);
+    setMobilePane('wiki');
+    closeMobileNav();
     updateHash();
   });
 });
@@ -112,6 +134,8 @@ window.addEventListener('message', (event) => {
     setMode('source', false);
     setSourcePage(event.data.source, false);
     setWikiPanel(event.data.panel, true, false);
+    setMobilePane(event.data.source ? 'source' : 'wiki');
+    closeMobileNav();
     updateHash();
   } else if (event.data.type === 'source-page') {
     setMode('source', false);
@@ -176,6 +200,8 @@ function renderSymbolSearchResults(query) {
       setMode('source', false);
       setSourcePage(entry.source, false);
       setWikiPanel(entry.panel, true, false);
+      setMobilePane('source');
+      closeMobileNav();
       updateHash();
     });
     meta.textContent = `${entry.kind} · ${entry.path}:${entry.line}`;
@@ -186,6 +212,25 @@ function renderSymbolSearchResults(query) {
 
 if (symbolSearch && symbolSearchStatus && symbolSearchResults) {
   symbolSearch.addEventListener('input', () => renderSymbolSearchResults(symbolSearch.value));
+}
+
+if (mobileNavToggle) {
+  mobileNavToggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    viewer.classList.add('mobile-nav-open');
+  });
+}
+if (mobileNavClose) {
+  mobileNavClose.addEventListener('click', (event) => {
+    event.preventDefault();
+    closeMobileNav();
+  });
+}
+if (mobilePaneToggle) {
+  mobilePaneToggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    setMobilePane(mobilePane === 'source' ? 'wiki' : 'source');
+  });
 }
 
 function clamp(value, min, max) {
