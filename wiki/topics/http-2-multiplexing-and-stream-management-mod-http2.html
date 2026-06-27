@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/http-2-multiplexing-and-stream-management-mod-http2.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>HTTP/2 Multiplexing and Stream Management (mod_http2)</h1>
+<h2>概念</h2>
+<p><code>mod_http2</code> におけるHTTP/2の多重化（Multiplexing）とストリーム管理は、単一の物理的な接続（セッション）上で、複数の独立した双方向フレームシーケンス（ストリーム）を並行して処理する仕組みです。これにより、HTTP/1.1のような接続のブロッキング（Head-of-Line Blocking）を回避し、効率的なリソース利用を実現します。</p>
+<h2>なぜ重要か</h2>
+<p>HTTP/2プロトコルの核心である多重化をApache HTTP Server上で実現するために不可欠です。クライアントからの複数のリクエストを単一の接続内で並行して処理し、仮想的なHTTP/1.1風のリクエストに変換して内部のワーカースレッドに割り当てることで、リソースの節約とレスポンスの高速化を両立させます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>提供されたソースファイルから、以下の主要エンティティが関与していることが示されています。</p>
+<ul>
+<li>**h2_session (<a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a>)**: クライアントとの物理的なHTTP/2接続全体を管理するエンティティ。</li>
+<li>**h2_stream (<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a>)**: セッション内で多重化される個々のHTTP/2ストリーム（リクエストとレスポンスのライフサイクル）を表すエンティティ。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');">h2_mplx</a> (<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a>)**: セッションとワーカーの仲介役（マルチプレクサ）として、ストリームのタスクを管理・調整するエンティティ。</li>
+<li>**h2_workers (<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>modules/http2/h2_workers.c</code></a>)**: 実際のストリーム処理（タスク）を実行するワーカースレッド群を管理するエンティティ。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>詳細なエンドツーエンドの制御フロー（フレームの受信からタスクのディスパッチ、レスポンス送信までの具体的な関数呼び出しや状態遷移）は、提供されたコンテキストからは**未だ詳細には判明していません**。</p>
+<p>一般的な流れとしては、<code>h2_session</code> が接続からHTTP/2フレームを受信し、<code>h2_stream</code> を生成・管理します。これらのストリームは <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> を介して <code>h2_workers</code> にタスクとしてスケジュールされ、並行処理された後にレスポンスが多重化されてクライアントに返送されます。</p>
+<h2>重要な不変条件</h2>
+<p>提供されたソースコードの具体的なアサーションや状態遷移ルールが提示されていないため、詳細な不変条件（Invariants）は**現時点では不明です**。</p>
+<h2>よくある落とし穴</h2>
+<p>具体的な実装コードやエラーハンドリングのコンテキストが提供されていないため、現時点で判明している特定の落とし穴（デッドロック、メモリリーク、ストリームのクリーンアップ失敗など）は**ありません**。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>modules/http2/h2_workers.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

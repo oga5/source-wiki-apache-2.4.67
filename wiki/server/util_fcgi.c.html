@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_fcgi.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_fcgi.c.html&quot;}, '*');">server/util_fcgi.c</a></h1>
+<h2>概要</h2>
+<p>FastCGI プロトコル（RFC 3652）のバイナリ構造を Apache HTTP Server 内で扱うためのユーティリティ群を提供します。主に FastCGI レコードのヘッダーおよびボディのシリアライズ・デシリアライズ、ならびに環境変数（<code>apr_table_t</code>）の FastCGI 形式へのエンコードを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、FastCGI を利用するバックエンド（<code>mod_proxy_fcgi</code> 等）と Apache の内部データ構造の橋渡しを行います。プロトコルの低レイヤーなバイト操作を抽象化し、一貫したインターフェースを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル構造の変換**: <a class="wiki-source-link" href="../../source/include/util_fcgi.h.html#L40" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_fcgi_h__ap_fcgi_header.html&quot;}, '*');"><code>ap_fcgi_header</code></a> および <a class="wiki-source-link" href="../../source/include/util_fcgi.h.html#L106" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_fcgi_h__ap_fcgi_begin_request_body.html&quot;}, '*');"><code>ap_fcgi_begin_request_body</code></a> 構造体と、ネットワーク転送用のバイト配列間の相互変換。</li>
+<li>**環境変数のエンコード**: FastCGI の <code>PARAMS</code> レコードで要求される「長さ＋データ」形式への環境変数の変換。</li>
+<li>**バッファ管理**: エンコード時のバッファオーバーフロー防止と、分割送信のためのイテレータ管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ヘッダー・ボディ操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L26" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_header_to_array.html&quot;}, '*');"><code>ap_fcgi_header_to_array</code></a> / <code>from_array</code>: ヘッダー構造体とバイト配列の変換。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L52" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_header_fields_from_array.html&quot;}, '*');"><code>ap_fcgi_header_fields_from_array</code></a>: ヘッダーの各フィールドを個別の変数に展開。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L81" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_fill_in_header.html&quot;}, '*');"><code>ap_fcgi_fill_in_header</code></a> / <code>fill_in_request_body</code>: 構造体の各フィールドを安全に初期化。</li>
+</ul>
+<h3>環境変数エンコード</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_encoded_env_len.html&quot;}, '*');"><code>ap_fcgi_encoded_env_len</code></a>: 指定されたバッファサイズ内に収まる環境変数の総バイト数を計算し、処理すべき要素のインデックスを更新。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_encode_env.html&quot;}, '*');"><code>ap_fcgi_encode_env</code></a>: <code>apr_table_t</code> から FastCGI 形式のバイトストリームへ変換。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ヘッダー処理**: <a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L81" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_fill_in_header.html&quot;}, '*');"><code>ap_fcgi_fill_in_header</code></a> でヘッダーを構築し、<a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L26" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_header_to_array.html&quot;}, '*');"><code>ap_fcgi_header_to_array</code></a> でバイト列に変換して送信バッファへコピーします。 2. **環境変数エンコード**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_encoded_env_len.html&quot;}, '*');"><code>ap_fcgi_encoded_env_len</code></a> を呼び出し、現在のバッファ容量でエンコード可能な要素数とバイト数を算出します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_encode_env.html&quot;}, '*');"><code>ap_fcgi_encode_env</code></a> がその範囲内で <code>apr_table_t</code> を走査し、キーと値の長さを FastCGI 形式（1バイトまたは4バイトの長さフィールド）でエンコードしてバッファに書き込みます。</li>
+<li><code>starting_elem</code> ポインタを介して、複数回にわたる分割送信の進捗を保持します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: Apache のコアデータ構造（<code>request_rec</code> 等）。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: コアモジュールの定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: エラーログ出力用。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_fcgi.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_fcgi.h.html&quot;}, '*');"><code>util_fcgi.h</code></a>: プロトコル定義と構造体宣言。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a>: 本ユーティリティの主要な利用者。FastCGI 通信のロジックが実装されています。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: 本ファイル内の関数はメモリの割り当てを行いません。呼び出し元が提供したバッファ（<code>unsigned char a[]</code> や <code>void *buffer</code>）に対して操作を行います。</li>
+<li>**境界条件**: <a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_encode_env.html&quot;}, '*');"><code>ap_fcgi_encode_env</code></a> は <code>APR_ENOSPC</code> を返し、バッファ不足を明示的に通知します。</li>
+<li>**レイアウト**: FastCGI の長さフィールドは、値が 127 を超える場合に 4 バイト（最上位ビットが 1）を使用する可変長エンコーディングを採用しており、<a class="wiki-source-link" href="../../source/server/util_fcgi.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_fcgi_c__ap_fcgi_encode_env.html&quot;}, '*');"><code>ap_fcgi_encode_env</code></a> 内でこのビット演算が行われています。</li>
+<li>**省略された領域**: FastCGI のパケット受信時のパディング処理や、ソケット I/O 自体は本ファイルには含まれていません。これらはプロトコル定義のサポートに特化しているためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_header_to_array.html" target="wiki-view"><code>ap_fcgi_header_to_array</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_header_from_array.html" target="wiki-view"><code>ap_fcgi_header_from_array</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_header_fields_from_array.html" target="wiki-view"><code>ap_fcgi_header_fields_from_array</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_begin_request_body_to_array.html" target="wiki-view"><code>ap_fcgi_begin_request_body_to_array</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_fill_in_header.html" target="wiki-view"><code>ap_fcgi_fill_in_header</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_fill_in_request_body.html" target="wiki-view"><code>ap_fcgi_fill_in_request_body</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_encoded_env_len.html" target="wiki-view"><code>ap_fcgi_encoded_env_len</code></a></li>
+<li><a href="../symbols/server__util_fcgi_c__ap_fcgi_encode_env.html" target="wiki-view"><code>ap_fcgi_encode_env</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/pyhttpd/nghttp.py.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/test/pyhttpd/nghttp.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/nghttp.py.html&quot;}, '*');">test/pyhttpd/nghttp.py</a></h1>
+<h2>概要</h2>
+<p><code>nghttp</code> コマンドラインツールを Python から制御し、HTTP/2 通信のテストを実行するためのラッパーモジュールです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/pyhttpd</code> サブシステムにおいて、HTTP/2 クライアントとしての振る舞いをシミュレートする役割を担います。主に <code>curl</code> モジュールと並び、サーバーのレスポンス検証やストリーム制御のテストに使用されます。</p>
+<h2>責務</h2>
+<ul>
+<li><code>nghttp</code> コマンドの引数生成と実行の抽象化。</li>
+<li><code>nghttp -v</code> 出力の解析による、HTTP/2 フレーム（HEADERS, <a class="wiki-source-link" href="../../../source/support/htcacheclean.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">DATA</a>, PUSH_PROMISE）の構造化。</li>
+<li>ファイルアップロードや POST リクエストのための、一時ファイルを用いたデータ準備。</li>
+<li>実行結果の <code>ExecResult</code> オブジェクトへの集約。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>Nghttp</code>: メインクラス。テスト対象の URL やオプションを管理し、実行を制御します。</li>
+<li><code>parse_output(btext)</code>: <code>nghttp</code> の冗長な出力を解析し、ストリームごとのヘッダーやボディを辞書形式で抽出する中核メソッドです。</li>
+<li><code>get_stream(streams, sid)</code>: ストリーム ID に基づき、解析中のストリーム状態を初期化または取得します。</li>
+<li><code>_run(args)</code>: <code>subprocess.run</code> を呼び出し、実行時間や結果をラップする低レベル実行メソッドです。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>Nghttp</code> インスタンスに実行パスや接続先を設定。 2. **実行**: <code>get</code>, <code>post_data</code>, <code>upload</code> 等のメソッドが <code>_raw</code> を呼び出し、<code>_baserun</code> を経由して <code>nghttp</code> を起動。 3. **解析**: <code>_raw</code> は <code>parse_output</code> を呼び出し、<code>nghttp</code> の標準出力（バイト列）を正規表現で走査。 4. **構造化**: <code>parse_output</code> 内でストリームごとのヘッダーやデータ長を <code>streams</code> 辞書に蓄積し、最終的に <code>ExecResult</code> に付与して返却。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>re</code>: 出力解析のための正規表現処理。</li>
+<li><code>subprocess</code>: <code>nghttp</code> コマンドの外部実行。</li>
+<li><code>urllib.parse</code>: URL の分解と再構築。</li>
+<li><code>.result.ExecResult</code>: 実行結果の格納用データクラス。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/test/pyhttpd/result.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/result.py.html&quot;}, '*');"><code>test/pyhttpd/result.py</code></a>: 実行結果を保持する <code>ExecResult</code> クラスが定義されています。</li>
+<li><a class="wiki-source-link" href="../../../source/test/pyhttpd/curl.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/curl.py.html&quot;}, '*');"><code>test/pyhttpd/curl.py</code></a>: HTTP/1.1 や一般的な HTTP テストを行うための並行ツールです。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**解析の限界**: <code>parse_output</code> は正規表現ベースの簡易的なパーサーです。<code>nghttp</code> の出力形式が変更されると壊れやすいため、複雑なプロトコル検証には注意が必要です。</li>
+<li>**一時ファイル**: <code>post_data</code> や <code>upload_file</code> は <code>TMP_DIR</code> に一時ファイルを生成します。テスト実行環境の権限とクリーンアップに留意してください。</li>
+<li>**ストリームの識別**: HTTP/2 のストリーム ID を追跡しており、特に奇数 ID のメインストリームのレスポンスを優先的に抽出するロジックが含まれています。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

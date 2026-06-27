@@ -1,0 +1,85 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/win32/ApacheMonitor.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');">support/win32/ApacheMonitor.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');"><code>ApacheMonitor.c</code></a> は、Windows 上で Apache HTTP Server サービスを監視・管理するためのタスクトレイ常駐型 GUI アプリケーションです。サービスの状態（起動・停止・再起動）の制御、リモートサーバーへの接続、およびステータス表示を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support/win32</code> モジュールにおけるフロントエンド層として機能します。サービス管理の基盤となる Windows API（SCM: Service Control Manager）をラップし、ユーザーフレンドリーな対話インターフェースを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**サービス監視**: レジストリをスキャンして Apache サービスを特定し、定期的に状態をポーリングする。</li>
+<li>**サービス制御**: SCM を介したサービスの起動、停止、再起動の実行。</li>
+<li>**UI 管理**: タスクトレイアイコンの表示、サービス管理ダイアログの描画、およびリモート接続管理。</li>
+<li>**プロセス間通信**: 権限昇格が必要な操作のためのプロセス再起動（<code>runas</code>）および既存インスタンスの終了処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>サービス管理構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__ST_APACHE_SERVICE.html&quot;}, '*');"><code>ST_APACHE_SERVICE</code></a>: サービス名、表示名、パス、PID 等を保持する。</li>
+<li><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L85" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__ST_MONITORED_COMP.html&quot;}, '*');"><code>ST_MONITORED_COMP</code></a>: リモート監視対象のコンピュータ名とレジストリハンドルを保持する。</li>
+</ul>
+<h3>グローバル状態</h3>
+<ul>
+<li><code>g_stServices[]</code>, <code>g_stComputers[]</code>: 監視対象のサービスおよびコンピュータの配列。</li>
+<li><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');"><code>g_stcSection</code></a>: サービス状態更新時の競合を防ぐためのクリティカルセクション。</li>
+</ul>
+<h3>コア関数</h3>
+<ul>
+<li><code>ApacheManageService()</code>: SCM を使用してサービスを制御するメインロジック。</li>
+<li><code>GetApacheServicesStatus()</code>: レジストリを走査し、Apache サービスを列挙・更新する。</li>
+<li><code>am_RespawnAsUserAdmin()</code>: 権限不足時に管理者権限で自身を再起動する。</li>
+<li><code>WndProc()</code> / <code>ServiceDlgProc()</code>: メインウィンドウおよびサービス管理ダイアログのメッセージループ処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L1544" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__WinMain.html&quot;}, '*');"><code>WinMain</code></a> が OS バージョンを確認し、レジストリから監視対象をロードしてメインウィンドウを作成。 2. **監視ループ**: <code>WM_TIMER</code> メッセージにより定期的に <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L734" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__FindRunningServices.html&quot;}, '*');"><code>FindRunningServices</code></a> が呼び出され、サービス状態を更新。変更があれば <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L319" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__ShowNotifyIcon.html&quot;}, '*');"><code>ShowNotifyIcon</code></a> でトレイアイコンを更新。 3. **ユーザー操作**: ユーザーがダイアログで操作を行うと <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');"><code>WM_MANAGEMESSAGE</code></a> が発行され、<a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__ApacheManageService.html&quot;}, '*');"><code>ApacheManageService</code></a> が SCM を通じてサービスを制御。 4. **終了**: <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L1470" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__KillAllMonitors.html&quot;}, '*');"><code>KillAllMonitors</code></a> または <code>WM_QUIT</code> により、リソース（ハンドル、クリティカルセクション）を解放して終了。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>windows.h</code>, <code>WtsApi32.h</code>: Windows システムおよびターミナルサービス API。</li>
+<li><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.h.html&quot;}, '*');"><code>ApacheMonitor.h</code></a>: リソース ID 定義。</li>
+<li><code>commctrl.h</code>, <code>shlobj.h</code>: UI コンポーネントおよびシェル機能。</li>
+<li><code>objbase.h</code></li>
+<li><code>stdio.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>tchar.h</code></li>
+<li><code>windowsx.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.h.html&quot;}, '*');"><code>support/win32/ApacheMonitor.h</code></a>: UI リソース定義（IDD, IDS, IDM 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/support/win32/wintty.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/wintty.c.html&quot;}, '*');"><code>support/win32/wintty.c</code></a>: コンソール関連の補助機能。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L122" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__am_ClearServicesSt.html&quot;}, '*');"><code>am_ClearServicesSt</code></a> および <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__am_ClearComputersSt.html&quot;}, '*');"><code>am_ClearComputersSt</code></a> で動的に確保された文字列（<code>_tcsdup</code>）を解放します。終了処理でのメモリリークには注意が必要です。</li>
+<li>**権限**: サービス制御には管理者権限が必要です。権限がない場合、<a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L222" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__am_RespawnAsUserAdmin.html&quot;}, '*');"><code>am_RespawnAsUserAdmin</code></a> が <code>ShellExecute</code> で <code>runas</code> を呼び出し、昇格を試みます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');"><code>MAX_APACHE_SERVICES</code></a> (128) および <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');"><code>MAX_APACHE_COMPUTERS</code></a> (32) の固定長配列を使用しているため、大規模な環境では制限を受ける可能性があります。</li>
+<li>**未実装/浅い部分**: ネットワークブラウズ機能は <code>SHBrowseForFolder</code> に依存しており、環境によっては動作が不安定になる可能性があります。また、エラーハンドリングは <a class="wiki-source-link" href="../../../source/support/win32/ApacheMonitor.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__win32__ApacheMonitor_c__ErrorMessage.html&quot;}, '*');"><code>ErrorMessage</code></a> 関数に集約されていますが、一部のレジストリ操作は簡略化されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ST_APACHE_SERVICE.html" target="wiki-view"><code>ST_APACHE_SERVICE</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ST_MONITORED_COMP.html" target="wiki-view"><code>ST_MONITORED_COMP</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ErrorMessage.html" target="wiki-view"><code>ErrorMessage</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__GetStringRes.html" target="wiki-view"><code>GetStringRes</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__GetSystemOSVersion.html" target="wiki-view"><code>GetSystemOSVersion</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ShowNotifyIcon.html" target="wiki-view"><code>ShowNotifyIcon</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ShowTryPopupMenu.html" target="wiki-view"><code>ShowTryPopupMenu</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ShowTryServicesMenu.html" target="wiki-view"><code>ShowTryServicesMenu</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__CenterWindow.html" target="wiki-view"><code>CenterWindow</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__ApacheManageService.html" target="wiki-view"><code>ApacheManageService</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__IsServiceRunning.html" target="wiki-view"><code>IsServiceRunning</code></a></li>
+<li><a href="../../symbols/support__win32__ApacheMonitor_c__CreateMainWindow.html" target="wiki-view"><code>CreateMainWindow</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

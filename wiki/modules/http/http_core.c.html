@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http/http_core.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_core.c.html&quot;}, '*');">modules/http/http_core.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_core.c.html&quot;}, '*');"><code>http_core.c</code></a> は、Apache HTTP Server における HTTP プロトコル処理の基盤となるモジュールです。接続のライフサイクル管理、HTTP 固有のフィルタチェーンの構築、および MPM（Multi-Processing Module）との連携を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> ディレクトリにおける「HTTP プロトコルスタックの入口」として機能します。他のフィルタ（<code>byterange</code>, <code>chunk</code> 等）を登録し、接続が確立された後のリクエスト処理フローを制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続処理のディスパッチ**: MPM の特性（同期/非同期）に応じた接続処理関数の切り替え。</li>
+<li>**HTTP フィルタの管理**: HTTP プロトコルに必要なフィルタ（入力フィルタ、ヘッダーフィルタ、チャンクフィルタ等）の登録とリクエストへの適用。</li>
+<li>**設定管理**: <code>KeepAlive</code> 関連のディレクティブ（Timeout, MaxRequests）の解析とサーバー設定への反映。</li>
+<li>**フックの提供**: <code>post_config</code> や <code>process_connection</code> などの主要なサーバーライフサイクルイベントへの介入。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタハンドル (Public Data)</h3>
+<ul>
+<li><code>ap_http_input_filter_handle</code>: リクエストボディの読み込み用。</li>
+<li><code>ap_http_header_filter_handle</code>: HTTP レスポンスヘッダーの生成用。</li>
+<li><code>ap_chunk_filter_handle</code>: チャンク転送エンコーディング用。</li>
+<li><code>ap_http_outerror_filter_handle</code>: エラー発生時のレスポンス処理用。</li>
+<li><code>ap_byterange_filter_handle</code>: バイトレンジリクエストの処理用。</li>
+</ul>
+<h3>接続処理関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_core_c__ap_process_http_connection.html&quot;}, '*');"><code>ap_process_http_connection</code></a>: MPM の種類に応じて同期/非同期処理を振り分けるエントリポイント。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html#L135" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_core_c__ap_process_http_async_connection.html&quot;}, '*');"><code>ap_process_http_async_connection</code></a>: 非同期 MPM 用のステートマシン駆動処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html#L180" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_core_c__ap_process_http_sync_connection.html&quot;}, '*');"><code>ap_process_http_sync_connection</code></a>: 同期 MPM 用のループベースの処理。</li>
+</ul>
+<h3>設定・初期化</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html#L102" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_core.c.html&quot;}, '*');"><code>http_cmds</code></a>: <code>KeepAlive</code>, <code>KeepAliveTimeout</code>, <code>MaxKeepAliveRequests</code> を定義するコマンドテーブル。</li>
+<li><code>register_hooks</code>: モジュールのフック登録およびフィルタの登録を行うメイン関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> が起動時に呼ばれ、フィルタの登録と MPM の非同期サポート状況（<code>async_mpm</code>）を確認します。 2. **接続開始**: <a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_core_c__ap_process_http_connection.html&quot;}, '*');"><code>ap_process_http_connection</code></a> が呼ばれ、MPM の特性に基づき <code>sync</code> または <code>async</code> の処理関数へ分岐します。 3. **リクエスト処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/server/protocol.c.html#L1423" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__protocol_c__ap_read_request.html&quot;}, '*');"><code>ap_read_request</code></a> でリクエストを解析。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html#L253" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_core_c__http_create_request.html&quot;}, '*');"><code>http_create_request</code></a> フックにより、必要な出力フィルタがリクエストのフィルタスタックに追加されます。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L480" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_process_request.html&quot;}, '*');"><code>ap_process_request</code></a> を通じてリクエストのハンドラが実行されます。</li>
+<p>4. **終了処理**: 非同期モードでは <code>CONN_STATE_LINGER</code> への遷移、同期モードではループによる <code>Keep-Alive</code> 継続判定が行われます。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>: サーバーコアの基本構造。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: リクエスト処理のインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: フィルタチェーン操作用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: MPM の状態取得用。</li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>util_ebcdic.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>modules/http/http_protocol.c</code></a>: <a class="wiki-source-link" href="../../../source/server/protocol.c.html#L1423" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__protocol_c__ap_read_request.html&quot;}, '*');"><code>ap_read_request</code></a> や <a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L480" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_process_request.html&quot;}, '*');"><code>ap_process_request</code></a> の実装詳細。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>: 各フィルタの実体（<a class="wiki-source-link" href="../../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>include/http_core.h</code></a>: 本ファイルの対となるヘッダー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L480" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_process_request.html&quot;}, '*');"><code>ap_process_request</code></a> 呼び出し後、リクエストプールは破棄されるため、関数内で <code>r = NULL</code> とすることで解放後の不正アクセスを防止する防御的プログラミングがなされています。</li>
+<li>**非同期 MPM**: <code>async_mpm</code> 変数は <code>post_config</code> で決定されます。非同期対応の MPM（<code>event</code> など）では、接続状態（<a class="wiki-source-link" href="../../../source/include/httpd.h.html#L824" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__httpd_h__conn_state_t.html&quot;}, '*');"><code>conn_state_t</code></a>）を介してステートマシンが駆動されます。</li>
+<li>**省略された詳細**: 本ファイルはフィルタの「登録」と「接続の振り分け」に特化しており、個々のフィルタの具体的なロジック（バイトレンジの計算やチャンクのエンコード）は各フィルタ専用のソースファイルに委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__http_core_c__set_keep_alive_timeout.html" target="wiki-view"><code>set_keep_alive_timeout</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__set_keep_alive.html" target="wiki-view"><code>set_keep_alive</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__set_keep_alive_max.html" target="wiki-view"><code>set_keep_alive_max</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__http_scheme.html" target="wiki-view"><code>http_scheme</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__http_port.html" target="wiki-view"><code>http_port</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__ap_process_http_async_connection.html" target="wiki-view"><code>ap_process_http_async_connection</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__ap_process_http_sync_connection.html" target="wiki-view"><code>ap_process_http_sync_connection</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__ap_process_http_connection.html" target="wiki-view"><code>ap_process_http_connection</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__http_create_request.html" target="wiki-view"><code>http_create_request</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__http_send_options.html" target="wiki-view"><code>http_send_options</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__http_post_config.html" target="wiki-view"><code>http_post_config</code></a></li>
+<li><a href="../../symbols/modules__http__http_core_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

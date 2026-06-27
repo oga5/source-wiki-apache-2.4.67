@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/modules__dav__fs.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/dav/fs</h1>
+<h2>システム内での役割</h2>
+<p><code>modules/dav/fs</code> は、Apache HTTP Server の <code>mod_dav</code> モジュールに対し、ローカルファイルシステムを WebDAV リポジトリとして公開するためのバックエンド実装です。このモジュールはディレクトリ境界に基づいて構成されており、ファイルシステム上の実体と WebDAV リソースの橋渡しを行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リポジトリ提供**: ファイルシステム上のパスを WebDAV リソースとして抽象化し、読み書きやディレクトリ走査を可能にする。</li>
+<li>**メタデータ管理**: ファイルやディレクトリに付随する WebDAV プロパティ（Dead Properties）を DBM 形式で永続化する。</li>
+<li>**ロック管理**: <code>DAVLockDB</code> を介したリソースのロック状態（直接ロックおよび間接ロック）の管理と永続化。</li>
+<li>**モジュール統合**: <code>mod_dav</code> が要求するフックインターフェースを実装し、Apache の設定と連携させる。</li>
+</ul>
+<h2>このモジュールのファイル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a>: プロパティ管理のための DBM データベース操作層。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>: ロック情報の永続化と解決ロジック。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/mod_dav_fs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/mod_dav_fs.c.html&quot;}, '*');"><code>modules/dav/fs/mod_dav_fs.c</code></a>: モジュールのエントリポイントおよび設定管理。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>: リポジトリ操作のメイン実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.h.html&quot;}, '*');"><code>modules/dav/fs/repos.h</code></a>: 公開 API およびインターフェース定義。</li>
+</ul>
+<h2>主要なデータ構造</h2>
+<ul>
+<li>**リポジトリ/リソース**: <code>dav_resource_private</code>, <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_walker_context.html&quot;}, '*');"><code>dav_fs_walker_context</code></a></li>
+<li>**ロック関連**: <code>dav_lockdb_combined</code>, <code>dav_lock_discovery</code>, <code>dav_lock_indirect</code>, <code>dav_locktoken</code></li>
+<li>**DBM/プロパティ**: <code>dav_db</code>, <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L279" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_propdb_metadata.html&quot;}, '*');"><code>dav_propdb_metadata</code></a></li>
+</ul>
+<h2>主なフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/modules/dav/fs/mod_dav_fs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/mod_dav_fs.c.html&quot;}, '*');"><code>mod_dav_fs.c</code></a> が <code>DAVLockDB</code> 設定を読み込み、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L2276" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_register.html&quot;}, '*');"><code>dav_fs_register</code></a> を通じて <code>mod_dav</code> にプロバイダーを登録する。 2. **リソース解決**: <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>repos.c</code></a> がリクエストパスを物理パスへ変換し、<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_resource.html&quot;}, '*');"><code>dav_resource</code></a> を構築する。 3. **プロパティ/ロック操作**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>dbm.c</code></a> および <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>lock.c</code></a> が <code>.DAV</code> ディレクトリ内の DBM ファイルを操作し、メタデータやロック状態の読み書きを行う。 4. **ディレクトリ走査**: <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>repos.c</code></a> が再帰的にファイルシステムを探索し、各リソースに対してコールバックを実行する。</p>
+<h2>外部依存</h2>
+<ul>
+<li>**APR**: <code>apr_dbm.h</code>, <code>apr_file_io.h</code>, <code>apr_strings.h</code>, <code>apr_uuid.h</code> 等</li>
+<li>**Apache HTTPD**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li>**DAV**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>mod_dav.h</code></a></li>
+</ul>
+<h2>内部構成</h2>
+<p>本モジュールは <code>mod_dav</code> のプロバイダーとして機能する単一のサブシステムであり、内部にサブモジュールは持ちません。</p>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.h.html&quot;}, '*');"><code>modules/dav/fs/repos.h</code></a> (インターフェースの理解) 2. <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a> (リポジトリ操作の核心) 3. <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> (ロック管理の詳細) 4. <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a> (メタデータ永続化の仕組み) 5. <a class="wiki-source-link" href="../../source/modules/dav/fs/mod_dav_fs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/mod_dav_fs.c.html&quot;}, '*');"><code>modules/dav/fs/mod_dav_fs.c</code></a> (モジュール構成と設定)</p>
+<h2>未解決の問い</h2>
+<ul>
+<li>DBM 操作における並行書き込み時の再試行ロジックの欠如が示唆されており、高負荷時の整合性保証について精緻化が必要。</li>
+<li><code>COPY</code>/<code>MOVE</code> 操作におけるファイルとプロパティの不整合リスクに対する堅牢性の検証。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

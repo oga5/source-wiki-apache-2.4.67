@@ -1,0 +1,82 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/suexec.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.c.html&quot;}, '*');">support/suexec.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/support/suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.c.html&quot;}, '*');"><code>suexec.c</code></a> は、Apache HTTP Server において CGI プログラムを特定のユーザー権限で安全に実行するためのラッパープログラムです。特権（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>）で動作する親プロセスから呼び出され、環境変数のクリーンアップ、ユーザー/グループの検証、ファイルシステムのパーミッションチェックを経て、最終的に <code>execv</code> でターゲットプログラムへ制御を移します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールにおけるセキュリティの要であり、Web サーバーの実行ユーザー（<a class="wiki-source-link" href="../../source/support/suexec.h.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_HTTPD_USER</code></a>）と、CGI を実行するターゲットユーザーの間の仲介役を果たします。</p>
+<h2>責務</h2>
+<ul>
+<li>**環境の隔離**: <code>clean_env()</code> を通じて、安全な環境変数のみを保持し、攻撃の踏み台となる変数を排除する。</li>
+<li>**権限の検証**: 実行元ユーザーが許可されたユーザーであるか、ターゲットユーザー/グループがシステム上で有効かを確認する。</li>
+<li>**セキュリティポリシーの強制**: 実行対象のファイルおよびディレクトリが、他者による書き込み権限を持たないこと、および所有者がターゲットユーザーと一致することを厳格に検証する。</li>
+<li>**監査ログ**: 実行成功および失敗の履歴を <code>syslog</code> または指定されたログファイルに記録する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>環境管理</h3>
+<ul>
+<li><code>clean_env()</code>: <code>environ</code> をリセットし、<a class="wiki-source-link" href="../../source/support/suexec.c.html#L91" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.c.html&quot;}, '*');"><code>safe_env_lst</code></a> に定義されたホワイトリストに基づき環境変数を再構築する。</li>
+<li><a class="wiki-source-link" href="../../source/support/suexec.c.html#L91" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.c.html&quot;}, '*');"><code>safe_env_lst</code></a>: 許可される環境変数の接頭辞および完全一致リスト。</li>
+</ul>
+<h3>ログ出力</h3>
+<ul>
+<li><code>log_err()</code> / <code>log_no_err()</code>: エラーおよび通常のトランザクションを記録するラッパー。</li>
+<li><code>err_output()</code>: <code>syslog</code> またはファイルへの書き込みを行う実体。</li>
+</ul>
+<h3>メイン処理</h3>
+<ul>
+<li><code>main()</code>: 引数の解析、ユーザー権限の切り替え（<code>setuid</code>/<code>setgid</code>）、ファイルシステムの検証、<code>execv</code> によるプロセス置換を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>clean_env()</code> で環境変数を最小化。 2. **検証**: <code>getuid()</code> で実行元を確認し、<code>getpwnam()</code> / <code>getgrnam()</code> でターゲットの UID/GID を解決。 3. **権限降格**: <code>setgid()</code> / <code>initgroups()</code> / <code>setuid()</code> を順に呼び出し、ターゲットユーザーへ権限を移行。 4. **パス検証**: <code>getcwd()</code> と <code>chdir()</code> を駆使して、実行対象が <a class="wiki-source-link" href="../../source/support/suexec.h.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_DOC_ROOT</code></a> 内に存在し、かつシンボリックリンク攻撃を受けていないかを <code>lstat()</code> で確認。 5. **実行**: <code>execv()</code> を呼び出し、現在のプロセスイメージをターゲットプログラムで置換。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/suexec.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>suexec.h</code></a>: コンパイル時の定数（<a class="wiki-source-link" href="../../source/support/suexec.h.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_HTTPD_USER</code></a>, <a class="wiki-source-link" href="../../source/support/suexec.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_UID_MIN</code></a> 等）を定義。</li>
+<li><code>pwd.h</code>, <code>grp.h</code>: ユーザーおよびグループ情報の取得。</li>
+<li><code>sys/stat.h</code>: ファイルのパーミッションおよび所有権の検証。</li>
+<li><code>unistd.h</code>: プロセス制御（<code>setuid</code>, <code>execv</code> 等）。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>fcntl.h</code></li>
+<li><code>stdarg.h</code></li>
+<li><code>stdio.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>string.h</code></li>
+<li><code>sys/param.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>syslog.h</code></li>
+<li><code>time.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/suexec.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>support/suexec.h</code></a>: このプログラムの挙動を制御する設定値の定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a>: Apache 本体の CGI 実行ロジック（<a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>suexec</code></a> との連携点）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>strdup()</code> で確保された文字列は、プログラム終了（<code>execv</code>）まで保持されます。<code>calloc</code> された環境変数バッファは <code>environ</code> に代入されます。</li>
+<li>**セキュリティ不変条件**: 実行対象のディレクトリおよびファイルは、グループや他者による書き込み権限（<code>S_IWGRP</code>, <code>S_IWOTH</code>）があってはなりません。また、<code>setuid</code>/<code>setgid</code> ビットが立っているファイルは拒否されます。</li>
+<li>**エッジケース**: <code>~userdir</code> リクエスト時は、<a class="wiki-source-link" href="../../source/support/suexec.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_USERDIR_SUFFIX</code></a> を用いてホームディレクトリ配下を探索します。</li>
+<li>**省略された詳細**: <code>_OSD_POSIX</code>（BS2000/OSD）固有の環境構築ロジックは、一般的な Unix 環境では使用されないため、詳細な解析からは除外しています。</li>
+<li>**警告**: このコードはセキュリティの境界線であるため、修正には極めて慎重な検討が必要です。<code>execv</code> 後の失敗は <code>exit(255)</code> で終了します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__suexec_c__log_err.html" target="wiki-view"><code>log_err</code></a></li>
+<li><a href="../symbols/support__suexec_c__log_no_err.html" target="wiki-view"><code>log_no_err</code></a></li>
+<li><a href="../symbols/support__suexec_c__clean_env.html" target="wiki-view"><code>clean_env</code></a></li>
+<li><a href="../symbols/support__suexec_c__main.html" target="wiki-view"><code>main</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

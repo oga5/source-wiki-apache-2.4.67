@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/md/md_cert_util.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/md/md_cert_util.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/md_cert_util.py.html&quot;}, '*');">test/modules/md/md_cert_util.py</a></h1>
+<h2>概要</h2>
+<p><code>MDCertUtil</code> クラスを提供するテストユーティリティモジュールです。主に、テスト環境における証明書の読み込み、検証、および属性抽出を簡素化するために設計されています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/md</code> サブシステムにおいて、証明書に関連するテストケース（<a class="wiki-source-link" href="../../../../source/test/modules/md/test_800_must_staple.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/test_800_must_staple.py.html&quot;}, '*');"><code>test_800_must_staple.py</code></a> や <a class="wiki-source-link" href="../../../../source/test/modules/md/test_810_ec.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/test_810_ec.py.html&quot;}, '*');"><code>test_810_ec.py</code></a> など）が、証明書の内容をプログラム的に検証するための共通基盤として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**証明書の取得と読み込み**: ファイルシステム、またはリモートURLからの証明書データのロード。</li>
+<li>**属性の抽出**: シリアル番号、有効期限（NotBefore/NotAfter）、SANリスト、Must Staple 拡張の有無などの解析。</li>
+<li>**検証機能**: 秘密鍵と証明書の整合性チェック、および秘密鍵自体の妥当性検証。</li>
+<li>**TLSハンドシェイク**: 稼働中のサーバーから直接証明書を取得する機能。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>MDCertUtil</code>: 本モジュールの中心となるクラス。証明書オブジェクトをラップし、各種ユーティリティメソッドを提供します。</li>
+<li><code>load_server_cert()</code>: サーバーのIP/ポートを指定してTLSハンドシェイクを行い、サーバーが提示する証明書を直接取得します。</li>
+<li><code>validate_cert_matches_priv_key()</code>: 証明書と秘密鍵のペアが一致するかを検証します。</li>
+<li><code>get_san_list()</code>: 証明書内の Subject Alternative Name を解析し、リストとして返します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>MDCertUtil</code> はファイルパスまたは <code>OpenSSL.crypto.X509</code> オブジェクトを受け取ります。ファイルパスの場合はバイナリとして読み込み、PEM/ASN1形式を試行してデコードします。 2. **属性アクセス**: <code>get_not_before()</code> 等のメソッドは、内部の <code>OpenSSL</code> オブジェクトからデータを取得し、<code>_parse_tsp()</code> を経由して Python の <code>datetime</code> オブジェクトに変換します。 3. **検証フロー**: <code>validate_cert_matches_priv_key()</code> は、一時的な <code>SSL.Context</code> を作成し、証明書と秘密鍵をロードして <code>check_privatekey()</code> を呼び出すことで整合性を確認します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>OpenSSL</code> (PyOpenSSL): 証明書のパース、TLSハンドシェイク、暗号学的検証の主要エンジン。</li>
+<li><code>cryptography.x509</code>: シリアル番号の型判定に使用。</li>
+<li><code>http.client</code> / <code>urllib.parse</code>: リモート証明書の取得用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/md/md_certs.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/md_certs.py.html&quot;}, '*');"><code>test/modules/md/md_certs.py</code></a>: 証明書管理に関連する高レベルなロジックが含まれており、本ユーティリティと組み合わせて使用されることが多いです。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/md/test_801_stapling.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/test_801_stapling.py.html&quot;}, '*');"><code>test/modules/md/test_801_stapling.py</code></a>: <code>get_must_staple()</code> メソッドの利用例として参照できます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本クラスは PyOpenSSL に強く依存しています。証明書の解析において、一部の属性（SANやMust Staple）は <code>dump_certificate</code> でテキスト化した後に正規表現で抽出するという、やや力技のアプローチをとっています。</li>
+<li><code>_parse_tsp</code> メソッドは、PyOpenSSL が返すバイト列形式のタイムスタンプを解釈するために実装されています。タイムゾーンの扱いに注意してください。</li>
+<li>サーバーへの接続テストを行う際は、ネットワーク環境やタイムアウト設定に依存するため、テスト実行時の環境設定に留意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

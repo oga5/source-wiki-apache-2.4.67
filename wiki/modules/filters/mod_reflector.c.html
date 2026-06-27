@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_reflector.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_reflector.c.html&quot;}, '*');">modules/filters/mod_reflector.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_reflector.c.html&quot;}, '*');"><code>mod_reflector.c</code></a> は、受信したリクエストのボディをそのままレスポンスとしてクライアントに送り返す（リフレクションする）ための Apache HTTP Server モジュールです。主にテストやデバッグ、あるいは特定のプロトコル変換のプロトタイプ作成に使用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> ディレクトリに属する他のフィルタモジュールがコンテンツの変換（圧縮や置換など）を行うのに対し、本モジュールは「入力ストリームをそのまま出力ストリームへ転送する」という極めてシンプルなパイプラインを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストの反射**: <code>POST</code> リクエストのボディを読み取り、そのままレスポンスボディとして書き出す。</li>
+<li>**ヘッダーの転送**: 設定されたルールに基づき、リクエストヘッダーをレスポンスヘッダーにコピーする。</li>
+<li>**メタデータの管理**: <code>Content-Length</code> や <code>Content-Type</code> などの主要なヘッダーをリクエストから引き継ぎ、レスポンスの整合性を保つ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reflector_c__reflector_handler.html&quot;}, '*');"><code>reflector_handler</code></a>: モジュールのメインロジック。リクエストを処理し、バケットブリゲードを介してデータを転送する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reflector_c__reflector_cfg.html&quot;}, '*');"><code>reflector_cfg</code></a>: ディレクトリ単位の設定を保持する構造体。反射させるヘッダーのペアを管理する。</li>
+<li><code>ReflectorHeader</code>: 設定ディレクティブ。リクエストヘッダーをレスポンスヘッダーにマッピングするルールを定義する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ハンドラ起動**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reflector_c__reflector_handler.html&quot;}, '*');"><code>reflector_handler</code></a> が <a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html#L223" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_reflector.c.html&quot;}, '*');"><code>reflector</code></a> ハンドラを持つリクエストを捕捉。 2. **ヘッダー処理**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_reflector.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reflector_c__header_do.html&quot;}, '*');"><code>header_do</code></a> を介して、設定されたリクエストヘッダーをレスポンスヘッダーへコピー。 3. **ストリーム処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を使用して入力フィルタからデータを読み取る。</li>
+<li>読み取ったバケットを <code>bbout</code> ブリゲードに書き込む。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を呼び出し、出力フィルタへデータを渡す。</li>
+<p>4. **終了**: <code>EOS</code> (End of Stream) バケットを検出するまでループし、完了後に <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> を返す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache のコア機能およびリクエスト処理用。</li>
+<li><code>apr_strings.h</code>, <code>apr_tables.h</code>: APR (Apache Portable Runtime) の文字列操作およびテーブル管理用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>modules/filters/mod_filter.c</code></a>: Apache のフィルタチェーン管理の基盤。本モジュールがフィルタとしてどのように統合されるかを理解する上で重要。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_buffer.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_buffer.c.html&quot;}, '*');"><code>modules/filters/mod_buffer.c</code></a>: データをバッファリングする手法の参考として有用。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは <code>POST</code> メソッドのみをサポートしています。他のメソッドに対する挙動は <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L517" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_METHOD_NOT_ALLOWED</code></a> を返します。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> と <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を使用したストリーミング処理の典型的な実装例です。バケットのメタデータ（<code>length == 0</code>）のスキップや <code>EOS</code> の判定など、フィルタ開発の定石が記述されています。</li>
+<li><code>ReflectorHeader</code> ディレクティブを使用する際は、リクエストヘッダー名とレスポンスヘッダー名を指定可能です。デバッグ用途で特定の情報をエコーバックさせる際に非常に強力です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__reflector_cfg.html" target="wiki-view"><code>reflector_cfg</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__header_do.html" target="wiki-view"><code>header_do</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__reflector_handler.html" target="wiki-view"><code>reflector_handler</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__create_reflector_dir_config.html" target="wiki-view"><code>create_reflector_dir_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__merge_reflector_dir_config.html" target="wiki-view"><code>merge_reflector_dir_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__reflector_header.html" target="wiki-view"><code>reflector_header</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reflector_c__reflector_hooks.html" target="wiki-view"><code>reflector_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

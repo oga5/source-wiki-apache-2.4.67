@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_filter.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');">server/util_filter.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のフィルタチェーン機構を実装するコアモジュールです。HTTP リクエストおよびレスポンスの処理過程において、データを変換・加工するフィルタの登録、管理、およびチェーンへの挿入・実行を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> で定義されたフィルタインターフェースの実装を提供します。フィルタは <code>request_rec</code> や <code>conn_rec</code> に紐付き、データ（バケットブリゲード）を順次処理するパイプラインを形成します。</p>
+<h2>責務</h2>
+<ul>
+<li>**フィルタ登録**: フィルタ名とコールバック関数をトライ木構造で管理し、名前解決を高速化する。</li>
+<li>**チェーン管理**: フィルタの優先度（<code>ftype</code>）に基づき、適切な位置へフィルタを挿入・削除する。</li>
+<li>**データ転送**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> および <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を通じて、フィルタ間でバケットブリゲードを伝播させる。</li>
+<li>**ユーティリティ**: フィルタ内での文字列出力、フラッシュ処理、ブリゲードの退避（<code>setaside</code>）などの補助機能を提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタ管理・登録</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L143" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>registered_output_filters</code></a> / <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L144" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>registered_input_filters</code></a>: フィルタ名を保持するトライ木のルート。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L257" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_register_output_filter.html&quot;}, '*');"><code>ap_register_output_filter</code></a> / <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L246" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_register_input_filter.html&quot;}, '*');"><code>ap_register_input_filter</code></a>: フィルタをシステムに登録する。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_output_filter_handle.html&quot;}, '*');"><code>ap_get_output_filter_handle</code></a> / <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_input_filter_handle.html&quot;}, '*');"><code>ap_get_input_filter_handle</code></a>: 名前からフィルタ定義（<code>ap_filter_rec_t</code>）を取得する。</li>
+</ul>
+<h3>チェーン操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L427" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_add_output_filter.html&quot;}, '*');"><code>ap_add_output_filter</code></a> / <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L409" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_add_input_filter.html&quot;}, '*');"><code>ap_add_input_filter</code></a>: フィルタをチェーンに追加する。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L475" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_remove_output_filter.html&quot;}, '*');"><code>ap_remove_output_filter</code></a> / <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L468" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_remove_input_filter.html&quot;}, '*');"><code>ap_remove_input_filter</code></a>: チェーンからフィルタを削除する。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L282" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__add_any_filter_handle.html&quot;}, '*');"><code>add_any_filter_handle</code></a>: フィルタの型（<code>ftype</code>）に基づき、適切な挿入位置を決定する内部関数。</li>
+</ul>
+<h3>データ処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a>: 入力フィルタチェーンからデータを読み込む。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a>: 出力フィルタチェーンへデータを渡す。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_save_brigade.html&quot;}, '*');"><code>ap_save_brigade</code></a>: フィルタがデータを保持するためにブリゲードをコピー・退避させる。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **登録**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__register_filter.html&quot;}, '*');"><code>register_filter</code></a> がフィルタ名をトライ木に格納し、<code>ap_filter_rec_t</code> を生成します。 2. **挿入**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L282" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__add_any_filter_handle.html&quot;}, '*');"><code>add_any_filter_handle</code></a> が <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>INSERT_BEFORE</code></a> マクロを使用して、フィルタの <code>ftype</code> に基づく順序でチェーンを構築します。 3. **実行**:</p>
+<ul>
+<li>出力の場合、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> が現在のフィルタの <code>out_func</code> を呼び出し、結果を次のフィルタへ渡します。</li>
+<li>入力の場合、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> が <code>in_func</code> を呼び出し、下位フィルタからデータを吸い上げます。</li>
+<p>4. **エラー**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L603" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade_fchk.html&quot;}, '*');"><code>ap_pass_brigade_fchk</code></a> は、フィルタエラーを検知し、ログ出力と HTTP ステータスコードへの変換を行います。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットブリゲード操作の基盤。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: 設定およびコアモジュールの定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: 公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>ap_hooks.h</code></a>: グローバルプール（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>FILTER_POOL</code></a>）の参照。</li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a>: 標準的なフィルタ（HTTP ヘッダ処理など）の実装。</li>
+<li><code>include/apr_buckets.h</code>: バケットのメモリ管理とライフサイクル。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: フィルタのコンテキストや構造体は、<code>ftype</code> に応じてリクエストプール（<code>r-&gt;pool</code>）またはコネクションプール（<code>c-&gt;pool</code>）に割り当てられます。</li>
+<li>**トライ木**: フィルタ名の検索はトライ木で行われ、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L71" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>TRIE_INITIAL_SIZE</code></a> で初期化されます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>INSERT_BEFORE</code></a> マクロは、フィルタの型（<code>ftype</code>）が小さいほどチェーンの先頭に近いという前提で順序を決定します。</li>
+<li>**省略**: 本ファイルはフィルタの「管理」と「伝播」に特化しており、個別のフィルタロジック（圧縮、チャンク化など）は含まれていません。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> 内で EOS（End of Stream）バケットを処理する際、リクエストの <code>eos_sent</code> フラグを更新する副作用があるため、フィルタの順序には注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_filter_c__filter_trie_node.html" target="wiki-view"><code>filter_trie_node</code></a></li>
+<li><a href="../symbols/server__util_filter_c__filter_trie_child_ptr.html" target="wiki-view"><code>filter_trie_child_ptr</code></a></li>
+<li><a href="../symbols/server__util_filter_c__trie_node_link.html" target="wiki-view"><code>trie_node_link</code></a></li>
+<li><a href="../symbols/server__util_filter_c__trie_node_alloc.html" target="wiki-view"><code>trie_node_alloc</code></a></li>
+<li><a href="../symbols/server__util_filter_c__filter_cleanup.html" target="wiki-view"><code>filter_cleanup</code></a></li>
+<li><a href="../symbols/server__util_filter_c__get_filter_handle.html" target="wiki-view"><code>get_filter_handle</code></a></li>
+<li><a href="../symbols/server__util_filter_c__ap_get_output_filter_handle.html" target="wiki-view"><code>ap_get_output_filter_handle</code></a></li>
+<li><a href="../symbols/server__util_filter_c__ap_get_input_filter_handle.html" target="wiki-view"><code>ap_get_input_filter_handle</code></a></li>
+<li><a href="../symbols/server__util_filter_c__register_filter.html" target="wiki-view"><code>register_filter</code></a></li>
+<li><a href="../symbols/server__util_filter_c__ap_register_input_filter.html" target="wiki-view"><code>ap_register_input_filter</code></a></li>
+<li><a href="../symbols/server__util_filter_c__ap_register_output_filter.html" target="wiki-view"><code>ap_register_output_filter</code></a></li>
+<li><a href="../symbols/server__util_filter_c__ap_get_brigade.html" target="wiki-view"><code>ap_get_brigade</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

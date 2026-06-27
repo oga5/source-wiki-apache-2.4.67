@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/create-mconfig-for-server.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>create_mconfig_for_server</h1>
+<h2>概念</h2>
+<p><code>create_mconfig_for_server</code> は、Apache HTTP Server のモジュール（<code>mod_suexec</code> や <code>mod_speling</code>）において、サーバーレベルの設定構造体を生成および初期化するためのコールバック関数です。各モジュールがサーバー設定フェーズで独自の設定データを保持するために使用されます。</p>
+<h2>なぜ重要か</h2>
+<p>Apache のモジュール構成において、メインサーバーやバーチャルホストごとに固有の設定（例: <code>mod_suexec</code> における <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.h.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_h__suexec_config_t.html&quot;}, '*');"><code>suexec_config_t</code></a>）を管理する必要があります。この関数は、Apache コアがモジュールのサーバー設定を初期化する際のフック（<code>create_server_config</code>）として登録され、適切なメモリプールから設定領域を確保・初期化する役割を担うため重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__generators.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__generators.html&quot;, &quot;source&quot;: &quot;source/modules/generators/cgi_common.h.html&quot;}, '*');"><code>module:modules/generators</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__mappers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__mappers.html&quot;, &quot;source&quot;: &quot;source/modules/mappers/mod_actions.c.html&quot;}, '*');"><code>module:modules/mappers</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__generators__mod_suexec_c__create_mconfig_for_server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_suexec_c__create_mconfig_for_server.html&quot;, &quot;source&quot;: &quot;source/modules/generators/mod_suexec.c.html#L45&quot;}, '*');"><code>symbol:modules/generators/mod_suexec.c#create_mconfig_for_server</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__mappers__mod_speling_c__create_mconfig_for_server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__create_mconfig_for_server.html&quot;, &quot;source&quot;: &quot;source/modules/mappers/mod_speling.c.html#L87&quot;}, '*');"><code>symbol:modules/mappers/mod_speling.c#create_mconfig_for_server</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. Apache HTTP Server の起動または設定読み込みフェーズにおいて、各モジュール（<code>suexec_module</code> や <code>speling_module</code>）のサーバー設定生成ハンドラとして本関数が呼び出されます。 2. 本関数は、引数としてメモリプール <code>apr_pool_t *p</code> とサーバーレコード <code>server_rec *s</code> を受け取ります。 3. 同一ファイル内で定義されている <code>mkconfig</code> 関数を呼び出し、メモリプール <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> を渡します。 4. <code>mkconfig</code> が生成・初期化した設定構造体へのポインタを、そのまま呼び出し元（Apache コア）へ返却します。</p>
+<p>※なお、Apache コアがこれらのフックを呼び出す全体的なエンドツーエンドの制御フローの詳細は、提供されたコンテキストからは完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**メモリプールの有効性**: 引数として渡される <code>apr_pool_t *p</code> は有効なメモリプールでなければなりません。</li>
+<li>**<code>mkconfig</code> の依存性**: 同一ファイル内で定義されている <code>mkconfig</code> 関数が利用可能であり、正しく設定構造体を生成できる必要があります。</li>
+<li>**未使用の引数**: <code>server_rec *s</code> 引数は、Apache のモジュール API 規約（シグネチャ）を満たすために定義されていますが、現在の実装（<code>mod_suexec</code> および <code>mod_speling</code>）では使用されていません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**メモリ割り当て失敗時の挙動**: <code>mkconfig</code> 内部でのメモリ割り当てが失敗した場合、APR（Apache Portable Runtime）のメモリ管理規約に従い、通常はプロセスが終了するなどの致命的なエラーとして扱われます。</li>
+<li>**同名関数の混同**: <a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>mod_suexec.c</code></a> と <a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>mod_speling.c</code></a> の両方に同名の <code>static</code> 関数が存在しますが、これらはそれぞれ独立して定義されており、モジュール間で直接的な呼び出し関係はありません。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.c.html&quot;}, '*');"><code>modules/generators/mod_suexec.c</code></a>（<code>create_mconfig_for_server</code> 定義および <code>mkconfig</code> の実装）</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>modules/mappers/mod_speling.c</code></a>（<code>create_mconfig_for_server</code> 定義および <code>mkconfig</code> の実装）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

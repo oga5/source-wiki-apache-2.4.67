@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__util_script_c__ap_scan_script_header_err_core_ex.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_script.c.html#L482" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_core_ex.html&quot;}, '*');">ap_scan_script_header_err_core_ex</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/util_script.c:482</code></li>
+</ul>
+<h2>目的</h2>
+<p>CGI スクリプトの出力を読み取り、HTTP ヘッダーとして解析・検証し、<code>request_rec</code> 構造体に反映させるコアエンジン。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>int ap_scan_script_header_err_core_ex(request_rec *r, char *buffer,
+                                       int (*getsfunc) (char *, int, void *),
+                                       void *getsfunc_data,
+                                       int module_index)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_buffer.c.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_buffer.c.html&quot;}, '*');"><code>buffer</code></a>: ヘッダー行を格納するバッファ（NULL の場合は内部スタック変数を使用）。</li>
+<li><code>getsfunc</code>: スクリプト出力を 1 行ずつ読み取るためのコールバック関数。</li>
+<li><code>getsfunc_data</code>: <code>getsfunc</code> に渡されるコンテキストデータ。</li>
+<li><code>module_index</code>: ログ出力に使用するモジュールインデックス。</li>
+<li>**出力**:</li>
+<li>成功時は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> または <a class="wiki-source-link" href="../../source/modules/http/http_protocol.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_protocol_c__ap_meets_conditions.html&quot;}, '*');"><code>ap_meets_conditions</code></a> の結果を返す。</li>
+<li>失敗時は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> または <a class="wiki-source-link" href="../../source/include/httpd.h.html#L543" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_GATEWAY_TIME_OUT</code></a> を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>すべての動的メモリ割り当ては <code>r-&gt;pool</code> を使用する。</li>
+<li><code>getsfunc</code> はスクリプト出力の終端（空行）までヘッダーを供給する必要がある。</li>
+<li><code>APR_CHARSET_EBCDIC</code> 定義環境下では、ASCII/EBCDIC の自動変換ロジックが介入する。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: ヘッダーマージ用テーブルおよび <code>Set-Cookie</code> 用テーブルを初期化。 2. **ループ処理**: <code>getsfunc</code> を使用してスクリプト出力を 1 行ずつ読み取る。</p>
+<ul>
+<li>読み取り失敗（<code>rv == 0</code>）は「ヘッダーの早期終了」、タイムアウト（<code>rv == -1</code>）は「ゲートウェイタイムアウト」として処理。</li>
+<li>行末の改行コード（CR/LF）を除去。</li>
+<p>3. **ヘッダー解析**:</p>
+<li>空行（<code>\0</code>）に到達した場合、<code>Status</code> ヘッダーの有無を確認し、<code>err_headers_out</code> をマージして終了。</li>
+<li><code>Content-type</code>, <code>Status</code>, <code>Location</code>, <code>Content-Length</code>, <code>Content-Range</code>, <code>Transfer-Encoding</code>, <code>ETag</code>, <code>Last-Modified</code>, <code>Set-Cookie</code> を個別に処理。</li>
+<li><code>Last-Modified</code> は日付の妥当性を検証し、必要に応じて更新。</li>
+<li>未知のヘッダーは <code>merge</code> テーブルに蓄積。</li>
+<p>4. **エラーハンドリング**: 不正なヘッダー形式（<code>:</code> が含まれない行）が検出された場合、エラーをログ出力し、スクリプト出力を読み切った後にエラーを返す。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>server/util_script.c</code></a> 内の <a class="wiki-source-link" href="../../source/server/util_script.c.html#L771" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err.html&quot;}, '*');"><code>ap_scan_script_header_err</code></a> 系関数群（<a class="wiki-source-link" href="../../source/server/util_script.c.html#L771" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err.html&quot;}, '*');"><code>ap_scan_script_header_err</code></a>, <a class="wiki-source-link" href="../../source/server/util_script.c.html#L778" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_ex</code></a>, <a class="wiki-source-link" href="../../source/server/util_script.c.html#L832" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade</code></a> など）。</li>
+<li>**呼び出し先**:</li>
+<li><code>getsfunc</code> コールバック関数。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/http_protocol.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_protocol_c__ap_meets_conditions.html&quot;}, '*');"><code>ap_meets_conditions</code></a>, <a class="wiki-source-link" href="../../source/include/http_log.h.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_rerror</code></a>, <code>apr_table_make</code>, <code>apr_table_do</code>, <code>apr_table_overlap</code>, <code>apr_table_overlay</code>, <code>apr_table_unset</code>, <code>apr_table_add</code>, <code>apr_table_set</code>, <a class="wiki-source-link" href="../../source/modules/http/http_protocol.c.html#L1093" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_protocol_c__ap_set_content_type.html&quot;}, '*');"><code>ap_set_content_type</code></a>, <a class="wiki-source-link" href="../../source/server/request.c.html#L2557" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_update_mtime.html&quot;}, '*');"><code>ap_update_mtime</code></a>, <a class="wiki-source-link" href="../../source/server/protocol.c.html#L2280" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__protocol_c__ap_set_last_modified.html&quot;}, '*');"><code>ap_set_last_modified</code></a>, <code>apr_date_parse_http</code>, <code>apr_date_parse_rfc</code> 等の APR/HTTPD API。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>request_rec</code>: リクエスト状態の保持。</li>
+<li><code>apr_table_t</code>: ヘッダー情報の管理に使用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**スクリプトの早期終了**: ヘッダーが出力される前にストリームが終了した場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> を返す。</li>
+<li>**タイムアウト**: <code>getsfunc</code> が <code>-1</code> を返した場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L543" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_GATEWAY_TIME_OUT</code></a> を返す。</li>
+<li>**不正なヘッダー**: <code>:</code> を含まない行が検出された場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> を返す。</li>
+<li>**無効な Status**: <code>Status</code> ヘッダーの値が HTTP 仕様に適合しない場合、ログ出力を行う。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はスクリプトの出力が完了するまでブロックする可能性がある。非同期 I/O が必要な場合は注意が必要。</li>
+<li><code>Set-Cookie</code> は他のヘッダーとマージせず、個別に保持・出力される仕様となっている。</li>
+<li><code>Last-Modified</code> の処理には GMT 変換や将来の日付に対するガードロジックが含まれている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

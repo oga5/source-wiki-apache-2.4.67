@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_ws_c__ws_handle_resp.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L197" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__ws_handle_resp.html&quot;}, '*');">ws_handle_resp</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_ws.c:197</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 上の WebSocket ハンドシェイクにおいて、バックエンドからのレスポンスを検査し、プロトコル変換の成否を判定してレスポンスバケットを書き換える。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void ws_handle_resp(conn_rec *c2, h2_conn_ctx_t *conn_ctx,
+                           struct ws_filter_ctx *ws_ctx, apr_bucket *b)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li><code>c2</code>: 処理対象の接続レコード。</li>
+<li><code>conn_ctx</code>: ストリームごとの接続コンテキスト。</li>
+<li><code>ws_ctx</code>: フィルタの実行状態を保持するコンテキスト。</li>
+<li><code>b</code>: 検査対象のレスポンスバケット。</li>
+<li>出力: 引数 <code>b</code> を介してレスポンスを置換し、<code>ws_ctx</code> および <code>conn_ctx</code> の状態を更新する。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>ws_ctx-&gt;has_final_response</code> が真の場合、本関数は何もせず終了する。</li>
+<li><code>Sec-WebSocket-Accept</code> ヘッダーの検証には、<code>ws_ctx-&gt;ws_accept_base64</code> に格納された期待値を使用する。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **レスポンス検査**: レスポンスステータスを確認する。 2. **101 Switching Protocols の処理**:</p>
+<ul>
+<li><code>Sec-WebSocket-Accept</code> ヘッダーが期待値と一致する場合、<a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__make_valid_resp.html&quot;}, '*');"><code>make_valid_resp</code></a> を呼び出し <code>200 OK</code> に変換する。</li>
+<li>一致しない場合、<a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__make_invalid_resp.html&quot;}, '*');"><code>make_invalid_resp</code></a> を呼び出し <code>502 Bad Gateway</code> に変換する。</li>
+<p>3. **エラー処理**: 200 未満のステータスは透過させ、200 以上 300 未満のステータスは <code>502 Bad Gateway</code> に変換する。 4. **バケット置換**: <code>b_override</code> が生成された場合、元のバケットを削除し、新しいバケットを挿入する。 5. **状態更新**: 最終レスポンスが確定した場合、<code>ws_ctx</code> および <code>conn_ctx</code> の <code>has_final_response</code> フラグを立てる。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>呼び出し元: <code>modules/http2/h2_ws.c:314</code> (出力フィルタ <code>h2_c2_ws_filter_out</code> 内)</li>
+<li>呼び出し先: <a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__make_valid_resp.html&quot;}, '*');"><code>make_valid_resp</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__make_invalid_resp.html&quot;}, '*');"><code>make_invalid_resp</code></a>, <code>apr_bucket_delete</code>, <code>APR_BUCKET_INSERT_BEFORE</code>, <code>APR_BUCKET_INSERT_AFTER</code>, <code>apr_bucket_eos_create</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>conn_rec</code>: Apache HTTPD の接続構造体。</li>
+<li><code>h2_conn_ctx_t</code>: HTTP/2 ストリームごとの接続コンテキスト。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L51" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__ws_filter_ctx.html&quot;}, '*');"><code>ws_filter_ctx</code></a>: WebSocket フィルタの実行状態（Accept キー、完了フラグ等）を保持。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>Sec-WebSocket-Accept</code> ヘッダーが欠落または不一致の場合、<code>502 Bad Gateway</code> を返し、<code>override_body</code> を設定して以降のボディを破棄する。</li>
+<li>101 以外の成功ステータス（2xx）が返された場合、WebSocket 接続として不適切とみなし <code>502 Bad Gateway</code> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>H2_C2_WS_OUT</code> フィルタの一部として動作する。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>AP_HAS_RESPONSE_BUCKETS</code></a> の定義有無により、レスポンスヘッダーの取得方法が分岐する。</li>
+<li>変換後のレスポンスは <code>c2-&gt;pool</code> を使用してメモリ管理される。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

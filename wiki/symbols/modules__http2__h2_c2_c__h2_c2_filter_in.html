@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_c2_c__h2_c2_filter_in.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_filter_in.html&quot;}, '*');">h2_c2_filter_in</a></h1>
+<h2>定義</h2>
+<ul>
+<li>**種別**: <code>function</code></li>
+<li>**定義箇所**: <code>modules/http2/h2_c2.c:181</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 セカンダリ接続（c2）におけるネットワーク入力フィルタとして機能し、<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> を介して HTTP/2 セッションから受信したデータを Apache の <code>apr_bucket_brigade</code> に変換して提供します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t h2_c2_filter_in(ap_filter_t* f,
+                             apr_bucket_brigade* bb,
+                             ap_input_mode_t mode,
+                             apr_read_type_e block,
+                             apr_off_t readbytes)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: </li>
+<li><code>f</code>: フィルタコンテキスト。</li>
+<li><code>bb</code>: データを格納するバケットブリゲード。</li>
+<li><code>mode</code>: 読み取りモード（<code>AP_MODE_READBYTES</code>, <code>AP_MODE_GETLINE</code> 等）。</li>
+<li><code>block</code>: ブロック読み取りの可否。</li>
+<li><code>readbytes</code>: 要求するバイト数。</li>
+<li>**出力**: </li>
+<li><code>bb</code>: 読み取られたデータが格納される。</li>
+<li>戻り値: <code>APR_SUCCESS</code>、<code>APR_EOF</code>、<code>APR_EAGAIN</code>、またはエラーコード。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>f-&gt;c</code> に <code>h2_conn_ctx_t</code> が関連付けられていること。</li>
+<li><code>fctx</code>（フィルタコンテキスト）が未初期化の場合は、初回呼び出し時に <code>f-&gt;c-&gt;pool</code> を使用して初期化される。</li>
+<li>接続がアボートされている場合、即座に <code>APR_ECONNABORTED</code> を返す。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: <code>AP_MODE_INIT</code> の場合は標準のフィルタチェーンへ委譲。 2. **コンテキスト準備**: <code>fctx</code> が存在しない場合、ブリゲードを作成し、<code>beam_in</code> が空であれば EOS バケットを挿入する。 3. **アップグレード処理**: HTTP Upgrade 時、初回読み取りで EOS を挿入し、リクエストボディの終了を通知する。 4. **データ受信**: <code>fctx-&gt;bb</code> が空の場合、<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_receive.html&quot;}, '*');"><code>h2_beam_receive</code></a> を呼び出して <code>beam_in</code> からデータを取得する。必要に応じて <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L1920" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_util_wait_on_pipe.html&quot;}, '*');"><code>h2_util_wait_on_pipe</code></a> で待機する。 5. **モード別処理**:</p>
+<ul>
+<li><code>AP_MODE_EXHAUSTIVE</code>: 全データを連結。</li>
+<li><code>AP_MODE_READBYTES</code> / <code>AP_MODE_SPECULATIVE</code>: 指定長分を連結またはコピー。</li>
+<li><code>AP_MODE_GETLINE</code>: <code>apr_brigade_split_line</code> を使用して行単位で抽出。</li>
+<p>6. **統計**: <code>h2_c_logio_add_bytes_in</code> が定義されていれば、受信バイト数を記録する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: Apache フィルタチェーン（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> 等を介して呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_receive.html&quot;}, '*');"><code>h2_beam_receive</code></a> (データ取得)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L1920" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_util_wait_on_pipe.html&quot;}, '*');"><code>h2_util_wait_on_pipe</code></a> (I/O 待機)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L1193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_brigade_concat_length.html&quot;}, '*');"><code>h2_brigade_concat_length</code></a> / <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L1228" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_brigade_copy_length.html&quot;}, '*');"><code>h2_brigade_copy_length</code></a> (データ操作)</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> (初期化時)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとのコンテキスト。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L176" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_fctx_in_t.html&quot;}, '*');"><code>h2_c2_fctx_in_t</code></a>: フィルタ固有の内部状態（ブリゲードやフラグを保持）。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>: ストリーム間のデータ転送用バッファ。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>APR_EAGAIN</code>: ノンブロッキング読み取りでデータがない場合に発生。</li>
+<li><code>APR_EOF</code>: ストリームの終了時に発生。</li>
+<li><code>AP_MODE_EATCRLF</code>: 未サポートのため <code>APR_ENOTIMPL</code> を返す。</li>
+<li>接続がアボートされている場合は <code>APR_ECONNABORTED</code> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>AP_MODE_GETLINE</code> はバケット分割を伴うため注意が必要。</li>
+<li><code>h2_c_logio_add_bytes_in</code> はオプションのフックであり、存在する場合のみ呼び出される。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_filter_in.html&quot;}, '*');"><code>h2_c2_filter_in</code></a> は <code>H2_C2_NET_IN</code> として登録されている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

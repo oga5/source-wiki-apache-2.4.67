@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__listen_c__open_listeners.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/listen.c.html#L548" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__open_listeners.html&quot;}, '*');">open_listeners</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/listen.c:548</code></li>
+</ul>
+<h2>目的</h2>
+<p>設定済みのリスナーリスト（<code>ap_listeners</code>）を走査し、各リスナーに対してソケットの作成、バインド、およびリスン状態への移行を行う。また、IPv6/IPv4 のバインド順序の最適化や、不要なリスナーの除外、マルチリスナー環境でのノンブロッキング設定を適用する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int open_listeners(apr_pool_t *pool)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>pool</code> (メモリ割り当て用の APR プール)</li>
+<li>**出力**: 成功時は <code>0</code>、失敗時は <code>-1</code> を返す。また、正常にオープンされたリスナーの総数が内部的にカウントされる。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>ap_listeners</code> は <code>ap_listen_rec</code> 構造体の連結リストとして構築済みであること。</li>
+<li><code>old_listeners</code> は、本関数呼び出し時にクリーンアップ対象として参照可能であること。</li>
+<li>IPv6 環境下では、<code>::</code>（IPv6）と <code>0.0.0.0</code>（IPv4）のバインド順序が適切に調整される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **リストの走査と最適化**: <code>ap_listeners</code> を走査し、IPv6/IPv4 のバインド順序を調整する。IPv6 ソケットが IPv4 を包含できる場合、IPv4 のバインドをスキップする等の重複排除を行う。 2. **ソケット生成**: <code>make_sock()</code> を呼び出し、各リスナーに対してソケットの作成と設定を行う。 3. **旧リスナーの破棄**: <code>ap_close_listeners_ex()</code> を呼び出し、古いリスナーをクローズする。 4. **ノンブロッキング設定**: 複数のリスナーが存在する場合、<code>apr_socket_opt_set</code> を用いて全リスナーをノンブロッキングモードに設定する。 5. **クリーンアップ登録**: プロセス終了時にリスナーをクローズするためのクリーンアップハンドラ（<a class="wiki-source-link" href="../../source/server/listen.c.html#L281" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__close_listeners_on_exec.html&quot;}, '*');"><code>close_listeners_on_exec</code></a>）をプールに登録する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>server/listen.c:771</code>（<a class="wiki-source-link" href="../../source/server/listen.c.html#L711" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_setup_listeners.html&quot;}, '*');"><code>ap_setup_listeners</code></a> 内から呼び出されることが示唆されている）</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/server/listen.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__make_sock.html&quot;}, '*');"><code>make_sock</code></a>, <a class="wiki-source-link" href="../../source/server/listen.c.html#L918" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_close_listeners_ex.html&quot;}, '*');"><code>ap_close_listeners_ex</code></a>, <code>apr_socket_opt_set</code>, <code>apr_pool_userdata_get</code>, <code>apr_pool_cleanup_register</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_listen_rec</code>: リスナー情報を保持する連結リスト構造体。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>make_sock()</code> が失敗した場合、致命的なエラーとして <code>-1</code> を返す。</li>
+<li>IPv6/IPv4 のバインド競合が発生した場合、リストの並び替えや特定のリスナーの除外が行われる。</li>
+<li>ノンブロッキング設定の適用に失敗した場合、エラーログを出力して <code>-1</code> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html#L148" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>AP_NONBLOCK_WHEN_MULTI_LISTEN</code></a> マクロが定義されている環境では、リスナー数に応じてソケットのブロッキングモードが動的に変更される。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');"><code>systemd</code></a> ソケットアクティベーションに関連するロジックは、<code>HAVE_SYSTEMD</code> マクロの有無により挙動が分岐する可能性がある。</li>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__make_sock.html&quot;}, '*');"><code>make_sock</code></a> の戻り値が <code>APR_SUCCESS</code> でない場合、致命的エラーとして処理を中断する設計となっている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

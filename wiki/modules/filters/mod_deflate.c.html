@@ -1,0 +1,100 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_deflate.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_deflate.c.html&quot;}, '*');">modules/filters/mod_deflate.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_deflate</code> は、Apache HTTP Server において動的なコンテンツ圧縮（Gzip）および伸長（Inflate）を提供するフィルタモジュールです。zlib ライブラリをラップし、HTTP ストリームの入出力に対して透過的なデータ変換を行います。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache のフィルタチェーンの一部として動作します。出力フィルタ（<code>DEFLATE</code>, <code>INFLATE</code>）および入力フィルタ（<code>DEFLATE</code>）を登録し、リクエストの <code>Content-Encoding</code> ヘッダーや <code>Accept-Encoding</code> リクエストヘッダーに基づいて、動的に圧縮・伸長を適用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**圧縮/伸長処理**: zlib を使用したストリームの変換。</li>
+<li>**HTTP プロトコル整合性**: <code>Content-Encoding</code> の管理、<code>Vary: Accept-Encoding</code> の付与、<code>ETag</code> の調整。</li>
+<li>**リソース保護**: 圧縮比や伸長後のサイズ制限による DoS 攻撃対策。</li>
+<li>**設定管理**: 圧縮レベル、ウィンドウサイズ、メモリ使用量などのチューニング。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_filter_config.html&quot;}, '*');"><code>deflate_filter_config</code></a>: サーバー全体の設定（圧縮レベル、バッファサイズ等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_dirconf_t.html&quot;}, '*');"><code>deflate_dirconf_t</code></a>: ディレクトリ単位の設定（伸長サイズ制限、圧縮比制限）。</li>
+</ul>
+<h3>コンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_ctx.html&quot;}, '*');"><code>deflate_ctx</code></a>: フィルタのライフサイクル中に保持される状態。zlib の <code>z_stream</code>、バッファ、CRC、ヘッダー情報、処理済みバイト数などを管理。</li>
+</ul>
+<h3>フィルタ関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L561" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_out_filter.html&quot;}, '*');"><code>deflate_out_filter</code></a>: 出力データを圧縮するフィルタ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L1542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__inflate_out_filter.html&quot;}, '*');"><code>inflate_out_filter</code></a>: 出力データを伸長するフィルタ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L1138" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_in_filter.html&quot;}, '*');"><code>deflate_in_filter</code></a>: 入力データ（リクエストボディ）を伸長するフィルタ。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__flush_libz_buffer.html&quot;}, '*');"><code>flush_libz_buffer</code></a>: zlib の内部バッファをフラッシュし、ブリゲードへ書き出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L107" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__check_gzip.html&quot;}, '*');"><code>check_gzip</code></a>: リクエストが Gzip 圧縮されているか判定し、ヘッダーを調整する。</li>
+<li><code>consume_buffer</code>: 圧縮/伸長されたデータを <code>apr_bucket_brigade</code> に追加する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: フィルタが初めて呼ばれた際、<a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_ctx.html&quot;}, '*');"><code>deflate_ctx</code></a> を生成し <code>deflateInit2</code> / <code>inflateInit2</code> で zlib を初期化。 2. **データ処理**:</p>
+<ul>
+<li><code>apr_bucket_brigade</code> からバケットを読み取り、zlib に渡す。</li>
+<li><code>zlib</code> の出力バッファが満杯になるか、フラッシュ要求（<a class="wiki-source-link" href="../../../source/modules/filters/mod_proxy_html.c.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_proxy_html.c.html&quot;}, '*');"><code>FLUSH</code></a> バケット）が来た時点で <code>consume_buffer</code> を呼び出し、次のフィルタへデータを渡す。</li>
+<p>3. **終了処理**: <code>EOS</code> (End of Stream) バケットを検知すると、zlib の残存データをフラッシュし、Gzip フッター（CRC/サイズ）を付与して <code>deflateEnd</code> / <code>inflateEnd</code> を呼び出す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>zlib.h</code>: 圧縮・伸長アルゴリズムのコア。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>, <code>apr_buckets.h</code>: Apache フィルタチェーンおよびデータブリゲードの管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: モジュール登録および設定管理。</li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_brotli.c.html&quot;}, '*');"><code>modules/filters/mod_brotli.c</code></a>: 同様の圧縮フィルタ（Brotli）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>modules/filters/mod_filter.c</code></a>: フィルタの適用条件を制御する基盤モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_ctx.html&quot;}, '*');"><code>deflate_ctx</code></a> はリクエストプールに紐付いており、リクエスト終了時に <code>apr_pool_cleanup_register</code> を通じて zlib リソースが解放されます。</li>
+<li>**メモリレイアウト**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_deflate_c__deflate_ctx.html&quot;}, '*');"><code>deflate_ctx</code></a> 内の <a class="wiki-source-link" href="../../../source/modules/filters/mod_buffer.c.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_buffer.c.html&quot;}, '*');"><code>buffer</code></a> は設定された <code>bufferSize</code> に基づいて動的に確保されます。</li>
+<li>**エッジケース**: </li>
+<li><code>HEAD</code> リクエストや <code>204 No Content</code>、既に圧縮済みのコンテンツはフィルタをスキップします。</li>
+<li>伸長時の <code>ratio_limit</code> や <code>inflate_limit</code> を超えた場合、<code>APR_EINVAL</code> や <code>APR_ENOSPC</code> を返して処理を中断します。</li>
+<li>**省略箇所**: zlib の内部的なハフマン符号化や LZ77 圧縮アルゴリズムの詳細は zlib ライブラリ側に依存するため、本ファイルでは触れていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_filter_config.html" target="wiki-view"><code>deflate_filter_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_dirconf_t.html" target="wiki-view"><code>deflate_dirconf_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__check_gzip.html" target="wiki-view"><code>check_gzip</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__getLong.html" target="wiki-view"><code>getLong</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__create_deflate_server_config.html" target="wiki-view"><code>create_deflate_server_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__create_deflate_dirconf.html" target="wiki-view"><code>create_deflate_dirconf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_window_size.html" target="wiki-view"><code>deflate_set_window_size</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_buffer_size.html" target="wiki-view"><code>deflate_set_buffer_size</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_note.html" target="wiki-view"><code>deflate_set_note</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_set_memlevel.html" target="wiki-view"><code>deflate_set_memlevel</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_ctx.html" target="wiki-view"><code>deflate_ctx</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_deflate_c__deflate_check_etag.html" target="wiki-view"><code>deflate_check_etag</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

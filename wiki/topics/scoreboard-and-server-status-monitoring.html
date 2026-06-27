@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/scoreboard-and-server-status-monitoring.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Scoreboard and Server Status Monitoring</h1>
+<h2>概念</h2>
+<p>**Scoreboard** は、Apache HTTP Server において親プロセスと子ワーカープロセス（またはスレッド）の間で、アクティブな接続、リクエスト数、ワーカーの状態などの稼働情報を共有・追跡するために使用される共有メモリ構造です。</p>
+<p>**Server Status Monitoring** は、このスコアボードに記録されたリアルタイムの稼働情報を収集し、管理者向けに人間が読める形式（HTML やプレーンテキストなど）で提供する仕組みです。これは主に <code>mod_status</code> モジュールによって実現されます。</p>
+<h2>なぜ重要か</h2>
+<p>マルチプロセスやマルチスレッド（MPM）で動作する Web サーバーにおいて、各ワーカーの現在の状態（ビジー、アイドル、キープアライブなど）や処理中のリクエストをリアルタイムに把握することは、システムの監視、パフォーマンスチューニング、および障害発生時のトラブルシューティングにおいて極めて重要です。スコアボードは、これらの情報を低遅延かつ一元的に管理するための基盤を提供します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> : スコアボードのデータ構造や操作用 API を定義するヘッダーファイルを提供します。</li>
+<li><a class="wiki-entity-link" href="../modules/modules__generators.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__generators.html&quot;, &quot;source&quot;: &quot;source/modules/generators/cgi_common.h.html&quot;}, '*');"><code>module:modules/generators</code></a> : スコアボードの情報を読み取り、ステータスレポートとして生成・出力するハンドラを提供します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a>** : スコアボードの全体構造、プロセスごとの情報（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L136" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__process_score.html&quot;}, '*');"><code>process_score</code></a>）、ワーカーごとの詳細な状態（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__worker_score.html&quot;}, '*');"><code>worker_score</code></a>）などを定義するヘッダーファイル。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_status.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_status.c.html&quot;}, '*');"><code>modules/generators/mod_status.c</code></a>** : スコアボードからデータを読み出し、Web 経由でサーバーの稼働ステータスを配信する <code>mod_status</code> モジュールの実装。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細なエンドツーエンドの流れ（親プロセスによる共有メモリの初期化、各ワーカープロセスによるスコアボードの更新タイミング、および <code>mod_status</code> による読み出し時の排他制御の具体的なライフサイクル）は完全には判明していません。</p>
+<p>一般的な想定フローは以下の通りです： 1. サーバー起動時に親プロセスがスコアボード用の共有メモリ領域を確保・初期化する。 2. 各ワーカープロセスがリクエストを受信・処理・完了するたびに、<a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a> で定義された構造体を介して自身のステータスを更新する。 3. 管理者または監視ツールが <code>mod_status</code> で設定されたエンドポイントにアクセスすると、<a class="wiki-source-link" href="../../source/modules/generators/mod_status.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_status.c.html&quot;}, '*');"><code>modules/generators/mod_status.c</code></a> がスコアボードの共有メモリから最新の情報を読み取り、レスポンスとして返却する。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、スコアボードのデータ整合性を維持するための具体的な不変条件（例：マルチプロセス間での書き込み競合を防ぐためのロック要件や、状態遷移の整合性ルール）は完全には判明していません。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では、スコアボードの共有メモリへのアクセスに伴うパフォーマンス上のボトルネックや、特定の MPM 設定下における制限など、具体的な落とし穴は判明していません。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a>** : スコアボードを構成するデータ構造（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L123" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__global_score.html&quot;}, '*');"><code>global_score</code></a>、<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L136" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__process_score.html&quot;}, '*');"><code>process_score</code></a>、<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__worker_score.html&quot;}, '*');"><code>worker_score</code></a> など）の定義を確認する。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_status.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_status.c.html&quot;}, '*');"><code>modules/generators/mod_status.c</code></a>** : スコアボードからどのようにデータを抽出し、ステータス画面としてレンダリングしているかの実装を確認する。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

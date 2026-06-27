@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_util_c__h2_fifo.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>h2_fifo</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/http2/h2_util.c:526</code></li>
+</ul>
+<h2>目的</h2>
+<p>スレッドセーフな FIFO（先入れ先出し）キューを提供し、マルチスレッド環境下でのデータ受け渡しを管理します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct h2_fifo {
+    void **elems;
+    int capacity;
+    int set;
+    int in;
+    int out;
+    int count;
+    int aborted;
+    apr_thread_mutex_t *lock;
+    apr_thread_cond_t  *not_empty;
+    apr_thread_cond_t  *not_full;
+};</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>void **elems</code>（要素格納用バッファ）、<code>int capacity</code>（最大容量）。</li>
+<li>**出力**: <code>apr_status_t</code>（操作の成功または失敗を示すステータスコード）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>lock</code> によって保護されたクリティカルセクション内で操作される必要があります。</li>
+<li><code>not_empty</code> および <code>not_full</code> 条件変数を用いて、スレッド間の同期を行います。</li>
+<li><code>aborted</code> フラグが設定された場合、キューの操作は中断されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li><code>apr_thread_mutex_lock</code> を使用して排他制御を行います。</li>
+<li><code>in</code>（挿入位置）と <a class="wiki-source-link" href="../../source/modules/generators/mod_info.c.html#L85" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_info.c.html&quot;}, '*');"><code>out</code></a>（取り出し位置）のインデックスを管理する循環バッファとして動作します。</li>
+<li>キューが満杯の場合は <code>not_full</code> で待機し、空の場合は <code>not_empty</code> で待機するブロッキング操作をサポートします。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L602" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_create.html&quot;}, '*');"><code>h2_fifo_create</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L607" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_set_create.html&quot;}, '*');"><code>h2_fifo_set_create</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L612" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_term.html&quot;}, '*');"><code>h2_fifo_term</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L624" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_count.html&quot;}, '*');"><code>h2_fifo_count</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L694" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_push.html&quot;}, '*');"><code>h2_fifo_push</code></a> 等のユーティリティ関数から参照されます。</li>
+<li>**呼び出し先**: APR のスレッド同期プリミティブ（<code>apr_thread_mutex_t</code>, <code>apr_thread_cond_t</code>）を呼び出します。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_thread_mutex_t</code>: 排他制御用。</li>
+<li><code>apr_thread_cond_t</code>: スレッド待機および通知用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**容量超過**: <code>capacity</code> に達した状態で <code>push</code> を行うと、非ブロッキングモードではエラーを返し、ブロッキングモードでは <code>not_full</code> で待機します。</li>
+<li>**空の状態**: <code>count</code> が 0 の状態で <code>pull</code> を行うと、同様に待機またはエラーが発生します。</li>
+<li>**中断**: <code>aborted</code> 状態に遷移した場合、待機中のスレッドは解放され、操作は失敗します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.c.html&quot;}, '*');"><code>h2_util.c</code></a> 内の静的関数および公開 API によって操作されます。</li>
+<li>メモリ管理は <code>apr_pool_t</code> に依存しているため、作成時に適切なプールが割り当てられていることを確認してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/acme-protocol-and-managed-domains-mod-md.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ACME Protocol and Managed Domains (mod_md)</h1>
+<h2>概念</h2>
+<p><code>mod_md</code>（Managed Domains）は、Apache HTTP ServerにおいてSSL/TLS証明書の自動管理を実現するためのモジュールです。RFC 8555で定義される **ACME（Automated Certificate Management Environment）プロトコル** を使用して、Let&#x27;s Encrypt などの認証局（CA）から証明書を自動的に取得、更新、および管理します。</p>
+<p>この機能は主に以下の3つのソースファイルによって支えられています。</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>mod_md.c</code></a>**: Apache HTTP Serverとの統合、設定ディレクティブの処理、およびライフサイクル管理。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a>**: ACMEプロトコルに準拠したクライアント機能（アカウント登録、注文、チャレンジの解決など）。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>**: 取得した証明書、秘密鍵、およびアカウント情報のローカルストレージへの永続化。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p>従来のSSL/TLS証明書の管理は、手動での申請、検証、配置、およびWebサーバーの再起動が必要であり、ヒューマンエラーや更新忘れによるサービス停止のリスクが常に存在していました。</p>
+<p><code>mod_md</code> を導入することで、Webサーバー自体が証明書の有効期限を監視し、ACMEプロトコルを通じてバックグラウンドで自動的に証明書を更新します。これにより、運用の安全性が向上し、管理コストが大幅に削減されます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a>**</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>modules/md/md_acme.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>modules/md/md_store.c</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**Managed Domain (MD)**: <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>mod_md.c</code></a> で定義および管理される、自動証明書管理の対象となるドメイン（およびそのサブドメイン）のグループ。</li>
+<li>**ACME Client (<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a>)**: ACMEサーバーと通信し、ディレクトリの取得、アカウントの作成、証明書の署名要求（CSR）の送信、およびチャレンジ（HTTP-01など）の検証を行うエンティティ。</li>
+<li>**Store (<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>)**: 証明書、秘密鍵、およびACMEアカウントのメタデータをファイルシステム等に安全に保存・ロードするストレージ管理機構。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードのメタデータからは、詳細な関数呼び出しシーケンスや完全な状態遷移は完全には特定されていませんが、一般的な処理フローは以下の通りです。</p>
+<p>1. **設定のパースと初期化 (<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>mod_md.c</code></a>)**: Apacheの起動時に設定ファイルから <code>ManagedDomain</code> 定義を読み込み、対象ドメインを登録します。 2. **ストレージの確認 (<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>)**: 既存の証明書や秘密鍵がローカルストレージに存在するか、またその有効期限が切れていないかを確認します。 3. **ACMEプロトコルの実行 (<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a>)**: 証明書の新規取得または更新が必要な場合、ACMEサーバーに接続してアカウントを登録（またはロード）し、新しい証明書の「注文（Order）」を作成します。 4. **チャレンジの解決**: CAから提示されたチャレンジ（例: HTTP-01）を解決するため、一時的な検証用リソースを配置し、CAによる検証をパスします。 5. **証明書の取得と保存 (<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>)**: 検証成功後、CSRを送信して発行された証明書をダウンロードし、ローカルストレージに安全に保存します。</p>
+<p>*注意: 内部的なスレッドモデルや、Apacheの親プロセス・子プロセス間での具体的な同期フローの詳細は、現時点では未確定です。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**秘密鍵の秘匿性**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> を介して保存される秘密鍵は、適切なファイルパーミッションで保護され、外部に漏洩してはなりません。</li>
+<li>**ACMEチャレンジの到達性**: HTTP-01 チャレンジを実行する際、外部のCAから対象ドメインの特定のパス（<code>.well-known/acme-challenge/</code>）へのHTTPリクエストが、<code>mod_md</code> によって適切に処理されなければなりません。</li>
+</ul>
+<p>*注意: コードレベルでの厳密な不変条件（状態遷移のガード条件やロック要件など）は、提供されたファイル名のみからは完全には特定されていません。*</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**ストレージの書き込み権限不足**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> が証明書や鍵を保存するディレクトリ（通常は <code>state</code> ディレクトリ）に対して、Apacheの実行ユーザーが書き込み権限を持っていない場合、更新処理が失敗します。</li>
+<li>**DNS/ファイアウォールの制限**: ACMEサーバーからのHTTP-01チャレンジ用リクエストが、ファイアウォールやDNSの誤設定によってブロックされると、証明書の発行が拒否されます。</li>
+<li>**レートリミット**: ACMEプロトコル（特に Let&#x27;s Encrypt）のテスト時に本番環境のCAエンドポイントを使用すると、短時間での頻繁なリクエストによりレートリミットに達し、一時的に証明書が取得できなくなることがあります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a>**: Apacheモジュールとしての初期化処理、ディレクティブ定義、およびリクエストハンドラとの連携を理解するために参照してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>modules/md/md_acme.c</code></a>**: ACMEプロトコルの具体的な通信ロジック、JSON Web Signature (JWS) の構築、およびチャレンジ処理を調査する場合に参照してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>modules/md/md_store.c</code></a>**: 証明書や鍵がファイルシステム上でどのように永続化され、管理されるかを把握するために参照してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

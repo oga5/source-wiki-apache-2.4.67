@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__proxy__mod_proxy_scgi_c__pass_response.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>pass_response</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/proxy/mod_proxy_scgi.c:363</code></li>
+</ul>
+<h2>目的</h2>
+<p>バックエンド（SCGIサーバー）からのレスポンスを読み込み、ヘッダー解析および後続のフィルタリング処理（<code>X-Sendfile</code> や内部リダイレクトの判定）を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int pass_response(request_rec *r, proxy_conn_rec *conn)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: </li>
+<li><code>r</code>: 現在のリクエスト構造体。</li>
+<li><code>conn</code>: バックエンドへの接続情報。</li>
+<li>**出力**: </li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>: 処理成功。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L477" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_FILTER_ERROR</code></a>: フィルタリング失敗。</li>
+<li>その他: <a class="wiki-source-link" href="../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> が返すエラーコード。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>r-&gt;pool</code> はリクエストの生存期間中有効であること。</li>
+<li><code>conn-&gt;sock</code> は有効なバックエンドソケットであること。</li>
+<li>SCGI プロトコル特有のボディフレーミングが使用されるため、<code>Content-Length</code> や <code>Transfer-Encoding</code> ヘッダーは、コアによる自動決定を優先するために削除される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **バケット作成**: <code>SOCKET_EX</code> バケットを作成し、バックエンドソケットと統計カウンタを紐付けてブリゲードに挿入する。 2. **ヘッダー解析**: <a class="wiki-source-link" href="../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> を呼び出し、バックエンドからのレスポンスヘッダーを解析する。 3. **ヘッダー調整**: <code>Content-Length</code> および <code>Transfer-Encoding</code> をヘッダーから削除する。 4. **<code>X-Sendfile</code> 処理**: 設定されている場合、指定されたヘッダーを検索し、存在すれば <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_config.html&quot;}, '*');"><code>scgi_request_config</code></a> を設定してサブリクエストへ移行する。 5. **内部リダイレクト処理**: 設定されている場合、<code>Location</code> ヘッダー等を検索し、内部リダイレクトが必要であれば同様に <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_config.html&quot;}, '*');"><code>scgi_request_config</code></a> を設定する。 6. **転送**: 上記の特殊処理に該当しない場合、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介してレスポンスボディをクライアントへ転送する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_scgi.c:582</code> (SCGIハンドラのメインフロー内)。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_palloc</code>, <code>apr_brigade_create</code>, <code>apr_bucket_eos_create</code>, <code>apr_table_get</code>, <code>apr_table_unset</code>, <code>apr_brigade_destroy</code> (APR API)</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L162" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__bucket_socket_ex_create.html&quot;}, '*');"><code>bucket_socket_ex_create</code></a> (カスタムバケット生成)</li>
+<li><a class="wiki-source-link" href="../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a>, <a class="wiki-source-link" href="../../source/include/http_log.h.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_rerror</code></a>, <code>ap_get_module_config</code>, <code>ap_set_module_config</code>, <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> (Apache HTTPd API)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L269" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_conn_rec.html&quot;}, '*');"><code>proxy_conn_rec</code></a>: バックエンド接続状態。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_config.html&quot;}, '*');"><code>scgi_config</code></a>: ディレクトリ単位の設定（<code>ProxySCGISendfile</code> 等）。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_config.html&quot;}, '*');"><code>scgi_request_config</code></a>: リクエスト処理中の内部リダイレクトやファイル送信指示。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__socket_ex_data.html&quot;}, '*');"><code>socket_ex_data</code></a>: ソケット読み込みと統計更新のためのデータ構造。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>ヘッダー解析失敗時: <a class="wiki-source-link" href="../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> がエラーを返し、ログ出力後にブリゲードを破棄して終了する。</li>
+<li>フィルタリング失敗時: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> がエラーを返した場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L477" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_FILTER_ERROR</code></a> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L536" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_handler.html&quot;}, '*');"><code>scgi_handler</code></a> から呼び出される。</li>
+<li><code>X-Sendfile</code> や内部リダイレクトの判定ロジックは、<code>r-&gt;err_headers_out</code> と <code>r-&gt;headers_out</code> の両方を走査する。</li>
+<li><code>SOCKET_EX</code> バケットを使用することで、ソケット読み込み時の統計カウンタ更新を透過的に行っている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

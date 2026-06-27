@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/worker-main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>worker_main</h1>
+<h2>概念</h2>
+<p><code>worker_main</code> は、Apache HTTP Server（<code>httpd-2.4.67</code>）の特定のマルチプロセッシングモジュール（MPM）において、クライアントからの接続リクエストを処理する個別ワーカー（スレッド）のメインループまたはエントリポイントとして機能する関数です。OS/2、NetWare、Windows（winnt）の各プラットフォーム向けMPMで、それぞれ独自の並行処理モデルに合わせて実装されています。</p>
+<h2>なぜ重要か</h2>
+<p>この関数は、各プラットフォーム固有の非同期I/Oやスレッドモデル（OS/2のキュー、NetWareの <code>select</code>/<code>accept</code>、WindowsのI/O完了ポート）に適合した形で、Apacheのコアな接続ライフサイクル（接続の受け入れ、接続オブジェクトの作成、リクエスト処理、接続のクローズ）を駆動するために不可欠な役割を担っています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__mpmt_os2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__mpmt_os2.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/mpmt_os2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__netware.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__netware.html&quot;, &quot;source&quot;: &quot;source/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/netware</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__winnt.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__winnt.html&quot;, &quot;source&quot;: &quot;source/server/mpm/winnt/child.c.html&quot;}, '*');"><code>module:server/mpm/winnt</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_main.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L345&quot;}, '*');"><code>symbol:server/mpm/mpmt_os2/mpmt_os2_child.c#worker_main</code></a>**  </li>
+<p>OS/2 MPMの子プロセスにおいて、<code>_beginthread</code> により起動されるワーカースレッドのメイン関数。OS/2のシステムキューから接続情報を取得して処理します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__netware__mpm_netware_c__worker_main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__worker_main.html&quot;, &quot;source&quot;: &quot;source/server/mpm/netware/mpm_netware.c.html#L336&quot;}, '*');"><code>symbol:server/mpm/netware/mpm_netware.c#worker_main</code></a>**  </li>
+<p>NetWare MPMにおけるワーカースレッドのメインループ。<code>NXContextAlloc</code> に関数ポインタとして渡され、<code>select()</code> と <code>apr_socket_accept()</code> を用いて直接接続を監視・受け入れます。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__winnt__child_c__worker_main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__worker_main.html&quot;, &quot;source&quot;: &quot;source/server/mpm/winnt/child.c.html#L785&quot;}, '*');"><code>symbol:server/mpm/winnt/child.c#worker_main</code></a>**  </li>
+<p>Windows (winnt) MPMにおけるワーカースレッドのメインループ。I/O完了ポート（IOCP）を介して <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L733" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_get_connection.html&quot;}, '*');"><code>winnt_get_connection</code></a> から接続コンテキストを取得し、処理を行います。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>プラットフォームごとに接続の取得方法が異なります。なお、親プロセスから子プロセスが起動され、各スレッドへ接続がディスパッチされるシステム全体の完全なエンドツーエンドのフローは、提供されたモジュール情報の範囲内では一部未確定ですが、各 <code>worker_main</code> 内部の処理フローは以下の通りです。</p>
+<p>1. **初期化**:</p>
+<ul>
+<li>**OS/2**: <code>DosSetExceptionHandler</code> によりスレッド内の例外ハンドラを登録し、OS/2キューを開きます。</li>
+<li>**NetWare**: スレッド固有のメモリプール（<code>ptrans</code>）とバケットアロケータを作成し、スレッドカウントをインクリメントします。</li>
+<li>**Windows**: スレッドローカルストレージ（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2490" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_HAS_THREAD_LOCAL</code></a> 有効時）の初期化を行います。</li>
+<p>2. **接続の取得と待機**:</p>
+<li>**OS/2**: <code>DosReadQueue</code> を使用して、キューから <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a>（接続情報）が届くのを待機します。</li>
+<li>**NetWare**: <code>select()</code> で <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>listenfds</code></a> を監視し、接続要求を検知すると <code>apr_socket_accept()</code> でソケットを受け入れます。</li>
+<li>**Windows**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L733" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_get_connection.html&quot;}, '*');"><code>winnt_get_connection</code></a> を呼び出し、接続コンテキスト（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a>）が取得できるまで待機します。</li>
+<p>3. **リクエストの処理**:</p>
+<li>共通して、<code>ap_run_create_connection</code> で接続オブジェクトを作成し、<a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> でHTTPリクエストを処理し、<a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> で接続を閉じます。</li>
+<li>処理の開始・終了に合わせて、スコアボードのステータス（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_READY</code></a> や <code>SERVER_BUSY</code> など）を更新します。</li>
+<p>4. **終了処理**:</p>
+<li>**OS/2**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>WORKTYPE_EXIT</code></a> メッセージを受信するか、キューの読み取りに失敗した時点でループを脱出し、スコアボードを <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_DEAD</code></a> に更新して終了します。</li>
+<li>**NetWare**: <code>die_now</code> フラグが真になるか、リクエスト上限（<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a>）に達した際に <code>clean_child_exit</code> を呼び出して終了します。</li>
+<li>**Windows**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L733" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_get_connection.html&quot;}, '*');"><code>winnt_get_connection</code></a> が <code>NULL</code> を返した場合やリクエスト上限に達した際にループを抜け、スコアボードを <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_DEAD</code></a> に更新して終了します。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**OS/2**: スレッド内の例外によってプロセス全体がクラッシュするのを防ぐため、<code>DosSetExceptionHandler</code> による例外ハンドラが登録されている必要があります。また、<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> プールが生存している必要があります。</li>
+<li>**NetWare**: 呼び出し時に <code>pmain</code> プールが初期化されている必要があります。また、<code>die_now</code> フラグが偽である限り、スレッドは生存し続けます。</li>
+<li>**Windows**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> プールが子プロセスの生存期間を管理している必要があります。</li>
+<li>**共通**: メモリリークを防ぐため、各接続処理のたびにトランザクション用のメモリプール（OS/2の <code>pconn</code>、NetWareの <code>ptrans</code> など）が適切に作成・破棄される必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**OS/2**: OS/2の <code>Dos*</code> APIに強く依存しているため、他プラットフォームへの移植性はありません。キューのオープン（<code>DosOpenQueue</code>）に失敗した場合、該当スロットのスコアボードをクリアして即座に終了します。</li>
+<li>**NetWare**: NetWareのNKSスレッドとして動作するため、ブロッキング操作を行うとシステム全体のパフォーマンスに影響を及ぼす可能性があります。また、ネットワーク層の停止（<code>ENETDOWN</code>）を検知した場合は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a> を指定してサーバー全体を終了させます。</li>
+<li>**Windows**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> の再利用ロジックにおいて、エラーパスを通過する際のメモリリークに注意が必要です。また、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2490" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_HAS_THREAD_LOCAL</code></a> の定義の有無によって、スレッドローカルストレージの初期化と破棄の挙動が分岐します。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>server/mpm/winnt/child.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

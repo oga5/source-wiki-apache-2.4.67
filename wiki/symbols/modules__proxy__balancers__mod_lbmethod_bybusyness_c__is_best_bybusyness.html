@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__is_best_bybusyness.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/proxy/balancers/mod_lbmethod_bybusyness.c.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_bybusyness_c__is_best_bybusyness.html&quot;}, '*');">is_best_bybusyness</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/proxy/balancers/mod_lbmethod_bybusyness.c:28</code></li>
+</ul>
+<h2>目的</h2>
+<p>ロードバランサーがリクエストを振り分ける際、複数のワーカーの中から「最も負荷が低い（最適な）」ワーカーを決定するための比較基準を提供します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int is_best_bybusyness(proxy_worker *current, proxy_worker *prev_best, void *baton)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>current</code>: 現在評価中のワーカー。</li>
+<li><code>prev_best</code>: これまでに評価した中で最も適していると判断されたワーカー。</li>
+<li><code>baton</code>: <code>int *total_factor</code> としてキャストされ、累積の重み合計を保持するポインタ。</li>
+<li>**出力**:</li>
+<li><code>int</code>: <code>current</code> が <code>prev_best</code> よりも適している場合は非ゼロ（真）、そうでない場合は 0（偽）を返します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>baton</code> は <code>int</code> 型のポインタとして正しく初期化されている必要があります。</li>
+<li><code>current</code> および <code>prev_best</code> の <code>s</code> メンバ（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L424" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker_shared.html&quot;}, '*');"><code>proxy_worker_shared</code></a>）が有効である必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>current</code> ワーカーの <code>lbstatus</code> を <code>lbfactor</code> 分だけ増加させ、<code>total_factor</code> にも加算します。 2. 以下のいずれかの条件を満たす場合、<code>current</code> を「より良い」と判定します。</p>
+<ul>
+<li><code>prev_best</code> が <code>NULL</code> である（最初のワーカーである）。</li>
+<li><code>current</code> の <code>busy</code> 数が <code>prev_best</code> より小さい。</li>
+<li><code>busy</code> 数が同数の場合、<code>current</code> の <code>lbstatus</code> が <code>prev_best</code> より大きい。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/balancers/mod_lbmethod_bybusyness.c:50</code> にて、<code>ap_proxy_balancer_get_best_worker_fn</code> の引数として渡されています。</li>
+<li>**呼び出し先**: 直接的な関数呼び出しはありませんが、<code>current-&gt;s</code> および <code>prev_best-&gt;s</code> を介して共有メモリ上のワーカー状態を参照・更新します。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a>: ロードバランサーのバックエンドサーバーを表す構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L424" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker_shared.html&quot;}, '*');"><code>proxy_worker_shared</code></a>: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a> 内の共有メモリ領域。<code>busy</code> 数や <code>lbstatus</code> を保持します。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>prev_best</code> が <code>NULL</code> の場合、最初のワーカーを無条件で選択します。</li>
+<li><code>busy</code> 数がすべて同数の場合、<code>lbstatus</code>（重み）の大きいワーカーが優先されます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>ap_proxy_balancer_get_best_worker_fn</code> による反復処理の中で呼び出されます。</li>
+<li><code>lbstatus</code> の更新がこの比較関数内で行われるため、呼び出し順序や反復回数に依存した副作用がある点に注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

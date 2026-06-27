@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/cache-storage-and-shared-memory-socache-providers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Cache Storage and Shared Memory Socache Providers</h1>
+<h2>概念</h2>
+<p>Apache HTTP Serverにおけるキャッシュ機構は、主に2つの異なる目的とレイヤーに分かれて提供されています。</p>
+<p>1. **HTTPレスポンスキャッシュ（RFC準拠）**: クライアントへのHTTPレスポンスをキャッシュするための仕組みです。コアロジックを <a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>mod_cache.c</code></a> が担い、実際の永続化ストレージは <a class="wiki-source-link" href="../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>mod_cache_disk.c</code></a> などのストレージプロバイダが担当します。 2. **共有オブジェクトキャッシュ（socache）**: SSLセッションや認証情報など、小さく高頻度でアクセスされるオブジェクトをプロセス間で高速に共有・キャッシュするための仕組みです。<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>ap_socache.h</code></a> で共通インターフェースが定義され、<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>mod_socache_shmcb.c</code></a> などのプロバイダが具体的な共有メモリ管理を提供します。</p>
+<h2>なぜ重要か</h2>
+<ul>
+<li>**パフォーマンスの向上**: </li>
+<p>重いバックエンド処理やディスクI/O、SSL/TLSハンドシェイクにおける鍵交換などの高コストな処理を回避し、レスポンスタイムを劇的に削減します。</p>
+<li>**モジュール化と柔軟性**: </li>
+<p>キャッシュの制御ロジックとストレージの実装が分離されているため、システムの要件（ディスクベース、共有メモリベースなど）に応じて最適なプロバイダを選択・拡張できます。</p>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a>** (<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a>):</li>
+<p>共有オブジェクトキャッシュ（socache）の実装が満たすべきインターフェースを定義する構造体です。<code>init</code>, <code>create</code>, <code>store</code>, <code>retrieve</code>, <code>remove</code>, <code>destroy</code> などの関数ポインタを提供します。</p>
+<li>**<code>mod_cache</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>modules/cache/mod_cache.c</code></a>):</li>
+<p>HTTPキャッシュのコアロジックを実装するモジュールです。キャッシュの有効期限（Expiration）や再検証（Validation）などのRFC準拠の制御を行います。</p>
+<li>**<code>mod_cache_disk</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>modules/cache/mod_cache_disk.c</code></a>):</li>
+<p><code>mod_cache</code> のためのディスクベースのストレージプロバイダです。キャッシュされたレスポンスのヘッダーとボディをディスク上のファイルとして管理します。</p>
+<li>**<code>mod_socache_shmcb</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a>):</li>
+<p>共有メモリ上のサイクリックバッファ（shmcb）を利用した <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> の具体的な実装です。SSLセッションキャッシュなどで広く利用されます。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードの範囲内では、HTTPキャッシュ（<code>mod_cache</code> / <code>mod_cache_disk</code>）と共有オブジェクトキャッシュ（<code>mod_socache_shmcb</code>）の間の直接的な統合や、詳細な相互作用のエンドツーエンドのフローは完全には定義されておらず、これらがどのように連携するか（あるいは独立して動作するか）の全体像は未確定です。</p>
+<p>一般的には、以下のように独立したフローが存在します。</p>
+<h3>HTTPキャッシュのフロー</h3>
+<p>1. クライアントからリクエストを受信すると、<code>mod_cache</code> がキャッシュの有無を判定します。 2. キャッシュが存在する場合、<code>mod_cache_disk</code> を介してディスクからキャッシュデータを読み出し、クライアントにレスポンスを返します。 3. キャッシュが存在しない、または期限切れの場合は、オリジンサーバーやバックエンドからコンテンツを取得し、<code>mod_cache_disk</code> を介してディスクに書き込みます。</p>
+<h3>共有オブジェクトキャッシュ（socache）のフロー</h3>
+<p>1. SSLハンドシェイク時などに、セッションデータの保存要求が発生します。 2. <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> インターフェースを介して、<code>mod_socache_shmcb</code> の <code>store</code> 関数が呼び出されます。 3. <code>mod_socache_shmcb</code> は、共有メモリ内のサイクリックバッファにデータをシリアライズして格納します。 4. 次回以降の接続時に <code>retrieve</code> 関数が呼び出され、共有メモリから高速にデータが復元されます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**API契約の遵守**:</li>
+<p>すべてのsocacheプロバイダは、<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> で定義されている <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> のライフサイクルおよびデータ操作のインターフェースを厳格に遵守しなければなりません。</p>
+<li>**排他制御とスレッドセーフティ**:</li>
+<p><code>mod_socache_shmcb</code> などの共有メモリプロバイダは、複数プロセス・複数スレッドからの同時アクセスに対して、データの破損を防ぐための適切なロックおよびバッファ境界の整合性を維持する必要があります。</p>
+<li>**ディスクキャッシュのメタデータ整合性**:</li>
+<p><code>mod_cache_disk</code> は、ディスク上に書き込まれるメタデータファイル（<code>.header</code>）とデータファイル（<code>.data</code>）の対応関係および一貫性を維持しなければなりません。</p>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**ディスクI/Oのボトルネック**:</li>
+<p><code>mod_cache_disk</code> を使用する場合、高負荷環境下ではディスクの書き込み・読み込み速度がボトルネックとなり、キャッシュによるパフォーマンス向上の効果が相殺されることがあります。</p>
+<li>**共有メモリのサイズ制限とエビクション**:</li>
+<p><code>mod_socache_shmcb</code> は固定サイズの共有メモリセグメントを使用します。キャッシュ対象（SSLセッションなど）が急増してバッファが溢れた場合、古いエントリが強制的に上書き（エビクション）され、キャッシュミス率が上昇する原因になります。</p>
+<li>**プロバイダの混同**:</li>
+<p>HTTPレスポンスキャッシュ（<code>mod_cache</code>）と、SSLセッション等に使われるオブジェクトキャッシュ（<code>socache</code>）は、設定方法や目的が全く異なります。これらを混同して設定を適用しないよう注意が必要です。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> — socacheプロバイダのインターフェース定義の詳細。</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a> — 共有メモリサイクリックバッファの実装詳細。</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>modules/cache/mod_cache.c</code></a> — HTTPキャッシュのコア制御ロジック。</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>modules/cache/mod_cache_disk.c</code></a> — ディスクストレージへのキャッシュ保存ロジック。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

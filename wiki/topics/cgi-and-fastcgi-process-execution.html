@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/cgi-and-fastcgi-process-execution.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>CGI and FastCGI Process Execution</h1>
+<h2>概念</h2>
+<p><code>CGI and FastCGI Process Execution</code> は、Apache HTTP Server（httpd-2.4.67）において、外部のCGI（Common Gateway Interface）スクリプトやプログラムを起動・管理し、動的コンテンツを生成するための仕組みです。</p>
+<p>Apacheでは、実行環境のスレッドモデル（MPM）に応じて、直接プロセスをフォークする方式（<code>mod_cgi</code>）と、専用のデーモンプロセスを介してフォークする方式（<code>mod_cgid</code>）を使い分けます。これらは共通のヘッダー定義（<a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>cgi_common.h</code></a>）を共有して実装されています。</p>
+<h2>なぜ重要か</h2>
+<p>Webサーバーにおいて外部プロセスを安全かつ効率的に実行することは、システムの安定性とセキュリティに直結します。 特にマルチスレッドMPM（<code>worker</code> や <code>event</code> など）環境下では、リクエスト処理スレッドから直接 <code>fork()</code> を呼び出すと、デッドロックやリソース消費の肥大化を招く危険性があります。これを防ぐために、専用の実行モデル（<code>mod_cgid</code>）を提供し、プロセスの生成と通信を適切に分離することが極めて重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__generators.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__generators.html&quot;, &quot;source&quot;: &quot;source/modules/generators/cgi_common.h.html&quot;}, '*');"><code>module:modules/generators</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本トピックに関与する主要なファイルおよびエンティティは以下の通りです。</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a>**: </li>
+<p>シングルスレッドまたは非スレッドMPM（<code>prefork</code> など）向けのCGI実行モジュール。リクエストを処理するプロセスが直接CGIプロセスをフォークします。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a>**: </li>
+<p>マルチスレッドMPM向けのCGI実行モジュール。バックグラウンドで動作する専用の <code>cgid</code> デーモンプロセスを介してCGIプロセスをフォークします。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a>**: </li>
+<p><code>mod_cgi</code> と <code>mod_cgid</code> の間で共有される、CGI実行に関する共通の構造体定義やヘルパー関数を提供するヘッダーファイル。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **リクエストの受信とハンドラの決定**: クライアントからのリクエストがCGIスクリプトにマッチすると、設定されたMPMに応じて <code>mod_cgi</code> または <code>mod_cgid</code> のハンドラが起動します。 2. **プロセスの起動**:</p>
+<ul>
+<li>**<code>mod_cgi</code> の場合**: リクエスト処理プロセスが直接 <code>fork()</code> および <code>exec()</code> を実行し、CGIスクリプトを起動します。</li>
+<li>**<code>mod_cgid</code> の場合**: リクエスト処理スレッドが、UNIXドメインソケットを介して <code>cgid</code> デーモンに起動要求を送信します。<code>cgid</code> デーモンが代わりに <code>fork()</code> および <code>exec()</code> を実行します。</li>
+<p>3. **入出力のパイプ処理**: CGIプロセスの標準入力、標準出力、標準エラー出力がApacheの接続ソケットやエラーログにバインドされ、データの送受信が行われます。</p>
+</ul>
+<p>*注意: 詳細な通信プロトコルやシグナル処理、FastCGIプロセス実行に関する具体的なエンドツーエンドフローの全容は、提供されたモジュールソースのメタデータからは完全には特定されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**MPMに応じたモジュールの選択**:</li>
+<p>マルチスレッドMPM環境では、スレッドセーフティとパフォーマンスを維持するため、<code>mod_cgi</code> ではなく必ず <code>mod_cgid</code> を使用しなければなりません。</p>
+<li>**共通インターフェースの維持**:</li>
+<p><code>mod_cgi</code> と <code>mod_cgid</code> は、CGI環境変数のセットアップやヘッダーのパース処理において、<a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>cgi_common.h</code></a> で定義された共通のデータ構造とロジックを共有しなければなりません。</p>
+</ul>
+<p>*注意: 内部的なパイプのクローズ順序や、プロセス監視に関するその他の不変条件は、現時点では未検証です。*</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**スレッドモデルでの <code>mod_cgi</code> の誤用**:</li>
+<p>マルチスレッド環境で誤って <code>mod_cgi</code> を有効にすると、フォーク時のスレッド状態の不整合や、パフォーマンスの大幅な低下を引き起こす可能性があります。</p>
+<li>**<code>mod_cgid</code> デーモンソケットの通信失敗**:</li>
+<p><code>mod_cgid</code> はUNIXドメインソケットを使用してデーモンと通信するため、ソケットファイルの配置ディレクトリのパーミッション設定が不適切な場合、CGIの起動に失敗します。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a> — CGIモジュール間で共有される共通定義の確認。</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> — 直接フォーク方式のCGI実行実装の確認。</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a> — デーモン経由方式のCGI実行およびソケット通信実装の確認。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

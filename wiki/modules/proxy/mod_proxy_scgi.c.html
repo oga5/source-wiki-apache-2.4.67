@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy_scgi.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');">modules/proxy/mod_proxy_scgi.c</a></h1>
+<h2>概要</h2>
+<p>SCGI (Simple Common Gateway Interface) プロトコルを Apache HTTP Server のプロキシサブシステムに統合するバックエンドモジュールです。SCGI プロトコルに基づき、リクエストヘッダーをネットストリング形式でエンコードしてバックエンドへ送信し、レスポンスを処理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のスキームハンドラとして動作します。<code>scgi://</code> で始まる URL を検知し、バックエンドとの接続確立、プロトコル変換、およびレスポンスのフィルタリングを担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル変換**: CGI 環境変数を SCGI ネットストリング形式に変換して送信。</li>
+<li>**接続管理**: <code>mod_proxy</code> のコネクションプールを利用したバックエンドとの通信。</li>
+<li>**レスポンス処理**: バックエンドからのレスポンスヘッダー解析と、<code>X-Sendfile</code> や内部リダイレクトのサポート。</li>
+<li>**カスタムバケット**: ソケット読み込みを抽象化する <code>SOCKET_EX</code> バケット型の実装。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定と状態管理</h3>
+<ul>
+<li><code>proxy_scgi_module</code>: モジュールのメイン構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_config.html&quot;}, '*');"><code>scgi_config</code></a>: ディレクトリ単位の設定（<code>ProxySCGISendfile</code>, <code>ProxySCGIInternalRedirect</code>）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_config.html&quot;}, '*');"><code>scgi_request_config</code></a>: リクエスト処理中の内部リダイレクトやファイル送信の指示を保持。</li>
+</ul>
+<h3>カスタムバケット (SOCKET_EX)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L144" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');"><code>bucket_type_socket_ex</code></a>: ソケットからの読み込みを統計情報（<code>counter</code>）と連動させるためのカスタムバケット型。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L93" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__bucket_socket_ex_read.html&quot;}, '*');"><code>bucket_socket_ex_read</code></a>: ソケットからデータを読み込み、ヒープバケットへ変換する関数。</li>
+</ul>
+<h3>ハンドラ関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L536" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_handler.html&quot;}, '*');"><code>scgi_handler</code></a>: プロキシリクエストのメインエントリポイント。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_canon.html&quot;}, '*');"><code>scgi_canon</code></a>: URL の正規化（<code>scgi://</code> スキームの処理）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L474" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_status.html&quot;}, '*');"><code>scgi_request_status</code></a>: 内部リダイレクトやファイル送信のフック処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **正規化**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_canon.html&quot;}, '*');"><code>scgi_canon</code></a> が URL を解析し、プロキシ内部形式に変換。 2. **接続**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L536" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_handler.html&quot;}, '*');"><code>scgi_handler</code></a> が <a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L2775" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_acquire_connection.html&quot;}, '*');"><code>ap_proxy_acquire_connection</code></a> でコネクションを取得し、<a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L3784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_connect_backend.html&quot;}, '*');"><code>ap_proxy_connect_backend</code></a> で接続。 3. **送信**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L258" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__send_headers.html&quot;}, '*');"><code>send_headers</code></a> が環境変数をネットストリング形式にシリアライズし、<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L230" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__sendall.html&quot;}, '*');"><code>sendall</code></a> を経由して送信。続いて <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L334" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__send_request_body.html&quot;}, '*');"><code>send_request_body</code></a> がリクエストボディを転送。 4. **受信**: <code>pass_response</code> が <code>SOCKET_EX</code> バケットを使用してバックエンドからのレスポンスを読み込み、<a class="wiki-source-link" href="../../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> でヘッダーを解析。 5. **後処理**: 設定に応じて <code>X-Sendfile</code> や内部リダイレクトを判定し、必要であれば <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L474" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_status.html&quot;}, '*');"><code>scgi_request_status</code></a> フックを介してサブリクエストを実行。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシサブシステムの基盤 API。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/scgi.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/scgi.h.html&quot;}, '*');"><code>scgi.h</code></a>: SCGI プロトコル定数。</li>
+<li><code>apr_buckets.h</code>, <code>apr_strings.h</code>: メモリ管理およびデータストリーム処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache HTTPd のリクエスト処理およびフィルタリング API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>ap_hooks.h</code></a></li>
+<li><code>apr_optional_hooks.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy.c</code></a>: プロキシモジュールの共通基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>modules/proxy/proxy_util.c</code></a>: コネクション管理や URL 解析のユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a>: 類似の CGI 系プロトコルハンドラ（比較対象として有用）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ割り当ては <code>request_rec</code> のプール (<code>r-&gt;pool</code>) に紐付いており、リクエスト終了時に自動解放されます。</li>
+<li>**ソケットの生存期間**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_scgi.c.html#L536" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_handler.html&quot;}, '*');"><code>scgi_handler</code></a> 内で <code>backend-&gt;close = 1</code> が設定されており、SCGI 通信後は常に接続を閉じる設計です。</li>
+<li>**バケットの抽象化**: <code>SOCKET_EX</code> バケットは、ソケット読み込み時に統計カウンタを更新するために実装されています。これは <code>apr_bucket_socket</code> をラップする形をとっています。</li>
+<li>**未実装/浅い部分**: SCGI プロトコル自体の詳細な仕様（ネットストリングの厳密なバリデーションなど）は、このモジュール内では最小限の処理に留まっています。また、<code>sendfile</code> の実装は <code>X-Sendfile</code> ヘッダーの存在に依存しており、バックエンドの挙動に強く依存します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_type.html" target="wiki-view"><code>scgi_request_type</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_config.html" target="wiki-view"><code>scgi_request_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__scgi_config.html" target="wiki-view"><code>scgi_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__socket_ex_data.html" target="wiki-view"><code>socket_ex_data</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__bucket_socket_ex_read.html" target="wiki-view"><code>bucket_socket_ex_read</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__bucket_socket_ex_make.html" target="wiki-view"><code>bucket_socket_ex_make</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__bucket_socket_ex_create.html" target="wiki-view"><code>bucket_socket_ex_create</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__scgi_canon.html" target="wiki-view"><code>scgi_canon</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__send_headers.html" target="wiki-view"><code>send_headers</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__send_request_body.html" target="wiki-view"><code>send_request_body</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__pass_response.html" target="wiki-view"><code>pass_response</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_status.html" target="wiki-view"><code>scgi_request_status</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

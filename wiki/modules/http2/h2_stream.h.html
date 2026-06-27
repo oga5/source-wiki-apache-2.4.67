@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_stream.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');">modules/http2/h2_stream.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>h2_stream.h</code></a> は、HTTP/2 プロトコルにおける「ストリーム」を定義するヘッダーファイルです。HTTP/2 のストリームは、単一の接続（<code>h2_session</code>）内で多重化される個別のリクエストとレスポンスのペアを指します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおいて、ストリームのライフサイクル管理と状態遷移を司る中心的なデータ構造を提供します。<code>h2_session</code> が接続全体を管理するのに対し、本ファイルは個別のリクエスト処理単位のコンテキストを保持します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ストリーム状態の管理**: RFC 7540 に準拠したストリーム状態（IDLE, OPEN, CLOSED 等）の保持と遷移の制御。</li>
+<li>**データバッファリング**: 入出力用のバケットブリゲード（<code>in_buffer</code>, <code>out_buffer</code>）およびデータ転送用ビーム（<a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>）の管理。</li>
+<li>**リクエスト/レスポンスの保持**: リクエストメタデータ、トレーラー、およびレスポンスヘッダーの格納。</li>
+<li>**イベント通知**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_h__h2_stream_monitor.html&quot;}, '*');"><code>h2_stream_monitor</code></a> を介した状態遷移やイベントの外部通知。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>struct h2_stream</code>: ストリームの全情報を保持するメイン構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_stream_state_t.html&quot;}, '*');"><code>h2_stream_state_t</code></a>: ストリームの現在の状態を示す列挙型（<a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>h2_stream.c</code></a> で定義）。</li>
+<li><code>h2_stream_dispatch()</code>: ストリームに対するイベント（フレーム受信等）を処理し、状態遷移をトリガーする関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_h__h2_stream_monitor.html&quot;}, '*');"><code>h2_stream_monitor</code></a>: 状態遷移を監視するためのコールバック構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html#L342" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>H2_STRM_LOG</code></a>: ストリーム固有の情報を付与したログ出力用マクロ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **生成**: <code>h2_stream_create()</code> により初期化され、<code>h2_session</code> に紐付けられます。 2. **データ入力**: <code>h2_stream_add_header()</code> や <code>h2_stream_recv_DATA()</code> を通じて、クライアントからのフレームがストリームのバッファに蓄積されます。 3. **処理**: ストリームが準備完了（<a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html#L211" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_prepare_processing.html&quot;}, '*');"><code>h2_stream_prepare_processing</code></a>）になると、ワーカーがリクエストを処理し、レスポンスを生成します。 4. **データ出力**: <code>h2_stream_read_to()</code> を通じて、処理済みのレスポンスデータがクライアントへ送出されます。 5. **終了**: <code>h2_stream_destroy()</code> により、関連するメモリプールと共に破棄されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache HTTP Server のプロトコル定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a>: HTTP/2 共通定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.h.html&quot;}, '*');"><code>h2_headers.h</code></a>: HTTP/2 ヘッダー処理用定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a>: 本ヘッダーで宣言された関数の実装および状態遷移テーブル。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.h.html&quot;}, '*');"><code>modules/http2/h2_session.h</code></a>: ストリームを所有・管理するセッション層。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');"><code>modules/http2/h2_mplx.h</code></a>: 複数のストリームをワーカーに多重化して割り当てるための仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>AP_DEBUG</code> が有効な場合、マジックナンバーによるメモリ整合性チェックを行います。</li>
+<li>ストリームの状態遷移は非常に厳格です。<a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_dispatch.html&quot;}, '*');"><code>h2_stream_dispatch</code></a> を呼び出す際は、現在の状態が期待通りであることを確認してください。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> は、ストリームの入出力データをスレッド間で安全に受け渡すための重要なコンポーネントです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_stream_h__h2_stream.html" target="wiki-view"><code>h2_stream</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_stream_h__h2_stream_event_t.html" target="wiki-view"><code>h2_stream_event_t</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_stream_h__h2_stream_monitor.html" target="wiki-view"><code>h2_stream_monitor</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/http-2-multiplexing-and-stream-management.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>HTTP/2 Multiplexing and Stream Management</h1>
+<h2>概念</h2>
+<p><code>mod_http2</code> における HTTP/2 Multiplexing and Stream Management（多重化およびストリーム管理）は、単一の物理的な TCP 接続（セッション）上で、複数の独立した双方向データストリームを並行して処理する仕組みです。これにより、リクエストとレスポンスを非同期かつ多重に処理することが可能になります。</p>
+<h2>なぜ重要か</h2>
+<p>HTTP/1.x で発生していたヘッドオブラインブロッキング（HOLB）問題を解決し、単一の接続を効率的に使い回すことで、接続確立のオーバーヘッドを削減し、Web ページの読み込み速度とサーバーリソースの利用効率を大幅に向上させるために不可欠です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>提供されたソースファイルに基づき、以下の主要エンティティがこの機能を構成します。</p>
+<ul>
+<li>**<code>h2_session</code>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a>): クライアントとの物理的な HTTP/2 接続全体を管理し、フレームの送受信や接続レベルの制御を行います。</li>
+<li>**<code>h2_stream</code>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a>): セッション内で多重化される個々の HTTP/2 ストリームを表し、その状態遷移やリクエスト・レスポンスのメタデータを管理します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a>): メインの接続スレッド（セッション）と、各ストリームを処理するワーカースレッド群との間で、タスクのスケジューリングやデータの多重化・交通整理を行うコーディネーターです。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a>): セッションスレッドとワーカースレッドの間で、安全かつ効率的にデータ（バケット）を転送するためのデータパイプライン（ビーム）機構を提供します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>※提供されたファイルパス情報のみからは、詳細なスレッドスケジューリングやエラーハンドリングを含む完全なエンドツーエンドの制御フローは特定されていません。</p>
+<p>推測される基本的な流れは以下の通りです。 1. クライアントからの接続を <code>h2_session</code> が受信・維持します。 2. 新しいストリーム要求（HEADERS フレームなど）が届くと、<code>h2_stream</code> が生成されます。 3. <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> がこのストリームをタスクとしてスケジュールし、ワーカースレッドに割り当てます。 4. ワーカースレッドとセッションスレッド間のデータ送受信は、<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> を介して非同期に行われます。 5. 処理が完了すると、レスポンスフレームがセッションを通じてクライアントに送信され、ストリームが破棄されます。</p>
+<h2>重要な不変条件</h2>
+<p>※スレッド間のロック順序、状態遷移の整合性、バケットの所有権移動に関する厳密な不変条件（Invariants）は、提供されたソースコードの具体的なシンボル定義が不足しているため、現時点では不明です。</p>
+<h2>よくある落とし穴</h2>
+<p>※デッドロックの発生条件、バケットビームの早期クローズによるメモリリーク、スレッド競合など、実装上の具体的な落とし穴は現時点では特定されていません。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a> — スレッド間のデータ転送とバケット管理の実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a> — ストリームタスクの多重化とスレッド間調整の実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a> — HTTP/2 接続およびフレーム送受信の管理</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a> — 個々のストリームの状態遷移とライフサイクル管理</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm/netware/mpm_netware.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');">server/mpm/netware/mpm_netware.c</a></h1>
+<h2>概要</h2>
+<p>NetWare OS 上で動作する Apache HTTP Server のマルチプロセッシングモジュール (MPM) です。NetWare のスレッドモデル（NKS: NetWare Kernel Services）を活用し、単一プロセス内で複数のワーカースレッドを管理するスレッドベースの MPM を実装しています。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の MPM インターフェースを実装し、NetWare 特有のコンソール操作、スレッド管理、およびネットワークリスニングのライフサイクルを制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッド管理**: <code>worker_main</code> を用いたワーカースレッドの生成、監視、およびスレッドプールの動的調整（<code>perform_idle_server_maintenance</code>）。</li>
+<li>**コンソール統合**: NetWare コンソールコマンド（<code>RESTART</code>, <code>SHUTDOWN</code>, <code>SETTINGS</code> 等）の登録と処理。</li>
+<li>**ライフサイクル管理**: <a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_run.html&quot;}, '*');"><code>netware_run</code></a> を中心としたサーバーの起動、リスニングソケットの監視、および正常終了/再起動の制御。</li>
+<li>**設定管理**: <code>StartThreads</code>, <code>MinSpareThreads</code>, <code>MaxSpareThreads</code>, <code>MaxThreads</code> などの MPM 固有ディレクティブの解析と適用。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ワーカースレッド制御</h3>
+<ul>
+<li><code>worker_main</code>: 各ワーカースレッドのメインループ。<code>select()</code> でリスニングソケットを監視し、接続を処理。</li>
+<li><code>make_child</code>: <code>NXThreadCreate</code> を用いて新しいワーカースレッドを生成。</li>
+<li><code>clean_child_exit</code>: スレッド終了時のクリーンアップとスコアボード更新。</li>
+</ul>
+<h3>サーバー状態管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>mpm_state</code></a>: サーバーの現在の状態（<a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html#L140" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>AP_MPMQ_STARTING</code></a>, <code>RUNNING</code>, <code>STOPPING</code>）。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>ap_threads_limit</code></a>, <a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>ap_threads_min_free</code></a>: スレッドプールの制限値。</li>
+<li><code>shutdown_pending</code>, <code>restart_pending</code>: シグナルやコンソール操作による状態遷移フラグ。</li>
+</ul>
+<h3>コンソール統合</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L1179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__CommandLineInterpreter.html&quot;}, '*');"><code>CommandLineInterpreter</code></a>: NetWare コンソールからの入力を解析・実行。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L1271" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__InstallConsoleHandler.html&quot;}, '*');"><code>InstallConsoleHandler</code></a>: <code>RegisterConsoleCommand</code> を用いたコマンドハンドラの登録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L1087" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_mpm_hooks.html&quot;}, '*');"><code>netware_mpm_hooks</code></a> がフックを登録。<a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L1104" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_rewrite_args.html&quot;}, '*');"><code>netware_rewrite_args</code></a> でコマンドライン引数を処理し、コンソールハンドラをインストール。 2. **起動**: <a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_run.html&quot;}, '*');"><code>netware_run</code></a> がリスニングソケットを準備し、<a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L586" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__startup_workers.html&quot;}, '*');"><code>startup_workers</code></a> で初期スレッド群を生成。 3. **メインループ**: <a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_run.html&quot;}, '*');"><code>netware_run</code></a> 内で <code>perform_idle_server_maintenance</code> を定期実行し、スレッドの過不足を調整。 4. **リクエスト処理**: 各 <code>worker_main</code> が <code>select()</code> で待機し、接続を受け取ると <a class="wiki-source-link" href="../../../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> を呼び出す。 5. **終了**: <code>shutdown_pending</code> がセットされると、全スレッドの終了を待機し、<a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_netware.c.html#L194" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__mpm_main_cleanup.html&quot;}, '*');"><code>mpm_main_cleanup</code></a> でリソースを解放。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_thread_proc.h</code>, <code>apr_thread_mutex.h</code>, <code>apr_pools.h</code> 等によるポータブルなスレッド・メモリ管理。</li>
+<li>**NetWare SDK**: <code>nks/netware.h</code>, <code>library.h</code>, <code>screen.h</code> 等による OS ネイティブなスレッド・コンソール制御。</li>
+<li>**Apache Core**: <a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a> 等によるサーバー基盤との統合。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_tables.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><code>mpm_default.h</code></li>
+<li><code>netware.h</code></li>
+<li><code>signal.h</code></li>
+<li><code>sys/select.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>time.h</code></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/netware/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>server/mpm/netware/mpm_default.h</code></a>: デフォルトの制限値や定数定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a>: スレッド状態の共有メモリ管理。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a>: リスニングソケットの抽象化。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>pmain</code> プールがサーバーのライフサイクルを管理し、<code>ptrans</code> プールがリクエストごとのトランザクションメモリを管理します。</li>
+<li>**スレッドモデル**: NetWare は単一プロセスモデルであるため、<code>fork()</code> は使用されず、すべてスレッドとして実装されています。</li>
+<li>**制約**: <code>HARD_SERVER_LIMIT</code> は NetWare の特性上 1 に固定されています。</li>
+<li>**未実装**: <code>netware_post_config</code> などの一部のフックはコメントアウトされており、必要最小限の機能に絞られています。</li>
+<li>**注意**: コンソールコマンドの処理は <code>NX_WRAP_INTERFACE</code> を介して行われており、NetWare のスレッドコンテキストを意識した設計になっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__clean_child_exit.html" target="wiki-view"><code>clean_child_exit</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__mpm_main_cleanup.html" target="wiki-view"><code>mpm_main_cleanup</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__netware_query.html" target="wiki-view"><code>netware_query</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__netware_get_name.html" target="wiki-view"><code>netware_get_name</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__mpm_term.html" target="wiki-view"><code>mpm_term</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__sig_term.html" target="wiki-view"><code>sig_term</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__set_signals.html" target="wiki-view"><code>set_signals</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__worker_main.html" target="wiki-view"><code>worker_main</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__netware_check_config.html" target="wiki-view"><code>netware_check_config</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__CommandLineInterpreter.html" target="wiki-view"><code>CommandLineInterpreter</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__InstallConsoleHandler.html" target="wiki-view"><code>InstallConsoleHandler</code></a></li>
+<li><a href="../../../symbols/server__mpm__netware__mpm_netware_c__RemoveConsoleHandler.html" target="wiki-view"><code>RemoveConsoleHandler</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

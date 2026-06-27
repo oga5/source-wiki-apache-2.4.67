@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__util_script_c__ap_create_environment.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_script.c.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_create_environment.html&quot;}, '*');">ap_create_environment</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/util_script.c:112</code></li>
+</ul>
+<h2>目的</h2>
+<p><code>apr_table_t</code> に格納されたリクエスト環境変数を、OS の <code>exec</code> システムコール等で利用可能な <code>char **</code> 形式の配列（環境変数ブロック）へ変換します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>char **ap_create_environment(apr_pool_t *p, apr_table_t *t)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li><code>t</code>: 環境変数のキーと値のペアを保持する <code>apr_table_t</code>。</li>
+<li>**出力**:</li>
+<li>変換された環境変数の文字列配列（<code>char **</code>）。末尾は <code>NULL</code> で終端されます。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>すべての動的メモリ割り当ては、提供された <code>apr_pool_t *p</code> から行われます。</li>
+<li>入力テーブル <code>t</code> に <code>TZ</code> 変数が存在しない場合、現在のプロセス環境から <code>TZ</code> を取得して配列に追加します。</li>
+<li>出力される各文字列は <code>KEY=VALUE</code> の形式です。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: <code>TZ</code> 変数の確認と追加を行います。 2. **変換と正規化**: 入力テーブル <code>t</code> の各要素を走査します。</p>
+<ul>
+<li>キーの先頭が数字の場合、<code>_</code> に置換します。</li>
+<li>キー内の英数字および <code>_</code> 以外の文字を <code>_</code> に置換します（Windows 環境では <code>(</code> および <code>)</code> も許可されます）。</li>
+<p>3. **重複排除**: 正規化の結果、既存のキーと衝突する場合はその変数を破棄します。 4. **終端**: 配列の最後に <code>NULL</code> を格納して返します。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_ext_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ext_filter.c.html&quot;}, '*');"><code>modules/filters/mod_ext_filter.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_elts</code>, <code>apr_palloc</code>, <code>apr_table_get</code>, <code>apr_pstrcat</code>, <code>apr_isdigit</code>, <a class="wiki-source-link" href="../../source/server/gen_test_char.c.html#L20" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>apr_isalnum</code></a> などの APR ユーティリティ関数。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_table_t</code>: 環境変数のソースとなるキー・値ペアのテーブル。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>メモリ不足時は <code>apr_palloc</code> によりアボートまたはエラーが発生する可能性があります。</li>
+<li>キーが空（<code>NULL</code>）の要素はスキップされます。</li>
+<li>正規化後のキーが既存のキーと重複する場合、その変数は環境変数ブロックに含まれません。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は CGI 仕様に準拠した環境変数の構築を目的としています。</li>
+<li><code>WIN32</code> 定義時とそれ以外で、キー名の正規化ルール（許可される文字）が異なる点に注意してください。</li>
+<li><code>mod_proxy_fcgi</code> 等の他モジュールでも同様の機能が必要とされる場合がありますが、本関数は <a class="wiki-source-link" href="../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>util_script.c</code></a> 内で完結しています。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

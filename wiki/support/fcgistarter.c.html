@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/fcgistarter.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/fcgistarter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/fcgistarter.c.html&quot;}, '*');">support/fcgistarter.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/support/fcgistarter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/fcgistarter.c.html&quot;}, '*');"><code>fcgistarter.c</code></a> は、FastCGI プログラムを起動し、指定されたポートでリクエストを待ち受けるためのスタンドアロンのユーティリティです。主に Unix 系プラットフォームにおいて、FastCGI プロセスが標準入力（ファイルディスクリプタ 0）経由でソケットを受け取れるように環境を整える役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュール内の他のツールが設定ファイルやログ管理を行うのに対し、本ファイルはプロセス管理とネットワークソケットのバインドに特化しています。Apache HTTP Server の外部で FastCGI プロセスを先行起動させるための補助ツールとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>コマンドライン引数による起動コマンド、ポート番号、インターフェース、プロセス数の指定。</li>
+<li>指定されたポートでの TCP ソケットの作成、バインド、およびリッスン。</li>
+<li>デーモン化（<code>apr_proc_detach</code>）の実行。</li>
+<li>子プロセスへのソケットの継承と、FastCGI が期待するファイルディスクリプタ 0 へのリダイレクト。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>main</code>: プログラムの全ライフサイクルを管理するエントリポイント。</li>
+<li><code>usage</code>: 引数エラー時にヘルプを表示して終了する関数。</li>
+<li><a class="wiki-source-link" href="../../source/support/fcgistarter.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__fcgistarter_c__exit_error.html&quot;}, '*');"><code>exit_error</code></a>: APR のエラーコードを解釈し、メッセージを出力して終了するユーティリティ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>apr_app_initialize</code> で APR 環境を構築し、引数を解析します。 2. **ソケット準備**: <code>apr_sockaddr_info_get</code> と <code>apr_socket_create</code> を経由し、指定ポートでリッスン状態にします。 3. **デーモン化**: <code>apr_proc_detach</code> を呼び出し、制御端末から切り離します。 4. **プロセス生成**: <code>apr_proc_fork</code> をループ内で実行します。</p>
+<ul>
+<li>**子プロセス**: <code>apr_os_sock_get</code> でソケットを取得し、<code>apr_file_dup2</code> を用いてファイルディスクリプタ 0 に複製した後、<code>execl</code> でターゲットコマンドを実行します。</li>
+<li>**親プロセス**: 指定された数のプロセスを生成するまで待機し、完了後にソケットを閉じます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_pools.h</code>: APR の基本構造とメモリ管理。</li>
+<li><code>apr_network_io.h</code>: ソケット通信用。</li>
+<li><code>apr_thread_proc.h</code>: プロセス生成および管理用。</li>
+<li><code>apr_getopt.h</code>: コマンドライン引数解析用。</li>
+<li><code>apr_portable.h</code>: プラットフォーム固有のファイルディスクリプタ操作用。</li>
+<li><code>stdlib.h</code></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/suexec.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.c.html&quot;}, '*');"><code>support/suexec.c</code></a>: プロセス実行権限を管理する別のサポートツール。</li>
+<li><code>apr_file_dup2</code>: 本ファイルで最も重要な、ファイルディスクリプタを差し替えるための APR 関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**プラットフォーム依存性**: 本ファイルは Unix 系のファイルディスクリプタ操作に強く依存しており、Windows 等の非 Unix 環境では実装が未完了（<code>#error</code>）です。</li>
+<li>**実装の制約**: FastCGI プロセスが fd 0 を必要とするため、APR の標準的な <code>apr_proc_create</code> を使用せず、<code>dup2</code> を用いた低レイヤーなハックを行っています。このため、エラーハンドリングが子プロセス側で困難であるという設計上の制約があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__fcgistarter_c__usage.html" target="wiki-view"><code>usage</code></a></li>
+<li><a href="../symbols/support__fcgistarter_c__exit_error.html" target="wiki-view"><code>exit_error</code></a></li>
+<li><a href="../symbols/support__fcgistarter_c__main.html" target="wiki-view"><code>main</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

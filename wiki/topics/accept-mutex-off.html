@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/accept-mutex-off.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>accept_mutex_off</h1>
+<h2>概念</h2>
+<p><code>accept_mutex_off</code> は、Apache HTTP Server (httpd) のマルチプロセッシングモジュール (MPM) である <code>prefork</code> や、関連するテストツールにおいて、接続の受け入れ（<code>accept</code>）処理の直後にプロセス間排他制御（ミューテックスやロック）を解放するために使用される関数です。</p>
+<h2>なぜ重要か</h2>
+<p>複数の子プロセスが同時に接続を待ち受けるマルチプロセスモデルにおいて、特定のプロセスが接続を受け入れた後、速やかにロックを解放して他の子プロセスが次の接続を受け入れられるようにするために重要です。これにより、接続処理の競合を防ぎ、効率的なリクエスト処理を実現します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/test.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/test.html&quot;, &quot;source&quot;: &quot;source/test/cls.c.html&quot;}, '*');"><code>module:test</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/prefork.c.html#L262&quot;}, '*');"><code>symbol:server/mpm/prefork/prefork.c#accept_mutex_off</code></a>**</li>
+<p><code>prefork</code> MPMにおいて、<code>apr_proc_mutex_unlock</code> を用いてプロセス間ミューテックスを解放する関数。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/test__time-sem_c__accept_mutex_off.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__time-sem_c__accept_mutex_off.html&quot;, &quot;source&quot;: &quot;source/test/time-sem.c.html#L124&quot;}, '*');"><code>symbol:test/time-sem.c#accept_mutex_off</code></a>**</li>
+<p>テスト環境において、<code>fcntl</code> システムコールを用いてプロセス間排他制御（ロック）を解放する関数。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>本関数は、接続処理のライフサイクルにおいて以下のように呼び出されます。ただし、テスト用実装と本番用実装がビルド時にどのように切り替えられるかなど、システム全体における詳細なエンドツーエンドの連携フローの全容は完全には明らかになっていません。</p>
+<h3>1. <code>prefork</code> MPMにおける流れ</h3>
+<ul>
+<li>子プロセスが <code>SAFE_ACCEPT</code> マクロ経由で <code>accept_mutex_off</code> を呼び出します。</li>
+<li><code>my_bucket-&gt;mutex</code> に対して <code>apr_proc_mutex_unlock</code> を実行し、ミューテックスを解放します。</li>
+<li>解放に成功した場合は <code>APR_SUCCESS</code> を返します。</li>
+<li>解放に失敗した場合、現在のプロセス世代とスコアボード上の実行世代を比較します。世代が一致していれば緊急ログを出力して <a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a> で強制終了し、世代が異なる（グレースフル再起動中など）場合はデバッグログを出力して処理を継続します。</li>
+</ul>
+<h3>2. <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> における流れ</h3>
+<ul>
+<li>計測ループまたは <code>SAFE_ACCEPT</code> マクロ経由で呼び出されます。</li>
+<li><code>fcntl</code> システムコールを <code>F_SETLKW</code> コマンドで呼び出し、<code>unlock_it</code> 構造体に基づいてロックを解除します。</li>
+<li>解放に失敗した場合は、<code>perror</code> でエラーを出力し、<code>exit(1)</code> で即座にプロセスを終了します。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**<code>prefork</code> MPMの実装**: グローバルな <code>my_bucket</code> が初期化されており、有効なミューテックスを保持している必要があります。また、本関数は <code>accept()</code> 処理の直後に呼び出されることを想定しています。</li>
+<li>**<a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> の実装**: <code>fcntl_fd</code> が有効なファイル記述子として初期化されており、<code>unlock_it</code> が <code>struct flock</code> 構造体として適切に設定されている必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**マクロ展開による隠蔽**: <code>prefork</code> MPMでは、本関数は直接呼び出されるのではなく <code>SAFE_ACCEPT</code> マクロを通じて呼び出されるため、ソースコードを静的解析する際に直接の呼び出し箇所を見落とす可能性があります。</li>
+<li>**エラーハンドリングの差異**: <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> はベンチマークやテスト用の設計であるため、ロック解除失敗時にエラー復旧を行わず即座に <code>exit(1)</code> で終了します。本番環境の挙動とは異なる点に注意が必要です。</li>
+<li>**同名関数の重複**: <a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a> 内には、コンパイルオプションによって異なるロック方式（SysV sem, pthread mutex等）に対応した同名の関数が複数定義されている可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/time-sem.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/time-sem.c.html&quot;}, '*');"><code>test/time-sem.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

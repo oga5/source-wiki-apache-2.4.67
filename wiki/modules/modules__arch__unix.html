@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/modules__arch__unix.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>modules/arch/unix</h1>
+<h2>システム内での役割</h2>
+<p>本モジュールは、Apache HTTP Server が Unix 系 OS 上で動作する際に必要な、プロセス権限管理、環境分離、およびシステムサービス統合のための基盤を提供します。ディレクトリ境界に基づき、Unix 特有のシステムコールや外部サービス（<a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a>）との連携機能を抽象化・集約しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**権限管理**: プロセス起動時の <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a> 権限から非特権ユーザーへの降格（<code>setuid</code>/<code>setgid</code>）。</li>
+<li>**環境分離**: <code>chroot</code> による実行ディレクトリの制限および suEXEC の検証。</li>
+<li>**特権の動的制御**: Solaris 等の特権機能を用いたリクエスト単位の権限分離。</li>
+<li>**サービス統合**: <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> によるサービス管理（起動通知、ソケット引き継ぎ、稼働状況の報告）のサポート。</li>
+</ul>
+<h2>このモジュールのファイル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');"><code>mod_unixd.c</code></a> / <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.h.html&quot;}, '*');"><code>mod_unixd.h</code></a>: 権限管理とプロセス環境設定のコア実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_privileges.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_privileges.c.html&quot;}, '*');"><code>mod_privileges.c</code></a>: OS レベルの特権機能を活用したリクエスト単位の権限分離。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');"><code>mod_systemd.c</code></a>: <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> サービスマネージャとの連携インターフェース。</li>
+</ul>
+<h2>主要なデータ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_config_t.html&quot;}, '*');"><code>unixd_config_t</code></a>: ユーザー/グループ ID や <code>chroot</code> 設定を保持する共通設定構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/unix/mod_privileges.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_privileges_c__priv_cfg.html&quot;}, '*');"><code>priv_cfg</code></a> / <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_privileges.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_privileges_c__priv_dir_cfg.html&quot;}, '*');"><code>priv_dir_cfg</code></a>: <code>mod_privileges</code> における vhost 単位の権限セットおよび動作モード。</li>
+<li><a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a>: <code>mod_systemd</code> が稼働統計を取得するために参照する共有メモリ構造。</li>
+</ul>
+<h2>主なフロー</h2>
+<p>1. **起動時**: <code>mod_unixd</code> が設定を読み込み、<code>mod_systemd</code> が起動完了をサービスマネージャへ通知。 2. **プロセス生成時**: <code>ap_unixd_setup_child()</code> が呼び出され、グループ権限の確定、<code>chroot</code> の実行、最終的な <code>setuid</code> による権限降格が行われる。 3. **リクエスト処理時**: <code>mod_privileges</code> が有効な場合、リクエストごとに権限セットの動的変更やプロセス分離（fork）が実行される。 4. **監視時**: <code>mod_systemd</code> が定期的にスコアボードから統計を読み取り、<a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> へステータスを送信。</p>
+<h2>外部依存</h2>
+<ul>
+<li>**システム API**: <code>unistd.h</code>, <code>pwd.h</code>, <code>grp.h</code>, <code>sys/prctl.h</code>, <code>priv.h</code> (Solaris)</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a>**: <code>libsystemd</code> (<code>sd-daemon.h</code>)</li>
+<li>**Apache 内部**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>, <a class="wiki-source-link" href="../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a>, <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a></li>
+</ul>
+<h2>内部構成</h2>
+<p>本モジュールは、Unix 系 MPM の動作を支える独立した機能モジュールの集合体です。各モジュールは MPM のフックポイントを利用して連携しますが、モジュール間での直接的な依存は最小限に抑えられています。</p>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.h.html&quot;}, '*');"><code>mod_unixd.h</code></a>: 権限管理の基本インターフェースを理解する。 2. <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');"><code>mod_unixd.c</code></a>: プロセス降格の標準的な実装を確認する。 3. <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_privileges.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_privileges.c.html&quot;}, '*');"><code>mod_privileges.c</code></a>: OS 特有の高度な権限分離手法を学ぶ。 4. <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');"><code>mod_systemd.c</code></a>: 外部サービスマネージャとの統合ロジックを確認する。</p>
+<h2>未解決の問い</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a>（<code>include/</code> 配下）と <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.h.html&quot;}, '*');"><code>mod_unixd.h</code></a> の役割分担の整理。</li>
+<li>マルチスレッド MPM（Worker/Event）環境における <code>mod_privileges</code> の互換性向上策。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

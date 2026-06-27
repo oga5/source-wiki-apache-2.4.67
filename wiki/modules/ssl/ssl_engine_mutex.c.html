@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_engine_mutex.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_mutex.c.html&quot;}, '*');">modules/ssl/ssl_engine_mutex.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_mutex.c.html&quot;}, '*');"><code>ssl_engine_mutex.c</code></a> は、Apache HTTP Server の <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> におけるセッションキャッシュ保護のための相互排他（Mutex）制御を実装するソースファイルです。マルチプロセス/マルチスレッド環境下で、共有されるセッションキャッシュへの安全なアクセスを保証します。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> のセッションキャッシュサブシステム（<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_scache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_scache.c.html&quot;}, '*');"><code>ssl_scache.c</code></a> 等）を補完するユーティリティ層です。キャッシュプロバイダがスレッドセーフまたはプロセスセーフでない場合に、排他制御を透過的に提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**Mutex の初期化**: サーバー起動時にグローバル Mutex を作成し、キャッシュの保護が必要か判定する。</li>
+<li>**子プロセスでの再初期化**: フォーク後の子プロセスで Mutex を再接続し、ロックを有効化する。</li>
+<li>**排他制御の実行**: セッションキャッシュへの読み書き時に、ロックの取得（<code>on</code>）と解放（<code>off</code>）を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_init.html&quot;}, '*');"><code>ssl_mutex_init</code></a>: サーバー起動時に Mutex を作成する。キャッシュプロバイダのフラグを確認し、不要な場合は作成をスキップする。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L59" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_reinit.html&quot;}, '*');"><code>ssl_mutex_reinit</code></a>: 子プロセス生成後に Mutex を再初期化する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_on.html&quot;}, '*');"><code>ssl_mutex_on</code></a> / <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L99" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_off.html&quot;}, '*');"><code>ssl_mutex_off</code></a>: セッションキャッシュ操作の前後で呼び出されるラッパー関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_init.html&quot;}, '*');"><code>ssl_mutex_init</code></a> が <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L666" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLModConfigRec.html&quot;}, '*');"><code>SSLModConfigRec</code></a> を参照し、キャッシュプロバイダの <a class="wiki-source-link" href="../../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a> フラグをチェックします。必要であれば <a class="wiki-source-link" href="../../../source/server/util_mutex.c.html#L407" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__ap_global_mutex_create.html&quot;}, '*');"><code>ap_global_mutex_create</code></a> で Mutex を生成します。 2. **実行時**: セッションキャッシュへのアクセスが必要な箇所で <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_on.html&quot;}, '*');"><code>ssl_mutex_on</code></a> を呼び出し、<code>apr_global_mutex_lock</code> を実行します。処理終了後に <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_mutex.c.html#L99" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_off.html&quot;}, '*');"><code>ssl_mutex_off</code></a> で <code>apr_global_mutex_unlock</code> を呼び出します。 3. **エラーハンドリング**: ロックの取得・解放に失敗した場合、<code>ap_log_error</code> を通じてログを出力し、呼び出し元に失敗を伝播させます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L666" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLModConfigRec.html&quot;}, '*');"><code>SSLModConfigRec</code></a> 構造体や <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L1151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>SSL_CACHE_MUTEX_TYPE</code></a> 定義など、モジュール内の共通定義に依存しています。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_scache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_scache.c.html&quot;}, '*');"><code>ssl_scache.c</code></a>: このファイルで管理される Mutex を実際に利用してキャッシュ操作を行う主要なコンポーネントです。</li>
+<li><code>apr_global_mutex</code>: Apache Portable Runtime (APR) が提供するクロスプラットフォームな Mutex 実装です。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**条件付き実行**: すべてのキャッシュプロバイダで Mutex が使用されるわけではありません。プロバイダ自体がスレッドセーフである場合、このモジュールの関数は実質的に何もしない（あるいは初期化をスキップする）設計になっています。</li>
+<li>**デバッグ**: ロックの取得失敗は、多くの場合、OS のリソース制限や権限設定に起因します。ログ出力される <code>APLOGNO</code> を確認してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_init.html" target="wiki-view"><code>ssl_mutex_init</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_reinit.html" target="wiki-view"><code>ssl_mutex_reinit</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_on.html" target="wiki-view"><code>ssl_mutex_on</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_mutex_c__ssl_mutex_off.html" target="wiki-view"><code>ssl_mutex_off</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

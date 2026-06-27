@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/aaa/mod_authn_file.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_file.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_file.c.html&quot;}, '*');">modules/aaa/mod_authn_file.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_file.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_file.c.html&quot;}, '*');"><code>mod_authn_file.c</code></a> は、Apache HTTP Server における認証プロバイダーの一つであり、テキストファイル（<code>AuthUserFile</code>）に保存されたユーザー名とパスワード情報を使用して認証を行うためのモジュールです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_authn_core</code> が提供する認証フレームワークに対し、「file」という名前の認証プロバイダーとして機能します。認証が必要なリクエストが発生した際、設定されたファイルから資格情報を検索し、認証の可否を判定します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>AuthUserFile</code> ディレクティブを解析し、パスワードファイルへのパスを保持する。</li>
+<li>**認証処理**: 指定されたファイルからユーザー名とパスワード（またはハッシュ）を読み取り、照合を行う。</li>
+<li>**キャッシュ連携**: 認証結果を <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L292" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__ap_authn_cache_store.html&quot;}, '*');"><code>ap_authn_cache_store</code></a>（存在する場合）へ通知し、後続の認証処理を高速化する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_file.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_file_c__authn_file_config_rec.html&quot;}, '*');"><code>authn_file_config_rec</code></a>: パスワードファイルのパスを保持するディレクトリごとの設定構造体。</li>
+<li><code>check_password</code>: 基本認証（Basic Auth）で使用されるパスワード照合関数。</li>
+<li><code>get_realm_hash</code>: ダイジェスト認証（Digest Auth）で使用されるハッシュ取得関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_file.c.html#L167" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_file.c.html&quot;}, '*');"><code>authn_file_provider</code></a>: <code>mod_authn_core</code> に登録される関数ポインタのセット。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> が <a class="wiki-source-link" href="../../../source/server/request.c.html#L2179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_register_auth_provider.html&quot;}, '*');"><code>ap_register_auth_provider</code></a> を呼び出し、「file」プロバイダーを登録します。 2. **リクエスト処理**:</p>
+<ul>
+<li>認証が必要なリクエストに対し、<code>check_password</code> または <code>get_realm_hash</code> が呼び出されます。</li>
+<li><code>ap_pcfg_openfile</code> を使用して設定されたパスワードファイルを開きます。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util.c.html#L1198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cfg_getline.html&quot;}, '*');"><code>ap_cfg_getline</code></a> で行単位に読み込み、<a class="wiki-source-link" href="../../../source/server/util.c.html#L723" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_getword.html&quot;}, '*');"><code>ap_getword</code></a> でユーザー名とパスワードを分割・抽出します。</li>
+<li>ユーザー名が一致した場合、<code>apr_password_validate</code> でパスワードを検証するか、ハッシュ値を返します。</li>
+<p>3. **キャッシュ**: 成功時に <code>AUTHN_CACHE_STORE</code> マクロを通じて結果をキャッシュ層へ渡します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>: 認証プロバイダーのインターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: Apache のコア機能および設定管理。</li>
+<li><code>apr_strings.h</code>, <code>apr_md5.h</code>: 文字列操作およびパスワード検証用ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>mod_authn_core.c</code></a>: 認証プロバイダーの登録と呼び出しを管理する上位モジュール。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_basic.c.html&quot;}, '*');"><code>mod_auth_basic.c</code></a> / <a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_digest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_digest.c.html&quot;}, '*');"><code>mod_auth_digest.c</code></a>: 本モジュールが提供するプロバイダーを利用する認証方式の実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは非常にシンプルで、ファイルベースの認証の標準的な実装例です。</li>
+<li>パスワードファイルはプレーンテキストであるため、セキュリティ上の観点からファイルへのアクセス権限管理が重要です。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util.c.html#L1198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cfg_getline.html&quot;}, '*');"><code>ap_cfg_getline</code></a> を使用した行単位の読み込みは、ファイルサイズが大きくなるとパフォーマンスに影響を与える可能性があるため、大規模なユーザーリストには <code>mod_authn_dbm</code> や <code>mod_authn_dbd</code> の利用が推奨されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authn_file_c__authn_file_config_rec.html" target="wiki-view"><code>authn_file_config_rec</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_file_c__create_authn_file_dir_config.html" target="wiki-view"><code>create_authn_file_dir_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_file_c__check_password.html" target="wiki-view"><code>check_password</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_file_c__get_realm_hash.html" target="wiki-view"><code>get_realm_hash</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_file_c__opt_retr.html" target="wiki-view"><code>opt_retr</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_file_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

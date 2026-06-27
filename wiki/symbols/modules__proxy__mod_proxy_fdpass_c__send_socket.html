@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__proxy__mod_proxy_fdpass_c__send_socket.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fdpass.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__send_socket.html&quot;}, '*');">send_socket</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/proxy/mod_proxy_fdpass.c:74</code></li>
+</ul>
+<h2>目的</h2>
+<p>Unix ドメインソケットを経由して、クライアントとの接続（ファイルディスクリプタ）を別のプロセスへ移譲（FD Passing）するために使用されます。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t send_socket(apr_pool_t *p, apr_socket_t *s, apr_socket_t *outbound)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: メモリ割り当てに使用する <code>apr_pool_t</code>。</li>
+<li><code>s</code>: 転送先となる Unix ドメインソケット。</li>
+<li><code>outbound</code>: 相手プロセスへ引き渡す対象のクライアントソケット。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>CMSG_DATA</code> マクロが定義されている環境（主に Unix 系）で動作することを前提とします。</li>
+<li>渡されるソケット <code>s</code> および <code>outbound</code> は、APR のソケットオブジェクトとして有効である必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>apr_os_sock_get</code> を使用して、APR ソケットから OS レベルのファイルディスクリプタ（<code>rawsock</code> および <code>srawsock</code>）を取得します。 2. <code>msghdr</code> 構造体を初期化し、送信データとしてダミーの 1 バイト（<code>\0</code>）を準備します。 3. <code>cmsghdr</code> 構造体をメモリプールから確保し、<code>SCM_RIGHTS</code> を設定して <code>rawsock</code>（引き渡す FD）を格納します。 4. <code>sendmsg</code> システムコールを呼び出し、制御メッセージとして FD を送信します。 5. 送信結果が <code>-1</code> の場合は <code>errno</code> を返し、成功時は <code>APR_SUCCESS</code> を返します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_fdpass.c:169</code>（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fdpass.c.html#L123" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_handler.html&quot;}, '*');"><code>proxy_fdpass_handler</code></a> 内で呼び出されます）。</li>
+<li>**呼び出し先**: </li>
+<li><code>apr_os_sock_get</code> (APR)</li>
+<li><code>sendmsg</code> (システムコール)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_socket_t</code>: APR のソケット抽象化レイヤー。</li>
+<li><code>msghdr</code>, <code>cmsghdr</code>: <code>sendmsg</code> でファイルディスクリプタを渡すために使用される POSIX ソケット構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_os_sock_get</code> が失敗した場合、そのエラーコードを返します。</li>
+<li><code>sendmsg</code> が <code>-1</code> を返した場合、その時点の <code>errno</code> を返します。</li>
+<li>相手プロセスが FD を受け取る準備ができていない場合、送信処理がブロックされる可能性があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>SCM_RIGHTS</code> を用いた低レイヤーの FD 移譲を行います。引き渡し後のソケット管理（Apache 側でのクローズ防止など）は呼び出し元で行う必要があります。</li>
+<li>プラットフォーム依存の <code>CMSG_DATA</code> マクロに依存しているため、移植時には注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

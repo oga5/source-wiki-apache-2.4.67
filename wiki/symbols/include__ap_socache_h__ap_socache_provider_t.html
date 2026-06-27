@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/include__ap_socache_h__ap_socache_provider_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');">ap_socache_provider_t</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>include/ap_socache.h:89</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server における「小規模オブジェクトキャッシュ」の抽象化レイヤーを定義する構造体です。メモリ、共有メモリ、ディスクなど、多様なバックエンド実装を統一的なインターフェースで利用可能にします。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct ap_socache_provider_t {
+    const char *name;
+    unsigned int flags;
+    const char *(*create)(ap_socache_instance_t **instance, const char *arg, apr_pool_t *tmp, apr_pool_t *p);
+    apr_status_t (*init)(ap_socache_instance_t *instance, const char *cname, const struct ap_socache_hints *hints, server_rec *s, apr_pool_t *pool);
+    void (*destroy)(ap_socache_instance_t *instance, server_rec *s);
+    apr_status_t (*store)(ap_socache_instance_t *instance, server_rec *s, const unsigned char *id, unsigned int idlen, apr_time_t expiry, unsigned char *data, unsigned int datalen, apr_pool_t *pool);
+    apr_status_t (*retrieve)(ap_socache_instance_t *instance, server_rec *s, const unsigned char *id, unsigned int idlen, unsigned char *data, unsigned int *datalen, apr_pool_t *pool);
+    apr_status_t (*remove)(ap_socache_instance_t *instance, server_rec *s, const unsigned char *id, unsigned int idlen, apr_pool_t *pool);
+    void (*status)(ap_socache_instance_t *instance, request_rec *r, int flags);
+    apr_status_t (*iterate)(ap_socache_instance_t *instance, server_rec *s, void *userctx, ap_socache_iterator_t *iterator, apr_pool_t *pool);
+} ap_socache_provider_t;</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: キャッシュ操作に必要なインスタンス、サーバー構造体、バイナリデータ（ID/データ本体）、有効期限、メモリプール。</li>
+<li>**出力**: 操作結果を示す <code>apr_status_t</code>（成功時は <code>APR_SUCCESS</code>）、または <code>retrieve</code> におけるデータ本体と書き込みサイズ。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>init</code> に渡す <code>cname</code> は最大16文字で、英数字（<code>[a-z0-9_-]</code>）のみの使用が推奨されます。</li>
+<li><code>retrieve</code> の <code>datalen</code> は入出力両用です。呼び出し時にバッファサイズを渡し、戻り値として実際に書き込まれたサイズを受け取ります。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a> フラグが設定されている場合、呼び出し側で明示的な排他制御が必要です。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **登録**: <a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a> を介して <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L219" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_PROVIDER_GROUP</code></a> に登録されます。 2. **生成**: <code>create</code> でインスタンスを生成し、<code>init</code> で識別名とヒントを適用して運用を開始します。 3. **操作**: <code>store</code>, <code>retrieve</code>, <code>remove</code> によりバイナリデータの読み書きを行います。 4. **走査**: <code>iterate</code> を通じてキャッシュ内の全オブジェクトをコールバック関数で処理します。 5. **破棄**: <code>destroy</code> によりリソースを解放します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a>（セッションキャッシュ）、<code>mod_cache_socache</code>、<code>mod_authn_socache</code> など。</li>
+<li>**呼び出し先**: 各キャッシュ実装モジュール（<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>mod_socache_shmcb.c</code></a>, <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_dbm.c.html&quot;}, '*');"><code>mod_socache_dbm.c</code></a>, <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_dc.c.html&quot;}, '*');"><code>mod_socache_dc.c</code></a>, <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_memcache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_memcache.c.html&quot;}, '*');"><code>mod_socache_memcache.c</code></a>, <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_redis.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_redis.c.html&quot;}, '*');"><code>mod_socache_redis.c</code></a>）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュインスタンスを保持する不透明な型。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_hints.html&quot;}, '*');"><code>ap_socache_hints</code></a>: キャッシュの期待される利用状況を記述するヒント構造体。</li>
+<li><code>server_rec</code>, <code>request_rec</code>: Apache のサーバーおよびリクエスト構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>create</code> は失敗時にエラー文字列を返します。</li>
+<li><code>retrieve</code> は対象が見つからない場合に <code>APR_NOTFOUND</code> を返します。</li>
+<li><code>status</code> メソッドは <code>mod_status</code> 向けですが、内部で非推奨の <code>ap_r*</code> インターフェースを使用しています。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体はインターフェース定義であり、実装は各 <code>mod_socache_*.c</code> に存在します。</li>
+<li><code>iterate</code> メソッドのシグネチャは <a class="wiki-source-link" href="../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>include/ap_mmn.h</code></a> で定義される API バージョン変更の影響を受ける可能性があります。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

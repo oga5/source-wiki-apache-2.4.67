@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_engine_rand.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');">modules/ssl/ssl_engine_rand.c</a></h1>
+<h2>概要</h2>
+<p>OpenSSL の擬似乱数生成器（PRNG）を初期化・強化するためのエントロピー供給機能を提供します。サーバー起動時や接続確立時に、外部ファイル、外部プログラム、EGD（Entropy Gathering Daemon）、または組み込みのシステム情報から乱数シードを生成します。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> の初期化プロセスの一部として、暗号学的に安全な乱数生成に必要なエントロピーを確保します。他のモジュールが SSL/TLS 通信を開始する前に、十分な乱数性が確保されていることを保証する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**エントロピー源の管理**: 設定ファイルで指定された複数のソース（ファイル、コマンド実行、EGD、組み込み）からエントロピーを収集する。</li>
+<li>**OpenSSL への供給**: 収集したデータを <code>RAND_seed()</code> を通じて OpenSSL の内部状態に注入する。</li>
+<li>**状態監視**: シード供給後の <code>RAND_status()</code> を確認し、エントロピー不足が懸念される場合に警告をログ出力する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ssl_rand_seed</code>: エントロピー供給のメインエントリーポイント。設定されたソースを順次処理する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_rand.c.html#L137" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_rand_c__ssl_rand_feedfp.html&quot;}, '*');"><code>ssl_rand_feedfp</code></a>: ファイルやコマンド出力からデータを読み込み、<code>RAND_seed</code> に渡すための汎用ヘルパー。</li>
+<li><code>BUFSIZE</code>: エントロピー読み込み時のバッファサイズ（8192バイト）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>ssl_rand_seed</code> が呼び出されると、<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L666" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLModConfigRec.html&quot;}, '*');"><code>SSLModConfigRec</code></a> から設定された乱数シードソースのリストを取得します。 2. **ソース別処理**:</p>
+<ul>
+<li><code>SSL_RSSRC_FILE/EXEC</code>: ファイルやコマンドから <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_rand.c.html#L137" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_rand_c__ssl_rand_feedfp.html&quot;}, '*');"><code>ssl_rand_feedfp</code></a> を経由してデータを読み込みます。</li>
+<li><code>SSL_RSSRC_EGD</code>: <code>RAND_egd</code> を直接呼び出し、EGD からエントロピーを取得します。</li>
+<li><code>SSL_RSSRC_BUILTIN</code>: 現在時刻、PID、および実行時のスタックメモリの一部を組み合わせてシードを生成します。</li>
+<p>3. **検証**: 全ソースの処理完了後、<code>RAND_status()</code> でエントロピーの充足を確認し、不足があれば警告を出力します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> の内部構造体や共通定義へのアクセスに必須。</li>
+<li><code>apr_file_io.h</code> (間接的): ファイル操作およびプロセス間通信に使用。</li>
+<li><code>openssl/rand.h</code> (間接的): <code>RAND_seed</code>, <code>RAND_status</code>, <code>RAND_egd</code> 等の OpenSSL API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_init.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_init.c.html&quot;}, '*');"><code>ssl_engine_init.c</code></a>: <code>ssl_rand_seed</code> が呼び出される主要な初期化フローが含まれています。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.c.html&quot;}, '*');"><code>mod_ssl.c</code></a>: モジュールの設定構造体（<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L666" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLModConfigRec.html&quot;}, '*');"><code>SSLModConfigRec</code></a>）の定義と管理が行われています。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「乱数生成の質」を向上させるための補助的な実装です。現代の OpenSSL（特に 1.1.1 以降）は OS のエントロピー源を自動的に利用するため、設定によっては本機能の重要性は相対的に低下しています。</li>
+<li><code>SSL_RSSRC_BUILTIN</code> で行われるスタックからのデータ取得は、あくまで補助的な手法であり、これのみに依存することは推奨されません。</li>
+<li>外部コマンド（<code>SSL_RSSRC_EXEC</code>）を使用する場合、そのコマンドの実行時間がサーバー起動時間に影響を与える点に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_rand_c__ssl_rand_seed.html" target="wiki-view"><code>ssl_rand_seed</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_rand_c__time_t.html" target="wiki-view"><code>time_t</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_rand_c__ssl_rand_feedfp.html" target="wiki-view"><code>ssl_rand_feedfp</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_rand_c__ssl_rand_choosenum.html" target="wiki-view"><code>ssl_rand_choosenum</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

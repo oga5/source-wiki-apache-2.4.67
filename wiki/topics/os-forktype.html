@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/os-forktype.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>os_forktype</h1>
+<h2>概念</h2>
+<p><code>os_forktype</code> は、主にBS2000（OSD/POSIX）環境において、現在の実行コンテキスト（デバッグモードの有無や実行ユーザーの権限）に適したプロセス生成手法（<code>bs2_ForkType</code>）を決定するための関数です。</p>
+<h2>なぜ重要か</h2>
+<p>BS2000環境では、特権ユーザー（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>）と非特権ユーザーで利用可能なプロセス生成手法が異なる場合があり、またデバッグ時などの単一プロセス実行（<code>one_process</code>）の要求にも対応する必要があります。<code>os_forktype</code> は、これらの条件を動的に判定し、最適なプロセス生成手法（<code>bs2_noFORK</code>、<code>bs2_FORK</code>、または <code>bs2_UFORK</code>）を選択・キャッシュすることで、安全かつ効率的なプロセス管理を可能にします。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/os__bs2000.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__bs2000.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/ebcdic.c.html&quot;}, '*');"><code>module:os/bs2000</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/os__unix.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__unix.html&quot;, &quot;source&quot;: &quot;source/os/unix/os.h.html&quot;}, '*');"><code>module:os/unix</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/os__bs2000__os_c__os_forktype.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__bs2000__os_c__os_forktype.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/os.c.html#L48&quot;}, '*');"><code>symbol:os/bs2000/os.c#os_forktype</code></a>**: BS2000環境におけるプロセス生成手法の判定ロジックの実体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/os__unix__unixd_c__os_forktype.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_c__os_forktype.html&quot;, &quot;source&quot;: &quot;source/os/unix/unixd.c.html#L648&quot;}, '*');"><code>symbol:os/unix/unixd.c#os_forktype</code></a>**: UNIX/BS2000環境のプロセス管理から呼び出される関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. プロセス生成処理（<code>os_fork</code> や <code>os_init_job_environment</code> など）から <code>os_forktype</code> が呼び出されます。 2. <code>os_forktype</code> は、静的変数 <code>forktype</code> がすでに初期化されているか確認します。 3. 未初期化（<code>bs2_unknown</code>）の場合、以下の優先順位で判定を行います：</p>
+<ul>
+<li><code>one_process</code> 引数が真（非ゼロ）の場合：<code>bs2_noFORK</code> を選択。</li>
+<li>実行ユーザーが非特権（<code>getuid() != 0</code>）の場合：<code>bs2_FORK</code> を選択。</li>
+<li>特権ユーザー（<code>getuid() == 0</code>）の場合：<code>bs2_UFORK</code> を選択。</li>
+<p>4. 決定された <code>bs2_ForkType</code> は静的変数 <code>forktype</code> にキャッシュされ、以降の呼び出しではこのキャッシュ値が即座に返されます。</p>
+</ul>
+<p>※なお、<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> 側の詳細な内部アルゴリズムや、呼び出し元である <code>os_fork</code>、<code>os_init_job_environment</code> との完全なエンドツーエンドの連携フローの全容は、現時点では完全には解析されていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**キャッシュの不変性**: 一度 <code>forktype</code> が <code>bs2_unknown</code> 以外の値に決定されると、その値は静的変数にキャッシュされ、以降の呼び出しで再判定されることはありません。</li>
+<li>**マクロ依存性**: 本関数は <code>_OSD_POSIX</code> マクロが定義された環境でのみ有効に機能します。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**実行権限の動的変更への非追従**: <code>forktype</code> は静的変数にキャッシュされるため、プロセス起動後に実行権限（UID）が変更されても、<code>os_forktype</code> が返す判定結果は更新されません。</li>
+<li>**環境依存性**: <code>getuid()</code> の結果に依存しているため、実行環境の権限設定が意図しない状態である場合、不適切な <code>bs2_ForkType</code> が選択される可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a>（<code>os_forktype</code> の判定ロジックの実装）</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>（<code>os_forktype</code> を呼び出す <code>os_fork</code> や <code>os_init_job_environment</code> の実装）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

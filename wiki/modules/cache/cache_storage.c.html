@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/cache/cache_storage.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_storage.c.html&quot;}, '*');">modules/cache/cache_storage.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_storage.c.html&quot;}, '*');"><code>cache_storage.c</code></a> は、Apache HTTP Server のキャッシュサブシステムにおける「ストレージ抽象化レイヤー」を実装するファイルです。特定のキャッシュストレージ実装（ディスク、メモリ等）に依存せず、キャッシュの検索、作成、無効化、およびヘッダーの正規化といった共通の操作を管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_cache</code> の中核を担い、リクエスト処理の各フェーズ（クイックハンドラやフィルタ）から呼び出されるインターフェースを提供します。各ストレージプロバイダー（<code>mod_cache_disk</code> や <code>mod_cache_socache</code> など）が提供する関数を抽象化し、プロバイダーリストを反復処理することで、複数のキャッシュバックエンドを透過的に扱えるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュライフサイクル管理**: キャッシュエンティティの作成 (<a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_create_entity.html&quot;}, '*');"><code>cache_create_entity</code></a>)、検索 (<a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_select.html&quot;}, '*');"><code>cache_select</code></a>)、削除 (<a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L34" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_remove_url.html&quot;}, '*');"><code>cache_remove_url</code></a>)、無効化 (<a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L690" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_invalidate.html&quot;}, '*');"><code>cache_invalidate</code></a>) を制御する。</li>
+<li>**キー生成と正規化**: リクエスト URI からキャッシュキーを生成し、セッション ID の除外やクエリ文字列の正規化を行う。</li>
+<li>**ヘッダー操作**: キャッシュされたレスポンスヘッダーと現在のリクエストヘッダーをマージし、HTTP 仕様（Vary ヘッダー、条件付きリクエスト、警告ヘッダー）に従ってレスポンスを構築する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>キャッシュ操作（公開 API）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_select.html&quot;}, '*');"><code>cache_select</code></a>: キャッシュの検索とネゴシエーション（Vary ヘッダーチェック、鮮度確認、条件付きリクエストの検証）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_create_entity.html&quot;}, '*');"><code>cache_create_entity</code></a>: 新しいキャッシュエンティティの作成を各プロバイダーに試行。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L34" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_remove_url.html&quot;}, '*');"><code>cache_remove_url</code></a>: 指定された URL に関連するキャッシュエントリを全プロバイダーから削除。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L690" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_invalidate.html&quot;}, '*');"><code>cache_invalidate</code></a>: POST/PUT/DELETE 等に応答して、URL および関連する <code>Location</code>/<code>Content-Location</code> を無効化。</li>
+</ul>
+<h3>キー生成</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L665" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_generate_key_default.html&quot;}, '*');"><code>cache_generate_key_default</code></a>: リクエストからキャッシュキーを生成するデフォルト実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L428" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_canonicalise_key.html&quot;}, '*');"><code>cache_canonicalise_key</code></a>: ホスト名、スキーム、ポート、クエリ文字列を正規化し、一貫したキャッシュキーを生成する内部関数。</li>
+</ul>
+<h3>ヘッダー処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_accept_headers.html&quot;}, '*');"><code>cache_accept_headers</code></a>: キャッシュされたヘッダーと現在のヘッダーをマージし、<code>r-&gt;headers_out</code> を更新する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **検索フロー**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_select.html&quot;}, '*');"><code>cache_select</code></a> が呼び出されると、<code>cache-&gt;providers</code> リストを走査し、各プロバイダーの <code>open_entity</code> を試行します。成功した場合、<code>Vary</code> ヘッダーによるネゴシエーションと鮮度チェックを行い、失敗した場合は次のプロバイダーへフォールバックします。 2. **キー生成フロー**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L665" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_generate_key_default.html&quot;}, '*');"><code>cache_generate_key_default</code></a> は、リクエストのライフサイクルに応じて <code>r-&gt;uri</code> または <code>r-&gt;parsed_uri</code> を参照し、<a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L428" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_canonicalise_key.html&quot;}, '*');"><code>cache_canonicalise_key</code></a> を呼び出します。ここでは <code>CacheIgnoreQueryString</code> などの設定に基づき、不要なパラメータを削ぎ落としたキーを生成します。 3. **ヘッダーマージ**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_accept_headers.html&quot;}, '*');"><code>cache_accept_headers</code></a> は、<a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__filter_header_do.html&quot;}, '*');"><code>filter_header_do</code></a> などのヘルパー関数を <code>apr_table_do</code> で呼び出し、警告ヘッダーのフィルタリングや <code>Content-Type</code> の再設定を安全に行います。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.h.html&quot;}, '*');"><code>mod_cache.h</code></a>: キャッシュサブシステムの基本構造体定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_storage.h.html&quot;}, '*');"><code>cache_storage.h</code></a>: 本ファイルの公開関数定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_util.h.html&quot;}, '*');"><code>cache_util.h</code></a>: キャッシュユーティリティ関数（鮮度チェック、テーブル操作など）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>mod_cache.c</code></a>: キャッシュのメインフック（クイックハンドラ等）を定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_util.c.html&quot;}, '*');"><code>cache_util.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L533" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_check_freshness.html&quot;}, '*');"><code>cache_check_freshness</code></a> や <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1324" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_table_getm.html&quot;}, '*');"><code>cache_table_getm</code></a> など、本ファイルが依存するロジックの実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>mod_cache_disk.c</code></a> / <a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');"><code>mod_cache_socache.c</code></a>: 本ファイルが抽象化する具体的なストレージプロバイダーの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての操作は <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を使用します。ライフサイクルはリクエスト終了時に自動的に解放されるため、明示的な <code>free</code> は不要です。</li>
+<li>**プロバイダーの反復**: <code>while (list)</code> ループによるプロバイダーの反復は、最初の成功（<a class="wiki-source-link" href="../../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>）で終了するか、すべてのプロバイダーを試行するまで継続します。</li>
+<li>**設計の注意点**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html#L428" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_canonicalise_key.html&quot;}, '*');"><code>cache_canonicalise_key</code></a> は非常に複雑です。これは、プロキシリクエスト（フォワード/リバース）と通常のリクエストで、ホスト名やポートの解釈が異なるためです。</li>
+<li>**省略された詳細**: 本ファイルはストレージの「管理」に特化しており、実際のデータの読み書き（I/O）は各プロバイダーの <code>provider-&gt;...</code> 関数に委譲されています。具体的な I/O 実装については各プロバイダーのソースを参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_remove_url.html" target="wiki-view"><code>cache_remove_url</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_create_entity.html" target="wiki-view"><code>cache_create_entity</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__filter_header_do.html" target="wiki-view"><code>filter_header_do</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__remove_header_do.html" target="wiki-view"><code>remove_header_do</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__add_header_do.html" target="wiki-view"><code>add_header_do</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_accept_headers.html" target="wiki-view"><code>cache_accept_headers</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_select.html" target="wiki-view"><code>cache_select</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_canonicalise_key.html" target="wiki-view"><code>cache_canonicalise_key</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_generate_key_default.html" target="wiki-view"><code>cache_generate_key_default</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_storage_c__cache_invalidate.html" target="wiki-view"><code>cache_invalidate</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

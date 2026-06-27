@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_substitute.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_substitute.c.html&quot;}, '*');">modules/filters/mod_substitute.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_substitute</code> は、Apache HTTP Server の出力フィルタモジュールであり、レスポンスボディに対して正規表現または文字列置換をオンザフライで実行します。メモリ使用量を予測可能にするため、行単位の処理と最大行長制限（デフォルト 1MB）を強制する設計となっています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> サブシステムの一部として、コンテンツ変換フィルタを提供します。<code>mod_sed</code> と類似の目的を持ちますが、より軽量な置換処理に特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>Substitute</code> ディレクティブによる置換パターンの定義と、<code>SubstituteMaxLineLength</code> によるメモリ保護設定の管理。</li>
+<li>**ストリーム処理**: <code>apr_bucket_brigade</code> を介してレスポンスデータを読み込み、行単位（改行区切り）でバッファリングして置換を実行。</li>
+<li>**メモリ安全性**: <a class="wiki-source-link" href="../../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> を活用した動的バッファ管理と、制限を超えた場合の <code>APR_ENOMEM</code> エラーによる保護。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__subst_dir_conf.html&quot;}, '*');"><code>subst_dir_conf</code></a>: ディレクトリごとの設定。置換パターンの配列、最大行長、継承順序を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__subst_pattern_t.html&quot;}, '*');"><code>subst_pattern_t</code></a>: 個別の置換ルール。<code>apr_strmatch</code>（高速文字列検索）または <a class="wiki-source-link" href="../../../source/include/ap_regex.h.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regex_t.html&quot;}, '*');"><code>ap_regex_t</code></a>（正規表現）のいずれかを保持。</li>
+</ul>
+<h3>フィルタコンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__substitute_module_ctx.html&quot;}, '*');"><code>substitute_module_ctx</code></a>: フィルタ実行中の状態保持用。<code>linebb</code>（未完の行）、<code>passbb</code>（出力用）、<code>tpool</code>（一時メモリ用）を管理。</li>
+</ul>
+<h3>主要関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L365" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__substitute_filter.html&quot;}, '*');"><code>substitute_filter</code></a>: フィルタのメインエントリポイント。バケットの読み込み、行の分割、置換処理の呼び出し、次フィルタへの転送を担当。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L127" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__do_pattmatch.html&quot;}, '*');"><code>do_pattmatch</code></a>: 特定の行に対して全パターンを適用するコアロジック。<code>flatten</code> モード（バッファコピー）と高速なバケット分割モードを切り替える。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L609" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__set_pattern.html&quot;}, '*');"><code>set_pattern</code></a>: <code>Substitute</code> ディレクティブの構文解析とコンパイル。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L365" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__substitute_filter.html&quot;}, '*');"><code>substitute_filter</code></a> が初回呼び出し時に <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__substitute_module_ctx.html&quot;}, '*');"><code>substitute_module_ctx</code></a> を生成し、一時プールを確保。 2. **バッファリング**: <code>apr_bucket_read</code> でデータを読み込み、<code>memchr</code> で改行を探す。改行が見つかるまで <code>ctx-&gt;linebb</code> にバケットを蓄積。 3. **置換実行**: 1行が完成すると <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L127" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__do_pattmatch.html&quot;}, '*');"><code>do_pattmatch</code></a> を呼び出す。</p>
+<ul>
+<li><code>flatten</code> モード: <a class="wiki-source-link" href="../../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> を使用して文字列を結合・置換し、新しいバケットを作成。</li>
+<li>高速モード: <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_substitute.c.html&quot;}, '*');"><code>SEDRMPATBCKT</code></a> マクロでバケットを分割し、置換文字列を挿入。</li>
+<p>4. **転送**: 処理済みバケットを <code>ctx-&gt;passbb</code> に移し、<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で下流フィルタへ送出。 5. **クリーンアップ**: <code>ctx-&gt;tpool</code> を定期的にクリアし、メモリリークを防止。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>, <a class="wiki-source-link" href="../../../source/include/util_varbuf.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>util_varbuf.h</code></a>: フィルタ処理およびバッファ管理。</li>
+<li><code>apr_buckets.h</code>, <code>apr_strmatch.h</code>: バケット操作および高速パターンマッチング。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: Apache モジュール基盤。</li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_sed.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_sed.c.html&quot;}, '*');"><code>modules/filters/mod_sed.c</code></a>: より複雑なストリーム編集が必要な場合の代替。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/regexp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/regexp.c.html&quot;}, '*');"><code>modules/filters/regexp.c</code></a>: 正規表現エンジンの詳細。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>ctx-&gt;tpool</code> は <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L365" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_substitute_c__substitute_filter.html&quot;}, '*');"><code>substitute_filter</code></a> の各ループ終了時に <code>apr_pool_clear</code> され、メモリが再利用されます。</li>
+<li>**制限事項**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_substitute.c.html&quot;}, '*');"><code>AP_MAX_BUCKETS</code></a> を超えるバケットが蓄積された場合、強制的にフラッシュしてメモリを解放する安全装置があります。</li>
+<li>**設計の意図**: <code>flatten</code> モードはメモリ消費が激しいため、デフォルトではバケット分割によるインプレース置換が優先されます。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_substitute.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_substitute.c.html&quot;}, '*');"><code>AP_MAX_BUCKETS</code></a> のチェックは安全策として存在しますが、極端な断片化が発生するエッジケースではパフォーマンスが低下する可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__subst_pattern_t.html" target="wiki-view"><code>subst_pattern_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__subst_dir_conf.html" target="wiki-view"><code>subst_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__substitute_module_ctx.html" target="wiki-view"><code>substitute_module_ctx</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__create_substitute_dcfg.html" target="wiki-view"><code>create_substitute_dcfg</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__merge_substitute_dcfg.html" target="wiki-view"><code>merge_substitute_dcfg</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__do_pattmatch.html" target="wiki-view"><code>do_pattmatch</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__substitute_filter.html" target="wiki-view"><code>substitute_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__set_pattern.html" target="wiki-view"><code>set_pattern</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__set_max_line_length.html" target="wiki-view"><code>set_max_line_length</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_substitute_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

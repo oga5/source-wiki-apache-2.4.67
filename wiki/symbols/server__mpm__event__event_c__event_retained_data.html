@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__event__event_c__event_retained_data.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L375" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_retained_data.html&quot;}, '*');">event_retained_data</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>server/mpm/event/event.c:375</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server のグレースフル再起動（<a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>AP_SIG_GRACEFUL</code></a>）を跨いで、Event MPM のプロセス管理状態や統計情報を保持するために使用される構造体です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct event_retained_data {
+    ap_unixd_mpm_retained_data *mpm;
+    int first_server_limit;
+    int first_thread_limit;
+    int sick_child_detected;
+    int maxclients_reported;
+    int near_maxclients_reported;
+    int max_daemon_used;
+    int total_daemons;
+    int active_daemons;
+    int *idle_spawn_rate;
+    int hold_off_on_exponential_spawning;
+} event_retained_data;</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>本構造体は、再起動時に共有メモリまたは保持されたメモリ領域から復元されます。</li>
+<li><code>max_daemon_used</code> や <code>total_daemons</code> 等の統計値は、プロセス管理サイクルを通じて更新・参照されます。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>max_daemon_used</code> は、これまでに割り当てられた最大の子プロセススロット数を保持し、スコアボードのスキャン最適化に使用されます。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L608" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>idle_spawn_rate</code></a> はリスナーバケットごとに管理され、<code>MAX_SPAWN_RATE</code>（32）を上限として指数的に増加します。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li>グレースフル再起動時、既存のプロセス情報を維持しつつ、新しい設定（<code>MaxRequestWorkers</code> 等）への移行をサポートします。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L608" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>idle_spawn_rate</code></a> は、アイドル状態のサーバーが不足している場合に子プロセスを生成する際のレートを制御し、生成の必要がないサイクルが続くとリセットされます。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>呼び出し元および呼び出し先の詳細は、提供されたソース抜粋からは特定できません。</li>
+<li><code>server/mpm/event/event.c:413</code> にて <code>static event_retained_data *retained;</code> として静的ポインタが定義されています。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.h.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_h__ap_unixd_mpm_retained_data.html&quot;}, '*');"><code>ap_unixd_mpm_retained_data</code></a>: Unix MPM 共通の保持データ構造。</li>
+<li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__scoreboard.html&quot;}, '*');"><code>scoreboard</code></a>: プロセス状態を追跡する共有メモリ構造（<code>max_daemon_used</code> によりスキャン範囲が最適化される）。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>MAX_SPAWN_RATE</code> を超える生成レートの増加は抑制されます。</li>
+<li>シャットダウンが保留されている間は、<code>total_daemons</code> は最新の状態を反映しない場合があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は、再起動を跨ぐ状態保持が必須であるため、メンバーの追加や変更を行う際は、グレースフル再起動時の互換性に注意してください。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L608" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>idle_spawn_rate</code></a> はポインタとして定義されており、動的な割り当てが行われる点に留意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

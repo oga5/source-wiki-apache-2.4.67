@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/mappers/mod_speling.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');">modules/mappers/mod_speling.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_speling</code> は、リクエストされた URL がサーバー上に存在しない場合に、スペルミスや大文字小文字の不一致を自動的に修正・補完する Apache モジュールです。ファイルシステムをスキャンし、類似した名前のファイルが見つかった場合にリダイレクト（301）または選択肢の提示（300）を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/mappers</code> サブシステムの一部として、リクエスト処理の「修正フェーズ（Fixups）」に介入します。他のマッパーモジュールが URL をファイルパスに変換した後に動作し、ファイルが見つからない場合にのみスペルチェックのロジックを適用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>CheckSpelling</code> などのディレクティブを通じた動作制御。</li>
+<li>**スペル判定**: 編集距離（挿入・削除・置換・転置）に基づく類似度計算。</li>
+<li>**ファイル探索**: ディレクトリを走査し、候補となるファイル名リストを生成。</li>
+<li>**レスポンス生成**: 修正候補が単一なら自動リダイレクト、複数なら <code>300 Multiple Choices</code> を返却。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a>: モジュールの動作設定（有効化、大文字小文字のみ、ベース名マッチング）を保持する構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L104" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_speling.c.html&quot;}, '*');"><code>speling_cmds</code></a>: <code>CheckSpelling</code> 等のディレクティブを定義する <a class="wiki-source-link" href="../../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a> 配列。</li>
+</ul>
+<h3>スペル判定ロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L118" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__sp_reason.html&quot;}, '*');"><code>sp_reason</code></a>: 判定結果の品質（一致、大文字小文字違い、転置、欠落、余分、単純ミス、その他）。</li>
+<li><code>spdist()</code>: 2つの文字列を比較し、<a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L118" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__sp_reason.html&quot;}, '*');"><code>sp_reason</code></a> を返す関数。tcsh のスペルチェックルーチンをベースに、大文字小文字を無視するように拡張されています。</li>
+</ul>
+<h3>リクエスト処理</h3>
+<ul>
+<li><code>check_speling()</code>: <code>fixups</code> フックに登録されるメイン関数。リクエストの妥当性検証、ディレクトリ走査、候補のソート、レスポンスの決定を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L139" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__misspelled_file.html&quot;}, '*');"><code>misspelled_file</code></a>: 候補ファイル名とその品質を保持する構造体。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック**: <code>register_hooks</code> により <code>ap_hook_fixups</code> に <a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L197" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__check_speling.html&quot;}, '*');"><code>check_speling</code></a> が登録されます。 2. **検証**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L197" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__check_speling.html&quot;}, '*');"><code>check_speling</code></a> は GET メソッドかつファイルが存在しないリクエストのみを処理対象とします。 3. **探索**: リクエストされたパスの親ディレクトリを <code>apr_dir_open</code> で開き、<code>apr_dir_read</code> で全ファイルを走査します。 4. **評価**: 各ファイル名に対し <a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spdist.html&quot;}, '*');"><code>spdist</code></a> を適用し、類似度を判定。候補を <code>apr_array_header_t</code> に蓄積します。 5. **決定**:</p>
+<ul>
+<li>候補が 1 つかつ確実性が高い場合: <code>Location</code> ヘッダを付与し <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L505" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_MOVED_PERMANENTLY</code></a> を返却。</li>
+<li>候補が複数ある場合: <code>notes</code> テーブルに候補リストを格納し <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L504" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_MULTIPLE_CHOICES</code></a> を返却。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_file_io.h</code>: ディレクトリ走査（<code>apr_dir_t</code> 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: モジュール設定の管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: リクエスト情報の取得と処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: ログ出力。</li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_negotiation.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_negotiation.c.html&quot;}, '*');"><code>modules/mappers/mod_negotiation.c</code></a>: <code>300 Multiple Choices</code> の処理において、本モジュールと同様の <code>notes</code> テーブル利用パターンが見られます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>r-&gt;pool</code> を使用してメモリを割り当てており、リクエスト終了時に自動解放されます。<code>sub_pool</code> はレスポンス生成時の一時的なメモリ確保に使用されます。</li>
+<li>**パフォーマンス**: ディレクトリ内の全ファイルを走査するため、ファイル数が多いディレクトリではパフォーマンスに影響を与える可能性があります。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_speling.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spdist.html&quot;}, '*');"><code>spdist</code></a> は「1文字の誤り」までしか許容しません。また、シンボリックリンクのループを避けるため、リクエストと一致するファイルが見つかった場合は即座に <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> を返して処理を終了します。</li>
+<li>**省略された詳細**: HTML 生成部分の文字列構築ロジックは冗長ですが、これは当時の Apache の慣習に従ったものであり、本質的なロジックではありません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__spconfig.html" target="wiki-view"><code>spconfig</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__mkconfig.html" target="wiki-view"><code>mkconfig</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__create_mconfig_for_server.html" target="wiki-view"><code>create_mconfig_for_server</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__create_mconfig_for_directory.html" target="wiki-view"><code>create_mconfig_for_directory</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__sp_reason.html" target="wiki-view"><code>sp_reason</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__misspelled_file.html" target="wiki-view"><code>misspelled_file</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__spdist.html" target="wiki-view"><code>spdist</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__sort_by_quality.html" target="wiki-view"><code>sort_by_quality</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__check_speling.html" target="wiki-view"><code>check_speling</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_speling_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

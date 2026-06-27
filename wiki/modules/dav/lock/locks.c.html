@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/dav/lock/locks.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');">modules/dav/lock/locks.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_dav</code> における汎用的なロック管理実装を提供します。DBM（Database Manager）を利用して、リソースに対する直接ロックおよび間接ロックの永続化、検索、更新、削除を行うためのフック関数群を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> のロックプロバイダインターフェース（<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_hooks_locks.html&quot;}, '*');"><code>dav_hooks_locks</code></a>）を実装するバックエンドです。<a class="wiki-source-link" href="../../../../source/modules/dav/lock/mod_dav_lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/mod_dav_lock.c.html&quot;}, '*');"><code>mod_dav_lock.c</code></a> がモジュールのエントリポイントとして機能するのに対し、本ファイルはロックデータベースの物理的な読み書きとデータ構造のシリアライズを担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**DBM 管理**: ロックデータベースの遅延オープンおよびクローズ。</li>
+<li>**データ永続化**: ロック情報をバイナリ形式で DBM にシリアライズ/デシリアライズ。</li>
+<li>**ロック操作**: ロックの作成、検索、削除、およびタイムアウトによる期限切れロックの自動クリーンアップ。</li>
+<li>**間接ロック解決**: 親コレクションから継承された間接ロックの追跡と解決。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>dav_lockdb_private</code>: DBM ハンドルとリクエストコンテキストを保持する内部構造体。</li>
+<li><code>dav_lock_discovery</code>: 直接ロックの情報を保持するリスト構造。</li>
+<li><code>dav_lock_indirect</code>: 間接ロック（継承ロック）の情報を保持するリスト構造。</li>
+<li><code>dav_locktoken</code>: ロックを一意に識別するための UUID ラッパー。</li>
+</ul>
+<h3>フック実装 (dav_hooks_locks_generic)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L375" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_open_lockdb.html&quot;}, '*');"><code>dav_generic_open_lockdb</code></a>: ロック DB を初期化し、<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> を構築。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L809" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_get_locks.html&quot;}, '*');"><code>dav_generic_get_locks</code></a>: リソースに関連付けられた全ロックを取得。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L979" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_append_locks.html&quot;}, '*');"><code>dav_generic_append_locks</code></a>: 新規ロックをデータベースに追加。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L1129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_refresh_locks.html&quot;}, '*');"><code>dav_generic_refresh_locks</code></a>: 既存ロックのタイムアウトを更新。</li>
+</ul>
+<h3>内部ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_save_lock_record.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a>: メモリ上のロックリストを DBM に書き込み。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_load_lock_record.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a>: DBM からロックリストを読み込み、期限切れを排除。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L716" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_resolve.html&quot;}, '*');"><code>dav_generic_resolve</code></a>: 間接ロックが参照する親の直接ロックを解決。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L375" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_open_lockdb.html&quot;}, '*');"><code>dav_generic_open_lockdb</code></a> が呼ばれると、DBM ハンドルは即座に開かれず、<code>opened</code> フラグで管理されます。実際の I/O は <a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L318" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_really_open_lockdb.html&quot;}, '*');"><code>dav_generic_really_open_lockdb</code></a> が呼ばれた時に発生します。 2. **読み込み**: <a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_load_lock_record.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> が DBM からデータを取得し、<code>dav_lock_discovery</code> または <code>dav_lock_indirect</code> のリストを構築します。この際、<code>time(NULL)</code> と比較して期限切れのロックはリストから除外されます。 3. **書き込み**: <a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_save_lock_record.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> は、リストをバイナリバッファにシリアライズします。直接ロックは <code>DAV_LOCK_DIRECT</code>、間接ロックは <code>DAV_LOCK_INDIRECT</code> というプレフィックスを付与して連結します。 4. **解決**: 間接ロックの操作時、<a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L716" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_resolve.html&quot;}, '*');"><code>dav_generic_resolve</code></a> が再帰的に親リソースのロックレコードを読み込み、トークンの一致を確認します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_dbm.h</code> (間接的): DBM 操作用。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>mod_dav.h</code></a>: DAV プロバイダインターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.h.html&quot;}, '*');"><code>locks.h</code></a>: 共通ヘッダー。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: サーバーコンテキストおよびログ出力用。</li>
+<li><code>apr.h</code></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_uuid.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><code>apu_version.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.h.html&quot;}, '*');"><code>modules/dav/lock/locks.h</code></a>: ロック DB パス取得関数の宣言。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/lock/mod_dav_lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/mod_dav_lock.c.html&quot;}, '*');"><code>modules/dav/lock/mod_dav_lock.c</code></a>: 本実装を <code>mod_dav</code> に登録するモジュール本体。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのロック構造体は <code>request_rec</code> のプールから割り当てられます。リクエスト終了時に自動的に解放されます。</li>
+<li>**データレイアウト**: DBM 内のデータは構造体パッキングを考慮したバイナリ列です。<code>dav_size_direct</code> 等の計算ロジックと、<a class="wiki-source-link" href="../../../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_load_lock_record.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> 内のオフセット計算は密結合しており、変更時は注意が必要です。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>DAV_GETLOCKS_COMPLETE</code></a> は未実装です。また、ロック DB が読み取り専用で開かれている場合、期限切れロックの自動削除（<code>need_save</code>）はスキップされます。</li>
+<li>**設計上の注意**: <code>###</code> で始まるコメントは、将来的な拡張やリファクタリングの余地（特にエラーハンドリングの強化やメモリ効率の改善）を示唆しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_locktoken.html" target="wiki-view"><code>dav_locktoken</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_discovery_fixed.html" target="wiki-view"><code>dav_lock_discovery_fixed</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_discovery.html" target="wiki-view"><code>dav_lock_discovery</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_indirect.html" target="wiki-view"><code>dav_lock_indirect</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lockdb_private.html" target="wiki-view"><code>dav_lockdb_private</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lockdb_combined.html" target="wiki-view"><code>dav_lockdb_combined</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_private.html" target="wiki-view"><code>dav_lock_private</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_lock_combined.html" target="wiki-view"><code>dav_lock_combined</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_dbm_new_error.html" target="wiki-view"><code>dav_generic_dbm_new_error</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_alloc_lock.html" target="wiki-view"><code>dav_generic_alloc_lock</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_parse_locktoken.html" target="wiki-view"><code>dav_generic_parse_locktoken</code></a></li>
+<li><a href="../../../symbols/modules__dav__lock__locks_c__dav_generic_format_locktoken.html" target="wiki-view"><code>dav_generic_format_locktoken</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

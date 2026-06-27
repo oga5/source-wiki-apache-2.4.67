@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/join-workers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>join_workers</h1>
+<h2>概念</h2>
+<p><code>join_workers</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）である <code>event</code> および <code>worker</code> において、子プロセスの終了処理時にリスナースレッドやワーカースレッド群の終了を待機（join）するための内部関数です。</p>
+<h2>なぜ重要か</h2>
+<p>子プロセスがシャットダウンまたは再起動する際、動作中のリスナースレッドや複数のワーカースレッドを安全に停止させ、それらのスレッドリソースを確実に回収する必要があります。<code>join_workers</code> は、これらのスレッドのクリーンアップと同期を秩序立てて行うために重要な役割を担っています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__join_workers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__join_workers.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L2552&quot;}, '*');"><code>symbol:server/mpm/event/event.c#join_workers</code></a>**  </li>
+<p><code>event</code> MPMにおける実装。シグネチャは <code>static void join_workers(apr_thread_t * listener, apr_thread_t ** threads)</code> です。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__join_workers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__join_workers.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L1035&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#join_workers</code></a>**  </li>
+<p><code>worker</code> MPMにおける実装。シグネチャは <code>static void join_workers(apr_thread_t *listener, apr_thread_t **threads, int mode)</code> であり、引数に <code>mode</code> が追加されています。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、スレッドが終了する詳細なライフサイクルや、具体的なシグナルハンドリングを伴うエンドツーエンドのフローは完全には解析されていません。</p>
+<p>現在判明している大まかなコールフローは以下の通りです： 1. 子プロセスのメインループである <code>child_main</code> から <code>join_workers</code> が呼び出されます。 2. <code>join_workers</code> 内部では、リスナースレッドを休止状態から復帰させて終了を促すために <code>wakeup_listener</code> を呼び出します。 3. 処理の過程で、必要に応じて <code>ap_log_error</code> を呼び出し、ログを記録します。</p>
+<h2>重要な不変条件</h2>
+<p>スレッドの回収順序（リスナーを先に回収すべきか、ワーカースレッドを先に回収すべきかなど）や、リソース解放時における排他制御などの具体的な不変条件は、現時点では解析されておらず未確定です。</p>
+<h2>よくある落とし穴</h2>
+<p>スレッドのjoin処理におけるデッドロックの可能性や、シグナル割り込み時の挙動、<code>worker</code> MPMにおける <code>mode</code> 引数の影響など、具体的な失敗モードや落とし穴は現時点では解析されておらず未確定です。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> 内の <code>join_workers</code> 定義および <code>child_main</code> からの呼び出し箇所</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> 内の <code>join_workers</code> 定義および <code>child_main</code> からの呼び出し箇所</li>
+<li>各MPMにおける <code>wakeup_listener</code> の実装とスレッド終了シグナルの関係</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

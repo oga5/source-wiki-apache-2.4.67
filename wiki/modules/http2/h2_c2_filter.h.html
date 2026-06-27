@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_c2_filter.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.h.html&quot;}, '*');">modules/http2/h2_c2_filter.h</a></h1>
+<h2>概要</h2>
+<p>HTTP/2 モジュールにおける「セカンダリ接続（C2）」用のフィルタ群を定義するヘッダーファイルです。Apache HTTP Server のフィルタチェーンに介入し、HTTP/2 ストリーム固有の処理や、HTTP/1.1 形式のレスポンスから HTTP/2 への変換を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> 内で、HTTP/2 のストリーム処理（C2）と Apache の標準的なフィルタパイプラインを橋渡しする役割を持ちます。特に、HTTP/2 のレスポンスバケット機能が有効か否かに応じて、処理パスを切り替える設計になっています。</p>
+<h2>責務</h2>
+<ul>
+<li>**入力フィルタ**: セカンダリ接続において、リクエスト情報を注入し、一度実行されたら自身を削除する「使い捨て」フィルタの提供。</li>
+<li>**出力フィルタ**: レスポンスヘッダーやノート（notes）を検査し、HTTP/2 固有の制御（PUSH の無効化やエラーコードの調整）を行う。</li>
+<li>**互換性レイヤー**: <a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>AP_HAS_RESPONSE_BUCKETS</code></a> が無効な環境において、HTTP/1.1 形式のレスポンスを解析し、HTTP/2 ストリームへ変換するための代替フィルタを提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_request_in.html&quot;}, '*');"><code>h2_c2_filter_request_in</code></a>: ストリーム開始時にリクエスト情報を注入する入力フィルタ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_notes_out.html&quot;}, '*');"><code>h2_c2_filter_notes_out</code></a>: レスポンスのメタデータを検査し、HTTP/2 制御ノートを調整する出力フィルタ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L629" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_catch_h1_out.html&quot;}, '*');"><code>h2_c2_filter_catch_h1_out</code></a> / <a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L681" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_response_out.html&quot;}, '*');"><code>h2_c2_filter_response_out</code></a>: レスポンスバケット機能が利用できない環境での、HTTP/1.1 レスポンス解析用フィルタ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_request_in.html&quot;}, '*');"><code>h2_c2_filter_request_in</code></a> が接続開始時に呼び出され、<code>h2_conn_ctx</code> からリクエスト情報を取得してパイプラインに挿入後、自身を <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L468" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_remove_input_filter.html&quot;}, '*');"><code>ap_remove_input_filter</code></a> で削除します。 2. **出力**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_notes_out.html&quot;}, '*');"><code>h2_c2_filter_notes_out</code></a> がレスポンスバケットを走査し、内部リダイレクト時のノート継承や、設定に基づく PUSH モードの制御を行います。 3. **フォールバック**: レスポンスバケット非対応環境では、<a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L629" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_catch_h1_out.html&quot;}, '*');"><code>h2_c2_filter_catch_h1_out</code></a> 等が HTTP/1.1 形式のストリームを解析し、HTTP/2 用のヘッダー構造へ変換します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a>: HTTP/2 の基本定義および定数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>: 本ヘッダーで宣言された関数の実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2.c.html&quot;}, '*');"><code>h2_c2.c</code></a>: セカンダリ接続のライフサイクル管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a>: 接続コンテキストの管理（リクエスト情報の取得元）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.h.html&quot;}, '*');"><code>h2_headers.h</code></a>: レスポンスヘッダーの解析・構築用ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>AP_HAS_RESPONSE_BUCKETS</code></a> マクロの有無により、提供される API が大きく異なります。現在の Apache HTTP Server のビルド環境がどちらをサポートしているかを確認してください。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_request_in.html&quot;}, '*');"><code>h2_c2_filter_request_in</code></a> は一度実行されると自身を削除する設計であるため、フィルタチェーンの管理において副作用を考慮する必要があります。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

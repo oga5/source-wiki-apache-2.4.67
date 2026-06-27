@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/lua/lua_passwd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/lua/lua_passwd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.c.html&quot;}, '*');">modules/lua/lua_passwd.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Luaモジュール内でパスワードハッシュを生成するためのユーティリティ関数群を提供します。Apache Portable Runtime (APR) の暗号化ライブラリを活用し、複数のアルゴリズム（MD5, SHA1, CRYPT, BCRYPT）に対応したハッシュ生成機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> において、ユーザー認証やパスワード管理に関連するLuaスクリプトからの要求を処理するバックエンド層として機能します。<a class="wiki-source-link" href="../../../source/modules/lua/lua_passwd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.h.html&quot;}, '*');"><code>lua_passwd.h</code></a> で定義された <code>passwd_ctx</code> 構造体を介して、ハッシュ化のパラメータと結果を受け渡します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ハッシュ生成**: 指定されたアルゴリズムに基づき、平文パスワードからハッシュ値を生成する。</li>
+<li>**ソルト生成**: <code>generate_salt</code> を通じて、暗号学的に安全なランダム値を生成する。</li>
+<li>**エラーハンドリング**: アルゴリズムの不一致や暗号化失敗時に、<code>passwd_ctx</code> を通じて詳細なエラーメッセージを返す。</li>
+<li>**メモリ保護**: 処理終了後、平文パスワードをメモリ上でゼロクリアする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>mk_password_hash(passwd_ctx *ctx)</code>: 公開関数。<code>ctx</code> 内のアルゴリズム指定に従いハッシュを生成するメインエントリーポイント。</li>
+<li><code>generate_salt(...)</code>: 内部関数。Base64エンコードされたランダムなソルト文字列を生成する。</li>
+<li><code>passwd_ctx</code>: ハッシュ化に必要な入力（パスワード、アルゴリズム、コスト）と出力バッファを保持する構造体。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_passwd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__mk_password_hash.html&quot;}, '*');"><code>mk_password_hash</code></a> が呼び出され、<code>ctx-&gt;alg</code> に基づいて分岐する。 2. **ソルト生成**: MD5やCRYPTアルゴリズムの場合、<code>generate_salt</code> を呼び出し、乱数からソルトを生成する。 3. **ハッシュ化**: APRの提供する各エンコード関数（<code>apr_md5_encode</code>, <code>apr_bcrypt_encode</code> 等）を呼び出し、<code>ctx-&gt;out</code> に結果を書き込む。 4. **検証と後処理**: CRYPTアルゴリズム使用時のパスワード切り詰め警告チェックなどを行い、最後に <code>memset</code> で平文パスワードを消去して終了する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_passwd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.h.html&quot;}, '*');"><code>lua_passwd.h</code></a>: 構造体定義および定数。</li>
+<li><code>apr_strings.h</code>, <code>apr_errno.h</code>: 文字列操作およびエラーコード管理。</li>
+<li><code>apr_md5.h</code>, <code>apr_sha1.h</code>: ハッシュアルゴリズムの実装。</li>
+<li><code>crypt.h</code>, <code>unistd.h</code>: システム依存の暗号化関数（環境により利用）。</li>
+<li><code>io.h</code></li>
+<li><code>stdio.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>string.h</code></li>
+<li><code>time.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>modules/lua/mod_lua.c</code></a>: 本機能を利用するLua VMのメインモジュール。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_dbd.c.html&quot;}, '*');"><code>modules/lua/lua_dbd.c</code></a>: データベース操作に関連するコード。パスワード検証フローで併用されることが多い。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**セキュリティ**: 本コードは平文パスワードを扱うため、処理後に必ず <code>memset</code> でメモリをクリアする設計になっています。</li>
+<li>**プラットフォーム依存**: <code>CRYPT_ALGO_SUPPORTED</code> などのマクロにより、OS環境（Windows/Unix）によって利用可能なアルゴリズムが制限される点に注意してください。</li>
+<li>**BCRYPT**: <code>BCRYPT_ALGO_SUPPORTED</code> が有効な場合、<code>cost</code> パラメータによる計算負荷の調整が可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_passwd_c__generate_salt.html" target="wiki-view"><code>generate_salt</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_passwd_c__mk_password_hash.html" target="wiki-view"><code>mk_password_hash</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

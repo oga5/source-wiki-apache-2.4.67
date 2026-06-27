@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/the-filter-chain-architecture-and-bucket-brigades.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>The Filter Chain Architecture and Bucket Brigades</h1>
+<h2>概念</h2>
+<p>Apache HTTP Serverにおける**フィルターチェーン（Filter Chain）**と**バケットブリゲード（Bucket Brigades）**は、リクエストおよびレスポンスデータを効率的にストリーミング処理するためのコアアーキテクチャです。</p>
+<p>データは「バケット（Bucket）」と呼ばれるデータ片の連鎖である「バケットブリゲード（Bucket Brigade）」として表現されます。このブリゲードが、登録されたフィルターのチェーンを順次通過することで、データの読み込み、変換（チャンク化、圧縮、暗号化など）、および書き込みが段階的に行われます。</p>
+<h2>なぜ重要か</h2>
+<p>このアーキテクチャにより、サーバーはコンテンツ全体をメモリに一括で読み込むことなく、データをパイプライン処理できます。これにより、メモリ消費量を最小限に抑えつつ、モジュール化された柔軟なデータ変換（例：<a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a> によるHTTPチャンクエンコーディングの適用など）を実現できます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a>：フィルターの基本構造や操作APIを定義するヘッダー（<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>）を提供します。</li>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a>：HTTPプロトコル固有のフィルター処理（<a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>）を実装します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<code>ap_filter_t</code>** (<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>): フィルターチェーン内の個々のフィルターインスタンスを表す構造体。</li>
+<li>**<code>ap_filter_rec_t</code>** (<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>): 登録されたフィルターの定義情報を保持する構造体。</li>
+<li>**<code>apr_bucket_brigade</code>**: 複数のバケット（<a class="wiki-source-link" href="../../source/modules/http2/h2_util.h.html#L476" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>apr_bucket</code></a>）を格納し、フィルター間を流通するコンテナ。</li>
+<li>**<code>ap_chunk_filter</code>** (<a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a>): レスポンスをHTTPチャンク形式にエンコードするための出力フィルター。</li>
+<li>**HTTP入力/出力フィルター** (<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>): HTTPプロトコルのヘッダー処理やボディの読み書きを行うフィルター群。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードのコンテキストからは、詳細なエンドツーエンドのデータフロー（すべてのフィルターの遷移やバケットのライフサイクル全体）は完全には特定されていません。</p>
+<p>一般的な流れは以下の通りです： 1. クライアントからの接続が発生すると、入力フィルターチェーンを介してリクエストデータが読み込まれます。 2. コンテンツハンドラがレスポンスを生成し、出力フィルターチェーンにバケットブリゲードを渡します。 3. <a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a> などのフィルターがブリゲード内のデータを加工（チャンク化など）します。 4. 最終的に、最下層のネットワークフィルターがデータをソケットに書き込みます。</p>
+<h2>重要な不変条件</h2>
+<p>提供されたファイル群の定義レベルの情報からは、厳密な不変条件（例：特定のバケットタイプが常に特定の順序で現れるべきか、メモリ管理の所有権の厳密なルールなど）は完全には特定されていません。</p>
+<p>一般的な不変条件として以下が挙げられます：</p>
+<ul>
+<li>各フィルターは、受け取ったバケットブリゲードを適切に処理（消費、変更、または次のフィルターへの転送）しなければなりません。</li>
+<li>メモリのリークを防ぐため、ブリゲードやバケットのライフサイクル管理は適切に行われる必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>提供されたソースコードの具体的な実装詳細やバグ情報が不足しているため、開発時に直面する具体的な落とし穴（例：無限ループ、バケットの二重解放、不正なメモリアクセスなど）の詳細は現時点では特定されていません。</p>
+<p>一般的には、バケットブリゲードの操作中にメモリプール（Pool）の寿命を超えてバケットを参照し続けたり、不適切にブリゲードを再利用したりすることがバグの原因となります。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>：フィルターAPIの定義、データ構造、および操作マクロ。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a>：HTTPチャンクエンコーディングを適用する具体的な出力フィルターの実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>：HTTPリクエストヘッダーの解析やレスポンス送信を制御するコアフィルターの実装。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

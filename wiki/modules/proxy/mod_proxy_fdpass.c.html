@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy_fdpass.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fdpass.c.html&quot;}, '*');">modules/proxy/mod_proxy_fdpass.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fdpass.c.html&quot;}, '*');"><code>mod_proxy_fdpass.c</code></a> は、Apache HTTP Server のプロキシサブシステムにおいて、クライアントとの接続（ソケット）を Unix ドメインソケット経由で外部プロセスへ引き渡す（FD Passing）ためのモジュールです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のスキームハンドラの一つとして機能します。通常の HTTP プロキシがリクエストを転送するのに対し、本モジュールは「接続そのもの」を別のプロセスへ移譲することで、接続のハンドオフを実現します。</p>
+<h2>責務</h2>
+<ul>
+<li><code>fd://</code> スキームの URL を解釈し、指定された Unix ドメインソケットへ接続する。</li>
+<li><code>sendmsg</code> を使用し、クライアントとの接続ソケット（ファイルディスクリプタ）を外部プロセスへ送信する。</li>
+<li>接続引き渡し後、Apache 側がクライアントソケットを誤ってクローズしないよう、ダミーソケットへの差し替えを行う。</li>
+<li>拡張可能なフラッシュ機構（<code>proxy_fdpass_flusher</code>）を提供し、引き渡し前にレスポンスをフラッシュする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L123" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_handler.html&quot;}, '*');"><code>proxy_fdpass_handler</code></a>: <code>fd://</code> スキームを処理するメインハンドラ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__send_socket.html&quot;}, '*');"><code>send_socket</code></a>: <code>SCM_RIGHTS</code> を用いてファイルディスクリプタを Unix ドメインソケット経由で送信する低レイヤー関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_canon.html&quot;}, '*');"><code>proxy_fdpass_canon</code></a>: URL の正規化を行い、<code>fd://</code> スキームを識別する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L219" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fdpass.c.html&quot;}, '*');"><code>builtin_flush</code></a>: デフォルトのレスポンスフラッシュプロバイダ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **正規化**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_canon.html&quot;}, '*');"><code>proxy_fdpass_canon</code></a> が <code>fd://</code> URL を検出し、内部パスへ変換。 2. **接続**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L123" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_handler.html&quot;}, '*');"><code>proxy_fdpass_handler</code></a> が <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L51" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__get_socket_from_path.html&quot;}, '*');"><code>get_socket_from_path</code></a> を呼び出し、ターゲットとなる Unix ドメインソケットへ接続。 3. **フラッシュ**: 設定された <code>flusher</code> プロバイダを呼び出し、バッファをフラッシュして接続状態を整える。 4. **移譲**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fdpass_c__send_socket.html&quot;}, '*');"><code>send_socket</code></a> が <code>sendmsg</code> を実行し、クライアントソケットの FD を相手プロセスへ渡す。 5. **保護**: Apache コアが接続をクローズするのを防ぐため、<code>ap_set_core_module_config</code> で接続ソケットをダミーに置き換える。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシ基盤機能。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fdpass.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fdpass.h.html&quot;}, '*');"><code>mod_proxy_fdpass.h</code></a>: 共有されるプロバイダ定義。</li>
+<li><code>&lt;sys/socket.h&gt;</code>, <code>&lt;sys/un.h&gt;</code>: Unix ドメインソケットおよび <code>sendmsg</code> / <code>cmsghdr</code> 関連のシステムコール。</li>
+<li><code>sys/socket.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>sys/un.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L3639" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_connect_uds.html&quot;}, '*');"><code>ap_proxy_connect_uds</code></a> など、Unix ドメインソケット接続の共通ユーティリティを提供。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>mod_proxy.c</code></a>: プロキシモジュールのフック登録と全体制御。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**プラットフォーム制限**: 本モジュールは <code>CMSG_DATA</code> マクロが定義されている環境（主に Unix 系）でのみ動作します。</li>
+<li>**FD Passing の仕組み**: <code>SCM_RIGHTS</code> を用いた FD の受け渡しは、プロセス間での接続の「所有権」を移転させる強力な手法ですが、相手プロセスが正しく FD を受け取り、適切に管理できることが前提となります。</li>
+<li>**ダミーソケットの重要性**: 接続引き渡し後に Apache が元のソケットをクローズすると、クライアントとの通信が切断されます。ダミーへの差し替えは、Apache のクリーンアップ処理を無害化するための重要なハックです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_canon.html" target="wiki-view"><code>proxy_fdpass_canon</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fdpass_c__get_socket_from_path.html" target="wiki-view"><code>get_socket_from_path</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fdpass_c__send_socket.html" target="wiki-view"><code>send_socket</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fdpass_c__proxy_fdpass_handler.html" target="wiki-view"><code>proxy_fdpass_handler</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fdpass_c__standard_flush.html" target="wiki-view"><code>standard_flush</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fdpass_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

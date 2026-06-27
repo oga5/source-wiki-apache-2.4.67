@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/request-processing-lifecycle-and-hook-dispatch.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Request Processing Lifecycle and Hook Dispatch</h1>
+<h2>概念</h2>
+<p><code>Request Processing Lifecycle and Hook Dispatch</code> は、Apache HTTP Serverにおけるリクエスト処理の各フェーズ（接続の受け入れ、リクエストの解析、アクセス制御、コンテンツ生成など）を、拡張可能な「フック（Hook）」機構を介して段階的に実行するアーキテクチャです。各モジュールは特定のフックにハンドラを登録し、コアエンジンがこれを順次ディスパッチすることで、柔軟なリクエスト処理を実現します。</p>
+<h2>なぜ重要か</h2>
+<p>この機構により、コアコードを変更することなく、認証、ロギング、URLマッピング、コンテンツフィルタリングなどの機能をモジュールとして動的に追加・変更できます。リクエスト処理のライフサイクルとフックのディスパッチルールを理解することは、モジュール開発やサーバーの動作カスタマイズにおいて極めて重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**: フックの宣言（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_DECLARE_HOOK</code></a> など）や、フックの実行マクロ（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_ALL</code></a> など）を定義するヘッダーファイル。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a>**: HTTPリクエストのライフサイクル（リクエストの受信、内部リクエストの処理、各フェーズのフック起動など）を制御する実装。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**: モジュールの設定、および登録されたフックの管理とディスパッチを制御するコアロジック。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細なエンドツーエンドのコールスタックや、すべてのフックの厳密な実行順序は完全には特定されていません。</p>
+<p>一般的な流れとして、以下のように処理が進行します： 1. クライアントからのリクエストを受信すると、<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a> などの処理ロジックが起動します。 2. <a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> で管理されているフックディスパッチ機構を介して、<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a> で定義されたマクロに基づき、登録されたモジュールのハンドラが順次呼び出されます。 3. 各フェーズ（ヘッダー解析、アクセス制御、コンテンツ生成など）のフックが実行され、最終的なレスポンスが生成されます。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、フックの実行順序の依存関係や、リクエストコンテキスト（<code>request_rec</code>）の整合性に関する厳密な不変条件は完全には特定されていません。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**フックの登録順序の誤り**: フック登録時の優先度（<code>APR_HOOK_FIRST</code>、<code>APR_HOOK_MIDDLE</code>、<code>APR_HOOK_LAST</code> など）を誤ると、依存する他のモジュールより前または後に実行され、意図しない動作を引き起こす可能性があります。</li>
+<li>**不適切な戻り値の返却**: フックハンドラが返すステータス（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a>、またはエラーコード）の扱いを誤ると、後続のフックがスキップされたり、リクエストが途中で異常終了したりする原因になります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

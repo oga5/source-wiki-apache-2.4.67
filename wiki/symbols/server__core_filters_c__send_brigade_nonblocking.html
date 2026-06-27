@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__core_filters_c__send_brigade_nonblocking.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L649" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__send_brigade_nonblocking.html&quot;}, '*');">send_brigade_nonblocking</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/core_filters.c:649</code></li>
+</ul>
+<h2>目的</h2>
+<p><code>apr_bucket_brigade</code> 内のデータをソケットへ非ブロッキングで書き出します。<code>sendfile</code> が利用可能な場合はそれを優先し、それ以外は <code>writev</code> を用いて効率的にデータを転送します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t send_brigade_nonblocking(apr_socket_t *s,
+                                             apr_bucket_brigade *bb,
+                                             core_output_filter_ctx_t *ctx,
+                                             conn_rec *c)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: 送信先ソケット。</li>
+<li><code>bb</code>: 送信対象のバケットブリゲード。</li>
+<li><code>ctx</code>: 出力フィルタの永続コンテキスト（<code>iovec</code> 配列やバッファを保持）。</li>
+<li><code>c</code>: 接続レコード。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>ctx-&gt;vec</code> および <code>ctx-&gt;nvec</code> は、<code>writev</code> 実行時に有効な状態である必要があります。</li>
+<li><code>APR_HAS_SENDFILE</code> が有効な環境では、<a class="wiki-source-link" href="../../source/server/core_filters.c.html#L615" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__can_sendfile_bucket.html&quot;}, '*');"><code>can_sendfile_bucket</code></a> の判定に基づき <code>sendfile</code> が選択されます。</li>
+<li>メタデータバケット（長さ 0 のバケット）は、先行するデータバケットの送信が完了するまで削除されません。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. ブリゲード内の各バケットを順次走査します。 2. <code>sendfile</code> 対応バケットであれば、蓄積中の <code>iovec</code> を先に書き出した後、<a class="wiki-source-link" href="../../source/server/core_filters.c.html#L836" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__sendfile_nonblocking.html&quot;}, '*');"><code>sendfile_nonblocking</code></a> を呼び出します。 3. データバケットの場合、<code>apr_bucket_read</code> でデータを取得します。読み込みがブロックされる場合は、蓄積済みの <code>iovec</code> を書き出した後、ブロック読み込みに切り替えて再試行します。 4. 取得したデータを <code>ctx-&gt;vec</code> に蓄積し、<code>conf-&gt;flush_max_threshold</code> を超えるか、<code>iovec</code> が満杯になった時点で <a class="wiki-source-link" href="../../source/server/core_filters.c.html#L784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__writev_nonblocking.html&quot;}, '*');"><code>writev_nonblocking</code></a> を呼び出します。 5. 最後に、残存する <code>iovec</code> があれば書き出しを行い、ソケットの <code>nopush</code> 状態を解除して終了します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a> 内の <a class="wiki-source-link" href="../../source/server/core_filters.c.html#L453" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__ap_core_output_filter.html&quot;}, '*');"><code>ap_core_output_filter</code></a>（行 506）から呼び出されます。</li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L615" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__can_sendfile_bucket.html&quot;}, '*');"><code>can_sendfile_bucket</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L637" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__sock_nopush.html&quot;}, '*');"><code>sock_nopush</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__writev_nonblocking.html&quot;}, '*');"><code>writev_nonblocking</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L836" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__sendfile_nonblocking.html&quot;}, '*');"><code>sendfile_nonblocking</code></a></li>
+<li><code>apr_bucket_read</code></li>
+<li><code>apr_bucket_delete</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html#L787" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_output_filter_ctx_t.html&quot;}, '*');"><code>core_output_filter_ctx_t</code></a>: フィルタの永続状態と書き込み用バッファを保持。</li>
+<li><code>apr_bucket_brigade</code>: 送信データのキュー。</li>
+<li><code>apr_socket_t</code>: 通信に使用するソケット。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_bucket_read</code> や <a class="wiki-source-link" href="../../source/server/core_filters.c.html#L784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__writev_nonblocking.html&quot;}, '*');"><code>writev_nonblocking</code></a> がエラーを返した場合、即座に処理を中断し、そのエラーコードを返します。</li>
+<li><code>iovec</code> の容量不足時は、動的に <code>ctx-&gt;vec</code> を再割り当て（最大 <a class="wiki-source-link" href="../../source/server/core_filters.c.html#L595" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>NVEC_MAX</code></a> まで）します。</li>
+<li><code>EAGAIN</code> 発生時は、蓄積済みデータをフラッシュしてからブロック読み込みへ移行するリカバリ処理を行います。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>nvec</code> が 0 の場合のみ空バケットを削除するロジックは、EOR（End of Request）等のメタデータが順序通りに処理されることを保証するためのものです。</li>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L637" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__sock_nopush.html&quot;}, '*');"><code>sock_nopush</code></a> の制御は、ネットワーク効率を最適化するために重要です。修正時は <code>cleanup</code> ラベルでの解除漏れに注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

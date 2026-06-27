@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http/http_etag.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_etag.c.html&quot;}, '*');">modules/http/http_etag.c</a></h1>
+<h2>概要</h2>
+<p>HTTP プロトコルにおける <code>ETag</code> ヘッダーの生成と管理を担うモジュールです。ファイルシステム上の属性（inode, サイズ, 更新日時）や、ファイル内容の SHA1 ハッシュに基づいた一意な識別子を生成し、キャッシュの検証をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> サブシステムの一部として、リクエスト処理の最終段階でレスポンスヘッダーに <code>ETag</code> を付与する役割を持ちます。<a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>http_protocol.c</code></a> 等から呼び出され、リソースの同一性を保証するための計算ロジックを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ETag 生成ロジック**: ファイル属性（<code>finfo</code>）または内容のハッシュ（<code>SHA1</code>）を用いた文字列生成。</li>
+<li>**検証情報の統合**: コンテンツネゴシエーション時に使用される <code>vlist_validator</code> (VLV) との結合。</li>
+<li>**設定に基づく制御**: <code>FileETag</code> ディレクティブの設定（<code>etag_bits</code>）に従った、ETag に含める情報のフィルタリング。</li>
+<li>**ヘッダー管理**: 生成された ETag を <code>r-&gt;headers_out</code> テーブルへ設定、または生成不可時のフラグ設定。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>公開 API (ETag 生成・設定)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__ap_make_etag_ex.html&quot;}, '*');"><code>ap_make_etag_ex</code></a>: <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__etag_rec.html&quot;}, '*');"><code>etag_rec</code></a> 構造体を受け取り、詳細な設定に基づいて ETag 文字列を生成するコア関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L353" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__ap_make_etag.html&quot;}, '*');"><code>ap_make_etag</code></a>: <code>request_rec</code> から簡易的に ETag を生成するラッパー。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L367" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__ap_set_etag.html&quot;}, '*');"><code>ap_set_etag</code></a>: リクエストのファイル情報から ETag を生成し、レスポンスヘッダーに自動設定する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L391" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__ap_set_etag_fd.html&quot;}, '*');"><code>ap_set_etag_fd</code></a>: ファイル記述子（<code>apr_file_t</code>）を直接指定して ETag を生成・設定する。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__make_digest_etag.html&quot;}, '*');"><code>make_digest_etag</code></a>: ファイル内容を読み込み、SHA1 ハッシュによる強力な ETag を生成する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__etag_uint64_to_hex.html&quot;}, '*');"><code>etag_uint64_to_hex</code></a>: <code>apr_uint64_t</code> を高速に 16 進数文字列へ変換する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L67" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__etag_start.html&quot;}, '*');"><code>etag_start</code></a> / <a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__etag_end.html&quot;}, '*');"><code>etag_end</code></a>: ETag 文字列のフォーマット（<code>W/</code> プレフィックスや引用符の付与）を管理する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **入力**: <a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L367" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__ap_set_etag.html&quot;}, '*');"><code>ap_set_etag</code></a> 等が <code>request_rec</code> から <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__etag_rec.html&quot;}, '*');"><code>etag_rec</code></a> を構築し、<a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__ap_make_etag_ex.html&quot;}, '*');"><code>ap_make_etag_ex</code></a> を呼び出します。 2.  **設定評価**: <a class="wiki-source-link" href="../../../source/include/http_core.h.html#L527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_dir_config.html&quot;}, '*');"><code>core_dir_config</code></a> から <code>etag_bits</code> を取得し、どの属性を含めるかを決定します。 3.  **分岐**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html#L498" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>ETAG_DIGEST</code></a> 指定時または強力な ETag が必要な場合: <a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__make_digest_etag.html&quot;}, '*');"><code>make_digest_etag</code></a> がファイルを読み込み、<code>apr_sha1</code> でハッシュ化します。</li>
+<li>通常時: ファイルの inode, size, mtime を連結し、<a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__etag_uint64_to_hex.html&quot;}, '*');"><code>etag_uint64_to_hex</code></a> で文字列化します。</li>
+<p>4.  **VLV 統合**: <code>r-&gt;vlist_validator</code> が存在する場合、ETag の末尾に結合し、ネゴシエーション情報を保持します。 5.  **出力**: 生成された文字列を <code>apr_table_setn</code> で <code>headers_out</code> に格納します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_sha1.h</code>, <code>apr_base64.h</code>: ハッシュ生成およびエンコード。</li>
+<li><code>apr_buckets.h</code>: ファイル読み込み時のバケット操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: <a class="wiki-source-link" href="../../../source/include/http_core.h.html#L527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_dir_config.html&quot;}, '*');"><code>core_dir_config</code></a>（<code>FileETag</code> 設定）の取得。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: レスポンスヘッダー操作の基盤。</li>
+<li><code>apr_mmap.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>modules/http/http_protocol.c</code></a>: 本モジュールの API を利用してレスポンスを構築する主要ファイル。</li>
+<li><a class="wiki-source-link" href="../../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: <code>FileETag</code> ディレクティブの定義と <a class="wiki-source-link" href="../../../source/include/http_core.h.html#L527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_dir_config.html&quot;}, '*');"><code>core_dir_config</code></a> の管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての ETag 文字列は <code>r-&gt;pool</code> から割り当てられ、リクエスト終了時に自動解放されます。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/http/http_etag.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_etag_c__make_digest_etag.html&quot;}, '*');"><code>make_digest_etag</code></a> はファイル全体を読み込むため、大きなファイルに対してはコストが高い操作です。</li>
+<li>**弱 ETag**: 更新から 1 秒以内のファイルや、VLV が弱い場合は <code>W/</code> プレフィックスが付与されます。</li>
+<li>**省略された詳細**: <code>apr_mmap</code> に関する最適化パスは、<code>APR_HAS_MMAP</code> が有効な環境でのみ動作するよう条件分岐されています。</li>
+<li>**不変条件**: <code>etag_bits</code> が <a class="wiki-source-link" href="../../../source/include/http_core.h.html#L494" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>ETAG_NONE</code></a> の場合、ETag は生成されず、<code>no-etag</code> ノートが設定されます。これは後続のフィルターが ETag を付与しないようにするための制御です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__http_etag_c__etag_uint64_to_hex.html" target="wiki-view"><code>etag_uint64_to_hex</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__etag_start.html" target="wiki-view"><code>etag_start</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__etag_end.html" target="wiki-view"><code>etag_end</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__make_digest_etag.html" target="wiki-view"><code>make_digest_etag</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_make_etag_ex.html" target="wiki-view"><code>ap_make_etag_ex</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_make_etag.html" target="wiki-view"><code>ap_make_etag</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_set_etag.html" target="wiki-view"><code>ap_set_etag</code></a></li>
+<li><a href="../../symbols/modules__http__http_etag_c__ap_set_etag_fd.html" target="wiki-view"><code>ap_set_etag_fd</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

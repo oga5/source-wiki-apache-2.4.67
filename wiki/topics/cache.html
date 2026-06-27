@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/cache.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>cache</h1>
+<h2>概念</h2>
+<p>Apache HTTP Server における <code>cache</code> は、複数のモジュールで異なる文脈で使用されるキャッシュ機構を指します。</p>
+<p>特に <code>mod_rewrite</code>（<code>modules/mappers</code>）においては、外部マップ（DBM、DBD、PRG など）のルックアップ結果をリクエスト間で保持し、再利用するための専用のキャッシュ構造体（<code>struct cache</code>）として定義されています。なお、<code>mod_cache</code>（<code>modules/cache</code>）にも同名のシンボルが存在しますが、その詳細な役割や構造は現時点では提供されていません。</p>
+<h2>なぜ重要か</h2>
+<p><code>mod_rewrite</code> における外部マップの検索処理はコストが高いため、ルックアップ結果をキャッシュすることで、リクエスト処理のパフォーマンスを大幅に向上させることができます。リクエストの生存期間を超えてデータを保持するために、リクエストプールとは独立したメモリプールを管理し、マルチスレッド環境下での安全なアクセスを保証する仕組みが重要となります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__mappers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__mappers.html&quot;, &quot;source&quot;: &quot;source/modules/mappers/mod_actions.c.html&quot;}, '*');"><code>module:modules/mappers</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__mappers__mod_rewrite_c__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__cache.html&quot;, &quot;source&quot;: &quot;source/modules/mappers/mod_rewrite.c.html#L386&quot;}, '*');"><code>symbol:modules/mappers/mod_rewrite.c#cache</code></a>** (構造体)</li>
+<p><code>mod_rewrite</code> 内部で定義されている、外部マップルックアップ結果を保持するキャッシュ管理構造体。ハッシュテーブル <code>maps</code>、専用のメモリプール <code>pool</code>、およびスレッド排他制御用の <code>lock</code> を含みます。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html#L2698" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>symbol:modules/cache/mod_cache.c#cache</code></a>** (シンボル)</li>
+<p><code>mod_cache</code> モジュール内に存在するキャッシュ関連のシンボル（詳細な仕様は未詳）。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p><code>mod_rewrite</code> におけるキャッシュの利用フローは以下の通りです。</p>
+<p>1. **ルックアップ要求**: 外部マップ（DBM, DBD, PRG 等）の検索要求が発生します。 2. **キャッシュ検索**: キャッシュ構造体 <code>cache</code> 内のハッシュテーブル <code>maps</code> から、該当するエントリ（<a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html#L397" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__cachedmap.html&quot;}, '*');"><code>cachedmap</code></a>）を検索します。 3. **キャッシュミス時の登録**: キャッシュに存在しない場合、外部ソースから結果を取得し、<code>cache-&gt;pool</code> を用いてハッシュテーブル <code>maps</code> に登録します。スレッド環境下では、この書き込み操作は <code>lock</code> を介して排他制御されます。 4. **結果の返却**: キャッシュされた結果を返却します。</p>
+<p>※ <code>mod_cache</code> 側のエンドツーエンドの流れ、およびシステム全体におけるキャッシュ機構間の統合的なフローは現時点では不明です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**ライフサイクルの独立性**: <code>mod_rewrite</code> の <code>cache</code> は、個々のリクエストの生存期間（<code>r-&gt;pool</code>）とは独立して生存しなければなりません。そのため、キャッシュデータの割り当てには必ず <code>cache-&gt;pool</code> が使用されます。</li>
+<li>**スレッドセーフティ**: <code>APR_HAS_THREADS</code> が有効な環境では、ハッシュテーブル <code>maps</code> へのアクセスは必ず <code>lock</code>（<code>apr_thread_mutex_t</code>）を介して保護されなければなりません。</li>
+<li>※ <code>mod_cache</code> 側の不変条件は現時点では不明です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**メモリリークとライフサイクル管理の誤り**: <code>mod_rewrite</code> のキャッシュはリクエストの生存期間を超えて保持されるため、誤って <code>r-&gt;pool</code> からメモリを割り当てると、リクエスト終了時にデータが消失し不正アクセスを招きます。逆に、不要になったキャッシュデータを適切に管理しないとメモリリークの原因になります。</li>
+<li>**ロックの初期化・取得失敗**: スレッド環境において <code>lock</code> の初期化や取得に失敗した場合、キャッシュへのアクセスが安全に行えなくなります。</li>
+<li>**名前の混同**: <a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>mod_rewrite.c</code></a> 内の <code>cache</code> 構造体は、<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> などのグローバルな共有キャッシュAPIとは直接の関係がない、モジュール専用のクローズドな実装です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>modules/mappers/mod_rewrite.c</code></a>**</li>
+<p><code>struct cache</code> の定義、および <a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html#L397" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__cachedmap.html&quot;}, '*');"><code>cachedmap</code></a> や <a class="wiki-source-link" href="../../source/modules/mappers/mod_rewrite.c.html#L272" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewritemap_entry.html&quot;}, '*');"><code>rewritemap_entry</code></a> と連携した外部マップルックアップの具体的なキャッシュ制御処理。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>modules/cache/mod_cache.c</code></a>**</li>
+<p>もう一つの <code>cache</code> シンボルの具体的な実装と、<code>mod_cache</code> モジュールにおけるキャッシュ制御の役割。</p>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

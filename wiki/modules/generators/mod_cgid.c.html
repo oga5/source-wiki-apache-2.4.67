@@ -1,0 +1,108 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/generators/mod_cgid.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');">modules/generators/mod_cgid.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_cgid</code> は、CGI スクリプトを外部の専用デーモンプロセス経由で実行するための Apache HTTP Server モジュールです。マルチスレッド MPM（Worker や Event など）環境において、CGI プロセスの生成と管理をメインのサーバープロセスから分離し、安定性とパフォーマンスを向上させることを目的としています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_cgi</code> が各リクエストごとに直接 <code>fork()</code> を行うのに対し、<code>mod_cgid</code> は Unix ドメインソケットを使用してメインサーバーと CGI デーモン間で通信を行います。これにより、スレッドセーフではない CGI 実行環境を隔離し、プロセス管理を中央集権化します。</p>
+<h2>責務</h2>
+<ul>
+<li>**デーモン管理**: CGI デーモンプロセスの起動、監視、および異常終了時の再起動。</li>
+<li>**リクエスト転送**: Unix ドメインソケットを介したリクエスト情報（環境変数、引数、ファイルパス等）のシリアライズと転送。</li>
+<li>**プロセス実行**: デーモン側での CGI プロセスの <code>fork</code>/<code>exec</code>、およびリソース制限（RLIMIT）の適用。</li>
+<li>**SSI 統合**: <code>mod_include</code> と連携し、SSI 内の <code>exec</code> コマンドを CGI デーモン経由で実行。</li>
+<li>**デバッグログ**: <code>ScriptLog</code> ディレクティブに基づく CGI 入出力の記録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>デーモン管理・状態保持</h3>
+<ul>
+<li><code>cgid_module</code>: モジュール定義構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_server_conf.html&quot;}, '*');"><code>cgid_server_conf</code></a>: サーバー単位の設定（ログパス、バッファサイズ等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_dirconf.html&quot;}, '*');"><code>cgid_dirconf</code></a>: ディレクトリ単位の設定（タイムアウト等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>daemon_pid</code></a>: CGI デーモンプロセスの PID。</li>
+</ul>
+<h3>通信・リクエスト処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L195" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_req_t.html&quot;}, '*');"><code>cgid_req_t</code></a>: デーモンへ送信されるリクエストヘッダー構造体。</li>
+<li><code>connect_to_daemon()</code>: デーモンへの Unix ドメインソケット接続を確立。</li>
+<li><code>send_req()</code> / <code>get_req()</code>: リクエスト情報のシリアライズとデシリアライズ。</li>
+<li><code>cgid_handler()</code>: HTTP リクエストを CGI リクエストに変換するメインハンドラ。</li>
+</ul>
+<h3>プロセス制御</h3>
+<ul>
+<li><code>cgid_start()</code>: デーモンプロセスの起動。</li>
+<li><code>cgid_server()</code>: デーモンプロセスのメインループ。</li>
+<li><code>cleanup_script()</code>: CGI プロセスの終了処理（SIGTERM/SIGKILL）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L1035" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_init.html&quot;}, '*');"><code>cgid_init</code></a> が <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L1002" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_start.html&quot;}, '*');"><code>cgid_start</code></a> を呼び出し、デーモンプロセスを <code>fork</code> します。 2. **リクエスト受信**: <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L1468" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_handler.html&quot;}, '*');"><code>cgid_handler</code></a> がリクエストを受け取ると、<a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L1296" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__connect_to_daemon.html&quot;}, '*');"><code>connect_to_daemon</code></a> でソケット接続を確立します。 3. **データ転送**: <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L578" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__send_req.html&quot;}, '*');"><code>send_req</code></a> が環境変数や引数をソケット経由でデーモンへ送信します。 4. **実行**: デーモンは <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L500" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__get_req.html&quot;}, '*');"><code>get_req</code></a> で情報を受け取り、<code>apr_proc_create</code> を用いて CGI プロセスを生成します。 5. **レスポンス**: CGI の出力はパイプ経由で読み取られ、<a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L420" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_handle_response.html&quot;}, '*');"><code>cgi_handle_response</code></a> を通じてクライアントへ返送されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_proc_t</code>, <code>apr_socket_t</code>, <code>apr_pool_t</code> 等のプロセス・通信・メモリ管理。</li>
+<li>**Apache Core**: <a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a> 等のサーバー制御。</li>
+<li>**OS**: <code>sys/un.h</code> (Unix ドメインソケット), <code>sys/stat.h</code>。</li>
+<li>**内部**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>cgi_common.h</code></a> (共通の CGI バケット処理)。</li>
+<li><code>../filters/mod_include.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_suexec.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_suexec.h.html&quot;}, '*');"><code>mod_suexec.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><code>sys/socket.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a>: CGI 関連の共通データ構造とロジック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_include.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_include.h.html&quot;}, '*');"><code>modules/filters/mod_include.h</code></a>: SSI 統合のためのインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a>: プロセス分離を行わない代替実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>pcgi</code></a> プールはデーモンプロセスの生存期間を管理し、リクエストごとのメモリは <code>ptrans</code> プールで管理されます。</li>
+<li>**エッジケース**: <code>ScriptSock</code> のパス長制限に注意が必要です。また、デーモンが異常終了した場合、<a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html#L282" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__cgid_maint.html&quot;}, '*');"><code>cgid_maint</code></a> が再起動を試みます。</li>
+<li>**制限**: <code>mod_cgid</code> はマルチスレッド環境での CGI 実行を前提としており、プラットフォームによっては（Windows 等）サポートされていません。</li>
+<li>**省略**: 本ドキュメントでは、<a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>cgi_common.h</code></a> 内の具体的なバケット操作の詳細や、プラットフォーム固有の <code>fd</code> パッシングの複雑な実装については詳細を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_dirconf.html" target="wiki-view"><code>cgid_dirconf</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_suexec_id_doer.html" target="wiki-view"><code>cgid_suexec_id_doer</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__is_scriptaliased.html" target="wiki-view"><code>is_scriptaliased</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_server_conf.html" target="wiki-view"><code>cgid_server_conf</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_rlimit_t.html" target="wiki-view"><code>cgid_rlimit_t</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_req_t.html" target="wiki-view"><code>cgid_req_t</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__create_argv.html" target="wiki-view"><code>create_argv</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_maint.html" target="wiki-view"><code>cgid_maint</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__close_unix_socket.html" target="wiki-view"><code>close_unix_socket</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__sock_readhdr.html" target="wiki-view"><code>sock_readhdr</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cgid_init.html" target="wiki-view"><code>cgid_init</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_cgid_c__cleanup_script_info.html" target="wiki-view"><code>cleanup_script_info</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

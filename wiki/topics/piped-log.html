@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/piped-log.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>piped_log</h1>
+<h2>概念</h2>
+<p><code>piped_log</code> は、Apache HTTP Server において外部プロセスへログを転送するためのパイプ通信を抽象化・管理する構造体です。ヘッダーファイル（<a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>include/http_log.h</code></a>）では不透明（opaque）な型として宣言され、実体は <a class="wiki-source-link" href="../../source/server/log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/log.c.html&quot;}, '*');"><code>server/log.c</code></a> で定義されています。これにより、外部ログ処理プロセスとのパイプ接続、データの転送、および子プロセスのライフサイクル管理がカプセル化されます。</p>
+<h2>なぜ重要か</h2>
+<p>ログ出力を外部の専用プロセス（例: ログローテーションツールなど）にパイプ経由で委譲することで、Webサーバー本体の処理からログ管理の負荷を分離できます。また、特定の環境（<a class="wiki-source-link" href="../../source/include/ap_config.h.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>AP_HAVE_RELIABLE_PIPED_LOGS</code></a> が有効な場合）では、ログ転送先の子プロセスが異常終了した際に自動的に再起動を試みる死活監視機能を提供し、ログの損失を防ぐ極めて重要な役割を担っています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (<a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>include/http_log.h</code></a>)</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> (<a class="wiki-source-link" href="../../source/server/log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/log.c.html&quot;}, '*');"><code>server/log.c</code></a>)</li>
+<li>呼び出し元モジュール（<a class="wiki-source-link" href="../../source/modules/loggers/mod_log_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>modules/loggers/mod_log_config.c</code></a>、<a class="wiki-source-link" href="../../source/modules/loggers/mod_log_forensic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_forensic.c.html&quot;}, '*');"><code>modules/loggers/mod_log_forensic.c</code></a> など）</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__http_log_h__piped_log.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_log_h__piped_log.html&quot;, &quot;source&quot;: &quot;source/include/http_log.h.html#L776&quot;}, '*');"><code>symbol:include/http_log.h#piped_log</code></a>**: </li>
+<p>外部モジュール向けに公開されている不透明構造体としての定義です。直接メンバにアクセスすることはできず、APIを介して操作します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__log_c__piped_log.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__piped_log.html&quot;, &quot;source&quot;: &quot;source/server/log.c.html#L186&quot;}, '*');"><code>symbol:server/log.c#piped_log</code></a>**: </li>
+<p>構造体の具体的な定義です。以下のメンバを含みます。</p>
+<li><code>apr_pool_t *p</code>: 構造体の生存期間を管理するメモリプール。</li>
+<li><code>apr_file_t *read_fd, *write_fd</code>: パイプの読み取り用および書き込み用のファイル記述子。</li>
+<li><code>char *program</code>, <code>apr_proc_t *pid</code>, <code>apr_cmdtype_e cmdtype</code>（<a class="wiki-source-link" href="../../source/include/ap_config.h.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>AP_HAVE_RELIABLE_PIPED_LOGS</code></a> 定義時のみ）: 外部プロセスの再起動や管理に必要な情報。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **生成とプロセス起動**: ログ関連モジュールが <a class="wiki-source-link" href="../../source/server/log.c.html#L1958" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_open_piped_log.html&quot;}, '*');"><code>ap_open_piped_log</code></a> または <a class="wiki-source-link" href="../../source/server/log.c.html#L1894" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_open_piped_log_ex.html&quot;}, '*');"><code>ap_open_piped_log_ex</code></a> を呼び出し、メモリプールと実行プログラム名を渡して <code>piped_log</code> を生成します。内部的に <a class="wiki-source-link" href="../../source/server/log.c.html#L1767" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__piped_log_spawn.html&quot;}, '*');"><code>piped_log_spawn</code></a> が呼び出され、外部プロセスが起動してパイプが確立されます。 2. **ログの書き込み**: サーバーは <a class="wiki-source-link" href="../../source/server/log.c.html#L206" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_piped_log_write_fd.html&quot;}, '*');"><code>ap_piped_log_write_fd</code></a> を通じて書き込み用のファイル記述子（<code>write_fd</code>）を取得し、ログデータをパイプ経由で外部プロセスへ転送します。 3. **プロセスの監視と再起動（条件付き）**: <a class="wiki-source-link" href="../../source/include/ap_config.h.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>AP_HAVE_RELIABLE_PIPED_LOGS</code></a> が有効な場合、<a class="wiki-source-link" href="../../source/server/log.c.html#L1821" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__piped_log_maintenance.html&quot;}, '*');"><code>piped_log_maintenance</code></a> 関数が <code>apr_proc_other_child_register</code> を介して子プロセスの死活監視を行い、異常終了を検知した場合は再起動を試みます。 4. **破棄**: <a class="wiki-source-link" href="../../source/server/log.c.html#L1978" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_close_piped_log.html&quot;}, '*');"><code>ap_close_piped_log</code></a> を呼び出すことで、パイプがクローズされ、関連するリソースが解放されます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**不透明性の維持**: </li>
+<p><code>piped_log</code> は不透明型であるため、外部モジュールから直接構造体のメンバにアクセスしてはならず、必ず <a class="wiki-source-link" href="../../source/server/log.c.html#L201" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_piped_log_read_fd.html&quot;}, '*');"><code>ap_piped_log_read_fd</code></a> や <a class="wiki-source-link" href="../../source/server/log.c.html#L206" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_piped_log_write_fd.html&quot;}, '*');"><code>ap_piped_log_write_fd</code></a> などの提供された API を介して操作しなければなりません。</p>
+<li>**ライフサイクルの依存**: </li>
+<p><code>piped_log</code> 構造体および関連リソースの生存期間は、生成時に渡された <code>apr_pool_t</code> のライフサイクルに厳密に従います。</p>
+<li>**プラットフォーム/ビルド依存の監視**: </li>
+<p>子プロセスの自動再起動機能は、<a class="wiki-source-link" href="../../source/include/ap_config.h.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>AP_HAVE_RELIABLE_PIPED_LOGS</code></a> が定義されている環境でのみ保証されます。</p>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**直接アクセスによる破損**: </li>
+<p><a class="wiki-source-link" href="../../source/server/log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/log.c.html&quot;}, '*');"><code>server/log.c</code></a> 以外から構造体の内部メンバに直接アクセスしようとすると、カプセル化が壊れ、将来のコード変更時に互換性の問題が発生します。</p>
+<li>**I/O ボトルネック**: </li>
+<p>高負荷環境において、外部ログプロセスの処理遅延やパイプのバッファ詰まりが発生すると、サーバー全体の I/O パフォーマンスに悪影響を及ぼす可能性があります。</p>
+<li>**自動再起動の未サポート環境**: </li>
+<p><a class="wiki-source-link" href="../../source/include/ap_config.h.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>AP_HAVE_RELIABLE_PIPED_LOGS</code></a> が未定義の環境では、外部プロセスが終了しても自動的に再起動されないため、ログの転送が停止するリスクがあります。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>include/http_log.h</code></a> （API 宣言と不透明型の定義）</li>
+<li><a class="wiki-source-link" href="../../source/server/log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/log.c.html&quot;}, '*');"><code>server/log.c</code></a> （<code>piped_log</code> の実体定義、プロセス生成、および監視ロジック）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_util.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');">modules/http2/h2_util.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util.h</code></a> は、Apache HTTP/2 モジュール全体で使用される汎用的なユーティリティ関数、データ構造、およびマクロを定義するヘッダーファイルです。HTTP/2 プロトコル特有の処理（ヘッダー変換、Base64URL エンコード、nghttp2 連携）から、低レベルなデータ構造（ハッシュ、キュー、バケット操作）までを網羅しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおける「共通基盤」として機能します。特定のビジネスロジックを持たず、ストリーム管理、セッション制御、プロトコル変換など、他のすべてのコンポーネントが依存する低レイヤーの操作を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**データ構造の提供**: 整数 ID をキーとするハッシュ (<code>h2_ihash</code>)、ソート可能な整数キュー (<a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_h__h2_iqueue.html&quot;}, '*');"><code>h2_iqueue</code></a>)、およびスレッドセーフな FIFO キュー (<code>h2_fifo</code>, <code>h2_ififo</code>) の管理。</li>
+<li>**HTTP/2 プロトコル支援**: ヘッダーの正規化、Push Policy の判定、Base64URL エンコード/デコード。</li>
+<li>**nghttp2 連携**: <code>nghttp2_nv</code> 構造体への変換や、リクエスト/レスポンスヘッダーの構築支援。</li>
+<li>**APR Brigade 操作**: バケットブリゲードの連結、コピー、メモリ使用量の見積もり、およびデバッグ用のダンプ出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>h2_ihash_t</code>: 整数 ID をキーとするハッシュテーブル。<a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L225" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_ihash_create.html&quot;}, '*');"><code>h2_ihash_create</code></a> で生成し、<a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_ihash_add.html&quot;}, '*');"><code>h2_ihash_add</code></a>/<code>get</code>/<code>remove</code> で操作。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_h__h2_iqueue.html&quot;}, '*');"><code>h2_iqueue</code></a>: ストリーム ID 等を管理するためのソート可能な整数キュー。</li>
+<li><code>h2_fifo</code> / <code>h2_ififo</code>: スレッドセーフな FIFO キュー。<a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L694" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_push.html&quot;}, '*');"><code>h2_fifo_push</code></a>/<code>pull</code> によるブロッキング操作や、<a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L770" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_peek.html&quot;}, '*');"><code>h2_fifo_peek</code></a> による非破壊的な先頭要素操作が可能。</li>
+</ul>
+<h3>ヘッダー・プロトコル変換</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L379" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_h__h2_ngheader.html&quot;}, '*');"><code>h2_ngheader</code></a>: <code>nghttp2</code> が要求するヘッダー形式への変換結果を保持する構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L1762" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_req_add_header.html&quot;}, '*');"><code>h2_req_add_header</code></a>: リクエストヘッダーをテーブルに追加する際のバリデーションと変換。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L1865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_push_policy_determine.html&quot;}, '*');"><code>h2_push_policy_determine</code></a>: RFC に基づく Push Policy の決定。</li>
+</ul>
+<h3>デバッグ・ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L463" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util_bb_log</code></a>: バケットブリゲードの内容をログ出力するマクロ。デバッグ時に非常に有用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_util_hex_dump.html&quot;}, '*');"><code>h2_util_hex_dump</code></a>: バイナリデータの 16 進ダンプ生成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**キュー操作**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L770" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_fifo_peek.html&quot;}, '*');"><code>h2_fifo_peek</code></a> は、キューのロックを保持したままコールバック関数を実行する設計となっており、競合を防ぎつつ先頭要素の安全な検査を可能にします。</li>
+<li>**ブリゲード操作**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html#L1320" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_append_brigade.html&quot;}, '*');"><code>h2_append_brigade</code></a> は、<code>h2_bucket_gate</code> コールバックを使用して、条件に応じたバケットの転送制御を行います。</li>
+<li>**メモリ管理**: ほとんどの構造体は <code>apr_pool_t</code> を引数に取り、APR のメモリ管理ライフサイクルに従います。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>nghttp2/nghttp2.h</code>: HTTP/2 プロトコルスタック。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache HTTPD のプロトコル処理基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.h.html&quot;}, '*');"><code>h2_headers.h</code></a>: モジュール内の定数定義やヘッダー構造体。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.c.html&quot;}, '*');"><code>h2_util.c</code></a>: 本ヘッダーで宣言された関数の実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>h2_bucket_beam.c</code></a>: ブリゲードの転送（Beam）に関連するより高度なバケット操作。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.c.html&quot;}, '*');"><code>h2_headers.c</code></a>: HTTP/2 ヘッダーの具体的な処理ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>h2_ihash</code> や <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_h__h2_iqueue.html&quot;}, '*');"><code>h2_iqueue</code></a> で管理される要素のメモリ所有権は、呼び出し元が管理する場合と、コンテナが管理する場合があるため、各関数のドキュメントを確認してください。</li>
+<li>**スレッド安全性**: <code>h2_fifo</code> はスレッドセーフですが、<a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_h__h2_iqueue.html&quot;}, '*');"><code>h2_iqueue</code></a> や <code>h2_ihash</code> は明示的なロックを必要とする場合があります。</li>
+<li>**省略された詳細**: 本ファイルはユーティリティの宣言に特化しており、具体的なアルゴリズム（Base64URL の変換テーブル等）は <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.c.html&quot;}, '*');"><code>h2_util.c</code></a> に隠蔽されています。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L463" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util_bb_log</code></a> は <a class="wiki-source-link" href="../../../source/include/http_log.h.html#L225" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_C_IS_LEVEL</code></a> で囲まれており、ログレベルが低い場合はオーバーヘッドが最小化されるよう設計されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_ihash_t.html" target="wiki-view"><code>h2_ihash_t</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_ihash_iter_t.html" target="wiki-view"><code>h2_ihash_iter_t</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_iqueue.html" target="wiki-view"><code>h2_iqueue</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_iq_cmp.html" target="wiki-view"><code>h2_iq_cmp</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_fifo.html" target="wiki-view"><code>h2_fifo</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_fifo_op_t.html" target="wiki-view"><code>h2_fifo_op_t</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_fifo_peek_fn.html" target="wiki-view"><code>h2_fifo_peek_fn</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_ififo.html" target="wiki-view"><code>h2_ififo</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_ififo_peek_fn.html" target="wiki-view"><code>h2_ififo_peek_fn</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_ngheader.html" target="wiki-view"><code>h2_ngheader</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__h2_hd_scratch.html" target="wiki-view"><code>h2_hd_scratch</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_util_h__apr_off_t.html" target="wiki-view"><code>apr_off_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

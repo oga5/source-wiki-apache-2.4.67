@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__util_time_c__cached_explode.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_time.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_time_c__cached_explode.html&quot;}, '*');">cached_explode</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/util_time.c:55</code></li>
+</ul>
+<h2>目的</h2>
+<p>時刻分解処理（<code>apr_time_t</code> から <code>apr_time_exp_t</code> への変換）をリングバッファ形式のキャッシュを用いて高速化し、システムコール呼び出しを削減する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t cached_explode(apr_time_exp_t *xt, apr_time_t t,
+                            struct exploded_time_cache_element *cache,
+                            int use_gmt);</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>xt</code>: 分解後の時刻を格納する構造体へのポインタ。</li>
+<li><code>t</code>: 変換対象の時刻（<code>apr_time_t</code>）。</li>
+<li><code>cache</code>: 時刻キャッシュを保持するリングバッファ配列。</li>
+<li><code>use_gmt</code>: GMT変換を行う場合は非ゼロ、ローカルタイムの場合はゼロを指定。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code> を返し、<code>xt</code> に結果が格納される。失敗時は APR のエラーコードを返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>キャッシュは <code>TIME_CACHE_MASK</code> を用いたリングバッファとして実装されている。</li>
+<li>キャッシュの整合性は、<code>t</code>（タイムスタンプ）と <code>t_validate</code>（検証用タイムスタンプ）の双方が一致することで保証される。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_time.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_time.h.html&quot;}, '*');"><code>AP_TIME_RECENT_THRESHOLD</code></a>（デフォルト15秒）以内の時刻に対してのみキャッシュが有効。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **キャッシュ探索**: 入力時刻からリングバッファのインデックスを計算し、該当要素を取得する。 2. **キャッシュヒット判定**: キャッシュ要素のタイムスタンプが現在の秒数以上であれば、スナップショットを採取する。 3. **整合性検証**: スナップショットの <code>t</code> と <code>t_validate</code> が入力時刻と一致するか確認する。</p>
+<ul>
+<li>一致する場合: キャッシュされた <code>xt</code> を使用する。</li>
+<li>不一致の場合: キャッシュを無視し、<code>apr_time_exp_gmt</code> または <code>apr_time_exp_lt</code> を直接呼び出す。</li>
+<p>4. **キャッシュミス/更新**: キャッシュが古い場合、標準の APR 関数で時刻を分解し、結果をキャッシュに書き込む。書き込み時は <code>t</code> を最後に更新することで、読み取り側の不整合検知を可能にする。 5. **最終処理**: <code>xt-&gt;tm_usec</code> にマイクロ秒部分を反映させて終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/util_time.c:149</code> (<a class="wiki-source-link" href="../../source/server/util_time.c.html#L146" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_time_c__ap_explode_recent_localtime.html&quot;}, '*');"><code>ap_explode_recent_localtime</code></a> から)</li>
+<li><code>server/util_time.c:155</code> (<a class="wiki-source-link" href="../../source/server/util_time.c.html#L152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_time_c__ap_explode_recent_gmt.html&quot;}, '*');"><code>ap_explode_recent_gmt</code></a> から)</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_time_exp_gmt</code> / <code>apr_time_exp_lt</code> (APR ライブラリ関数)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_time.c.html#L34" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_time_c__exploded_time_cache_element.html&quot;}, '*');"><code>exploded_time_cache_element</code></a>: 時刻分解結果と整合性検証用のタイムスタンプを保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**競合**: マルチスレッド環境で書き込み中に読み取りが発生した場合、整合性チェックで不整合が検知され、フォールバックとして標準の APR 関数が呼び出される。</li>
+<li>**範囲外**: <a class="wiki-source-link" href="../../source/include/util_time.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_time.h.html&quot;}, '*');"><code>AP_TIME_RECENT_THRESHOLD</code></a> を超える古い時刻が入力された場合、キャッシュは利用されず直接変換が行われる。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はロックフリー設計であるため、スレッド間の競合を「検知して再計算する」ことで解決している。</li>
+<li><code>t_validate</code> は、書き込み完了を保証するためのマーカーとして機能する。この順序（<code>t</code> 更新 -&gt; <code>xt</code> コピー -&gt; <code>t_validate</code> 更新）を変更してはならない。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

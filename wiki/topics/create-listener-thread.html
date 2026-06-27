@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/create-listener-thread.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>create_listener_thread</h1>
+<h2>概念</h2>
+<p><code>create_listener_thread</code> は、Apache HTTP Server（httpd-2.4.67）のマルチプロセッシングモジュール（MPM）である <code>event</code>、<code>worker</code>、<code>winnt</code> において、クライアントからの接続要求を監視・受付するリスナースレッドを生成するための内部関数です。</p>
+<h2>なぜ重要か</h2>
+<p>Webサーバーがクライアントからの接続を適切に受け付けて処理を開始するためには、ネットワークソケットを監視するリスナースレッドの存在が不可欠です。各MPMは、それぞれの並行処理アーキテクチャ（イベント駆動、マルチスレッド、Windows固有の非同期I/Oなど）に合わせて、この関数を通じてリスナースレッドを初期化・起動します。</p>
+<h2>関与するモジュール</h2>
+<p>本トピックには以下のモジュールが関与しています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__winnt.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__winnt.html&quot;, &quot;source&quot;: &quot;source/server/mpm/winnt/child.c.html&quot;}, '*');"><code>module:server/mpm/winnt</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本トピックを構成する主要な関数シンボルは以下の通りです。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__create_listener_thread.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__create_listener_thread.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L2295&quot;}, '*');"><code>symbol:server/mpm/event/event.c#create_listener_thread</code></a></li>
+<li>シグネチャ: <code>static void create_listener_thread(thread_starter * ts)</code></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__winnt__child_c__create_listener_thread.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__create_listener_thread.html&quot;, &quot;source&quot;: &quot;source/server/mpm/winnt/child.c.html#L885&quot;}, '*');"><code>symbol:server/mpm/winnt/child.c#create_listener_thread</code></a></li>
+<li>シグネチャ: <code>static void create_listener_thread(void)</code></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__create_listener_thread.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__create_listener_thread.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L845&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#create_listener_thread</code></a></li>
+<li>シグネチャ: <code>static void create_listener_thread(thread_starter *ts)</code></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細なエンドツーエンドの実行フローは完全には解析されていません。 ただし、静的解析情報から以下の呼び出し関係が判明しています。</p>
+<p>1. 各MPMの子プロセス初期化処理（<code>child_main</code>）またはスレッド起動処理（<code>start_threads</code>）から <code>create_listener_thread</code> が呼び出されます。 2. <code>event</code> および <code>worker</code> MPMの実装では、内部で <code>ap_thread_create</code> を呼び出してスレッドを生成します。その過程で、必要に応じて <a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_malloc.html&quot;}, '*');"><code>ap_malloc</code></a> によるメモリ確保、エラー時の <code>ap_log_error</code> によるログ出力、および <code>clean_child_exit</code> による子プロセスのクリーンアップ終了処理が行われます。 3. <code>winnt</code> MPMの実装では引数を取らず、呼び出し先シンボルは定義されていません。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、スレッド生成時や実行時における具体的な前提条件および不変条件は解析されていません。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では、具体的な失敗モードや境界条件、開発時に陥りやすい落とし穴は解析されていません。ただし、<code>event</code> や <code>worker</code> ではスレッド生成（<code>ap_thread_create</code>）やメモリ確保（<a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_malloc.html&quot;}, '*');"><code>ap_malloc</code></a>）の失敗時に <code>clean_child_exit</code> を介して子プロセスが終了する可能性があるため、リソース枯渇時の挙動に注意する必要があります。</p>
+<h2>次に読む場所</h2>
+<p>各MPMにおける具体的なスレッド生成ロジックを理解するために、以下のソースファイルを参照してください。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>server/mpm/winnt/child.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

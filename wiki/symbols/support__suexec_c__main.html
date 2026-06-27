@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/support__suexec_c__main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>main</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>support/suexec.c:270</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server の CGI プログラムを、特定のユーザー権限で安全に実行するためのラッパープログラムのメインエントリポイントです。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>int main(int argc, char *argv[])</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: </li>
+<li><code>argc</code>, <code>argv</code>: コマンドライン引数。ターゲットユーザー名、グループ名、実行コマンドパスを受け取ります。</li>
+<li>**出力**: </li>
+<li>成功時: <code>execv</code> によりプロセスイメージが置換されるため、戻り値はありません。</li>
+<li>失敗時: 終了ステータスコード（101〜126, 150, 255等）を返して終了します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>実行ユーザーは <a class="wiki-source-link" href="../../source/support/suexec.h.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_HTTPD_USER</code></a> と一致している必要があります。</li>
+<li>実行対象のディレクトリおよびファイルは、グループや他者による書き込み権限（<code>S_IWGRP</code>, <code>S_IWOTH</code>）を持ってはなりません。</li>
+<li>実行対象のファイルに <code>setuid</code>/<code>setgid</code> ビットが設定されている場合は拒否されます。</li>
+<li>実行対象の UID/GID は、<a class="wiki-source-link" href="../../source/support/suexec.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_UID_MIN</code></a> / <a class="wiki-source-link" href="../../source/support/suexec.h.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_GID_MIN</code></a> 以上である必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **環境初期化**: <code>clean_env()</code> を呼び出し、安全な環境変数のみに制限します。 2. **権限検証**: 実行元ユーザーが許可されたユーザーか確認します。 3. **引数解析**: ターゲットユーザー、グループ、コマンドを特定します。 4. **ユーザー解決**: <code>getpwnam</code> / <code>getpwuid</code> 等を用いてターゲットの UID/GID を解決します。 5. **権限降格**: <code>setgid()</code>、<code>initgroups()</code>、<code>setuid()</code> を順に実行し、ターゲットユーザーへ権限を移行します。 6. **パス検証**: <code>getcwd()</code> と <code>chdir()</code> を使用して、実行対象が <a class="wiki-source-link" href="../../source/support/suexec.h.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/suexec.h.html&quot;}, '*');"><code>AP_DOC_ROOT</code></a> 内に存在し、シンボリックリンク攻撃を受けていないことを確認します。 7. **実行**: <code>execv()</code> を呼び出し、ターゲットプログラムへ制御を移します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: 特権（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>）で動作する親プロセス（Apache HTTP Server 本体の CGI 実行ロジック）。</li>
+<li>**呼び出し先**: <code>clean_env()</code>, <code>log_err()</code>, <code>log_no_err()</code>, <code>getuid()</code>, <code>getpwuid()</code>, <code>getpwnam()</code>, <code>getgrnam()</code>, <code>getgrgid()</code>, <code>setgid()</code>, <code>initgroups()</code>, <code>setuid()</code>, <code>getcwd()</code>, <code>chdir()</code>, <code>lstat()</code>, <code>execv()</code> 等。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>struct passwd</code>: ユーザー情報保持用。</li>
+<li><code>struct group</code>: グループ情報保持用。</li>
+<li><code>struct stat</code>: ファイルおよびディレクトリの属性情報保持用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>引数が不足している場合（101）、ユーザー不一致（103）、コマンドパスの不正（104）、ユーザー/グループが無効（105, 106, 121）、権限昇格失敗（109, 110）、ドキュメントルート外へのアクセス（114）、ディレクトリのパーミッション不備（116）などでエラー終了します。</li>
+<li><code>execv</code> 後の失敗は <code>exit(255)</code> で終了します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はセキュリティの境界線であるため、修正には極めて慎重な検討が必要です。</li>
+<li><code>strdup()</code> で確保されたメモリは <code>execv</code> まで保持されます。</li>
+<li><code>_OSD_POSIX</code> 固有のロジックが含まれており、プラットフォーム依存の挙動に注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>include/ap_listen.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');">include/ap_listen.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a> は、Apache HTTP Server におけるネットワークリスナーの管理を定義するヘッダーファイルです。MPM（Multi-Processing Module）が接続を受け付けるためのソケット設定、バインド、およびリスニング状態の管理を行うためのデータ構造と API を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache コアの一部として、設定ファイルで指定された <code>Listen</code> ディレクティブに基づき、サーバーが待機すべき全ソケットのリストを保持・管理します。MPM はこのリストを参照して、各プロセス/スレッドがどのソケットから接続を受け入れるかを決定します。</p>
+<h2>責務</h2>
+<ul>
+<li>リスナー設定の保持: <code>ap_listen_rec</code> 構造体によるソケット情報の管理。</li>
+<li>ソケットのライフサイクル管理: ソケットの生成、バインド、リスニングの開始、およびクローズ処理。</li>
+<li>設定の統合: <code>Listen</code> 関連のディレクティブ（<code>Listen</code>, <code>ListenBacklog</code> 等）の解析と適用。</li>
+<li>マルチコア最適化: <code>SO_REUSEPORT</code> を利用したリスナーのバケット分割（<a class="wiki-source-link" href="../../source/server/listen.c.html#L797" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_duplicate_listeners.html&quot;}, '*');"><code>ap_duplicate_listeners</code></a>）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>ap_listen_rec</code>: リスナーソケットの情報を保持する主要な構造体。</li>
+<li><code>ap_listeners</code>: 全リスナーを保持するグローバルなリンクリスト。</li>
+<li><code>ap_setup_listeners()</code>: 設定に基づいてソケットを生成し、バインドする関数。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html#L157" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>LISTEN_COMMANDS</code></a>: MPM が設定テーブルに含めるべき、リスナー関連ディレクティブの定義マクロ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <a class="wiki-source-link" href="../../source/include/ap_listen.h.html#L157" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>LISTEN_COMMANDS</code></a> を通じて <a class="wiki-source-link" href="../../source/server/listen.c.html#L988" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_set_listener.html&quot;}, '*');"><code>ap_set_listener</code></a> 等が呼び出され、<code>ap_listen_rec</code> リストが構築されます。 2. **初期化フェーズ**: <code>ap_setup_listeners()</code> が呼び出され、リスト内の全エントリに対して <code>socket()</code>, <code>bind()</code>, <code>listen()</code> が実行されます。 3. **実行フェーズ**: 必要に応じて <code>ap_duplicate_listeners()</code> が呼ばれ、マルチコア環境向けにリスナーが複製されます。 4. **終了フェーズ**: <code>ap_close_listeners()</code> により、全ソケットが適切にクローズされます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: APR レベルのソケット操作。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: <code>server_rec</code> 等のコアデータ構造。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: 設定解析用コマンド定義。</li>
+<li><code>apr_optional.h</code>: システム固有（<a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> 等）のオプション機能の統合。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a>: 本ヘッダーで宣言された関数の実装が含まれる。</li>
+<li><code>server/mpm/</code>: 各 MPM が <code>ap_listeners</code> をどのように利用して接続を受け入れるかの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルで宣言されている <code>ap_set_...</code> 系関数は、設定解析時にのみ使用される内部的なものです。外部モジュールから直接呼び出すべきではありません。</li>
+<li><code>ap_listen_rec</code> の <code>accept_func</code> は、MPM が接続を受け入れる際に呼び出す関数ポインタであり、プロトコルごとのハンドリングを可能にする重要なフックです。</li>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L797" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_duplicate_listeners.html&quot;}, '*');"><code>ap_duplicate_listeners</code></a> は、高負荷環境でのスケーラビリティ向上のために使用されます。プラットフォームが <code>SO_REUSEPORT</code> をサポートしているかどうかが動作の鍵となります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__ap_listen_h__ap_slave_t.html" target="wiki-view"><code>ap_slave_t</code></a></li>
+<li><a href="../symbols/include__ap_listen_h__ap_listen_rec.html" target="wiki-view"><code>ap_listen_rec</code></a></li>
+<li><a href="../symbols/include__ap_listen_h__apr_pool_t.html" target="wiki-view"><code>apr_pool_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

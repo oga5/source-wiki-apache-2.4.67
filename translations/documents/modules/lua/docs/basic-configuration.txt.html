@@ -1,0 +1,112 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/lua/docs/basic-configuration.txt</title><link rel="stylesheet" href="../../../../../styles.css"></head><body><h1>Japanese translation</h1><p><code>modules/lua/docs/basic-configuration.txt</code></p><pre>例については sample_httpd.conf を参照してください。
+
+基本的なモジュール読み込みディレクティブは以下の通りです。
+    LoadModule lua_module modules/mod_lua.so
+
+ハンドラ名は &quot;lua-script&quot; です。そのため、通常の AddHandler ディレクティブ（例: &quot;AddHandler lua-script .lua&quot;）を使用して、.lua で終わるすべてのファイルを mod_lua で評価するように設定できます。
+
+mod_lua は、以下の追加ディレクティブを提供します。
+
+    LuaRoot /path/to/a/directory
+        mod_lua 内のすべての相対パスを評価するために使用されるベースパスを指定します。指定しない場合、現在の作業ディレクトリからの相対パスとして解決されますが、サーバー環境ではうまく動作しない可能性があります。
+
+    LuaScope once|request|conn|server [max|min max]
+        この「Directory」内のハンドラによって使用される Lua インタプリタのライフサイクルスコープを指定します。デフォルトは &quot;once&quot; です。
+        
+        once: インタプリタを一度使用して破棄します。
+        
+        request: このリクエスト内で同じファイルに基づく処理を行うためにインタプリタを使用します。これもリクエストスコープです。
+                 
+        conn: request と同様ですが、connection_rec に関連付けられます。
+        
+        server: これは他のものとは異なります。サーバーのスコープは非常に長く、複数のスレッドが同じ server_rec を共有するためです。これに対応するため、サーバー範囲のインタプリタは apr リソースリストに格納されます。min および max 引数はプールサイズを指定するためのものですが、現時点では使用されていません。
+
+    LuaMapHandler uri-pattern /path/to/lua/script.lua [function-name]
+        このディレクティブは、URI パターンを特定のファイル内の特定のハンドラ関数にマッピングします。URI のマッチングには PCRE 正規表現を使用し、ファイルパスと関数名の両方へのマッチグループの挿入をサポートしています。正規表現を記述する際は、セキュリティ上の問題が発生しないよう注意してください。
+        
+        例:
+            LuaMapHandler /(\w+)/(/w+) /scripts/$1.lua handle_$2
+                これは /photos/show?id=9 のような URI を /scripts/photos.lua ファイルにマッチさせ、そのファイルを読み込んだ後、Lua VM 上でハンドラ関数 handle_show を呼び出します。
+                
+            LuaMapHandler /bingo /scripts/wombat.lua
+                これは &quot;handle&quot; 関数を呼び出します。関数名が指定されていない場合のデフォルトです。
+    
+    LuaPackagePath /path/to/include/?.lua
+        Lua のモジュール検索パスにパスを追加します。Lua と同じ規則に従います。これは単に Lua VM 内の package.path を変更するものです。
+        
+        例:
+            LuaPackagePath /scripts/lib/?.lua
+            LuaPackagePath /scripts/lib/?/init.lua
+
+    LuaPackageCPath /path/to/include/?.soa
+        Lua の共有ライブラリ検索パスにパスを追加します。Lua と同じ規則に従います。これは単に Lua VM 内の package.cpath を変更するものです。
+        
+        例:
+            LuaPackagePath /scripts/lib/?.so
+
+    LuaCodeCache stat|forever|never
+        メモリ内コードキャッシュの動作を指定します。デフォルトは stat です。これはファイルが必要になるたびにトップレベルのスクリプト（インクルードされたファイルは含まない）のステータスを確認し、更新時刻が読み込み済みファイルより新しい場合に再読み込みを行います。他の値を指定すると、ファイルを永久にキャッシュする（ステータス確認や置換を行わない）、またはキャッシュを一切行わないようにできます。
+        
+        一般的に、本番環境では stat または forever が適しており、開発環境では stat または never が適しています。
+        
+        例:
+            LuaCodeCache stat
+            LuaCodeCache forever
+            LuaCodeCache never
+    
+    LuaHookTranslateName  /path/to/lua/script.lua  hook_function_name
+        リクエスト処理の translate name フェーズにフック（APR_HOOK_MIDDLE）を追加します。フック関数は引数として request_rec を受け取り、ステータスコードを返す必要があります。ステータスコードは HTTP エラーコード、または apache2 モジュールで定義された定数（apache2.OK、apache2.DECLINED、apache2.DONE）のいずれかです。
+
+        フックに不慣れな方のために説明すると、基本的に各フックは、いずれかが apache2.OK を返すまで呼び出されます。フックで変換を行いたくない場合は、単に apache2.DECLINED を返してください。リクエストの処理を停止させる必要がある場合は、apache2.DONE を返します。
+
+        例:
+            LuaHookTranslateName /scripts/conf/hooks.lua silly_mapper
+
+            -- /scripts/conf/hooks.lua --
+            function silly_mapper(r)
+                if r.uri == &quot;/&quot; then
+                    r.file = &quot;/var/www/home.lua&quot;
+                    return apache2.OK
+                else
+                    return apache2.DECLINED
+                end
+            end
+
+    LuaHookFixups  /path/to/lua/script.lua  hook_function_name
+        LuaHookTranslateName と同様ですが、fixups フェーズで実行されます。
+
+    LuaHookMapToStorage  /path/to/lua/script.lua  hook_function_name
+        ...
+
+    LuaHookCheckUserID  /path/to/lua/script.lua  hook_function_name
+        ...
+
+    LuaHookTypeChecker  /path/to/lua/script.lua  hook_function_name
+        ...
+
+    LuaHookAuthChecker  /path/to/lua/script.lua  hook_function_name
+        ...
+
+    LuaHookAccessChecker  /path/to/lua/script.lua  hook_function_name
+        ...
+
+    LuaHookAuthChecker  /path/to/lua/script.lua  hook_function_name
+        ...
+
+    LuaHookInsertFilter  /path/to/lua/script.lua  hook_function_name
+        未実装</pre><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/server__mpm__netware.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/netware</h1>
+<h2>システム内での役割</h2>
+<p>NetWare OS 上で Apache HTTP Server を動作させるためのマルチプロセッシングモジュール（MPM）です。NetWare の単一プロセス・マルチスレッドモデル（NKS: NetWare Kernel Services）を活用し、効率的なリクエスト処理を実現します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッド管理**: ワーカースレッドの生成、監視、およびスレッドプールの動的調整（<code>perform_idle_server_maintenance</code>）。</li>
+<li>**コンソール統合**: NetWare コンソールコマンド（<code>RESTART</code>, <code>SHUTDOWN</code> 等）の登録と処理。</li>
+<li>**ライフサイクル管理**: サーバーの起動、リスニングソケットの監視、および正常終了/再起動の制御。</li>
+<li>**設定管理**: スレッド数やスタックサイズなどの MPM 固有ディレクティブの解析と適用。</li>
+</ul>
+<h2>このモジュールのファイル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>server/mpm/netware/mpm_default.h</code></a>: スレッド数やスタックサイズ等のデフォルト値定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a>: MPM のメインロジックおよび NetWare OS との統合実装。</li>
+</ul>
+<h2>主要なデータ構造</h2>
+<ul>
+<li><code>worker_main</code>: ワーカースレッドのメインループ関数。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>mpm_state</code></a>: サーバーの現在の動作状態（起動中、実行中、停止中など）。</li>
+<li><code>shutdown_pending</code> / <code>restart_pending</code>: 終了や再起動を制御する状態遷移フラグ。</li>
+</ul>
+<h2>主なフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L1087" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_mpm_hooks.html&quot;}, '*');"><code>netware_mpm_hooks</code></a> によりフックを登録し、コンソールハンドラをインストール。 2. **起動**: <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__netware_run.html&quot;}, '*');"><code>netware_run</code></a> がリスニングソケットを準備し、初期スレッド群を生成。 3. **メインループ**: <code>perform_idle_server_maintenance</code> を定期実行し、スレッドプールの過不足を調整。 4. **リクエスト処理**: 各ワーカースレッドが <code>select()</code> で接続を待機し、リクエストを処理。 5. **終了**: 終了フラグがセットされると、全スレッドの終了を待機し、リソースを解放。</p>
+<h2>外部依存</h2>
+<ul>
+<li>**APR**: スレッド、メモリ、同期プリミティブの抽象化。</li>
+<li>**NetWare SDK**: <code>NKS</code> を介したネイティブなスレッド制御およびコンソール操作。</li>
+<li>**Apache Core**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>, <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a> 等によるサーバー基盤との連携。</li>
+</ul>
+<h2>内部構成</h2>
+<ul>
+<li>子モジュール数: 0</li>
+<li>本モジュールは NetWare 特有の環境に最適化されており、<code>fork()</code> を使用しない単一プロセスモデルを採用しています。</li>
+</ul>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>server/mpm/netware/mpm_default.h</code></a>（定数と制限値の把握） 2. <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a>（スレッド管理とライフサイクル制御の理解）</p>
+<h2>未解決の問い</h2>
+<ul>
+<li>現在のコードベースにおける一部の未実装フック（<code>netware_post_config</code> 等）の将来的な必要性。</li>
+<li>NetWare 環境特有のメモリ制約下における、スコアボードの最適化手法の精緻化。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

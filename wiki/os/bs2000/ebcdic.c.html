@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>os/bs2000/ebcdic.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/os/bs2000/ebcdic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/ebcdic.c.html&quot;}, '*');">os/bs2000/ebcdic.c</a></h1>
+<h2>概要</h2>
+<p>BS2000 メインフレーム環境における EBCDIC と ASCII 間の文字コード変換機能を提供します。Apache HTTP Server がネイティブの EBCDIC 環境で動作する際、ネットワーク通信やプロトコル処理に必要な ASCII 変換をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>os/bs2000</code> サブシステムの一部として、文字セットの不一致を吸収する低レベルな変換レイヤーを担います。<a class="wiki-source-link" href="../../../source/os/bs2000/ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/ebcdic.h.html&quot;}, '*');"><code>ebcdic.h</code></a> で宣言された変換テーブルと関数を実装し、他のモジュールが文字コードを意識せずにデータ処理を行えるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**変換テーブルの保持**: EBCDIC から ASCII への変換（通常版および厳密版）、および ASCII から EBCDIC への変換テーブルを静的データとして提供。</li>
+<li>**メモリブロック変換**: 指定されたバイト数（<code>count</code>）のメモリ領域を、変換テーブルを用いて一括変換する関数の提供。</li>
+<li>**プロトコル互換性の維持**: 改行コード（<code>\n</code>）など、プロトコル上で特別な意味を持つ文字の変換ルールを制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>os_toascii</code>: EBCDIC から ASCII への変換テーブル。<code>0x0A</code>（LF）を ASCII の <code>0x0A</code> にマッピングするプロトコル向け。</li>
+<li><code>os_toascii_strictly</code>: 厳密な EBCDIC-ASCII 変換テーブル。</li>
+<li><code>os_toebcdic</code>: ASCII から EBCDIC への変換テーブル。</li>
+<li><code>ebcdic2ascii()</code> / <code>ascii2ebcdic()</code>: メモリブロックを変換する主要なユーティリティ関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>本ファイルは主にデータ変換のルックアップテーブルとして機能します。 1. 呼び出し元が変換対象のバッファとサイズを関数に渡します。 2. 関数は <code>while</code> ループ内で、入力バッファの各バイトをインデックスとして変換テーブルを参照します。 3. 変換後の値を宛先バッファに書き込みます。 4. <code>os_toascii</code> はプロトコル文字列の変換を考慮し、特定の制御文字を適切にマッピングするよう設計されています。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a>: Apache の設定および環境定義。</li>
+<li><a class="wiki-source-link" href="../../../source/os/bs2000/ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/ebcdic.h.html&quot;}, '*');"><code>ebcdic.h</code></a>: 本ファイルのヘッダーであり、変換関数のプロトタイプとテーブルの外部参照を定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a>: BS2000 特有の OS 抽象化レイヤー。</li>
+<li><code>APR_CHARSET_EBCDIC</code>: Apache Portable Runtime (APR) 側で定義される、EBCDIC 環境を有効化するためのコンパイル時フラグ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**非連続性**: EBCDIC では英字（&#x27;a&#x27;..&#x27;z&#x27;）が連続していないため、単純なオフセット計算ではなく、本ファイルで定義された変換テーブルによるルックアップが必須です。</li>
+<li>**厳密性の違い**: <code>os_toascii</code> と <code>os_toascii_strictly</code> の違いは、<code>0x0A</code>（LF）の扱いのみです。プロトコル文字列を扱う場合は、改行コードが正しく変換される <code>os_toascii</code> を使用してください。</li>
+<li>**オーバーラップ**: 変換関数は <code>dest</code> と <code>srce</code> が重なるメモリ領域を想定していません。使用時は注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/os__bs2000__ebcdic_c__ebcdic2ascii.html" target="wiki-view"><code>ebcdic2ascii</code></a></li>
+<li><a href="../../symbols/os__bs2000__ebcdic_c__ebcdic2ascii_strictly.html" target="wiki-view"><code>ebcdic2ascii_strictly</code></a></li>
+<li><a href="../../symbols/os__bs2000__ebcdic_c__ascii2ebcdic.html" target="wiki-view"><code>ascii2ebcdic</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

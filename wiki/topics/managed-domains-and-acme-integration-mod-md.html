@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/managed-domains-and-acme-integration-mod-md.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Managed Domains and ACME Integration (mod_md)</h1>
+<h2>概念</h2>
+<p><code>mod_md</code>（Managed Domains）は、Apache HTTP Server内でSSL/TLS証明書の管理を自動化するためのモジュール群です。ACME（Automated Certificate Management Environment）プロトコル（Let&#x27;s Encryptなど）をサポートし、外部ツール（certbotなど）に依存することなく、Webサーバー自体が自律的に証明書の取得、更新、および適用を行います。</p>
+<h2>なぜ重要か</h2>
+<p>従来のSSL/TLS証明書の管理は、手動での申請、サーバーへの配置、および定期的な更新作業が必要であり、設定ミスや更新忘れによるサービス停止のリスクが常に存在していました。<code>mod_md</code> を導入することで、証明書のライフサイクル管理がApache内部に統合され、運用の自動化と安全性の向上が実現します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><code>modules/md</code> (Apache HTTP Server 内のManaged Domainモジュールディレクトリ)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**mod_md (<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>mod_md.c</code></a>)**: Apacheモジュールのエントリポイント。設定ディレクティブの解析、フックの登録、およびApacheコアと他のMDコンポーネントとの仲介を行います。</li>
+<li>**ACME Client (<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a>)**: ACMEサーバー（認証局）との通信、アカウント登録、チャレンジの実行、および証明書の要求を担当します。</li>
+<li>**Registry (<a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a>)**: 管理対象ドメイン（MD）の登録状態、更新スケジュール、およびライフサイクル全般を管理するビジネスロジックです。</li>
+<li>**Store (<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>)**: 取得した証明書、秘密鍵、アカウントメタデータなどをファイルシステム等の永続ストレージに安全に保存・ロードする抽象化レイヤーです。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>*注意: 提供されたソースファイル群からは、詳細な内部関数呼び出しシーケンスや厳密なプロトコルハンドシェイクの全容は完全には特定されていません。以下は、構成ファイルから推測される一般的な処理フローです。*</p>
+<p>1. **初期化と設定ロード**: Apacheの起動時または再起動時に、<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>mod_md.c</code></a> が設定ファイルから管理対象ドメイン（<code>MDomain</code> ディレクティブなど）の定義を読み込みます。 2. **状態チェック**: <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a> が <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> を介して既存の証明書の状態を確認し、新規取得または更新が必要かどうかを判定します。 3. **ACMEチャレンジの実行**: 更新が必要な場合、<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> がACMEサーバーと通信を開始し、ドメインの所有権を証明するためのチャレンジ（HTTP-01など）をセットアップします。 4. **証明書の取得と保存**: チャレンジの検証が成功すると、ACMEサーバーから新しい証明書が発行され、<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> を通じてディスクに永続化されます。 5. **証明書の適用**: 新しい証明書がロードされ、WebサーバーのTLSコンテキストに適用されます。</p>
+<h2>重要な不変条件</h2>
+<p>*注意: ソースコードの完全な静的解析が行われていないため、詳細な不変条件は完全には特定されていません。設計上想定される不変条件は以下の通りです。*</p>
+<ul>
+<li>**秘密鍵の秘匿性**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> によって保存される秘密鍵は、適切なファイルパーミッションで保護され、外部に漏洩してはなりません。</li>
+<li>**チャレンジパスの整合性**: ACMEサーバーからの検証リクエスト（<code>.well-known/acme-challenge/</code>）は、チャレンジ実行中に正しくルーティングされ、応答可能でなければなりません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>*注意: 網羅的なトラブルシューティング情報は完全には特定されていませんが、モジュールの構造から以下の点に注意する必要があります。*</p>
+<ul>
+<li>**ストレージの書き込み権限**: Apacheの実行ユーザーが <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> の指定するデータ保存ディレクトリに対して書き込み権限を持っていない場合、証明書の保存や更新に失敗します。</li>
+<li>**ACMEレートリミット**: 設定ミスや頻繁な再起動により、ACMEサーバー（Let&#x27;s Encrypt等）のAPI呼び出し制限（レートリミット）に達し、一時的に証明書が取得できなくなる可能性があります。</li>
+<li>**ネットワーク制限**: WebサーバーからACMEサーバーへのアウトバウンド通信、またはACMEサーバーからWebサーバーへのインバウンド通信（HTTP-01検証用）がファイアウォール等で遮断されていると、検証プロセスが完了しません。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a> (モジュールの初期化と設定ディレクティブの理解)</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>modules/md/md_acme.c</code></a> (ACMEプロトコルの実装詳細)</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>modules/md/md_reg.c</code></a> (ドメイン管理と更新ロジック)</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>modules/md/md_store.c</code></a> (証明書と鍵の永続化メカニズム)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

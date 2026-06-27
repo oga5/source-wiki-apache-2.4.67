@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/generators/cgi_common.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');">modules/generators/cgi_common.h</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の CGI 実行モジュール（<code>mod_cgi</code>, <code>mod_cgid</code>）間で共有される共通ロジックを定義しています。主に、CGI スクリプトの標準エラー出力のキャプチャ、SSI（Server Side Includes）の <code>exec</code> ディレクティブ処理、および CGI 実行時のバケット処理を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/generators</code> サブシステムにおいて、CGI 関連の実行基盤を提供します。個別のモジュール（<a class="wiki-source-link" href="../../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>mod_cgi.c</code></a> 等）が実装すべき共通のユーティリティ関数群を静的関数として提供し、コードの重複を排除しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**エラーログ管理**: スクリプトの標準エラー出力を読み取り、Apache のエラーログへ転送する。</li>
+<li>**SSI 統合**: <code>mod_include</code> と連携し、<code>exec</code> コマンド（<code>cmd</code> および <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgi.c.html#L771" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>cgi</code></a>）の実行をハンドリングする。</li>
+<li>**CGI バケット管理**: スクリプトの入出力パイプを監視するためのカスタムバケット型（<code>CGI</code>）の定義とライフサイクル管理。</li>
+<li>**リクエスト/レスポンス処理**: リクエストボディのスクリプトへの転送、およびスクリプトからのレスポンスヘッダ解析と転送。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>CGI バケット管理</h3>
+<ul>
+<li><code>struct cgi_bucket_data</code>: バケットに関連付けられたポーリング用データ（<code>pollset</code>、<code>request_rec</code>、タイムアウト値）。</li>
+<li><code>cgi_bucket_create()</code>: スクリプトの stdout/stderr を監視する <code>CGI</code> 型バケットを生成。</li>
+<li><code>cgi_bucket_read()</code>: バケット読み取り時に <code>poll()</code> を実行し、stderr をログへ排出しつつ stdout を取得する。</li>
+</ul>
+<h3>SSI 実行ハンドラ</h3>
+<ul>
+<li><code>cgi_handle_exec()</code>: <code>mod_include</code> から呼び出される <code>exec</code> ディレクティブのメインハンドラ。</li>
+<li><code>cgi_optfns_retrieve()</code>: <code>mod_include</code> が提供するオプション関数を検索し、<code>exec</code> ハンドラを登録する。</li>
+</ul>
+<h3>ログ・エラー処理</h3>
+<ul>
+<li><code>log_scripterror()</code>: スクリプトの stderr 出力をフォーマットしてエラーログに書き出す。</li>
+<li><code>log_script_err()</code>: パイプから stderr を行単位で読み取り、ログへ転送する。</li>
+</ul>
+<h3>リクエスト/レスポンス制御</h3>
+<ul>
+<li><code>cgi_handle_request()</code>: リクエストボディを読み取り、スクリプトの標準入力へ書き込む。</li>
+<li><code>cgi_handle_response()</code>: スクリプトの出力を解析し、ヘッダ処理とレスポンスのフィルタリングを行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト処理**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L557" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_handle_request.html&quot;}, '*');"><code>cgi_handle_request</code></a> が入力フィルタからデータを読み取り、スクリプトのパイプへ書き込みます。 2. **バケット読み取り**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L348" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_bucket_read.html&quot;}, '*');"><code>cgi_bucket_read</code></a> が <code>apr_pollset_poll</code> を使用して、スクリプトの stdout と stderr を非同期的に監視します。 3. **エラー転送**: stderr にデータがある場合、<a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__log_script_err.html&quot;}, '*');"><code>log_script_err</code></a> が即座に読み取り、<a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__log_scripterror.html&quot;}, '*');"><code>log_scripterror</code></a> を経由して Apache のエラーログへ出力します。 4. **レスポンス解析**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L420" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_handle_response.html&quot;}, '*');"><code>cgi_handle_response</code></a> がスクリプトの出力を <a class="wiki-source-link" href="../../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> で解析し、適切な HTTP ステータスを決定します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>, <code>apr_poll.h</code>: バケット操作と非同期 I/O 監視。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a>: Apache のリクエスト処理と CGI ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: フィルタチェーンを通じたデータ転送。</li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>mod_cgi.c</code></a> / <a class="wiki-source-link" href="../../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>mod_cgid.c</code></a>: 本ヘッダの関数を呼び出し、CGI 実行のメインエントリポイントとなる。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_include.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_include.c.html&quot;}, '*');"><code>mod_include.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L128" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_handle_exec.html&quot;}, '*');"><code>cgi_handle_exec</code></a> を呼び出す SSI 処理の本体。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L229" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_bucket_data.html&quot;}, '*');"><code>cgi_bucket_data</code></a> は <code>request_rec</code> のプールを使用して割り当てられます。バケットの生存期間はリクエストの生存期間に依存します。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L348" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__cgi_bucket_read.html&quot;}, '*');"><code>cgi_bucket_read</code></a> 内での <code>poll()</code> は、スクリプトの出力が完了するまでブロックする可能性があるため、タイムアウト設定が重要です。</li>
+<li>**未実装/省略**: <code>WANT_CGI_BUCKET</code> マクロが定義されていない場合、バケット関連のロジックはコンパイルされません。これは環境やモジュールの構成に依存します。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/generators/cgi_common.h.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__cgi_common_h__log_scripterror.html&quot;}, '*');"><code>log_scripterror</code></a> 内で <code>apr_stat</code> を呼び出している箇所は、高負荷時にコストとなる可能性があるため注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__generators__cgi_common_h__discard_script_output.html" target="wiki-view"><code>discard_script_output</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__log_scripterror.html" target="wiki-view"><code>log_scripterror</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__log_script_err.html" target="wiki-view"><code>log_script_err</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_handle_exec.html" target="wiki-view"><code>cgi_handle_exec</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_optfns_retrieve.html" target="wiki-view"><code>cgi_optfns_retrieve</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_bucket_data.html" target="wiki-view"><code>cgi_bucket_data</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_bucket_create.html" target="wiki-view"><code>cgi_bucket_create</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_bucket_dup.html" target="wiki-view"><code>cgi_bucket_dup</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_read_stdout.html" target="wiki-view"><code>cgi_read_stdout</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_bucket_read.html" target="wiki-view"><code>cgi_bucket_read</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_handle_response.html" target="wiki-view"><code>cgi_handle_response</code></a></li>
+<li><a href="../../symbols/modules__generators__cgi_common_h__cgi_handle_request.html" target="wiki-view"><code>cgi_handle_request</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/htcacheclean.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">support/htcacheclean.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のディスクキャッシュ（<code>mod_cache_disk</code>）を管理・整理するためのスタンドアロンユーティリティです。キャッシュサイズの制限（バイト数および inode 数）に基づき、古いエントリや期限切れのエントリを削除し、ディスク領域を解放します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールの一部として、サーバー実行中または停止中にキャッシュディレクトリをクリーンアップする運用ツールを提供します。<code>mod_cache_disk</code> が生成するファイル構造（ヘッダーファイルとデータファイルのペア）を理解し、整合性を保ちながら削除を行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュの監視と削除**: 指定された制限値を超えたキャッシュエントリの特定と削除。</li>
+<li>**ディレクトリ管理**: キャッシュディレクトリの再帰的な走査と、不要になった空ディレクトリの削除。</li>
+<li>**デーモンモード**: 指定間隔での定期的なクリーンアップ実行。</li>
+<li>**URL 個別削除**: コマンドライン引数で指定された特定の URL キャッシュの削除。</li>
+<li>**統計情報の出力**: クリーンアップ結果のサマリー表示。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__DIRENTRY.html&quot;}, '*');"><code>DIRENTRY</code></a>: ディレクトリ走査中に一時的に保持されるファイル情報（ヘッダー/データファイルのペア管理用）。</li>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__ENTRY.html&quot;}, '*');"><code>ENTRY</code></a>: 最終的に削除対象を決定するために使用されるキャッシュエントリのリスト構造。</li>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__stats.html&quot;}, '*');"><code>stats</code></a>: クリーンアップ処理中の統計情報（サイズ、inode 数、削除数など）を保持。</li>
+</ul>
+<h3>制御フラグ・状態</h3>
+<ul>
+<li><code>interrupted</code>: シグナル（SIGINT/SIGTERM）による中断フラグ。</li>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>realclean</code></a>: Apache が停止していると仮定して徹底的にクリーンアップを行うフラグ。</li>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L101" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>dryrun</code></a>: 削除を行わず、削除対象のシミュレーションのみを行うフラグ。</li>
+</ul>
+<h3>主要関数</h3>
+<ul>
+<li><code>process_dir()</code>: キャッシュディレクトリを再帰的に走査し、<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__ENTRY.html&quot;}, '*');"><code>ENTRY</code></a> リストを構築する。</li>
+<li><code>purge()</code>: <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__ENTRY.html&quot;}, '*');"><code>ENTRY</code></a> リストに基づき、制限値に収まるよう古いエントリから順に削除を実行する。</li>
+<li><code>delete_entry()</code>: ヘッダーファイル、データファイル、および関連するディレクトリを削除する。</li>
+<li><code>list_urls()</code>: キャッシュ内の URL 一覧を表示する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 引数を解析し、動作モード（デーモン、単発、URL 削除）を決定。 2. **走査**: <code>process_dir()</code> がキャッシュディレクトリを再帰的に探索し、<code>apr_hash_t</code> を用いてヘッダーとデータのペアを特定。 3. **リスト構築**: 有効なキャッシュエントリを <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__ENTRY.html&quot;}, '*');"><code>ENTRY</code></a> リング構造に格納。 4. **削除判定**: <code>purge()</code> が合計サイズと inode 数を計算し、制限を超過している場合に「期限切れ」「古い順」の優先度で <code>delete_entry()</code> を呼び出す。 5. **クリーンアップ**: <code>delete_entry()</code> はファイル削除後、必要に応じて <code>delete_parent()</code> を呼び出し、空になったディレクトリを再帰的に削除する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: ファイル操作 (<code>apr_file_io.h</code>)、メモリ管理 (<code>apr_pools.h</code>)、ハッシュ (<code>apr_hash.h</code>)、リング (<code>apr_ring.h</code>)、プロセス制御 (<code>apr_thread_proc.h</code>) 等の基盤。</li>
+<li>**Cache Common**: <code>../modules/cache/cache_common.h</code> および <a class="wiki-source-link" href="../../source/modules/cache/cache_disk_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_disk_common.h.html&quot;}, '*');"><code>cache_disk_common.h</code></a> を参照し、キャッシュファイルのフォーマット定義を共有。</li>
+<li><code>../modules/cache/cache_disk_common.h</code></li>
+<li><code>apr.h</code></li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_date.h</code></li>
+<li><code>apr_file_info.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_md5.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>modules/cache/mod_cache_disk.c</code></a>: このツールが管理対象とするキャッシュファイルを生成するモジュール。</li>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>support/rotatelogs.c</code></a>: 同じく <code>support</code> ディレクトリにあるログ管理ユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を多用しています。特に <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L594" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__process_dir.html&quot;}, '*');"><code>process_dir</code></a> や <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L323" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__delete_file.html&quot;}, '*');"><code>delete_file</code></a> 内では、メモリリークを防ぐために一時的なサブプールを作成・破棄するパターンが徹底されています。</li>
+<li>**競合回避**: Apache との同時実行を考慮し、<code>apr_stat</code> のリトライ処理や、ファイルが存在しない場合のハンドリングが随所に含まれています。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>NICE_DELAY</code></a> や <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L59" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>DELETE_NICE</code></a> 定数により、システム負荷を抑えるためのスロットリング機能が実装されています。</li>
+<li>**省略箇所**: 本ファイルは非常に長大ですが、主に「ファイルシステム操作の抽象化」と「キャッシュフォーマットのパース」に注力しています。エラーハンドリングの詳細は、APR のステータスコードチェックに依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__htcacheclean_c__DIRENTRY.html" target="wiki-view"><code>DIRENTRY</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__ENTRY.html" target="wiki-view"><code>ENTRY</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__stats.html" target="wiki-view"><code>stats</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__fake_file_remove.html" target="wiki-view"><code>fake_file_remove</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__round_up.html" target="wiki-view"><code>round_up</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__delete_parent.html" target="wiki-view"><code>delete_parent</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__delete_file.html" target="wiki-view"><code>delete_file</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__delete_entry.html" target="wiki-view"><code>delete_entry</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__list_urls.html" target="wiki-view"><code>list_urls</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__process_dir.html" target="wiki-view"><code>process_dir</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__remove_directory.html" target="wiki-view"><code>remove_directory</code></a></li>
+<li><a href="../symbols/support__htcacheclean_c__find_directory.html" target="wiki-view"><code>find_directory</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

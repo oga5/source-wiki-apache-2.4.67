@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http__http_filters_c__http_ctx_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__http_ctx_t.html&quot;}, '*');">http_ctx_t</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/http/http_filters.c:60</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP 入力フィルタにおけるリクエストボディの解析状態およびストリーム処理の進捗を管理するためのコンテキスト構造体です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct http_filter_ctx {
+    apr_off_t remaining;
+    apr_off_t limit;
+    apr_off_t limit_used;
+    apr_int32_t chunk_used;
+    apr_int32_t chunk_bws;
+    apr_int32_t chunkbits;
+    enum { ... } state;
+    unsigned int eos_sent :1,
+                 seen_data:1;
+    apr_bucket_brigade *bb;
+} http_ctx_t;</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: フィルタチェーンを通じて受信する <code>apr_bucket_brigade</code> を保持し、解析状態に応じてデータを消費します。</li>
+<li>**出力**: 解析されたリクエストボディの断片を後続のハンドラへ提供し、プロトコル違反や制限超過時にはエラー状態を保持します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>state</code> メンバは、RFC 7230 に準拠したチャンク転送の解析状態（<code>BODY_CHUNK</code> から <code>BODY_CHUNK_TRAILER</code> まで）を厳密に遷移する必要があります。</li>
+<li><code>remaining</code> は、<code>Content-Length</code> またはチャンクサイズに基づく残りの読み取りバイト数を保持します。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li>**状態管理**: <code>state</code> を用いて、ストリームデータが「チャンクヘッダ」「データ本体」「トレーラ」のどの段階にあるかを追跡します。</li>
+<li>**制限管理**: <code>limit</code> および <code>limit_used</code> を使用して、設定されたリクエストボディの最大サイズ制限を強制します。</li>
+<li>**バッファリング**: <code>bb</code>（<code>apr_bucket_brigade</code>）を介して、フィルタリング対象のデータを一時的に保持・処理します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> がこの構造体をフィルタコンテキストとして利用します。また、<code>bail_out_on_error</code>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L137" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__parse_chunk_size.html&quot;}, '*');"><code>parse_chunk_size</code></a>、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__read_chunked_trailers.html&quot;}, '*');"><code>read_chunked_trailers</code></a> が引数として受け取ります。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、直接関数を呼び出すことはありませんが、各フィルタ関数が本構造体のメンバを更新・参照します。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_bucket_brigade</code>: ストリームデータを保持するバッファ。</li>
+<li><code>ap_filter_t</code>: 本構造体がコンテキストとしてアタッチされるフィルタ構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>limit</code> を超えるデータを受信した場合、<code>bail_out_on_error</code> を通じて接続を終了させる必要があります。</li>
+<li>チャンク解析中に不正なフォーマットやオーバーフローが検出された場合、プロトコルエラーとして処理されます。</li>
+<li><code>eos_sent</code> フラグにより、EOS（End of Stream）バケットの二重送信を防止します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>state</code> の遷移は非常に複雑です。特に <code>BODY_CHUNK_CR</code> や <code>BODY_CHUNK_LF</code> などの細かい状態は、厳密なプロトコル解析のために存在するため、変更時は RFC 7230 を参照してください。</li>
+<li>メモリ管理は <code>r-&gt;pool</code> または <code>f-&gt;c-&gt;bucket_alloc</code> に依存しているため、バケット操作時のリークに注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

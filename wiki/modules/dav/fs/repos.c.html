@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/dav/fs/repos.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');">modules/dav/fs/repos.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>repos.c</code></a> は、Apache HTTP Server の <code>mod_dav</code> におけるファイルシステムベースのストレージプロバイダーの実装です。ローカルファイルシステム上のディレクトリやファイルを WebDAV リソースとして公開し、プロパティ管理、リソースのコピー/移動/削除、およびディレクトリ走査機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav_fs</code> モジュールの中心的なリポジトリフック実装です。<a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.h.html&quot;}, '*');"><code>repos.h</code></a> で宣言されたインターフェースを具現化し、<code>mod_dav</code> コアに対してファイルシステム固有の操作を抽象化して提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リソース管理**: ファイルシステムパスと WebDAV リソースの相互変換、およびリソースの存在確認。</li>
+<li>**ファイル操作**: ストリーム（読み書き）の抽象化、ファイルのコピー・移動・削除の実行。</li>
+<li>**プロパティ管理**: <code>DAV:</code> 名前空間およびカスタム名前空間（<code>executable</code> 属性など）のライブプロパティの定義と操作。</li>
+<li>**ディレクトリ走査**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L1877" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_walk.html&quot;}, '*');"><code>dav_fs_walk</code></a> を通じた再帰的なリソース探索と、それに応じたコールバック実行。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リポジトリフック (<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L270" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_hooks_repository.html&quot;}, '*');"><code>dav_hooks_repository</code></a>)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L101" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>dav_hooks_repository_fs</code></a>: リポジトリ操作のメインエントリーポイント。<code>get_resource</code>, <a class="wiki-source-link" href="../../../../source/modules/http2/h2_proxy_session.c.html#L825" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__open_stream.html&quot;}, '*');"><code>open_stream</code></a>, <code>copy_resource</code>, <code>walk</code> 等の関数ポインタを保持。</li>
+</ul>
+<h3>コンテキスト構造体</h3>
+<ul>
+<li><code>dav_resource_private</code>: リソースの物理パス、<code>apr_finfo_t</code>、リクエスト情報を保持するプライベートデータ。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_walker_context.html&quot;}, '*');"><code>dav_fs_walker_context</code></a>: ディレクトリ走査中に状態を維持するためのコンテキスト。</li>
+<li><code>dav_stream</code>: ファイル読み書きのためのストリーム状態（一時ファイルパスやクリーンアップ情報を含む）。</li>
+</ul>
+<h3>ライブプロパティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L188" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>dav_fs_liveprop_group</code></a>: サポートするライブプロパティ（<code>creationdate</code>, <code>getcontentlength</code> 等）と名前空間の定義。</li>
+<li><code>dav_fs_patch_*</code>: <code>executable</code> プロパティの更新、検証、ロールバックを行う一連のフック関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**リソース探索**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L667" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_get_resource.html&quot;}, '*');"><code>dav_fs_get_resource</code></a> がリクエストからパスを構築し、<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_resource.html&quot;}, '*');"><code>dav_resource</code></a> を初期化します。</li>
+<li>**ディレクトリ走査**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L1877" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_walk.html&quot;}, '*');"><code>dav_fs_walk</code></a> が <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L1793" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_internal_walk.html&quot;}, '*');"><code>dav_fs_internal_walk</code></a> を経由して <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L1504" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_walker.html&quot;}, '*');"><code>dav_fs_walker</code></a> を呼び出します。これは再帰的にディレクトリを探索し、各リソースに対して <code>params-&gt;func</code> を実行します。</li>
+<li>**コピー/移動**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L1224" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_copymove_resource.html&quot;}, '*');"><code>dav_fs_copymove_resource</code></a> が走査を行い、各ファイルに対して <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_copymove_file.html&quot;}, '*');"><code>dav_fs_copymove_file</code></a> を実行します。プロパティの移動は <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L554" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_copymoveset.html&quot;}, '*');"><code>dav_fs_copymoveset</code></a> が担当し、DBM ファイルを操作します。</li>
+<li>**ストリーム処理**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L908" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_open_stream.html&quot;}, '*');"><code>dav_fs_open_stream</code></a> でファイルを開き、<a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L1018" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_write_stream.html&quot;}, '*');"><code>dav_fs_write_stream</code></a> で書き込み、<a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L983" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_close_stream.html&quot;}, '*');"><code>dav_fs_close_stream</code></a> でコミット（一時ファイルからのリネーム）またはロールバック（一時ファイルの削除）を行います。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_file_io.h</code>, <code>apr_buckets.h</code>: ファイル I/O およびバケット操作。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>mod_dav.h</code></a>: WebDAV プロバイダーインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.h.html&quot;}, '*');"><code>repos.h</code></a>: 本モジュールの公開ヘッダー。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache HTTP Server のリクエスト処理およびヘッダー操作。</li>
+<li><code>apr.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.h.html&quot;}, '*');"><code>modules/dav/fs/repos.h</code></a>: 公開インターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>: ロック管理の実装。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a>: プロパティ保存用の DBM 操作。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/mod_dav_fs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/mod_dav_fs.c.html&quot;}, '*');"><code>modules/dav/fs/mod_dav_fs.c</code></a>: モジュールの登録と初期化。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての操作は <code>request_rec</code> または <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L387" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_resource.html&quot;}, '*');"><code>dav_resource</code></a> に関連付けられた <code>apr_pool_t</code> を使用します。明示的な <code>free</code> は不要ですが、プール寿命に注意が必要です。</li>
+<li>**エラー処理**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L121" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_error.html&quot;}, '*');"><code>dav_error</code></a> 構造体を使用してエラーを伝播します。<a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L207" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>MAP_IO2HTTP</code></a> マクロにより、APR のエラーコードを適切な HTTP ステータスコードに変換しています。</li>
+<li>**一貫性**: <code>MOVE</code> や <code>COPY</code> 操作において、ファイルとプロパティ（DBM）の両方を更新する必要があるため、一部の操作で「不整合な状態」が発生するリスクがコメントで指摘されています。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>DEBUG_GET_HANDLER</code></a> が 0 に設定されており、標準的な GET ハンドリングは <code>mod_dav</code> コアに依存しています。また、シンボリックリンクの扱いは明示的にスキップされています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_resource_private.html" target="wiki-view"><code>dav_resource_private</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_walker_context.html" target="wiki-view"><code>dav_fs_walker_context</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymove_walk_ctx.html" target="wiki-view"><code>dav_fs_copymove_walk_ctx</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_stream.html" target="wiki-view"><code>dav_stream</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_get_request_rec.html" target="wiki-view"><code>dav_fs_get_request_rec</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_pool.html" target="wiki-view"><code>dav_fs_pool</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_pathname.html" target="wiki-view"><code>dav_fs_pathname</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_dir_file_name.html" target="wiki-view"><code>dav_fs_dir_file_name</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_format_time.html" target="wiki-view"><code>dav_format_time</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymove_file.html" target="wiki-view"><code>dav_fs_copymove_file</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymove_state.html" target="wiki-view"><code>dav_fs_copymove_state</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__repos_c__dav_fs_copymoveset.html" target="wiki-view"><code>dav_fs_copymoveset</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

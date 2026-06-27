@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/find-chr.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>find_chr</h1>
+<h2>概念</h2>
+<p><code>find_chr</code> は、指定された解析コンテキスト（<code>link_ctx</code>）の現在位置から、特定の文字 <code>c</code> を検索するためのユーティリティ関数です。主に <code>Link</code> ヘッダーなどの文字列解析において、クォートや区切り文字を探索するために利用されます。</p>
+<h2>なぜ重要か</h2>
+<p>この関数は、HTTP/2 関連のプッシュ機能やプロキシユーティリティ、および Managed Domains（MD）モジュールにおいて、文字列パース処理（クォート文字列の読み込みやスキップなど）を共通のパターンで安全に行うための基礎的なビルディングブロックとして機能しています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>各モジュールで同名の静的関数として定義されており、シグネチャや型に若干の差異があります。</p>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http2__h2_proxy_util_c__find_chr.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__find_chr.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_proxy_util.c.html#L820&quot;}, '*');"><code>symbol:modules/http2/h2_proxy_util.c#find_chr</code></a>**</li>
+<li>シグネチャ: <code>static int find_chr(link_ctx *ctx, char c, int *pidx)</code></li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http2__h2_push_c__find_chr.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_c__find_chr.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_push.c.html#L141&quot;}, '*');"><code>symbol:modules/http2/h2_push.c#find_chr</code></a>**</li>
+<li>シグネチャ: <code>static int find_chr(link_ctx *ctx, char c, size_t *pidx)</code></li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__md__md_util_c__find_chr.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_util_c__find_chr.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_util.c.html#L1329&quot;}, '*');"><code>symbol:modules/md/md_util.c#find_chr</code></a>**</li>
+<li>シグネチャ: <code>static unsigned int find_chr(link_ctx *ctx, char c, apr_size_t *pidx)</code></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **呼び出し**: <code>read_link</code>、<a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html#L170" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_c__read_qstring.html&quot;}, '*');"><code>read_qstring</code></a>、<code>skip_qstring</code> などの上位のパース関数から呼び出されます。 2. **線形探索**:</p>
+<ul>
+<li><code>ctx-&gt;i</code>（現在のオフセット位置）から <code>ctx-&gt;slen</code>（文字列全体の長さ）までループを回します。</li>
+<li>文字列 <code>ctx-&gt;s</code> の各要素を順次確認し、引数 <code>c</code> と一致する文字を探索します。</li>
+<p>3. **結果の返却**:</p>
+<li>一致する文字が見つかった場合、そのインデックスを <code>*pidx</code> に格納し、成功を示す値（<code>1</code> など）を返して即座に終了します。</li>
+<li>文字列の末尾まで見つからなかった場合は <code>0</code> を返します。</li>
+</ul>
+<p>※ なお、システム全体における完全なエンドツーエンドのデータフローや、各モジュール間での詳細な連携フローは現時点では完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**引数の有効性**: <code>ctx</code> は有効な <code>link_ctx</code> 構造体を指し、<code>pidx</code> は書き込み可能なメモリ領域を指している必要があります。</li>
+<li>**検索開始位置**: 検索範囲は常に <code>ctx-&gt;i</code> から開始されるため、呼び出し側で <code>ctx-&gt;i</code> が適切に管理・更新されている必要があります。</li>
+<li>その他の詳細な不変条件はまだ解析されていません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**境界条件**: <code>ctx-&gt;i</code> がすでに <code>ctx-&gt;slen</code> 以上である場合、ループは実行されずに <code>0</code> が返されます。呼び出し側でインデックスの境界チェックや更新を誤ると、意図しないパース失敗の原因になります。</li>
+<li>**型の不一致**: モジュールごとに戻り値の型（<code>int</code> / <code>unsigned int</code>）や、インデックスを格納するポインタの型（<code>int *</code> / <code>size_t *</code> / <code>apr_size_t *</code>）が微妙に異なるため、コードを移植・参照する際には注意が必要です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');"><code>modules/http2/h2_push.c</code></a>（具体的なアルゴリズムの実装例）</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_util.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.c.html&quot;}, '*');"><code>modules/md/md_util.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

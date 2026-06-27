@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/master-main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>master_main</h1>
+<h2>概念</h2>
+<p><code>master_main</code> は、Apache HTTP Server (httpd-2.4.67) の特定のマルチプロセッシングモジュール (MPM) において、親プロセス（マスタープロセス）のメイン処理を担う関数です。OS/2 環境（<code>mpmt_os2</code>）および Windows 環境（<code>winnt</code>）のそれぞれで定義されており、子プロセスの生成、監視、およびライフサイクル管理を制御する役割を持ちます。</p>
+<h2>なぜ重要か</h2>
+<p>この関数は、サーバー全体の安定稼働とプロセスのライフサイクル管理において中核的な役割を果たします。OS/2 環境では、リスナーソケットやスコアボードなどの共有リソースを初期化し、必要な数の子プロセスを維持・監視します。Windows 環境でも同様に、シャットダウンや再起動のイベントをハンドリングしながら、子プロセスの起動や停止を制御するために重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__mpmt_os2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__mpmt_os2.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/mpmt_os2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__winnt.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__winnt.html&quot;, &quot;source&quot;: &quot;source/server/mpm/winnt/child.c.html&quot;}, '*');"><code>module:server/mpm/winnt</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__mpmt_os2__mpmt_os2_c__master_main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__master_main.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpmt_os2.c.html#L192&quot;}, '*');"><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#master_main</code></a>: OS/2 MPM における親プロセスのメイン処理関数。</li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__winnt__mpm_winnt_c__master_main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__master_main.html&quot;, &quot;source&quot;: &quot;source/server/mpm/winnt/mpm_winnt.c.html#L756&quot;}, '*');"><code>symbol:server/mpm/winnt/mpm_winnt.c#master_main</code></a>: Windows MPM における親プロセスのメイン処理関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>OS/2 環境（<code>mpmt_os2</code>）における流れは以下の通りです： 1. **初期化とリソース確保**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L111" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_run.html&quot;}, '*');"><code>mpmt_os2_run</code></a> から呼び出され、シグナルハンドラの設定、リスナーソケットの準備、共有メモリ（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html&quot;}, '*');"><code>parent_info_t</code></a>）の確保、および OS/2 ミューテックス（<code>ap_mpm_accept_mutex</code>）の作成を行います。 2. **スコアボード初期化**: スコアボード用の共有メモリを確保・初期化します。 3. **メインループ**:</p>
+<ul>
+<li>稼働プロセス数をカウントし、目標数（<code>ap_daemons_to_start</code>）に達するまで <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');"><code>spawn_child</code></a> を用いて子プロセスを生成します。</li>
+<li><code>DosWaitChild</code> を非ブロックで呼び出し、子プロセスの終了を監視します。</li>
+<li>子プロセスが終了した場合はスコアボードを更新します。</li>
+<li>終了フラグが立つまで <code>apr_sleep</code> で待機します。</li>
+<p>4. **終了処理**: 全子プロセスにシグナル（<code>SIGTERM</code> または <code>SIGHUP</code>）を送信し、共有メモリを解放して終了します。</p>
+</ul>
+<p>Windows 環境（<code>winnt</code>）における詳細なエンドツーエンドの流れ（シャットダウンや再起動イベントの具体的なハンドリング手順など）は、現時点では十分に解析されておらず未解明です。ただし、<a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html#L1696" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__winnt_run.html&quot;}, '*');"><code>winnt_run</code></a> から呼び出され、<a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html#L542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__create_process.html&quot;}, '*');"><code>create_process</code></a> や <a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html#L139" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__winnt_note_child_started.html&quot;}, '*');"><code>winnt_note_child_started</code></a> などを介して子プロセスの管理を行うことが分かっています。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**OS/2 環境 (<code>mpmt_os2</code>)**:</li>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L711" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_setup_listeners.html&quot;}, '*');"><code>ap_setup_listeners</code></a> が成功し、リスナーソケットが利用可能である必要があります。</li>
+<li>共有メモリおよびスコアボード用の共有メモリが正常に確保されている必要があります。</li>
+<li>プロセス数の上限として <code>HARD_SERVER_LIMIT</code>（10）が適用されます。</li>
+<li>**Windows 環境 (<code>winnt</code>)**:</li>
+<li>重要な不変条件は現時点では解析されておらず未解明です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**OS/2 環境 (<code>mpmt_os2</code>)**:</li>
+<li>OS/2 の <code>Dos</code> 系 API（<code>DosAllocSharedMem</code>, <code>DosCreateMutexSem</code>, <code>DosWaitChild</code> など）に強く依存しているため、他プラットフォームへの移植性はありません。</li>
+<li>プロセス数の上限（<code>HARD_SERVER_LIMIT</code> = 10）がハードコードされているため、これを超えるスケーラビリティは確保できません。</li>
+<li>子プロセスが致命的エラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a>）で終了した場合、メインループが中断されサーバー全体が停止します。</li>
+<li>**Windows 環境 (<code>winnt</code>)**:</li>
+<li>詳細な失敗モードや落とし穴は現時点では解析されておらず未解明です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a> の <code>master_main</code> 定義および <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');"><code>spawn_child</code></a> などの関連関数</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a> の <code>master_main</code> 定義および <a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html#L542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__create_process.html&quot;}, '*');"><code>create_process</code></a> などの関連関数</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

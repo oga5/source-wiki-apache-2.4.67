@@ -1,0 +1,97 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/cache/mod_cache_socache.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');">modules/cache/mod_cache_socache.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_cache_socache</code> は、Apache HTTP Server のキャッシュサブシステムに対し、共有オブジェクトキャッシュ（<code>socache</code>）をバックエンドとして提供するモジュールです。メモリや共有メモリ（shmcb, dbm, redis 等）を介して HTTP レスポンスを永続化・再利用します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_cache</code> のプロバイダーとして機能します。<code>mod_cache_disk</code> がファイルシステムを対象とするのに対し、本モジュールは <code>ap_socache</code> インターフェースを実装する任意のストレージバックエンドを抽象化して利用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュライフサイクル管理**: <code>create_entity</code>, <code>open_entity</code>, <code>commit_entity</code> 等を通じたキャッシュの生成・取得・確定。</li>
+<li>**データシリアライズ**: HTTP ヘッダー（<code>headers_in</code>, <code>headers_out</code>）およびボディを単一のバッファへパック/アンパックする。</li>
+<li>**Vary ヘッダー対応**: <code>Vary</code> ヘッダーに基づくキーの再生成と、条件付きキャッシュの管理。</li>
+<li>**設定管理**: キャッシュサイズ制限や有効期限（TTL）のディレクトリ単位での制御。</li>
+<li>**排他制御**: 共有リソースへのアクセスを保護するためのグローバルミューテックス管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__cache_socache_object_t.html&quot;}, '*');"><code>cache_socache_object_t</code></a>: キャッシュエントリのメモリ内表現。バッファ、ヘッダーテーブル、ボディのブリゲードを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__cache_socache_dir_conf.html&quot;}, '*');"><code>cache_socache_dir_conf</code></a>: ディレクトリ単位の設定（最大サイズ、TTL 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__cache_socache_conf.html&quot;}, '*');"><code>cache_socache_conf</code></a>: サーバー単位の設定（使用する <code>socache</code> プロバイダーのインスタンス）。</li>
+</ul>
+<h3>主要なフック・コールバック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache.h.html#L99" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_h__cache_provider.html&quot;}, '*');"><code>cache_provider</code></a>: <code>mod_cache</code> が呼び出す一連の関数ポインタ群（<code>open_entity</code>, <code>store_body</code> 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L1433" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__socache_post_config.html&quot;}, '*');"><code>socache_post_config</code></a>: プロバイダーの初期化とミューテックスのセットアップ。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>store_table</code> / <code>read_table</code>: ヘッダーテーブルとバッファ間のシリアライズ/デシリアライズ。</li>
+<li><code>regen_key</code>: <code>Vary</code> ヘッダーに基づき、リクエストヘッダーを組み込んだ一意なキーを生成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **検索**: <code>open_entity</code> が呼ばれると、まずキーで検索。<code>Vary</code> フォーマットであれば、リクエストヘッダーを元に <code>regen_key</code> でキーを再生成し、再度検索を行う。 2. **読み込み**: 成功時、バッファから <a class="wiki-source-link" href="../../../source/modules/cache/cache_socache_common.h.html#L36" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_socache_common_h__cache_socache_info_t.html&quot;}, '*');"><code>cache_socache_info_t</code></a> を読み取り、ヘッダーを再構築。ボディは <code>apr_bucket_pool_create</code> を用いてバッファからブリゲードへマッピングされる。 3. **書き込み**: <code>store_body</code> がストリームをバッファへコピー。<code>commit_entity</code> で最終的に <code>socache_provider-&gt;store</code> を呼び出し、ストレージへ永続化する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>ap_socache.h</code></a>: 共有オブジェクトキャッシュの抽象インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.h.html&quot;}, '*');"><code>mod_cache.h</code></a>: キャッシュサブシステムの共通定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a>: 共有リソース保護のためのミューテックス操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><code>apu_version.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_socache_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_socache_common.h.html&quot;}, '*');"><code>cache_socache_common.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_status.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_status.h.html&quot;}, '*');"><code>mod_status.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_charset.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_charset.h.html&quot;}, '*');"><code>util_charset.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_socache_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_socache_common.h.html&quot;}, '*');"><code>cache_socache_common.h</code></a>: 共有されるデータ構造とフォーマット定義。</li>
+<li><code>modules/cache/mod_socache_*.c</code>: 具体的なバックエンド実装（shmcb, redis 等）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__cache_socache_object_t.html&quot;}, '*');"><code>cache_socache_object_t</code></a> 内の <code>pool</code> は、キャッシュエントリのライフサイクルを管理します。<code>open_entity</code> 失敗時や <code>commit_entity</code> 完了時に <code>apr_pool_destroy</code> を呼び出し、メモリリークを防いでいます。</li>
+<li>**排他制御**: <a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');"><code>socache_mutex</code></a> は、バックエンドがスレッドセーフでない場合に備えて使用されます。<a class="wiki-source-link" href="../../../source/modules/cache/mod_cache_socache.c.html#L1433" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__socache_post_config.html&quot;}, '*');"><code>socache_post_config</code></a> で <a class="wiki-source-link" href="../../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a> フラグを確認し、必要に応じて生成されます。</li>
+<li>**制約**: 現在、範囲リクエスト（Range Requests）のキャッシュはサポートされていません。</li>
+<li>**データレイアウト**: キャッシュバッファは「フォーマットヘッダー + メタデータ + ヘッダー群 + ボディ」の順でパックされます。<code>slider</code> 変数がこのバッファ内のオフセットを追跡します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__cache_socache_object_t.html" target="wiki-view"><code>cache_socache_object_t</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__cache_socache_provider_conf.html" target="wiki-view"><code>cache_socache_provider_conf</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__cache_socache_conf.html" target="wiki-view"><code>cache_socache_conf</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__cache_socache_dir_conf.html" target="wiki-view"><code>cache_socache_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__read_array.html" target="wiki-view"><code>read_array</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__store_array.html" target="wiki-view"><code>store_array</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__read_table.html" target="wiki-view"><code>read_table</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__store_table.html" target="wiki-view"><code>store_table</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__regen_key.html" target="wiki-view"><code>regen_key</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__array_alphasort.html" target="wiki-view"><code>array_alphasort</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__tokens_to_array.html" target="wiki-view"><code>tokens_to_array</code></a></li>
+<li><a href="../../symbols/modules__cache__mod_cache_socache_c__create_entity.html" target="wiki-view"><code>create_entity</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/filter-chain-and-bucket-brigade-i-o.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Filter Chain and Bucket Brigade I/O</h1>
+<h2>概念</h2>
+<p><code>Filter Chain and Bucket Brigade I/O</code> は、Apache HTTP Server がリクエストおよびレスポンスデータを処理するためのストリーミング制御メカニズムです。データは「バケット（Bucket）」およびそれを連結した「バケットブリゲード（Bucket Brigade: <code>apr_bucket_brigade</code>）」という単位で管理され、個々の処理を担当する「フィルタ（Filter）」が数珠つなぎになった「フィルタチェーン（Filter Chain）」を通過しながら、順次変換・転送されます。</p>
+<h2>なぜ重要か</h2>
+<p>Apache は、静的ファイルの読み込み、プロキシ転送、動的コンテンツ生成など、多種多様なデータソースとプロトコルを扱います。フィルタチェーンとバケットブリゲードを採用することで、以下のメリットが得られます。</p>
+<ul>
+<li>**モジュール化と再利用性**: HTTP ヘッダの生成、チャンクエンコーディングのデコード、データの制限チェックなどの処理を独立したフィルタとして実装し、必要に応じて動的にチェーンへ挿入できます。</li>
+<li>**高効率なI/O**: データを一括でメモリに読み込むことなく、バケット単位でパイプライン処理するため、メモリ消費量を抑えながら大容量データを扱えます。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<p>提供された情報に基づき、以下のモジュールがこのメカニズムに関与しています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (フィルタの基本構造体定義を提供)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a> (HTTP プロトコル固有の入力・出力フィルタを実装)</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> (コアフィルタの実装を担当)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本メカニズムを構成する主要なエンティティは以下の通りです。</p>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__util_filter_h__ap_filter_rec_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_rec_t.html&quot;, &quot;source&quot;: &quot;source/include/util_filter.h.html#L199&quot;}, '*');"><code>symbol:include/util_filter.h#ap_filter_rec_t</code></a>** (構造体)</li>
+<p>フィルタの定義情報を保持するメタデータ構造体です。フィルタ名、実行関数ポインタ、フィルタの型（優先順位）などを管理し、<code>next</code> ポインタを介して登録済みフィルタのリストを形成します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/include__util_filter_h__ap_filter_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_t.html&quot;, &quot;source&quot;: &quot;source/include/util_filter.h.html#L94&quot;}, '*');"><code>symbol:include/util_filter.h#ap_filter_t</code></a>** (構造体)</li>
+<p>フィルタチェーン内に実際にインスタンス化された個々のフィルタを表現します。<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> や <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を介して、隣接するフィルタとバケットブリゲードの受け渡しを行います。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http__http_filters_c__ap_http_filter.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;, &quot;source&quot;: &quot;source/modules/http/http_filters.c.html#L340&quot;}, '*');"><code>symbol:modules/http/http_filters.c#ap_http_filter</code></a>** (関数)</li>
+<p>HTTP リクエストボディの入力処理を担当するフィルタ関数です。<code>Transfer-Encoding: chunked</code> のデコード、<code>Content-Length</code> に基づく境界制御、および <code>LimitRequestBody</code> に基づくサイズ制限の強制を行います。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http__http_filters_c__ap_http_header_filter.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_header_filter.html&quot;, &quot;source&quot;: &quot;source/modules/http/http_filters.c.html#L1425&quot;}, '*');"><code>symbol:modules/http/http_filters.c#ap_http_header_filter</code></a>** (関数)</li>
+<p>HTTP レスポンスヘッダの出力処理を担当するフィルタ関数です。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報から確認できるデータの流れは以下の通りです。</p>
+<p>1. **入力データの要求と取得**:</p>
+<ul>
+<li>ハンドラや上位フィルタが <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を呼び出してデータを要求します。</li>
+<li>これにより、入力フィルタチェーンが順次呼び出されます。</li>
+<p>2. **HTTPリクエストの解析とフィルタリング (<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a>)**:</p>
+<li>初回呼び出し時、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> は <code>Transfer-Encoding</code> や <code>Content-Length</code> ヘッダを解析し、内部状態（<code>BODY_CHUNK</code> や <code>BODY_LENGTH</code> など）を決定します。</li>
+<li>必要に応じて <code>100 Continue</code> レスポンスを送信します。</li>
+<li>下位フィルタからデータを取得し、チャンクサイズ（<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L137" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__parse_chunk_size.html&quot;}, '*');"><code>parse_chunk_size</code></a>）の解析や、<code>Content-Length</code> に基づく残りバイト数（<code>ctx-&gt;remaining</code>）の減算を行いながら、安全なデータバケットを構築して呼び出し元に返します。</li>
+<p>3. **出力データの送信 (<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_header_filter.html&quot;}, '*');"><code>ap_http_header_filter</code></a>)**:</p>
+<li>レスポンス送信時、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_header_filter.html&quot;}, '*');"><code>ap_http_header_filter</code></a> が呼び出され、ヘッダフィールドの結合や送信処理、および後続の出力フィルタへのブリゲードの受け渡し（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a>）を行います。</li>
+</ul>
+<p>※ **注意**: フィルタチェーン全体の構築タイミングや、<a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a> におけるネットワークソケットとの直接的なI/Oを伴う最終的なエンドツーエンドの制御フローの詳細は、提供された情報からは完全には特定されていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**フィルタの順序決定**: フィルタは <a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a> に基づいてチェーン内で厳密にソートされます。</li>
+<li>**サブリクエストの制限**: <code>AP_FTYPE_CONNECTION</code> 以上の型を持つフィルタは、サブリクエスト内では使用できません。</li>
+<li>**入力フィルタの開始状態**: <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> において、<code>BODY_NONE</code> 状態はトレーラヘッダ処理を除き、開始状態としては無効です。</li>
+<li>**残りバイト数の追跡**: <code>Content-Length</code> が指定されている場合、<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> のコンテキスト（<code>ctx-&gt;remaining</code>）は、残りの読み込み可能バイト数を正確に保持しなければなりません。</li>
+</ul>
+<p>※ **注意**: バケットの寿命管理や、エラー発生時におけるブリゲードのクリーンアップに関する詳細な不変条件は、提供された情報からは完全には特定されていません。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**フィルタの登録順序の誤り**: フィルタの型（<a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a>）や登録順序が不適切な場合、チェーン内の実行順序が意図しないものになり、データ破損やプロトコル違反を引き起こす可能性があります。</li>
+<li>**バケットブリゲードの所有権と退避**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> に渡されるブリゲードの所有権は呼び出し元にあります。フィルタ内部でデータを一時的に保持（遅延処理など）する場合は、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_save_brigade.html&quot;}, '*');"><code>ap_save_brigade</code></a> を使用してデータを安全に退避させないと、後続の処理でデータが上書き・消失する危険があります。</li>
+<li>**複雑な状態遷移のハンドリング**: <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> における <code>ctx-&gt;state</code> の遷移は RFC 7230 に準拠しており非常に複雑です。チャンクサイズや制限値（<code>ctx-&gt;limit</code>）の計算ロジックを修正する際は、状態遷移の不整合やバッファオーバーフローを誘発しやすいため、細心の注意が必要です。</li>
+<li>**メモリリーク**: フィルタ処理中のメモリ管理はリクエストプール（<code>f-&gt;r-&gt;pool</code>）に依存しているため、ループ内でのバケット操作に伴う一時メモリの累積やリークに注意する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>**: フィルタの登録、チェーン構築、および <code>ap_filter_t</code> / <code>ap_filter_rec_t</code> の構造体定義を理解するために参照してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>**: <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> や <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_header_filter.html&quot;}, '*');"><code>ap_http_header_filter</code></a> の具体的な実装、および HTTP プロトコル制約（チャンク、Content-Length、ヘッダ処理）の強制方法を学ぶために参照してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a>**: コアなネットワークI/Oとフィルタチェーンの接続部分を理解するために参照してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

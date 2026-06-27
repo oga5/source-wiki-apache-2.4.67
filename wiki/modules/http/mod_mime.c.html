@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http/mod_mime.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');">modules/http/mod_mime.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_mime</code> は、ファイル名拡張子に基づいて MIME タイプ、エンコーディング、言語、ハンドラ、およびフィルタを決定する Apache HTTP Server モジュールです。リクエスト処理の <code>type_checker</code> フェーズで動作し、ファイルシステム上のリソースに適切なメタデータを付与します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http</code> サブシステムにおいて、リクエストされたリソースの「正体」を定義する役割を担います。<a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>http_protocol.c</code></a> などがリクエストを処理する前に、このモジュールが <code>request_rec</code> 構造体のメタデータフィールドを適切に設定することで、後続のフィルタやハンドラが正しい処理を選択できるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリ単位の MIME マッピング（<code>AddType</code>, <code>AddEncoding</code> 等）の保持とマージ。</li>
+<li>**メタデータ解決**: ファイル名拡張子を解析し、<code>content_type</code>, <code>content_encoding</code>, <code>content_languages</code> などを設定。</li>
+<li>**フィルタ/ハンドラ登録**: 拡張子に基づいた入力/出力フィルタの動的追加。</li>
+<li>**設定ファイル読み込み**: <code>TypesConfig</code> ディレクティブで指定された MIME 定義ファイルのパース。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L77" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__mime_dir_config.html&quot;}, '*');"><code>mime_dir_config</code></a>: ディレクトリごとの設定を保持。拡張子マッピングのハッシュテーブルと、継承/削除ルールを管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__extension_info.html&quot;}, '*');"><code>extension_info</code></a>: 特定の拡張子に関連付けられたメタデータ（タイプ、言語、フィルタ等）の集合。</li>
+</ul>
+<h3>コマンドハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L245" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__add_extension_info.html&quot;}, '*');"><code>add_extension_info</code></a>: <code>AddType</code> 等のディレクティブを処理し、<a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__extension_info.html&quot;}, '*');"><code>extension_info</code></a> を更新。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__remove_extension_info.html&quot;}, '*');"><code>remove_extension_info</code></a>: 特定の拡張子の設定を無効化する予約エントリを作成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L321" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__multiviews_match.html&quot;}, '*');"><code>multiviews_match</code></a>: <code>MultiviewsMatch</code> ディレクティブの解析。</li>
+</ul>
+<h3>処理ロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L753" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__find_ct.html&quot;}, '*');"><code>find_ct</code></a>: <code>type_checker</code> フックの本体。ファイル名から拡張子を抽出し、マッピングを適用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__analyze_ct.html&quot;}, '*');"><code>analyze_ct</code></a>: <code>Content-Type</code> ヘッダ文字列を解析し、パラメータ（charset等）を抽出・再構築。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L429" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__mime_post_config.html&quot;}, '*');"><code>mime_post_config</code></a>: サーバー起動時に <code>mime.types</code> ファイルを読み込み、グローバルなマッピングを構築。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L429" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__mime_post_config.html&quot;}, '*');"><code>mime_post_config</code></a> が <code>mime.types</code> を読み込み、グローバルハッシュ <code>mime_type_extensions</code> を作成。 2. **リクエスト時**: <a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L753" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__find_ct.html&quot;}, '*');"><code>find_ct</code></a> が呼び出される。</p>
+<ul>
+<li><code>r-&gt;filename</code> から拡張子を順次抽出。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L77" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__mime_dir_config.html&quot;}, '*');"><code>mime_dir_config</code></a> のハッシュテーブルを検索し、一致する <a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__extension_info.html&quot;}, '*');"><code>extension_info</code></a> を取得。</li>
+<li>見つかったメタデータを <code>request_rec</code> に適用。</li>
+<p>3. **パラメータ処理**: <a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__analyze_ct.html&quot;}, '*');"><code>analyze_ct</code></a> が <code>Content-Type</code> を解析し、<code>charset</code> などのパラメータを正規化して再構築。 4. **終了**: 最終的に <code>r-&gt;content_type</code> 等が設定され、<a class="wiki-source-link" href="../../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> を返して終了。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_hash.h</code>, <code>apr_strings.h</code>: マッピング管理と文字列操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache モジュール基盤とリクエスト構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html#L1103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_protocol_c__ap_set_content_type_ex.html&quot;}, '*');"><code>ap_set_content_type_ex</code></a> 等のメタデータ設定関数。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L753" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__find_ct.html&quot;}, '*');"><code>find_ct</code></a> が呼び出されるコンテキスト。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>modules/http/http_protocol.c</code></a>: 本モジュールが設定したメタデータを利用する側。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を使用。設定の継承時には <code>apr_hash_merge</code> や <code>apr_pmemdup</code> を用いて、親設定を破壊しないよう深いコピーが行われます。</li>
+<li>**エッジケース**: 拡張子が複数ある場合（例: <code>file.tar.gz</code>）、右から左へ順次解析されます。<code>RemoveType</code> 等の削除系ディレクティブは、マージ時に <code>remove_mappings</code> 配列を走査して適用されるため、設定の順序に依存します。</li>
+<li>**制限事項**: <a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__mod_mime_c__analyze_ct.html&quot;}, '*');"><code>analyze_ct</code></a> は非常に詳細なパーサーですが、複雑な MIME パラメータのパースはエラーパスが多く、不正なヘッダに対してはログを出力してフォールバックします。</li>
+<li>**未実装/浅い部分**: <code>XXXX</code> コメントにある通り、EBCDIC 環境での文字コード処理には一部課題が残っています。また、フィルタの重複チェックは行われていないため、設定次第で同じフィルタが複数回追加される可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http__mod_mime_c__attrib_info.html" target="wiki-view"><code>attrib_info</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__extension_info.html" target="wiki-view"><code>extension_info</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__mime_dir_config.html" target="wiki-view"><code>mime_dir_config</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__param.html" target="wiki-view"><code>param</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__content_type.html" target="wiki-view"><code>content_type</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__create_mime_dir_config.html" target="wiki-view"><code>create_mime_dir_config</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__overlay_extension_mappings.html" target="wiki-view"><code>overlay_extension_mappings</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__remove_items.html" target="wiki-view"><code>remove_items</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__merge_mime_dir_configs.html" target="wiki-view"><code>merge_mime_dir_configs</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__add_extension_info.html" target="wiki-view"><code>add_extension_info</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__remove_extension_type.html" target="wiki-view"><code>remove_extension_type</code></a></li>
+<li><a href="../../symbols/modules__http__mod_mime_c__remove_extension_info.html" target="wiki-view"><code>remove_extension_info</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

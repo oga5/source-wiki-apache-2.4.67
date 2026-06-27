@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/ap-sock-disable-nagle.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_sock_disable_nagle</h1>
+<h2>概念</h2>
+<p><code>ap_sock_disable_nagle</code> は、Apache HTTP Serverにおいて、指定されたネットワークソケットに対してNagleアルゴリズムを無効化（<code>TCP_NODELAY</code> を有効化）するためのユーティリティ関数です。これにより、小さなパケットがバッファリングされずに即座に送信されるようになります。</p>
+<h2>なぜ重要か</h2>
+<p>HTTPのようなプロトコル、特に持続的接続（Persistent Connections）においては、Nagleアルゴリズムによる送信遅延（ACKを待つことによる遅延）がパフォーマンスに悪影響を及ぼすことがあります。この関数を適用してNagleアルゴリズムを無効化することで、送信遅延を防ぎ、ネットワークの応答性とパフォーマンスを向上させることができます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L208" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>symbol:include/mpm_common.h#ap_sock_disable_nagle</code></a>: 関数の宣言またはマクロ定義。</li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm_common_c__ap_sock_disable_nagle.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_sock_disable_nagle.html&quot;, &quot;source&quot;: &quot;source/server/mpm_common.c.html#L210&quot;}, '*');"><code>symbol:server/mpm_common.c#ap_sock_disable_nagle</code></a>: 関数の実体。<code>apr_socket_opt_set</code> を用いて <code>APR_TCP_NODELAY</code> を設定し、失敗時には <code>ap_log_error</code> で警告を出力する実装を持ちます。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. 呼び出し元（<a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>server/listen.c</code></a> や <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>modules/http2/h2_proxy_session.c</code></a> など）が、有効な <code>apr_socket_t</code> へのポインタを引数として <code>ap_sock_disable_nagle</code> を呼び出します。 2. 関数内部で、APR（Apache Portable Runtime）ライブラリの <code>apr_socket_opt_set</code> 関数を呼び出し、ソケットに対して <code>APR_TCP_NODELAY</code> オプションを <code>1</code>（有効）に設定します。 3. 設定結果（<code>apr_status_t</code>）を確認します。 4. 設定が失敗（<code>APR_SUCCESS</code> 以外）した場合、<code>ap_log_error</code> を使用して警告レベル（<a class="wiki-source-link" href="../../source/include/http_log.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_WARNING</code></a>）のエラーログを記録します。</p>
+<p>※なお、呼び出し元がどのようなタイミングや条件でこの関数をトリガーするのか、システム全体における詳細なエンドツーエンドのライフサイクルやフローの全貌は完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>引数として渡される <code>apr_socket_t *s</code> は、有効なAPRソケットオブジェクトを指している必要があります。</li>
+<li>Nagleアルゴリズムの無効化に失敗した場合でも、サーバーの動作を停止させるような致命的なエラーとは見なされず、警告ログを出力した上で処理を継続するというフォールバック動作が保証されています。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li><code>apr_socket_opt_set</code> が失敗した場合、警告ログは出力されますが、関数の戻り値が <code>void</code> であるため、呼び出し元は設定の成否を直接検知できません。</li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>include/mpm_common.h</code></a> にも関連する定義が存在するため、関数を修正または変更する際は、ヘッダーの宣言と <a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a> の実装との間で整合性を維持する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>include/mpm_common.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

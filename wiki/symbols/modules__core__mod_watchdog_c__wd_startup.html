@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__core__mod_watchdog_c__wd_startup.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_startup.html&quot;}, '*');">wd_startup</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/core/mod_watchdog.c:268</code></li>
+</ul>
+<h2>目的</h2>
+<p>Watchdog インスタンスの実行スレッドを生成し、ライフサイクル管理のためのクリーンアップハンドラを登録する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t wd_startup(ap_watchdog_t *w, apr_pool_t *p)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>w</code>: 起動対象の <code>ap_watchdog_t</code> 構造体へのポインタ。</li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: スレッドおよびクリーンアップ処理に使用するメモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>w-&gt;thread_started</code> はアトミックに 0 にリセットされる。</li>
+<li><code>w-&gt;singleton</code> が真の場合、<code>w-&gt;mutex</code> が初期化済みである必要がある。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>w-&gt;thread_started</code> を 0 に設定する。 2. <code>w-&gt;singleton</code> が有効な場合、<code>apr_proc_mutex_child_init</code> を呼び出し、子プロセス内での mutex を初期化する。失敗した場合は即座にエラーを返す。 3. <code>ap_thread_create</code> を呼び出し、<a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L107" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker.html&quot;}, '*');"><code>wd_worker</code></a> をエントリポイントとしてスレッドを生成する。 4. スレッド生成に成功した場合、<code>apr_pool_pre_cleanup_register</code> を使用して、プール破棄時に <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker_cleanup.html&quot;}, '*');"><code>wd_worker_cleanup</code></a> が実行されるよう登録する。 5. スレッド生成の結果を返す。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/core/mod_watchdog.c:479</code></li>
+<li><code>modules/core/mod_watchdog.c:576</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_atomic_set32</code></li>
+<li><code>apr_proc_mutex_child_init</code></li>
+<li><code>apr_proc_mutex_lockfile</code></li>
+<li><code>ap_thread_create</code></li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L107" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker.html&quot;}, '*');"><code>wd_worker</code></a> (スレッドエントリ)</li>
+<li><code>apr_pool_pre_cleanup_register</code></li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker_cleanup.html&quot;}, '*');"><code>wd_worker_cleanup</code></a> (クリーンアップハンドラ)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_watchdog_t</code>: 監視インスタンスの状態を保持する構造体。</li>
+<li><code>apr_pool_t</code>: リソース管理用プール。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_proc_mutex_child_init</code> が失敗した場合、そのエラーコードを返して終了する。</li>
+<li><code>ap_thread_create</code> が失敗した場合、スレッドは生成されず、クリーンアップハンドラも登録されない。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はスレッドの生成とクリーンアップの紐付けを行うため、呼び出し側は <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> のライフサイクルがスレッドの生存期間を包含していることを保証する必要がある。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy_balancer.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_balancer.c.html&quot;}, '*');">modules/proxy/mod_proxy_balancer.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_proxy_balancer</code> は、Apache HTTP Server のプロキシサブシステムにおけるロードバランサ機能を提供するモジュールです。複数のバックエンドワーカー間での負荷分散、セッションスティッキー（スティッキーセッション）、および動的なメンバー管理（<code>balancer-manager</code>）を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> の拡張機能として動作し、<code>balancer://</code> スキームを処理します。<a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a> で定義された共有メモリ（<a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a>）を利用して、マルチプロセス環境下でバランサの状態とワーカーの統計情報を同期・共有します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストルーティング**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html&quot;}, '*');"><code>proxy_balancer_pre_request</code></a> を通じて、負荷分散アルゴリズムに基づき最適なワーカーを選択する。</li>
+<li>**セッション管理**: クッキーやパスパラメータを用いたスティッキーセッションの維持。</li>
+<li>**状態管理と同期**: 共有メモリを用いたワーカーのヘルス状態、負荷状況、および統計情報の永続化と同期。</li>
+<li>**管理インターフェース**: <code>balancer-manager</code> ハンドラによる、実行時のワーカーパラメータ変更やメンバー追加機能の提供。</li>
+<li>**ヘルスチェック連携**: <code>mod_proxy_hcheck</code> 等の外部モジュールと連携し、ワーカーの稼働状態を監視・制御する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル・初期化</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_pre_config.html&quot;}, '*');"><code>balancer_pre_config</code></a>: ミューテックスの登録とオプション関数の取得。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L860" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_post_config.html&quot;}, '*');"><code>balancer_post_config</code></a>: 共有メモリ（<a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a>）の確保と各バランサ・ワーカーの初期化。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L2014" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_child_init.html&quot;}, '*');"><code>balancer_child_init</code></a>: 子プロセス起動時の共有メモリへのアタッチ。</li>
+</ul>
+<h3>ルーティング・選択ロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html&quot;}, '*');"><code>proxy_balancer_pre_request</code></a>: リクエスト処理の入口。バランサの選択とワーカーの決定を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__find_best_worker.html&quot;}, '*');"><code>find_best_worker</code></a>: ロードバランサアルゴリズム（<code>lbmethod</code>）を呼び出し、最適なワーカーを特定する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L272" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__find_session_route.html&quot;}, '*');"><code>find_session_route</code></a>: スティッキーセッション情報から既存のワーカーを検索する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L201" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__find_route_worker.html&quot;}, '*');"><code>find_route_worker</code></a>: 特定のルートを持つワーカーを検索し、必要に応じてリトライやリダイレクトを処理する。</li>
+</ul>
+<h3>管理・状態更新</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L1904" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_handler.html&quot;}, '*');"><code>balancer_handler</code></a>: <code>balancer-manager</code> のリクエストを処理する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L1129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_process_balancer_worker.html&quot;}, '*');"><code>balancer_process_balancer_worker</code></a>: 管理画面からのパラメータ変更をワーカー/バランサに適用する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L426" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__force_recovery.html&quot;}, '*');"><code>force_recovery</code></a>: エラー状態のワーカーを再試行し、必要に応じて復旧を強制する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **リクエスト処理**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html&quot;}, '*');"><code>proxy_balancer_pre_request</code></a> が呼ばれると、まず <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L272" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__find_session_route.html&quot;}, '*');"><code>find_session_route</code></a> でスティッキーセッションを試行。失敗した場合は <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__find_best_worker.html&quot;}, '*');"><code>find_best_worker</code></a> でアルゴリズムに従いワーカーを選択する。 2.  **同期**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L860" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_post_config.html&quot;}, '*');"><code>balancer_post_config</code></a> で作成された <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> を通じて、全プロセスが同一の <code>proxy_balancer</code> および <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a> 構造体を共有する。 3.  **排他制御**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L593" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>PROXY_THREAD_LOCK</code></a>/<code>UNLOCK</code> マクロにより、共有メモリへのアクセスを保護する。 4.  **管理フロー**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L1904" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_handler.html&quot;}, '*');"><code>balancer_handler</code></a> は POST データを解析し、<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L1129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_process_balancer_worker.html&quot;}, '*');"><code>balancer_process_balancer_worker</code></a> を経由して共有メモリ上のパラメータを更新する。CSRF 対策として <code>nonce</code> の検証を行う。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.h.html&quot;}, '*');"><code>proxy_util.h</code></a>: プロキシ基盤の共通構造体とユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_watchdog.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>mod_watchdog.h</code></a>: ヘルスチェック等の監視機能との連携。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a>: 共有メモリ管理プロバイダ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>ap_hooks.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_date.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_md5.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_md5.h.html&quot;}, '*');"><code>util_md5.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a>: 共有メモリ操作やワーカーの初期化ロジックの本体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_hcheck.c.html&quot;}, '*');"><code>mod_proxy_hcheck.c</code></a>: ヘルスチェック機能の提供元。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy.c</code></a>: プロキシのメインフック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: バランサとワーカーのデータは <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> を介して共有メモリに配置されます。プロセス間でのデータ整合性は <code>gmutex</code> によって保証されます。</li>
+<li>**安全性**: <code>balancer-manager</code> は CSRF 攻撃を防ぐため、<code>Referer</code> ヘッダのチェックと <code>nonce</code> の照合を厳格に行います。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html#L860" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__balancer_post_config.html&quot;}, '*');"><code>balancer_post_config</code></a> は設定読み込み時に二度呼ばれる可能性があるため、初期化の重複防止処理が含まれています。</li>
+<li>**省略範囲**: 本ファイルはバランサの「制御」に特化しており、具体的な負荷分散アルゴリズム（<a class="wiki-source-link" href="../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_byrequests.c.html&quot;}, '*');"><code>byrequests</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/balancers/mod_lbmethod_bytraffic.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_bytraffic.c.html&quot;}, '*');"><code>bytraffic</code></a> 等）の実装は各 <code>lbmethod</code> プロバイダモジュールに委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__balancer_pre_config.html" target="wiki-view"><code>balancer_pre_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_canon.html" target="wiki-view"><code>proxy_balancer_canon</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__init_balancer_members.html" target="wiki-view"><code>init_balancer_members</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__get_path_param.html" target="wiki-view"><code>get_path_param</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__get_cookie_param.html" target="wiki-view"><code>get_cookie_param</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__find_route_worker.html" target="wiki-view"><code>find_route_worker</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__find_session_route.html" target="wiki-view"><code>find_session_route</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__find_best_worker.html" target="wiki-view"><code>find_best_worker</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__balancer_fixup.html" target="wiki-view"><code>balancer_fixup</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__force_recovery.html" target="wiki-view"><code>force_recovery</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__decrement_busy_count.html" target="wiki-view"><code>decrement_busy_count</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html" target="wiki-view"><code>proxy_balancer_pre_request</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

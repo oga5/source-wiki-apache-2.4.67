@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>include/mpm_common.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');">include/mpm_common.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）間で共有される共通機能、定数、およびフックを定義するヘッダーファイルです。プラットフォーム固有の差異を吸収しつつ、複数の MPM 実装（prefork, worker, event 等）で再利用可能なロジックを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>include</code> ディレクトリにおいて、MPM 関連のインターフェースを統合する中心的な役割を果たします。<a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a> が MPM の抽象的な定義を扱うのに対し、本ファイルはプロセス管理、シグナル処理、および設定の共通化といった「実装の詳細」を共有するための基盤となります。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: 子プロセスの生存監視、終了処理（reclaim/relieve）、およびプロセス間通信（Pipe-of-Death）の定義。</li>
+<li>**設定の共通化**: <code>MaxRequestsPerChild</code> や <code>PidFile</code> など、多くの MPM が共通して持つ設定項目の管理。</li>
+<li>**フックの提供**: MPM のライフサイクルや状態変化（子プロセスの停止、接続のサスペンド/レジューム等）を外部モジュールが監視・介入するためのフック定義。</li>
+<li>**OS 抽象化**: ユーザー名/グループ名の ID 変換や、TCP_NODELAY のようなソケットオプションの共通操作。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L246" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mpm_common_h__ap_pod_t.html&quot;}, '*');"><code>ap_pod_t</code></a>: 「Pipe-of-Death」を管理する構造体。子プロセスに終了を通知するために使用されます。</li>
+<li><code>ap_reclaim_child_processes()</code>: 親プロセスが終了時に子プロセスを確実に回収するための関数。</li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>AP_SIG_GRACEFUL</code></a>: サーバーのグレースフルリスタートを指示するシグナル（通常 <code>SIGUSR1</code>）。</li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L475" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>AP_ACCEPT_MUTEX_TYPE</code></a>: 複数の MPM が受け入れ用ミューテックスを識別するための共通文字列。</li>
+<li><code>ap_mpm_podx_restart_t</code>: 拡張 Pipe-of-Death で使用される再起動/終了の種別を定義する列挙型。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>本ファイルは主に宣言を提供しますが、MPM の制御フローは以下のフックを通じて行われます。 1. **初期化**: <a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L164" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__mpm_common_pre_config.html&quot;}, '*');"><code>mpm_common_pre_config</code></a> を通じて MPM 共通の設定が初期化されます。 2. **監視**: <a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_wait_or_timeout.html&quot;}, '*');"><code>ap_wait_or_timeout</code></a> を通じて、親プロセスは子プロセスの終了を監視し、必要に応じて <code>monitor</code> フックを呼び出します。 3. **終了処理**: <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L731" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_mpm_pod_signal.html&quot;}, '*');"><code>ap_mpm_pod_signal</code></a> 等により Pipe-of-Death にデータが書き込まれると、子プロセスはそれを検知して終了処理（<code>child_stopping</code> フック）へ移行します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a>: Apache の基本設定マクロ。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: MPM の基本インターフェース。</li>
+<li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: プロセス状態を共有するためのスコアボード構造。</li>
+<li><code>apr_proc_mutex.h</code>: プロセス間ミューテックスの抽象化。</li>
+<li><code>netinet/tcp.h</code>: <code>TCP_NODELAY</code> などのソケットオプション用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a>: 本ヘッダーで宣言された関数の実装が含まれる対となるソースファイル。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>include/ap_mpm.h</code></a>: MPM の抽象化レイヤー。</li>
+<li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a>: プロセス管理のデータ構造の詳細。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイル内の関数やマクロの多くは、<code>WIN32</code> や <a class="wiki-source-link" href="../../source/os/netware/pre_nw.h.html#L34" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/pre_nw.h.html&quot;}, '*');"><code>NETWARE</code></a> 以外の環境（主に Unix 系）を想定しています。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_DECLARE_HOOK</code></a> で定義されているフックは、MPM の挙動をカスタマイズするモジュール開発者にとって非常に重要です。</li>
+<li>Pipe-of-Death (<a class="wiki-source-link" href="../../source/include/mpm_common.h.html#L246" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mpm_common_h__ap_pod_t.html&quot;}, '*');"><code>ap_pod_t</code></a>) は、Apache が子プロセスを安全に終了させるための重要なメカニズムであるため、MPM の終了処理を追う際はここから読み解くのが近道です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__mpm_common_h__ap_generation_t.html" target="wiki-view"><code>ap_generation_t</code></a></li>
+<li><a href="../symbols/include__mpm_common_h__ap_pod_t.html" target="wiki-view"><code>ap_pod_t</code></a></li>
+<li><a href="../symbols/include__mpm_common_h__ap_podx_restart_t.html" target="wiki-view"><code>ap_podx_restart_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

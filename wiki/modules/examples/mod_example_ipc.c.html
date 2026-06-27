@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/examples/mod_example_ipc.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/examples/mod_example_ipc.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_ipc.c.html&quot;}, '*');">modules/examples/mod_example_ipc.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるプロセス間通信（IPC）の利用例を示すサンプルモジュールです。共有メモリ（Shared Memory）とグローバルミューテックス（Global Mutex）を使用して、マルチプロセス環境下で共有カウンタを安全にインクリメントする方法を提示します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/examples</code> ディレクトリにおいて、APR（Apache Portable Runtime）の IPC 機能に特化した実装例を提供します。実運用向けではなく、開発者が Apache のプロセスモデルと共有リソースの同期メカニズムを理解するための教育用コードです。</p>
+<h2>責務</h2>
+<ul>
+<li>**共有メモリの管理**: <code>apr_shm</code> を用いた共有メモリセグメントの確保と初期化。</li>
+<li>**同期制御**: <code>apr_global_mutex</code> を用いた、プロセス間での排他制御の実装。</li>
+<li>**ライフサイクル管理**: 親プロセスでのリソース確保と、子プロセスでの再初期化、および終了時のクリーンアップ。</li>
+<li>**リクエスト処理**: HTTP リクエストに応じて共有カウンタを更新し、結果を HTML で出力する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>exipc_shm</code>: 共有メモリブロックを指すポインタ。</li>
+<li><code>exipc_mutex</code>: プロセス間で共有されるグローバルミューテックス。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/examples/mod_example_ipc.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__examples__mod_example_ipc_c__exipc_data.html&quot;}, '*');"><code>exipc_data</code></a>: 共有メモリ内に格納されるデータ構造（カウンタを保持）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/examples/mod_example_ipc.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__examples__mod_example_ipc_c__exipc_handler.html&quot;}, '*');"><code>exipc_handler</code></a>: リクエストを受け取り、ロック取得・カウンタ更新・レスポンス生成を行うメイン関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>pre_config</code> でミューテックス型を登録し、<code>post_config</code> で共有メモリの確保とミューテックスの生成を行います。 2. **子プロセス起動**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L3250" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__child_init.html&quot;}, '*');"><code>child_init</code></a> で各子プロセスがミューテックスを再オープンし、共有リソースへのアクセス準備を整えます。 3. **リクエスト処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/examples/mod_example_ipc.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__examples__mod_example_ipc_c__exipc_handler.html&quot;}, '*');"><code>exipc_handler</code></a> が呼び出されると、<code>apr_global_mutex_trylock</code> または <code>lock</code> を試行します。</li>
+<li>ロック取得後、共有メモリ上の <a class="wiki-source-link" href="../../../source/modules/examples/mod_example_ipc.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__examples__mod_example_ipc_c__exipc_data.html&quot;}, '*');"><code>exipc_data</code></a> を読み込み、カウンタをインクリメントします。</li>
+<li>処理終了後、<code>apr_global_mutex_unlock</code> でロックを解放します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_shm.h</code>, <a class="wiki-source-link" href="../../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a>: APR の IPC および同期プリミティブ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache モジュール API。</li>
+<li><code>unistd.h</code>: <code>getpid()</code> 等のシステムコール用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><code>sys/types.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/examples/mod_example_hooks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/examples/mod_example_hooks.c.html&quot;}, '*');"><code>modules/examples/mod_example_hooks.c</code></a>: Apache のフック機構の基本を学ぶための関連サンプル。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a>: Apache におけるミューテックスの抽象化レイヤーの詳細。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**ロックの挙動**: 本コードは <code>trylock</code> が未実装のプラットフォームを考慮したフォールバック処理を含んでおり、ロック取得の試行ロジックがやや複雑です。</li>
+<li>**実運用上の注意**: このモジュールは教育用であり、高負荷環境でのパフォーマンスや、共有メモリの堅牢な管理については考慮されていません。</li>
+<li>**デバッグ**: <code>ab</code> (Apache Benchmark) を使用して、同時接続数を変えながらカウンタの挙動を観察することをお勧めします。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__exipc_data.html" target="wiki-view"><code>exipc_data</code></a></li>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__shm_cleanup_wrapper.html" target="wiki-view"><code>shm_cleanup_wrapper</code></a></li>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__exipc_pre_config.html" target="wiki-view"><code>exipc_pre_config</code></a></li>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__exipc_post_config.html" target="wiki-view"><code>exipc_post_config</code></a></li>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__exipc_child_init.html" target="wiki-view"><code>exipc_child_init</code></a></li>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__exipc_handler.html" target="wiki-view"><code>exipc_handler</code></a></li>
+<li><a href="../../symbols/modules__examples__mod_example_ipc_c__exipc_register_hooks.html" target="wiki-view"><code>exipc_register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

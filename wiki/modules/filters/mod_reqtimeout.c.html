@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_reqtimeout.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_reqtimeout.c.html&quot;}, '*');">modules/filters/mod_reqtimeout.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L336" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_reqtimeout</code></a> は、Apache HTTP Server におけるリクエスト処理の各段階（TLSハンドシェイク、ヘッダー読み取り、ボディ読み取り）に対して、動的なタイムアウト制限を適用するフィルタモジュールです。低速なクライアントによるリソース枯渇攻撃（Slowloris 等）を防止することを目的としています。</p>
+<h2>モジュール内での役割</h2>
+<p>本モジュールは <code>AP_FTYPE_CONNECTION</code> レベルで動作する入出力フィルタとして実装されています。接続のライフサイクルに介入し、設定されたタイムアウト値に基づいてソケットの読み取り時間を監視・制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>RequestReadTimeout</code> ディレクティブによる各段階のタイムアウト値および最小データ転送レートの定義。</li>
+<li>**接続監視**: 入力フィルタ <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L172" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_filter.html&quot;}, '*');"><code>reqtimeout_filter</code></a> を通じて、データ受信の進捗を監視し、タイムアウト超過時に接続を強制終了する。</li>
+<li>**動的調整**: 受信したデータ量に応じてタイムアウト期限を延長する（最小レートが設定されている場合）。</li>
+<li>**ライフサイクル制御**: <code>pre_read_request</code> および <code>post_read_request</code> フックを利用し、リクエストの各フェーズに応じたタイムアウト設定の切り替え。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_srv_cfg.html&quot;}, '*');"><code>reqtimeout_srv_cfg</code></a>: サーバーごとの設定を保持。ハンドシェイク、ヘッダー、ボディの各段階の閾値を管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_con_cfg.html&quot;}, '*');"><code>reqtimeout_con_cfg</code></a>: 接続ごとの状態を保持。現在のタイムアウト期限、ソケット、一時バッファ（<code>tmpbb</code>）を格納。</li>
+</ul>
+<h3>フィルタ・フック関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L172" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_filter.html&quot;}, '*');"><code>reqtimeout_filter</code></a>: メインの入力フィルタ。ソケットのタイムアウト値を動的に変更し、期限切れをチェック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L348" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_eor.html&quot;}, '*');"><code>reqtimeout_eor</code></a>: 出力フィルタ。EOR（End of Request）バケットを検知し、リクエスト間のタイムアウト状態をリセット。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L370" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_init.html&quot;}, '*');"><code>reqtimeout_init</code></a>: 接続初期化時にフィルタを挿入。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__extend_timeout.html&quot;}, '*');"><code>extend_timeout</code></a>: 受信データ量に基づき、<code>timeout_at</code> を延長する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L91" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__check_time_left.html&quot;}, '*');"><code>check_time_left</code></a>: 現在時刻と期限を比較し、残り時間を算出。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L370" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_init.html&quot;}, '*');"><code>reqtimeout_init</code></a> が接続開始時に呼ばれ、入出力フィルタをスタックに挿入。 2. **フェーズ移行**: <code>pre_read_request</code> でヘッダー読み取り用、<code>post_read_request</code> でボディ読み取り用の設定を <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_con_cfg.html&quot;}, '*');"><code>reqtimeout_con_cfg</code></a> にロード。 3. **データ読み取り**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L172" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_filter.html&quot;}, '*');"><code>reqtimeout_filter</code></a> が <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> をラップ。</p>
+<ul>
+<li><code>AP_MODE_GETLINE</code> の場合、非ブロッキング読み取りと <code>apr_poll</code> を組み合わせて、タイムアウトを厳密に監視しながら行単位でデータを取得。</li>
+<li>読み取り成功時、<a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__extend_timeout.html&quot;}, '*');"><code>extend_timeout</code></a> がデータ量に応じて期限を延長。</li>
+<p>4. **タイムアウト発生**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L91" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__check_time_left.html&quot;}, '*');"><code>check_time_left</code></a> が <code>APR_TIMEUP</code> を返すと、接続を <code>AP_CONN_CLOSE</code> に設定し、<code>short-lingering-close</code> を有効化して接続を即時切断。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>: Apache コア API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: フィルタチェーン操作用。</li>
+<li><code>apr_strings.h</code>, <code>apr_version.h</code>: 文字列操作および APR バージョン判定。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.c.html&quot;}, '*');"><code>mod_ssl.c</code></a>: ハンドシェイク段階のタイムアウト制御において、本モジュールが先行して動作する必要がある（<code>AP_FTYPE_CONNECTION + 8</code>）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>http_protocol.c</code></a>: <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> の呼び出し元であり、本フィルタの動作対象。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_con_cfg.html&quot;}, '*');"><code>reqtimeout_con_cfg</code></a> は接続プール（<code>c-&gt;pool</code>）に割り当てられ、接続終了まで生存します。<code>tmpbb</code> は行読み取り時のバッファとして使用されます。</li>
+<li>**エッジケース**: <code>AP_MODE_GETLINE</code> 以外のモード（<code>AP_MODE_SPECULATIVE</code> 等）では、タイムアウト延長を行わない設計になっています。</li>
+<li>**制約**: <code>APR_MAJOR_VERSION &lt; 2</code> の場合、<code>apr_poll</code> を使用してソケットを監視しますが、それ以降のバージョンでは <code>apr_socket_wait</code> を使用するよう抽象化されています。</li>
+<li>**未実装/浅い部分**: 本モジュールは HTTP プロトコルに特化しており、他のプロトコル（FTP等）での挙動は <a class="wiki-source-link" href="../../../source/modules/filters/mod_reqtimeout.c.html#L370" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_reqtimeout_c__reqtimeout_init.html&quot;}, '*');"><code>reqtimeout_init</code></a> 内の判定により無効化されるよう設計されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_stage_t.html" target="wiki-view"><code>reqtimeout_stage_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_srv_cfg.html" target="wiki-view"><code>reqtimeout_srv_cfg</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_con_cfg.html" target="wiki-view"><code>reqtimeout_con_cfg</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__extend_timeout.html" target="wiki-view"><code>extend_timeout</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__check_time_left.html" target="wiki-view"><code>check_time_left</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__have_lf_or_eos.html" target="wiki-view"><code>have_lf_or_eos</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__brigade_append.html" target="wiki-view"><code>brigade_append</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_filter.html" target="wiki-view"><code>reqtimeout_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_eor.html" target="wiki-view"><code>reqtimeout_eor</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_init.html" target="wiki-view"><code>reqtimeout_init</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_before_header.html" target="wiki-view"><code>reqtimeout_before_header</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_reqtimeout_c__reqtimeout_create_srv_config.html" target="wiki-view"><code>reqtimeout_create_srv_config</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

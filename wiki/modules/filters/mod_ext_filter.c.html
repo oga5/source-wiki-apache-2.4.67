@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_ext_filter.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ext_filter.c.html&quot;}, '*');">modules/filters/mod_ext_filter.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_ext_filter</code> は、外部の Unix スタイルフィルタプログラム（外部プロセス）を Apache HTTP Server の入力/出力フィルタとして統合するためのモジュールです。HTTP リクエスト/レスポンスのボディをパイプ経由で外部プロセスに渡し、その出力を後続のフィルタやクライアントへ返します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache のフィルタチェーンの一部として動作し、<code>ExtFilterDefine</code> ディレクティブで定義された外部コマンドを、指定された MIME タイプや環境変数に基づいて動的に起動・管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>ExtFilterDefine</code> および <code>ExtFilterOptions</code> によるフィルタの定義と、ディレクトリごとの動作設定（エラー時の挙動など）の保持。</li>
+<li>**プロセス管理**: 外部フィルタプロセスの起動、環境変数の引き継ぎ、リソース制限の適用、および終了時のクリーンアップ。</li>
+<li>**データストリーミング**: <code>apr_bucket_brigade</code> を介した Apache のバケットデータと外部プロセスの標準入出力間の橋渡し。</li>
+<li>**フィルタ制御**: フィルタの適用条件（MIME タイプ、環境変数）の評価と、条件不一致時のバイパス（noop）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L38" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_server_t.html&quot;}, '*');"><code>ef_server_t</code></a>: サーバー単位の設定。フィルタ定義を保持するハッシュテーブルを持つ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_dir_t.html&quot;}, '*');"><code>ef_dir_t</code></a>: ディレクトリ単位の設定。エラー時の挙動（<code>onfail</code>）やログ出力を制御。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_filter_t.html&quot;}, '*');"><code>ef_filter_t</code></a>: フィルタの定義情報（コマンドパス、引数、入出力タイプ、モード）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_ctx_t.html&quot;}, '*');"><code>ef_ctx_t</code></a>: リクエストごとの実行コンテキスト。プロセスハンドル、パイプ、バッファ状態を保持。</li>
+</ul>
+<h3>フィルタ処理関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_output_filter.html&quot;}, '*');"><code>ef_output_filter</code></a>: 出力フィルタのメインエントリ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L892" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_input_filter.html&quot;}, '*');"><code>ef_input_filter</code></a>: 入力フィルタのメインエントリ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L735" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_unified_filter.html&quot;}, '*');"><code>ef_unified_filter</code></a>: 共通のフィルタ処理ロジック。バケットを読み込み、外部プロセスへ書き出し、結果を読み取る。</li>
+</ul>
+<h3>ライフサイクル・ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__define_filter.html&quot;}, '*');"><code>define_filter</code></a>: <code>ExtFilterDefine</code> ディレクティブの解析とフィルタ登録。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L417" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__init_ext_filter_process.html&quot;}, '*');"><code>init_ext_filter_process</code></a>: 外部プロセスの起動とパイプの設定。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L394" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__child_errfn.html&quot;}, '*');"><code>child_errfn</code></a>: 外部プロセスで発生したエラーを Apache のエラーログへ転送するコールバック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L554" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__init_filter_instance.html&quot;}, '*');"><code>init_filter_instance</code></a> がリクエスト時に呼ばれ、フィルタ定義の検索と適用条件（<code>noop</code> フラグ）の判定を行う。 2. **プロセス起動**: 条件を満たす場合、<a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L417" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__init_ext_filter_process.html&quot;}, '*');"><code>init_ext_filter_process</code></a> が <code>apr_proc_create</code> を呼び出し、標準入出力パイプを接続する。 3. **データ転送**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L735" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_unified_filter.html&quot;}, '*');"><code>ef_unified_filter</code></a> がバケットを順次読み込み、<a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L672" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__pass_data_to_filter.html&quot;}, '*');"><code>pass_data_to_filter</code></a> を通じて外部プロセスの <code>stdin</code> に書き込む。 4. **結果取得**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L640" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__drain_available_output.html&quot;}, '*');"><code>drain_available_output</code></a> または <a class="wiki-source-link" href="../../../source/modules/filters/mod_ext_filter.c.html#L735" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ext_filter_c__ef_unified_filter.html&quot;}, '*');"><code>ef_unified_filter</code></a> 内のループで、外部プロセスの <code>stdout</code> からデータを読み取り、新しいバケットとしてブリゲードに挿入する。 5. **終了**: EOS (End of Stream) バケットを検知すると、外部プロセスの <code>stdin</code> を閉じ、残りの出力を読み取って完了する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache コア API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>, <a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a>: フィルタおよび CGI 関連ユーティリティ。</li>
+<li><code>apr_buckets.h</code>: バケットブリゲード操作。</li>
+<li><code>apr_proc.h</code> (間接的): プロセス管理。</li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_poll.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_time.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_time.h.html&quot;}, '*');"><code>util_time.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>mod_filter.c</code></a>: Apache のフィルタチェーン管理の基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_script.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_script.c.html&quot;}, '*');"><code>util_script.c</code></a>: CGI 環境変数の生成やプロセス管理の補助。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリは <code>request_rec</code> のプール（<code>r-&gt;pool</code>）に紐付いており、リクエスト終了時に自動解放されます。</li>
+<li>**プロセス生存期間**: 外部プロセスはリクエストの生存期間に依存します。<code>apr_pool_note_subprocess</code> により、リクエスト終了時にプロセスが確実に終了するよう設計されています。</li>
+<li>**エッジケース**: <code>APR_FILES_AS_SOCKETS</code> が定義されている環境では <code>apr_pollset</code> を使用して非同期的な入出力を行いますが、そうでない場合は <code>apr_sleep</code> を用いたポーリングが行われるため、パフォーマンスに影響が出る可能性があります。</li>
+<li>**制限事項**: 現在の設計では、フィルタの入出力タイプは単一の MIME タイプのみをサポートしています。また、外部プロセスがブロックした場合のハンドリングは、<code>EAGAIN</code> を検知してポーリングする実装になっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__ef_server_t.html" target="wiki-view"><code>ef_server_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__ef_filter_t.html" target="wiki-view"><code>ef_filter_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__ef_dir_t.html" target="wiki-view"><code>ef_dir_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__ef_ctx_t.html" target="wiki-view"><code>ef_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__create_ef_dir_conf.html" target="wiki-view"><code>create_ef_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__create_ef_server_conf.html" target="wiki-view"><code>create_ef_server_conf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__merge_ef_dir_conf.html" target="wiki-view"><code>merge_ef_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__add_options.html" target="wiki-view"><code>add_options</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__parse_cmd.html" target="wiki-view"><code>parse_cmd</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__define_filter.html" target="wiki-view"><code>define_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__ef_init.html" target="wiki-view"><code>ef_init</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ext_filter_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

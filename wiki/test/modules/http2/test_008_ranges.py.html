@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/http2/test_008_ranges.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_008_ranges.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_008_ranges.py.html&quot;}, '*');">test/modules/http2/test_008_ranges.py</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_http2</code> における HTTP Range リクエストの処理能力と、それに伴うログ記録・統計情報の正確性を検証するテストスイートです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> モジュールの一部として、HTTP/2 プロトコル特有のデータ転送制御（Range）が、HTTP/1.1 と同等に機能するか、およびサーバーの内部状態（ログやステータス）に正しく反映されるかを検証します。</p>
+<h2>責務</h2>
+<ul>
+<li>**Range リクエストの検証**: 部分コンテンツ（206 Partial Content）のレスポンスが、HTTP/2 経由で正しく返されることの確認。</li>
+<li>**ログ記録の整合性**: <code>CustomLog</code> に出力されるバイト数（送信・受信・レスポンス）が、Range リクエストの仕様と一致しているかの検証。</li>
+<li>**サーバー統計の追跡**: <code>server-status</code> モジュールが、Range リクエストを含むトラフィックを正しく集計しているかの確認。</li>
+<li>**異常系テスト**: 転送途中で切断されたリクエストに対するサーバーの挙動確認。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>TestRanges</code>: テストクラス。クラススコープで環境構築（データファイル生成、Apache 設定）を行います。</li>
+<li><code>test_h2_008_01</code>: HTTP/2 と HTTP/1.1 の Range リクエスト結果を比較し、ログのバイト数を確認するメインテスト。</li>
+<li><code>test_h2_008_04</code>: <code>server-status</code> を解析し、Range リクエストによる統計情報の増分が期待通りか検証する。</li>
+<li><code>get_server_status</code>: <code>/status?auto</code> エンドポイントを叩き、レスポンスを辞書形式に変換するヘルパー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>_class_scope</code> フィーチャが 100MB のダミーデータを作成し、<code>CustomLog</code> を有効にした Apache を起動します。 2. **リクエスト実行**: <code>curl</code> を使用して、特定の Range ヘッダーを付与したリクエストを送信します。 3. **検証**:</p>
+<ul>
+<li>レスポンスコード（206）とボディサイズを直接検証します。</li>
+<li>Apache を再起動してログバッファをフラッシュし、生成されたログファイルを JSON として読み込みます。</li>
+<li>ログ内の <code>bytes_resp_B</code>（レスポンスバイト数）や <code>bytes_tx_O</code>（送信バイト数）が、期待される範囲内にあるかをアサートします。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>env.H2Conf</code>, <code>env.H2TestEnv</code>: テスト環境の構成と Apache の制御に使用。</li>
+<li><code>json</code>, <code>os</code>, <code>re</code>: ログ解析およびファイル操作に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/env.py.html&quot;}, '*');"><code>test/modules/http2/env.py</code></a>: テスト環境の基盤。<code>H2Conf</code> や <code>H2TestEnv</code> の定義元。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_003_get.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_003_get.py.html&quot;}, '*');"><code>test/modules/http2/test_003_get.py</code></a>: 基本的な GET リクエストのテスト。比較対象として有用。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**ログのフラッシュ**: Apache のログは即座に書き込まれない場合があるため、テストの検証フェーズ前に <code>env.apache_restart()</code> を呼び出してログをフラッシュしています。</li>
+<li>**バイト数計算**: ログの <code>bytes_tx_O</code> はフレームオーバーヘッドを含むため、厳密な値ではなく「期待値以上かつ一定の許容範囲内」というアサーションになっています。</li>
+<li>**バグ追跡**: <code>test_h2_008_04</code> は Apache Bugzilla #66801 に関連しており、サーバー統計の正確性に関する回帰テストの側面を持ちます。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

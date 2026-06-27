@@ -1,0 +1,85 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/cache/cache_util.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_util.c.html&quot;}, '*');">modules/cache/cache_util.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_util.c.html&quot;}, '*');"><code>cache_util.c</code></a> は、Apache HTTP Server のキャッシュサブシステムにおける共通ユーティリティ関数群を提供します。HTTP 仕様（RFC 2616）に基づくキャッシュの有効期限計算、ヘッダー解析、キャッシュキー生成、および「サンダリング・ハード（Thundering Herd）」問題を防ぐためのファイルベースのロック機構を実装しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/cache</code> モジュールの中核的な補助レイヤーです。<code>mod_cache</code> や各ストレージプロバイダー（<code>mod_cache_disk</code> 等）が共通して利用するロジックを分離しており、リクエスト処理の各フェーズでキャッシュの適格性や鮮度を判定するために呼び出されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュ制御と鮮度判定**: <code>Cache-Control</code> や <code>Pragma</code> ヘッダーの解析、および RFC 準拠の鮮度計算。</li>
+<li>**リクエストフィルタリング**: 設定に基づくキャッシュ対象の URL マッチングとプロバイダーの選択。</li>
+<li>**排他制御**: キャッシュ更新時の競合を防ぐためのファイルロック管理。</li>
+<li>**ヘッダー正規化**: キャッシュ保存に適したヘッダーの抽出とホップバイホップヘッダーの除去。</li>
+<li>**ユーティリティ**: 文字列トークナイザーや時刻変換、ハッシュ生成などの低レベル処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>鮮度と制御</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__ap_cache_current_age.html&quot;}, '*');"><code>ap_cache_current_age</code></a>: RFC 2616 13.2.3 に基づくキャッシュの経過時間計算。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L533" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_check_freshness.html&quot;}, '*');"><code>cache_check_freshness</code></a>: キャッシュの鮮度を判定し、必要に応じてロックを試行。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1002" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__ap_cache_control.html&quot;}, '*');"><code>ap_cache_control</code></a>: <code>Cache-Control</code> および <code>Pragma</code> ヘッダーを解析し、構造体に格納。</li>
+</ul>
+<h3>ロック管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L279" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_try_lock.html&quot;}, '*');"><code>cache_try_lock</code></a>: キャッシュ更新のための排他ロックをファイルシステム上に作成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L390" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_remove_lock.html&quot;}, '*');"><code>cache_remove_lock</code></a>: 処理完了後にロックファイルを削除。</li>
+</ul>
+<h3>URL マッチングとプロバイダー</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L184" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_get_providers.html&quot;}, '*');"><code>cache_get_providers</code></a>: 現在のリクエストに対して適用可能なキャッシュプロバイダーのリストを構築。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__uri_meets_conditions.html&quot;}, '*');"><code>uri_meets_conditions</code></a>: 設定された URL パターンとリクエスト URI の照合。</li>
+</ul>
+<h3>ヘッダー処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1194" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__ap_cache_cacheable_headers.html&quot;}, '*');"><code>ap_cache_cacheable_headers</code></a>: キャッシュ可能なヘッダーのみを抽出（ホップバイホップヘッダーの除去を含む）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1324" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_table_getm.html&quot;}, '*');"><code>cache_table_getm</code></a>: 複数の同名ヘッダーをカンマ区切りで結合して取得。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **鮮度判定フロー**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L533" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_check_freshness.html&quot;}, '*');"><code>cache_check_freshness</code></a> が呼び出されると、<a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1002" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__ap_cache_control.html&quot;}, '*');"><code>ap_cache_control</code></a> でリクエスト/レスポンスの制御情報を解析し、<a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__ap_cache_current_age.html&quot;}, '*');"><code>ap_cache_current_age</code></a> で経過時間を算出します。鮮度が切れている場合、<a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L279" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_try_lock.html&quot;}, '*');"><code>cache_try_lock</code></a> を経由して排他制御を行い、競合時は stale なデータを返すか再検証を行います。 2. **ロックフロー**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L279" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_try_lock.html&quot;}, '*');"><code>cache_try_lock</code></a> は <code>r-&gt;pool</code> を利用してロックファイル名を生成し、<code>apr_file_open</code> で <code>APR_EXCL</code> を指定してアトミックな作成を試みます。失敗時は <code>APR_EEXIST</code> を返し、既存のロックを尊重します。 3. **ヘッダー処理フロー**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1194" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__ap_cache_cacheable_headers.html&quot;}, '*');"><code>ap_cache_cacheable_headers</code></a> は <code>apr_table_copy</code> でヘッダーを複製後、RFC で定義されたホップバイホップヘッダーを <code>apr_table_unset</code> で一括削除します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.h.html&quot;}, '*');"><code>mod_cache.h</code></a>: キャッシュモジュールの主要構造体定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_util.h.html&quot;}, '*');"><code>cache_util.h</code></a>: 本ファイルの関数宣言と定数定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a>: キャッシュプロバイダーのルックアップ機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>mod_cache.c</code></a>: 本ユーティリティを利用してリクエストのキャッシュ処理を行うメインモジュール。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cache/cache_storage.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/cache_storage.c.html&quot;}, '*');"><code>cache_storage.c</code></a>: キャッシュオブジェクトの保存・読み込みを行うストレージインターフェース。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 多くの関数が <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を引数に取り、メモリのライフサイクルをリクエスト終了時に自動解放されるように設計しています。</li>
+<li>**ロックの安全性**: ロックファイルは <code>APR_DELONCLOSE</code> を利用するか、<a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L390" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_remove_lock.html&quot;}, '*');"><code>cache_remove_lock</code></a> で明示的に削除されます。万が一プロセスがクラッシュしても、<code>lockmaxage</code> による期限切れチェックが機能するため、デッドロックは発生しません。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L1324" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_table_getm.html&quot;}, '*');"><code>cache_table_getm</code></a> は単一ヘッダーの場合にメモリ割り当てを避ける高速パスを備えています。</li>
+<li>**省略箇所**: 本ファイル内の <a class="wiki-source-link" href="../../../source/modules/cache/cache_util.c.html#L875" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_hash.html&quot;}, '*');"><code>cache_hash</code></a> 関数は MD5 を使用していますが、詳細なハッシュアルゴリズムの衝突耐性については本ファイルの範囲外です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cache__cache_util_c__uri_meets_conditions.html" target="wiki-view"><code>uri_meets_conditions</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__cache_use_early_url.html" target="wiki-view"><code>cache_use_early_url</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__get_provider.html" target="wiki-view"><code>get_provider</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__cache_get_providers.html" target="wiki-view"><code>cache_get_providers</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__ap_cache_current_age.html" target="wiki-view"><code>ap_cache_current_age</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__cache_try_lock.html" target="wiki-view"><code>cache_try_lock</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__cache_remove_lock.html" target="wiki-view"><code>cache_remove_lock</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__ap_cache_check_no_cache.html" target="wiki-view"><code>ap_cache_check_no_cache</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__ap_cache_check_no_store.html" target="wiki-view"><code>ap_cache_check_no_store</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__cache_check_freshness.html" target="wiki-view"><code>cache_check_freshness</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__ap_cache_tokstr.html" target="wiki-view"><code>ap_cache_tokstr</code></a></li>
+<li><a href="../../symbols/modules__cache__cache_util_c__cache_table_getm_t.html" target="wiki-view"><code>cache_table_getm_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

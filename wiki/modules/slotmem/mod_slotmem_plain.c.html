@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/slotmem/mod_slotmem_plain.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');">modules/slotmem/mod_slotmem_plain.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>mod_slotmem_plain.c</code></a> は、Apache HTTP Server における共有メモリ管理の「プレーン（非共有）」実装です。プロセス間共有を目的とした <code>mod_slotmem_shm</code> とは異なり、単一プロセス内のメモリ領域を固定サイズの「スロット」に分割して管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>ap_slotmem</code> プロバイダーインターフェースを実装するモジュールの一つです。<a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html#L52" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>AP_SLOTMEM_PROVIDER_GROUP</code></a> に &quot;plain&quot; として登録され、共有メモリを必要としない環境や、単一プロセス内でのデータ管理において、他のモジュールから透過的に利用されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**メモリ管理**: 固定サイズのデータブロック（スロット）の確保と解放。</li>
+<li>**ライフサイクル管理**: <code>globallistmem</code> を用いたスロットメモリインスタンスのリスト管理。</li>
+<li>**状態追跡**: 各スロットの利用状況（<code>inuse</code> フラグ）の保持と更新。</li>
+<li>**プロバイダー提供**: <a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> 構造体を通じた機能の公開。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>ap_slotmem_instance_t</code>: スロットメモリの管理単位。ベースアドレス、スロットサイズ、個数、利用状況フラグ、および次インスタンスへのポインタを保持。</li>
+</ul>
+<h3>インスタンス管理</h3>
+<ul>
+<li><code>globallistmem</code>: モジュール内で作成された全インスタンスを保持する静的リストの先頭。</li>
+<li><code>gpool</code>: インスタンスの割り当てに使用されるグローバルプール。</li>
+</ul>
+<h3>プロバイダー関数 (API)</h3>
+<ul>
+<li>**作成・接続**: <code>slotmem_create</code>, <code>slotmem_attach</code></li>
+<li>**データ操作**: <code>slotmem_get</code> (読み込み), <code>slotmem_put</code> (書き込み), <code>slotmem_dptr</code> (直接ポインタ取得)</li>
+<li>**スロット制御**: <code>slotmem_grab</code> (空きスロット確保), <code>slotmem_fgrab</code> (強制確保), <code>slotmem_release</code> (解放)</li>
+<li>**統計**: <code>slotmem_num_slots</code>, <code>slotmem_num_free_slots</code>, <code>slotmem_slot_size</code></li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_plain.c.html#L326" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_plain_c__ap_slotmem_plain_register_hook.html&quot;}, '*');"><code>ap_slotmem_plain_register_hook</code></a> がプロバイダーを登録し、<code>pre_config</code> でグローバルプールを初期化します。 2. **作成**: <code>slotmem_create</code> は <code>gpool</code> からメモリを確保し、<code>base</code> アドレスと <code>inuse</code> フラグ領域を計算してリストに追加します。 3. **アクセス**: <code>slotmem_get</code>/<code>put</code> は <code>id</code> からオフセットを計算し、<code>memcpy</code> を介してデータを転送します。この際、<a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>AP_SLOTMEM_TYPE_PREGRAB</code></a> フラグが立っている場合は <code>inuse</code> フラグのチェックが行われます。 4. **反復処理**: <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_plain.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_do.html&quot;}, '*');"><code>slotmem_do</code></a> は全スロットを走査し、コールバック関数を適用します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>ap_slotmem.h</code></a>: プロバイダーインターフェース定義および <a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> 構造体。</li>
+<li><code>apr_pools.h</code> (間接的): メモリ管理。</li>
+<li><code>apr_strings.h</code> (間接的): 文字列操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_shm.c</code></a>: 共有メモリ版の実装。API は共通ですが、こちらはプロセス間通信を前提としています。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: インスタンスおよびデータ領域は <code>gpool</code> に紐付いており、モジュールのライフサイクル全体で生存します。</li>
+<li>**境界チェック**: <code>slotmem_get</code>/<code>put</code> 内の <code>memcpy</code> には明示的なサイズチェックが含まれていません。呼び出し側で <code>dest_len</code> / <code>src_len</code> がスロットサイズを超えないことを保証する必要があります。</li>
+<li>**スレッド安全性**: 本実装は単一プロセス内での利用を想定しており、内部的なロック機構（Mutex等）は存在しません。マルチスレッド環境で利用する場合は、呼び出し側での排他制御が必要です。</li>
+<li>**省略された詳細**: <code>AP_SLOTMEM_IS_PREGRAB</code> の挙動に関する詳細な設計意図はソース内にコメントとして残されていますが、実装自体は単純なフラグチェックに留まっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__ap_slotmem_instance_t.html" target="wiki-view"><code>ap_slotmem_instance_t</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_do.html" target="wiki-view"><code>slotmem_do</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_create.html" target="wiki-view"><code>slotmem_create</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_attach.html" target="wiki-view"><code>slotmem_attach</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_dptr.html" target="wiki-view"><code>slotmem_dptr</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_get.html" target="wiki-view"><code>slotmem_get</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_put.html" target="wiki-view"><code>slotmem_put</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_num_slots.html" target="wiki-view"><code>slotmem_num_slots</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_num_free_slots.html" target="wiki-view"><code>slotmem_num_free_slots</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_slot_size.html" target="wiki-view"><code>slotmem_slot_size</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_grab.html" target="wiki-view"><code>slotmem_grab</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_plain_c__slotmem_fgrab.html" target="wiki-view"><code>slotmem_fgrab</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

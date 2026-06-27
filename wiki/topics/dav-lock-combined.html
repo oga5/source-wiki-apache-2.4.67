@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/dav-lock-combined.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lock_combined</h1>
+<h2>概念</h2>
+<p><code>dav_lock_combined</code> は、WebDAVのロック情報をメモリ上で保持するための統合構造体（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。公開用のロック情報（<code>dav_lock</code>）、内部管理用のプライベート情報（<code>dav_lock_private</code>）、およびロック識別子（<code>dav_locktoken</code>）を一つのメモリブロックにまとめ、効率的なデータ操作を可能にします。</p>
+<h2>なぜ重要か</h2>
+<p>WebDAVのロック情報を扱う際、公開インターフェース用のデータ、ファイルシステムやロックモジュール固有の内部管理状態、および一意な識別子（UUID）を個別に管理するのではなく、一つのコンテナ構造体として統合することで、メモリ割り当てやDBMからのデシリアライズ、リンクドリストの構築などのデータ操作を効率的かつ一貫して行うことができるため重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__lock.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html&quot;}, '*');"><code>module:modules/dav/lock</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lock_combined.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lock_combined.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L202&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lock_combined</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__lock__locks_c__dav_lock_combined.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_lock_combined.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html#L198&quot;}, '*');"><code>symbol:modules/dav/lock/locks.c#dav_lock_combined</code></a></li>
+</ul>
+<p>※ 両ファイルにおいて、ほぼ同一のシグネチャを持つ構造体として定義されています。</p>
+<h2>エンドツーエンドの流れ</h2>
+<p>DBMなどの永続化ストレージから読み込まれたバイナリデータ（ロックレコード）は、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_load_lock_record.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a> などの関数によってデシリアライズされ、この <code>dav_lock_combined</code> 構造体にマッピングされます。 メモリ上では、関連する <code>request_rec</code> のプールからメモリが割り当てられ、ロック情報の生成、解決、検証、およびリンクドリストとしての構築の過程で、本構造体へのポインタ（<code>dav_lock_combined *</code>）を介して各属性や識別子へのアクセスが行われます。</p>
+<p>なお、具体的な関数呼び出しの完全なエンドツーエンドの制御フローは、提供されたコンテキストからは完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li><code>pub</code> フィールド（<code>dav_lock</code>）は、<code>mod_dav</code> が要求する公開インターフェースと互換性を持たなければなりません。</li>
+<li><code>token</code> フィールド（<code>dav_locktoken</code>）は、UUIDに基づく一意な識別子でなければなりません。</li>
+<li>構造体内の各フィールド（<code>pub</code>, <code>priv</code>, <code>token</code>）が適切に初期化されている必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**メモリレイアウトの不整合**: 本構造体は <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方で定義されています。構造を変更する場合は、これら両方のファイルにおけるメモリレイアウトへの影響、および <code>mod_dav</code> 側の期待するデータレイアウトとの整合性に注意する必要があります。</li>
+<li>**シリアライズ時の破損**: DBMから読み込まれたシリアライズデータと構造体のサイズ・レイアウトに不整合が生じた場合、メモリ破壊や不正なデータの読み込みが発生する可能性があります。</li>
+<li>**初期化漏れ**: 各フィールドが正しく初期化されていない場合、ロックの解決や検証時に不整合が生じる可能性があります。</li>
+<li>**メモリ割り当て失敗**: <code>apr_palloc</code> 等によるメモリ割り当てが失敗した場合、構造体の生成自体が失敗する可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

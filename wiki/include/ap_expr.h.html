@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>include/ap_expr.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');">include/ap_expr.h</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における式評価エンジン（Expression Parser）の定義ファイルです。設定ファイルやリクエスト処理中に動的な条件判定や文字列生成を行うための、構文解析および評価フレームワークを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>APACHE_CORE</code> の一部として、<code>mod_rewrite</code>、<code>mod_include</code>、<code>mod_authz_core</code> など、複雑な条件分岐を必要とする多くのモジュールに対して共通の評価基盤を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>式の構文解析（<a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html#L379" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_parse.html&quot;}, '*');"><code>ap_expr_parse</code></a>）と評価（<a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html#L815" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_exec.html&quot;}, '*');"><code>ap_expr_exec</code></a>）のインターフェース定義。</li>
+<li>評価コンテキスト（<a class="wiki-source-link" href="../../source/include/ap_expr.h.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_eval_ctx_t.html&quot;}, '*');"><code>ap_expr_eval_ctx_t</code></a>）の管理。</li>
+<li>拡張可能な変数、関数、演算子（単項/二項）のフック機構の提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_expr.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_info_t.html&quot;}, '*');"><code>ap_expr_info_t</code></a>: 解析済み式ツリーのルートとメタデータ（ファイル名、行番号、フラグ）を保持する構造体。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_expr.h.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_eval_ctx_t.html&quot;}, '*');"><code>ap_expr_eval_ctx_t</code></a>: 評価時のリクエスト、接続、プール、正規表現バックリファレンスなどを保持する実行コンテキスト。</li>
+<li><code>ap_expr_exec()</code> / <code>ap_expr_str_exec()</code>: 式を評価し、結果（bool または string）を返す主要な関数。</li>
+<li><code>ap_expr_parse_cmd()</code>: 設定コマンドから式を解析するための高レベルなラッパーマクロ。</li>
+<li><code>AP_EXPR_FLAG_*</code>: 評価時の制約（<code>RESTRICTED</code>）や結果の型（<code>STRING_RESULT</code>）を制御するフラグ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **解析フェーズ**: <a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html#L379" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_parse.html&quot;}, '*');"><code>ap_expr_parse</code></a> が文字列を読み込み、<a class="wiki-source-link" href="../../source/include/ap_expr.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_info_t.html&quot;}, '*');"><code>ap_expr_info_t</code></a> 内に構文木を構築します。この際、<code>lookup_fn</code> を通じて変数や関数の実体（関数ポインタ）が解決されます。 2. **評価フェーズ**: <a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html#L821" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_exec_ctx.html&quot;}, '*');"><code>ap_expr_exec_ctx</code></a> に <a class="wiki-source-link" href="../../source/include/ap_expr.h.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_eval_ctx_t.html&quot;}, '*');"><code>ap_expr_eval_ctx_t</code></a> を渡して実行します。 3. **データフロー**: 評価中、コンテキスト内の <code>r</code>（リクエスト）や <code>c</code>（接続）から情報を取得し、必要に応じて <code>vary_this</code> にヘッダー名を記録することで、自動的に <code>Vary</code> ヘッダーの管理が行われます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: 基本的なリクエスト・接続構造体。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: 設定コマンド処理用。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_regex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regex.h.html&quot;}, '*');"><code>ap_regex.h</code></a>: 正規表現によるマッチング機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_parse.y.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/server/util_expr_parse.y.html&quot;}, '*');"><code>server/util_expr_parse.y</code></a> / <a class="wiki-source-link" href="../../source/server/util_expr_scan.l.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/server/util_expr_scan.l.html&quot;}, '*');"><code>server/util_expr_scan.l</code></a>: 実際のパーサーとスキャナーの実装。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_eval.c.html&quot;}, '*');"><code>server/util_expr_eval.c</code></a>: 評価エンジンのロジック。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_private.h.html&quot;}, '*');"><code>server/util_expr_private.h</code></a>: 内部的な構文木ノードの定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**拡張性**: 新しい変数や関数を追加したい場合は、<code>ap_expr_lookup_fn_t</code> フックを実装し、<a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a> 等で登録します。</li>
+<li>**メモリ管理**: 評価には <code>apr_pool_t</code> が必須です。コンテキスト作成時に適切なプールが割り当てられていることを確認してください。</li>
+<li>**セキュリティ**: <a class="wiki-source-link" href="../../source/include/ap_expr.h.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>AP_EXPR_FLAG_RESTRICTED</code></a> を指定すると、機密情報へのアクセスや権限バイパスを伴う変数の使用が制限されます。ユーザー入力を含む式を評価する場合は必ずこのフラグを検討してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/include__ap_expr_h__ap_expr_t.html" target="wiki-view"><code>ap_expr_t</code></a></li>
+<li><a href="../symbols/include__ap_expr_h__ap_expr_info_t.html" target="wiki-view"><code>ap_expr_info_t</code></a></li>
+<li><a href="../symbols/include__ap_expr_h__ap_expr_eval_ctx_t.html" target="wiki-view"><code>ap_expr_eval_ctx_t</code></a></li>
+<li><a href="../symbols/include__ap_expr_h__ap_expr_lookup_parms.html" target="wiki-view"><code>ap_expr_lookup_parms</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

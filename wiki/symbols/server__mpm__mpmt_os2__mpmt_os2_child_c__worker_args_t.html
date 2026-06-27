@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');">worker_args_t</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2_child.c:56</code></li>
+</ul>
+<h2>目的</h2>
+<p>子プロセス内において、メインスレッドが受け入れた接続情報をワーカー（<code>worker_main</code>）へ伝達するためのデータコンテナです。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct {
+    apr_pool_t *pconn;
+    apr_socket_t *conn_sd;
+} worker_args_t;</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: 接続受け入れ時に <code>apr_palloc</code> で割り当てられ、<code>pconn</code> および <code>conn_sd</code> が設定されます。</li>
+<li>**出力**: OS/2 のキュー（<code>workq</code>）を介してワーカーへ渡され、ワーカー側で接続処理に使用されます。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>pconn</code> は接続の生存期間を管理するメモリプールである必要があります。</li>
+<li><code>conn_sd</code> は有効な接続済みソケットである必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. メインスレッドが接続を受け入れると、<code>apr_palloc</code> を用いて <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a> 構造体をメモリ上に確保します。 2. 構造体に接続情報（プールとソケット）を格納します。 3. <code>DosWriteQueue</code> を呼び出し、<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>WORKTYPE_CONN</code></a> 型のデータとしてキューに投入します。 4. ワーカー側で <code>DosReadQueue</code> を通じて本構造体を受け取り、接続処理を開始します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a> 内のメイン接続受け入れループ（<code>DosWriteQueue</code> の引数として使用）。</li>
+<li>**呼び出し先**: <code>worker_main</code>（キューから読み出された後、接続処理の引数として利用）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_pool_t</code>: 接続ごとのメモリ管理に使用。</li>
+<li><code>apr_socket_t</code>: 処理対象のネットワークソケット。</li>
+<li><code>workq</code>: OS/2 ネイティブの FIFO キュー。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>メモリ不足により <code>apr_palloc</code> が失敗した場合、接続処理が中断されます。</li>
+<li>キューが満杯の場合や <code>DosWriteQueue</code> が失敗した場合、接続の受け渡しが正常に行われません。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は OS/2 のプロセス内通信（キュー）に依存しています。</li>
+<li>接続終了後、<code>pconn</code> プールが破棄されることで関連リソースが解放される設計です。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__winnt__nt_eventlog_c__service_stderr_thread.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__nt_eventlog_c__service_stderr_thread.html&quot;}, '*');">service_stderr_thread</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/winnt/nt_eventlog.c:29</code></li>
+</ul>
+<h2>目的</h2>
+<p>標準エラー出力（<code>stderr</code>）のパイプを監視し、受信した文字列をWindowsイベントログへ転送するバックグラウンドスレッドとして動作します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static DWORD WINAPI service_stderr_thread(LPVOID hPipe)</code></pre>
+<ul>
+<li>引数 <code>hPipe</code>: 監視対象となるパイプの読み取りハンドル。</li>
+</ul>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>hPipe</code> を通じて渡されるパイプからのバイトストリーム。</li>
+<li>**出力**: Windowsイベントログへの書き込み（<code>ReportEvent</code> API経由）。戻り値は常に <code>0</code>。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>stderr</code> がパイプにリダイレクトされている環境で実行されること。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_ready</code></a> イベントが適切に管理されていること。</li>
+<li>イベントログのソースとして「Apache Service」が登録可能であること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: イベントログのレジストリ設定（<code>EventMessageFile</code>等）を行い、<code>RegisterEventSourceW</code> でイベントソースを登録します。 2. **同期**: <code>SetEvent(stderr_ready)</code> を呼び出し、スレッドの準備完了をメインプロセスに通知します。 3. **監視ループ**: <code>ReadFile</code> でパイプから1バイトずつ読み取ります。</p>
+<ul>
+<li>改行コードを検知するか、バッファ（256バイト）が満杯になると、蓄積された文字列を <code>ReportEvent</code> でイベントログへ送信します。</li>
+<p>4. **終了処理**: パイプがクローズされた際、エラー発生時、または終了シグナル受信時に、イベントソースの登録解除、ハンドルクローズ、メモリプール（<code>apr_pool_t</code>）の破棄を行い終了します。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>server/mpm/winnt/nt_eventlog.c</code></a> 内の関数（<code>CreateThread</code> を介して起動）。</li>
+<li>**呼び出し先**: </li>
+<li>Windows API: <code>RegisterEventSourceW</code>, <code>ReadFile</code>, <code>ReportEvent</code>, <code>DeregisterEventSource</code>, <code>SetEvent</code>, <code>CloseHandle</code>。</li>
+<li>APR: <code>apr_pool_create_ex</code>, <code>apr_pool_destroy</code>, <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_open.html&quot;}, '*');"><code>ap_regkey_open</code></a>, <a class="wiki-source-link" href="../../source/os/win32/ap_regkey.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_value_set.html&quot;}, '*');"><code>ap_regkey_value_set</code></a> 等。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_regkey_t</code>: レジストリ操作用構造体。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_ready</code></a>: スレッド同期用イベントハンドル（外部定義）。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L26" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_thread</code></a>: スレッドハンドル（外部定義）。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**パイプ読み取りエラー**: <code>ERROR_BROKEN_PIPE</code> 以外のエラーが発生した場合、その旨をイベントログに記録します。</li>
+<li>**バッファ制限**: 256バイトを超えるメッセージは、バッファ上限に達した時点で強制的にイベントログへ出力されます。</li>
+<li>**レジストリ権限**: レジストリへの書き込み権限がない場合、設定更新はスキップされますが、イベントログ出力自体は継続を試みます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>stderr</code> をパイプへ差し替えるため、他のモジュールが <code>stderr</code> を直接操作すると競合する可能性があります。</li>
+<li>メッセージ定義には <code>netmsg.dll</code> を流用しており、イベントID <code>3299</code> を使用しています。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_ready</code></a> イベントによる同期は、サービス起動時の初期化順序を保証するために不可欠です。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/mod_md_os.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_os.c.html&quot;}, '*');">modules/md/mod_md_os.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_os.c.html&quot;}, '*');"><code>mod_md_os.c</code></a> は、Apache HTTP Server の <code>mod_md</code> モジュールにおいて、OS 固有の低レベルな操作を抽象化するユーティリティファイルです。主にファイルシステムの権限管理と、サーバープロセスの制御（シグナル送信）を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> は証明書の自動管理を行うため、証明書ファイルやディレクトリを生成・更新します。本ファイルは、それらのリソースが Apache のワーカプロセスから適切にアクセス可能であることを保証し、必要に応じてサーバーの再起動をトリガーする役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**権限管理**: 証明書ディレクトリやファイルの所有者（UID/GID）を、Apache の実行ユーザーに合わせて調整する。</li>
+<li>**プロセス制御**: 証明書の更新完了時などに、親プロセスへシグナルを送り、サーバーのグレースフル再起動を要求する。</li>
+<li>**プラットフォーム抽象化**: OS ごとの差異（Unix系 vs Windows）を吸収し、サポートされない環境では <code>APR_ENOTIMPL</code> を返す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_try_chown.html&quot;}, '*');"><code>md_try_chown</code></a>: 指定されたパスの所有者を変更するラッパー。ルート権限で実行されている場合のみ動作します。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_make_worker_accessible.html&quot;}, '*');"><code>md_make_worker_accessible</code></a>: <code>ap_unixd_config.user_id</code> を使用して、ファイルやディレクトリをワーカプロセスから読み書き可能にします。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_server_graceful.html&quot;}, '*');"><code>md_server_graceful</code></a>: 親プロセスに対して <a class="wiki-source-link" href="../../../source/include/mpm_common.h.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>AP_SIG_GRACEFUL</code></a> を送信し、設定の再読み込みを促します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **権限変更**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_make_worker_accessible.html&quot;}, '*');"><code>md_make_worker_accessible</code></a> が呼び出されると、内部で <a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_try_chown.html&quot;}, '*');"><code>md_try_chown</code></a> が実行されます。これは <a class="wiki-source-link" href="../../../source/os/unix/unixd.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>ap_unixd_config</code></a> から現在の実行ユーザー情報を取得し、<code>chown</code> システムコールをラップします。 2. **シグナル送信**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_server_graceful.html&quot;}, '*');"><code>md_server_graceful</code></a> は <code>getppid()</code> で親プロセスを特定し、<code>kill()</code> を用いてシグナルを送信します。成功時は <code>APR_SUCCESS</code> を返し、失敗時はエラーをログ出力します。 3. **条件分岐**: コンパイル時のマクロ（<a class="wiki-source-link" href="../../../source/os/unix/os.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/os.h.html&quot;}, '*');"><code>AP_NEED_SET_MUTEX_PERMS</code></a> や <code>WIN32</code>）により、OS がサポートしていない機能は即座に <code>APR_ENOTIMPL</code> を返すよう設計されています。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: Apache/APR の基本機能。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>, <a class="wiki-source-link" href="../../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a>: MPM（Multi-Processing Module）の設定情報や Unix 固有の定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.h.html&quot;}, '*');"><code>md_util.h</code></a>: モジュール共通のユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_os.h.html&quot;}, '*');"><code>mod_md_os.h</code></a>: 本ファイルのヘッダー。</li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_config.c.html&quot;}, '*');"><code>mod_md_config.c</code></a>: 実行ユーザー設定（<code>User</code>/<code>Group</code> ディレクティブ）の管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>: 証明書や鍵の永続化を担当しており、本ファイルの権限調整機能を頻繁に利用します。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「特権が必要な操作」を扱うため、実行環境の権限設定に依存します。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_os.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_os_c__md_try_chown.html&quot;}, '*');"><code>md_try_chown</code></a> は <code>geteuid()</code> が 0（<a class="wiki-source-link" href="../../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>）でない場合、何もしない（成功を返す）設計になっています。これは、非特権ユーザーで実行されている場合に権限エラーで停止しないための安全策です。</li>
+<li>Windows 環境では多くの機能が <code>APR_ENOTIMPL</code> となるため、クロスプラットフォームでの動作確認時には注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__mod_md_os_c__md_try_chown.html" target="wiki-view"><code>md_try_chown</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_os_c__md_make_worker_accessible.html" target="wiki-view"><code>md_make_worker_accessible</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_os_c__md_server_graceful.html" target="wiki-view"><code>md_server_graceful</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

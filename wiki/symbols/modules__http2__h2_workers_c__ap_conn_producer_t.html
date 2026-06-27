@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_workers_c__ap_conn_producer_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_conn_producer_t</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/http2/h2_workers.c:42</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 サブシステムにおいて、接続（<code>conn_rec</code>）の供給元を抽象化し、ワーカープールが接続をプル（取得）および完了通知するためのインターフェースを提供します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct ap_conn_producer_t {
+    APR_RING_ENTRY(ap_conn_producer_t) link;
+    const char *name;
+    void *baton;
+    ap_conn_producer_next *fn_next;
+    ap_conn_producer_done *fn_done;
+    ap_conn_producer_shutdown *fn_shutdown;
+    volatile prod_state_t state;
+    volatile int conns_active;
+};</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: 接続取得用のコールバック（<code>fn_next</code>）、完了通知用（<code>fn_done</code>）、シャットダウン用（<code>fn_shutdown</code>）の関数ポインタを保持します。<code>baton</code> は各コールバックに渡されるコンテキストデータです。</li>
+<li>**出力**: <code>fn_next</code> を通じて <code>conn_rec</code> をワーカーへ提供します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>link</code> フィールドにより、<code>h2_workers</code> 内の <code>prod_active</code> または <code>prod_idle</code> リングに登録される必要があります。</li>
+<li><code>state</code> および <code>conns_active</code> は <code>volatile</code> 修飾されており、スレッド間での可視性が保証される必要があります。</li>
+<li>状態遷移およびリング操作は、<code>h2_workers</code> が保持するミューテックスによって保護される必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **登録**: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L568" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_workers_register.html&quot;}, '*');"><code>h2_workers_register</code></a> を介してプールに登録されます。 2. **タスク供給**: ワーカーが <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__get_next.html&quot;}, '*');"><code>get_next</code></a> を呼び出すと、<code>fn_next</code> が実行され、処理対象の接続が提供されます。 3. **完了通知**: 接続処理終了後、<code>fn_done</code> が呼び出され、アクティブな接続数が更新されます。 4. **シャットダウン**: <code>fn_shutdown</code> により、プロデューサーの終了処理が実行されます。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> がこの構造体を保持し、<code>h2_workers</code> へ登録します。</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>h2_workers.c</code></a> 内の <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__get_next.html&quot;}, '*');"><code>get_next</code></a> 関数が <code>fn_next</code> を呼び出します。</li>
+<li>**注記**: 具体的なコールバック関数の実装（<code>fn_next</code> 等の実体）については、本構造体の定義箇所からは直接参照されておらず、外部モジュールで定義されている可能性があります。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>h2_workers</code>: プロデューサーを管理するメイン構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L36" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__prod_state_t.html&quot;}, '*');"><code>prod_state_t</code></a>: プロデューサーの状態を定義する列挙型。</li>
+<li><code>APR_RING</code>: プロデューサーをリスト管理するための Apache Portable Runtime のリング構造。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>fn_next</code> が <code>NULL</code> を返した場合、プロデューサーから取得可能な接続がないことを示します。</li>
+<li><code>conns_active</code> が 0 になった際の <code>fn_done</code> の挙動や、シャットダウン時の同期処理が不完全な場合、デッドロックやリークが発生する可能性があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <code>h2_workers</code> の中核となるタスク供給インターフェースです。変更時は <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>h2_workers.c</code></a> 内のリング操作および <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> との整合性に注意してください。</li>
+<li><code>volatile</code> 修飾が施されていますが、複雑な状態遷移を行う場合は、メモリバリアや適切なアトミック操作が適用されているか再確認を推奨します。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

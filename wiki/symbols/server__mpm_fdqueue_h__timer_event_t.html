@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm_fdqueue_h__timer_event_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm_fdqueue.h.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_h__timer_event_t.html&quot;}, '*');">timer_event_t</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>server/mpm_fdqueue.h:65</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server の MPM（特に <code>event</code> MPM）において、タイムアウト処理が必要なイベントを管理し、スレッド間で受け渡すための構造体です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct timer_event_t {
+    APR_RING_ENTRY(timer_event_t) link;
+    apr_time_t when;
+    ap_mpm_callback_fn_t *cbfunc;
+    void *baton;
+    int canceled;
+    apr_array_header_t *remove;
+};</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: タイムアウト発生時刻 (<code>when</code>)、実行すべきコールバック関数 (<code>cbfunc</code>)、およびその引数 (<code>baton</code>) を保持します。</li>
+<li>**出力**: タイムアウト到達時に <code>cbfunc</code> が呼び出され、イベント処理が実行されます。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>APR_RING</code> 構造の一部として管理されるため、リング操作の整合性が維持される必要があります。</li>
+<li><code>canceled</code> フラグが非ゼロの場合、イベントは無効として扱われます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **登録**: <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L1362" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__push_timer2worker.html&quot;}, '*');"><code>push_timer2worker</code></a> 等によりキューへ投入されます。 2. **待機**: 指定された時刻 (<code>when</code>) に到達するまで保持されます。 3. **実行**: 時刻到達時に <code>cbfunc</code> が <code>baton</code> を引数として実行されます。 4. **解放**: 処理完了後、または明示的なキャンセル時にリングから外され、メモリが再利用（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L1444" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>timer_free_ring</code></a> 等への移動）または解放されます。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> 内の <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L1362" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__push_timer2worker.html&quot;}, '*');"><code>push_timer2worker</code></a> 関数などが、本構造体を生成・操作します。</li>
+<li>**呼び出し先**: <code>cbfunc</code> に登録された関数が、タイムアウト発生時に呼び出されます。</li>
+<li>**注記**: 呼び出し関係の詳細は <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> に依存しており、本ヘッダーファイル単体では網羅的な呼び出し先リストは提供されていません。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>APR_RING</code>: イベントをリスト管理するために使用。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html#L201" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_mpm_h__ap_mpm_callback_fn_t.html&quot;}, '*');"><code>ap_mpm_callback_fn_t</code></a>: タイムアウト時に実行されるコールバック関数の型。</li>
+<li><code>apr_array_header_t</code>: 関連する削除対象リストを保持。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>canceled</code> フラグがセットされている場合、コールバックは実行されません。</li>
+<li>メモリ割り当て失敗時（<code>apr_skiplist_alloc</code> 等）の挙動は、呼び出し側の実装に依存します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>server/mpm_fdqueue.c</code></a> および <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> で頻繁に参照されます。</li>
+<li><code>APR_RING</code> を使用しているため、リスト操作時には適切なロックまたは排他制御がなされていることを確認してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

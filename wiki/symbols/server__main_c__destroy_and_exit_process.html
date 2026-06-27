@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__main_c__destroy_and_exit_process.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/main.c.html#L257" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__main_c__destroy_and_exit_process.html&quot;}, '*');">destroy_and_exit_process</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/main.c:257</code></li>
+</ul>
+<h2>目的</h2>
+<p>サーバープロセスの終了処理を安全に実行し、リソースの解放とプロセスの終了を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void destroy_and_exit_process(process_rec *process, int process_exit_value)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li><code>process</code> (入力): 終了対象のプロセス情報を保持する <a class="wiki-source-link" href="../../source/include/httpd.h.html#L816" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__httpd_h__process_rec.html&quot;}, '*');"><code>process_rec</code></a> 構造体へのポインタ。</li>
+<li><code>process_exit_value</code> (入力): プロセス終了時に OS へ返す終了ステータスコード。</li>
+<li>出力: なし（本関数は <code>exit()</code> を呼び出し、呼び出し元へは戻らない）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>process</code> ポインタは有効な <a class="wiki-source-link" href="../../source/include/httpd.h.html#L816" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__httpd_h__process_rec.html&quot;}, '*');"><code>process_rec</code></a> 構造体を指している必要がある。</li>
+<li>本関数はプロセスのライフサイクルの最終段階で呼び出されることを想定している。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <a class="wiki-source-link" href="../../source/server/main.c.html#L255" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>TASK_SWITCH_SLEEP</code></a> マイクロ秒間待機する。これは、パイプ経由のロガーが入力データを処理するための猶予を与え、ログの欠落を防ぐための措置である。 2. グローバル変数 <a class="wiki-source-link" href="../../source/server/core.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_main_state</code></a> を <a class="wiki-source-link" href="../../source/include/http_core.h.html#L1055" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>AP_SQ_MS_EXITING</code></a> に更新する。 3. <code>process-&gt;pool</code> を破棄し、関連するすべての子孫メモリプールを解放する。 4. <code>apr_terminate()</code> を呼び出し、APR (Apache Portable Runtime) のリソースを解放する。 5. <code>exit(process_exit_value)</code> を呼び出し、プロセスを終了する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>呼び出し元: <a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a> 内の各所（エラー発生時や正常終了時の分岐）。</li>
+<li>呼び出し先: <code>apr_sleep</code>, <code>apr_pool_destroy</code>, <code>apr_terminate</code>, <code>exit</code>。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L816" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__httpd_h__process_rec.html&quot;}, '*');"><code>process_rec</code></a>: プロセス全体のメモリプールや設定情報を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>process-&gt;pool</code> が既に破棄されている場合、未定義の動作を引き起こす可能性がある。</li>
+<li><a class="wiki-source-link" href="../../source/server/main.c.html#L255" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>TASK_SWITCH_SLEEP</code></a> 待機中、OS のスケジューリング状況によってはロガーの処理が完了しない可能性がある。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>main()</code> ループの終了処理を担うため、変更時はサーバーのシャットダウンシーケンス全体に影響を与える点に注意すること。</li>
+<li>ログの欠落を防ぐための待機処理は、将来的な非同期ロギングの実装状況に応じて調整が必要となる可能性がある。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

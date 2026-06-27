@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy_hcheck.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_hcheck.c.html&quot;}, '*');">modules/proxy/mod_proxy_hcheck.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_proxy_hcheck</code> は、Apache HTTP Server のプロキシワーカーに対するアクティブなヘルスチェック機能を提供するモジュールです。<code>mod_watchdog</code> を利用してバックグラウンドで定期的にバックエンドサーバーへリクエスト（TCP, CPING, HTTP）を送信し、その応答に基づいてワーカーの有効/無効を自動制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> サブシステムの一部として、ロードバランサー（<code>mod_proxy_balancer</code>）と連携します。ワーカーのステータスを共有メモリ経由で監視・更新し、障害発生時にトラフィックを自動的に切り離すための「監視者」として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ヘルスチェック設定の管理**: <code>ProxyHCTemplate</code> および <code>ProxyHCExpr</code> によるチェック条件の定義。</li>
+<li>**監視タスクの実行**: <code>mod_watchdog</code> を介した定期的なヘルスチェックのスケジューリング。</li>
+<li>**バックエンド通信**: TCP接続確認、AJP CPING/CPONG、および HTTP リクエストによる生存確認。</li>
+<li>**ワーカー状態の更新**: 成功/失敗回数に基づくワーカーのステータス（<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>PROXY_WORKER_HC_FAIL_FLAG</code></a> 等）の操作。</li>
+<li>**式評価**: <code>ap_expr</code> を利用した柔軟なヘルスチェック判定ルールの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・コンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__sctx_t.html&quot;}, '*');"><code>sctx_t</code></a>: サーバー単位のモジュール設定（テンプレート、条件式、ワーカーハッシュを保持）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_template_t.html&quot;}, '*');"><code>hc_template_t</code></a>: ヘルスチェックのパラメータ（間隔、成功/失敗閾値、メソッド等）を保持するテンプレート構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__wctx_t.html&quot;}, '*');"><code>wctx_t</code></a>: 個別のヘルスチェックワーカーのコンテキスト（リクエスト内容や対象ワーカーへの参照）。</li>
+</ul>
+<h3>監視・実行</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L987" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_watchdog_callback.html&quot;}, '*');"><code>hc_watchdog_callback</code></a>: <code>mod_watchdog</code> から呼び出されるメインループ。全ワーカーを走査し、チェック間隔を過ぎたワーカーをキューイングする。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L921" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_check.html&quot;}, '*');"><code>hc_check</code></a>: ヘルスチェックを実行するスレッド関数。<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L71" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__baton_t.html&quot;}, '*');"><code>baton_t</code></a> を介してチェック対象を受け取る。</li>
+</ul>
+<h3>判定ロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L701" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_check_tcp.html&quot;}, '*');"><code>hc_check_tcp</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L658" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_check_cping.html&quot;}, '*');"><code>hc_check_cping</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L841" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_check_http.html&quot;}, '*');"><code>hc_check_http</code></a>: 各プロトコルに応じたチェックの実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L1306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_expr_lookup.html&quot;}, '*');"><code>hc_expr_lookup</code></a>: <code>ap_expr</code> 拡張用フック。<code>HC()</code> 関数や <code>HC_BODY</code> 変数を提供。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L1125" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_post_config.html&quot;}, '*');"><code>hc_post_config</code></a> で <code>mod_watchdog</code> インスタンスを取得し、コールバックを登録。 2. **定期実行**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L987" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_watchdog_callback.html&quot;}, '*');"><code>hc_watchdog_callback</code></a> が定期的に起動し、<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L154" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_server_conf.html&quot;}, '*');"><code>proxy_server_conf</code></a> から全バランサーとワーカーを走査。 3. **タスク投入**: チェックが必要なワーカーに対し、<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L71" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__baton_t.html&quot;}, '*');"><code>baton_t</code></a> を作成し、スレッドプール（<code>hctp</code>）または直接 <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L921" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_check.html&quot;}, '*');"><code>hc_check</code></a> を呼び出す。 4. **チェック実行**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L921" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_check.html&quot;}, '*');"><code>hc_check</code></a> がバックエンドへの接続を確立し、リクエストを送信。 5. **判定と更新**: 応答を解析し、成功/失敗回数を更新。閾値を超えた場合、<a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L4310" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_set_wstatus.html&quot;}, '*');"><code>ap_proxy_set_wstatus</code></a> でワーカーの状態を更新。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシワーカーおよびバランサーのデータ構造。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_watchdog.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>mod_watchdog.h</code></a>: 定期実行のためのバックグラウンドタスク管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a>: ヘルスチェック条件の動的評価。</li>
+<li><code>apr_thread_pool.h</code>: 並列ヘルスチェック実行用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>ap_slotmem.h</code></a>: 共有メモリ管理（ワーカー状態の永続化）。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_balancer.c.html&quot;}, '*');"><code>mod_proxy_balancer.c</code></a>: バランサーの管理とワーカーの同期。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L2775" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_acquire_connection.html&quot;}, '*');"><code>ap_proxy_acquire_connection</code></a> 等の接続管理ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp_link.c.html&quot;}, '*');"><code>ajp_link.c</code></a>: AJP プロトコル関連の低レイヤー処理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L71" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__baton_t.html&quot;}, '*');"><code>baton_t</code></a> に紐づく <code>ptemp</code> プールは、チェック実行ごとに作成・破棄され、リクエスト処理中のメモリリークを防いでいます。</li>
+<li>**スレッド安全性**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_hcheck.c.html&quot;}, '*');"><code>HC_USE_THREADS</code></a> が有効な場合、<code>apr_thread_pool</code> を使用します。スレッドプールサイズは <code>ProxyHCTPsize</code> で制御可能です。</li>
+<li>**制約**: <code>ProxyHCTemplate</code> は <code>mod_proxy</code> のワーカー設定と密接に結合しており、設定変更時は <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_hcheck.c.html#L482" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_hcheck_c__hc_get_hcworker.html&quot;}, '*');"><code>hc_get_hcworker</code></a> 内で動的に再構築されます。</li>
+<li>**省略箇所**: 本ドキュメントでは、<code>ap_expr</code> の詳細な構文解析ロジックや、各プロトコル（HTTP/AJP）のパケット構築の詳細については、コードの複雑性を考慮し省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_template_t.html" target="wiki-view"><code>hc_template_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_condition_t.html" target="wiki-view"><code>hc_condition_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__sctx_t.html" target="wiki-view"><code>sctx_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__wctx_t.html" target="wiki-view"><code>wctx_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__baton_t.html" target="wiki-view"><code>baton_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_create_config.html" target="wiki-view"><code>hc_create_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_get_hcworker.html" target="wiki-view"><code>hc_get_hcworker</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_get_backend.html" target="wiki-view"><code>hc_get_backend</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_init_baton.html" target="wiki-view"><code>hc_init_baton</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_check_cping.html" target="wiki-view"><code>hc_check_cping</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_check_tcp.html" target="wiki-view"><code>hc_check_tcp</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_hcheck_c__hc_get_body.html" target="wiki-view"><code>hc_get_body</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

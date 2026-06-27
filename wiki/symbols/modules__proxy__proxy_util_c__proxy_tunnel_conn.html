@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__proxy__proxy_util_c__proxy_tunnel_conn.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L5369" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__proxy_tunnel_conn.html&quot;}, '*');">proxy_tunnel_conn</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/proxy/proxy_util.c:5369</code></li>
+</ul>
+<h2>目的</h2>
+<p>プロキシトンネルにおける双方向通信の片側（クライアントまたはバックエンド）の接続状態を管理する構造体です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct proxy_tunnel_conn {
+    struct proxy_tunnel_conn *other; // トンネルの反対側の端点
+    conn_rec *c;                     // 接続情報
+    const char *name;                // 識別名
+    apr_pollfd_t *pfd;               // ポーリング用ファイル記述子
+    apr_bucket_brigade *bb;          // データ転送用バケットブリゲード
+    unsigned int down_in:1,          // 入力側クローズフラグ
+                 down_out:1;         // 出力側クローズフラグ
+};</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>apr_pcalloc</code> 等によりメモリが割り当てられ、<code>conn_rec</code> や <code>apr_pollfd_t</code> が設定されます。</li>
+<li>**出力**: トンネル内のデータ転送処理において、<code>other</code> メンバを通じて対向接続へデータが渡されます。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>other</code> メンバは常にトンネルの対向端点を指す必要があります。</li>
+<li><code>c</code> (conn_rec) は有効な接続状態である必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li>トンネルの各端点として機能し、<code>apr_pollfd_t</code> を介した非同期 I/O 監視をサポートします。</li>
+<li><code>down_in</code> および <code>down_out</code> ビットフィールドにより、接続の各方向の終了状態を個別に追跡します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a> 内のトンネル処理ロジックにおいて、<code>in-&gt;other</code> を参照することで対向接続へのデータ転送を実現します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>modules/proxy/proxy_util.c</code></a> 内のトンネル初期化および転送処理（<a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html#L5634" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_tunnel_run.html&quot;}, '*');"><code>ap_proxy_tunnel_run</code></a> 等に関連する箇所）。</li>
+<li>**呼び出し先**: <code>conn_rec</code> 構造体（Apache HTTP Server のコア接続管理）および <code>apr_pollfd_t</code>（APR のポーリング機能）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>conn_rec</code>: Apache HTTP Server の接続コンテキスト。</li>
+<li><code>apr_pollfd_t</code>: APR のポーリング用構造体。</li>
+<li><code>apr_bucket_brigade</code>: データ転送用バッファ。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>メモリ割り当て失敗時（<code>apr_pcalloc</code> の失敗）。</li>
+<li>接続が予期せず切断された場合、<code>down_in</code> / <code>down_out</code> フラグが適切に更新されないと、トンネルループが終了せずリソースリークを引き起こす可能性があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a> で不透明（opaque）なポインタとして宣言されているため、外部モジュールからは直接メンバにアクセスせず、<a class="wiki-source-link" href="../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a> が提供するインターフェースを介して操作してください。</li>
+<li>ビットフィールドの操作はスレッドセーフではないため、呼び出し元の同期制御に依存します。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

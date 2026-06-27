@@ -1,0 +1,99 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_ws.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_ws.c.html&quot;}, '*');">modules/http2/h2_ws.c</a></h1>
+<h2>概要</h2>
+<p>HTTP/2 上での WebSocket (RFC 8441) をサポートするための変換レイヤーです。HTTP/2 の <code>CONNECT</code> メソッドを内部的な HTTP/1.1 形式の <code>GET</code> リクエストに書き換え、WebSocket ハンドシェイクの整合性を検証するフィルタを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおいて、HTTP/2 ストリームを WebSocket 接続として扱うためのブリッジとして機能します。主に <code>h2_c2</code>（子接続）のコンテキストで動作し、プロトコル変換とレスポンスのインターセプトを担当します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト変換**: HTTP/2 の <code>CONNECT</code> メソッドを、バックエンドが処理可能な <code>GET</code> + <code>Upgrade</code> ヘッダー付きリクエストへ変換。</li>
+<li>**ハンドシェイク検証**: <code>Sec-WebSocket-Accept</code> ヘッダーを生成・検証し、WebSocket 接続の成否を判定。</li>
+<li>**レスポンスフィルタリング**: <code>H2_C2_WS_OUT</code> フィルタを通じて、不正なレスポンスを <code>502 Bad Gateway</code> に変換し、成功時には <code>101 Switching Protocols</code> を <code>200 OK</code> に変換して透過させる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト変換・フック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__h2_ws_rewrite_request.html&quot;}, '*');"><code>h2_ws_rewrite_request</code></a>: <code>CONNECT</code> リクエストを WebSocket 用の <code>GET</code> リクエストに変換し、出力フィルタを挿入するメイン関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__h2_ws_register_hooks.html&quot;}, '*');"><code>h2_ws_register_hooks</code></a>: <code>post_read_request</code> フックおよび出力フィルタ <code>H2_C2_WS_OUT</code> を登録。</li>
+</ul>
+<h3>フィルタコンテキストと状態</h3>
+<ul>
+<li><code>struct ws_filter_ctx</code>: フィルタの実行状態（Accept キー、レスポンス完了フラグ、ボディ上書きフラグ）を保持する構造体。</li>
+<li><code>h2_c2_ws_filter_out</code>: レスポンスバケットを検査し、WebSocket ハンドシェイクの結果に応じてレスポンスを書き換える出力フィルタ。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__gen_ws_accept.html&quot;}, '*');"><code>gen_ws_accept</code></a>: RFC 6455 に基づき、<code>Sec-WebSocket-Key</code> から <code>Sec-WebSocket-Accept</code> を生成する SHA-1 ハッシュ関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__make_valid_resp.html&quot;}, '*');"><code>make_valid_resp</code></a> / <a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__make_invalid_resp.html&quot;}, '*');"><code>make_invalid_resp</code></a>: フィルタ内でレスポンスを差し替える際に使用するバケット生成関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト書き換え**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__h2_ws_rewrite_request.html&quot;}, '*');"><code>h2_ws_rewrite_request</code></a> が呼び出されると、リクエストをクローンし、<code>Upgrade</code> ヘッダーを追加。<code>Sec-WebSocket-Key</code> を生成し、出力フィルタ <code>H2_C2_WS_OUT</code> を <code>H2_C2_NET_OUT</code> の直前に挿入。 2. **レスポンス検査**: <code>H2_C2_WS_OUT</code> フィルタがレスポンスバケットを捕捉。<a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L197" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__ws_handle_resp.html&quot;}, '*');"><code>ws_handle_resp</code></a> が <code>Sec-WebSocket-Accept</code> を検証。 3. **レスポンス変換**:</p>
+<ul>
+<li>検証成功時: <code>101</code> を <code>200</code> に変換。</li>
+<li>検証失敗時: <code>502</code> を生成し、以降のボディを破棄（<code>override_body</code> フラグをセット）。</li>
+<p>4. **終了処理**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.c.html#L325" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__ws_post_read.html&quot;}, '*');"><code>ws_post_read</code></a> フックが、アップグレードされた接続が WebSocket をサポートしているか確認し、未サポートなら <code>501 Not Implemented</code> を返す。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_sha1.h</code>: WebSocket キーのハッシュ計算に使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a>: ストリームごとの接続コンテキスト（<code>is_upgrade</code> フラグ等）の管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a> / <a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: Apache HTTPD のフィルタおよびプロトコル処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_encode.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_strmatch.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_config.h.html&quot;}, '*');"><code>h2_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.h.html&quot;}, '*');"><code>h2_headers.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_request.h.html&quot;}, '*');"><code>h2_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_ws.h.html&quot;}, '*');"><code>h2_ws.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_vhost.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_vhost.h.html&quot;}, '*');"><code>http_vhost.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_ws.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_ws.h.html&quot;}, '*');"><code>h2_ws.h</code></a>: 公開インターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>: <code>H2_C2_NET_OUT</code> フィルタが定義されており、本フィルタの挿入位置の基準となる。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a>: 接続状態の共有に使用。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: フィルタコンテキストや変換後のリクエストは、すべて <code>c2-&gt;pool</code>（子接続のプール）を使用して割り当てられており、接続終了時に自動解放されます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>H2_USE_WEBSOCKETS</code></a> マクロが定義されていない場合、本モジュールは NOP（何もしない）として動作します。</li>
+<li>**エッジケース**: <code>101</code> レスポンスが返された際、<code>Sec-WebSocket-Accept</code> が欠落している場合や不一致の場合は、セキュリティ上の理由から <code>502</code> を返して接続を終了させます。</li>
+<li>**省略箇所**: 本ファイルは WebSocket のデータフレーム転送そのものではなく、あくまで「ハンドシェイクの変換」に特化しています。実際のデータ転送は HTTP/2 のストリームフレームとして透過的に処理されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_ws_c__ws_filter_ctx.html" target="wiki-view"><code>ws_filter_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__gen_ws_accept.html" target="wiki-view"><code>gen_ws_accept</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__h2_ws_rewrite_request.html" target="wiki-view"><code>h2_ws_rewrite_request</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__make_valid_resp.html" target="wiki-view"><code>make_valid_resp</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__make_invalid_resp.html" target="wiki-view"><code>make_invalid_resp</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__ws_handle_resp.html" target="wiki-view"><code>ws_handle_resp</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__ws_post_read.html" target="wiki-view"><code>ws_post_read</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_ws_c__h2_ws_register_hooks.html" target="wiki-view"><code>h2_ws_register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

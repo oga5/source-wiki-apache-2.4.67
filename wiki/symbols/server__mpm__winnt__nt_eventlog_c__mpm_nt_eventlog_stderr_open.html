@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__winnt__nt_eventlog_c__mpm_nt_eventlog_stderr_open.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__nt_eventlog_c__mpm_nt_eventlog_stderr_open.html&quot;}, '*');">mpm_nt_eventlog_stderr_open</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/winnt/nt_eventlog.c:133</code></li>
+</ul>
+<h2>目的</h2>
+<p>Windowsサービスとして実行されるApacheにおいて、標準エラー出力（<code>stderr</code>）をキャプチャし、Windowsイベントログへリダイレクトするための初期化を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>void mpm_nt_eventlog_stderr_open(const char *argv0, apr_pool_t *p)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>argv0</code>: サービス名（イベントログの表示名として使用）。</li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: メモリ割り当てに使用するAPRプール。</li>
+<li>**出力**: なし（副作用としてグローバルなパイプとスレッドを初期化）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>サービス起動の初期段階で呼び出される必要がある。</li>
+<li><code>stderr</code> をパイプへ差し替えるため、他のモジュールが <code>stderr</code> を直接操作する場合に競合が発生する可能性がある。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_ready</code></a> イベントがシグナルされるまで、呼び出し元はスレッドの起動とイベントソースの登録完了を待機する。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **パイプ作成**: <code>CreatePipe</code> を使用して、<code>stderr</code> を監視するための匿名パイプ（読み取り端 <code>hPipeRead</code>、書き込み端 <code>hPipeWrite</code>）を作成する。 2. **監視スレッド起動**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__nt_eventlog_c__service_stderr_thread.html&quot;}, '*');"><code>service_stderr_thread</code></a> を生成し、<code>hPipeRead</code> を渡してバックグラウンドでイベントログへの転送を開始する。 3. **同期**: <code>WaitForSingleObject</code> を使用し、監視スレッドがイベントソースの登録を完了するまで待機する。 4. **リダイレクト**: <code>apr_file_open_stderr</code> で取得した <code>stderr</code> を、<code>apr_file_dup2</code> を用いてパイプの書き込み端（<code>hPipeWrite</code>）へリダイレクトする。 5. **ログ初期化**: <code>ap_open_stderr_log(p)</code> を呼び出し、標準エラーログの基盤を確立する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/mpm/winnt/mpm_winnt.c:1243</code></li>
+<li>**呼び出し先**:</li>
+<li><code>CreatePipe</code>, <code>CreateThread</code>, <code>WaitForSingleObject</code> (Windows API)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__nt_eventlog_c__service_stderr_thread.html&quot;}, '*');"><code>service_stderr_thread</code></a> (監視スレッド)</li>
+<li><code>apr_file_open_stderr</code>, <code>apr_os_file_put</code>, <code>apr_file_dup2</code> (APR)</li>
+<li><a class="wiki-source-link" href="../../source/server/log.c.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__log_c__ap_open_stderr_log.html&quot;}, '*');"><code>ap_open_stderr_log</code></a> (Apache Core)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L26" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_thread</code></a>: 監視スレッドのハンドルを保持するグローバル変数。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>stderr_ready</code></a>: スレッドの初期化完了を通知するためのイベントハンドル。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>display_name</code></a>: サービス名を保持するグローバル変数。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>CreatePipe</code> や <code>CreateThread</code> が失敗した場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2332" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_assert</code></a> によりプロセスが異常終了する。</li>
+<li><code>apr_file_open_stderr</code> 等のAPR関数が失敗した場合、リダイレクト処理はスキップされる。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>stderr</code> をパイプへ差し替えるため、必ずサービス起動の初期段階で呼び出すこと。</li>
+<li>イベントログのメッセージ定義には <code>netmsg.dll</code> が流用されている。</li>
+<li>監視スレッドの終了処理については <a class="wiki-source-link" href="../../source/server/mpm/winnt/nt_eventlog.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__nt_eventlog_c__mpm_nt_eventlog_stderr_flush.html&quot;}, '*');"><code>mpm_nt_eventlog_stderr_flush</code></a> を参照のこと。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

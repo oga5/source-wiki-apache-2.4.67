@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__mod_http2_c__h2_post_config.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/mod_http2.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__mod_http2_c__h2_post_config.html&quot;}, '*');">h2_post_config</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/mod_http2.c:88</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server の起動時（<code>post_config</code> フック）に、<code>mod_http2</code> モジュールの初期化と環境の検証を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int h2_post_config(apr_pool_t *p, apr_pool_t *plog,
+                          apr_pool_t *ptemp, server_rec *s)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: </li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: 設定用メモリプール。</li>
+<li><code>plog</code>: ログ用メモリプール（使用せず）。</li>
+<li><code>ptemp</code>: 一時メモリプール（使用せず）。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li>**出力**: </li>
+<li><code>int</code>: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコードを返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>Apache の <code>post_config</code> フックは設定確認のための「ドライラン」と「本番」の2回呼ばれる可能性がある。</li>
+<li><code>apr_pool_userdata_get</code> を使用して、初回呼び出し（ドライラン）を検出し、重複初期化を防止している。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **機能フラグの設定**: コンパイル時の定義に基づき、<a class="wiki-source-link" href="../../source/modules/http2/mod_http2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.c.html&quot;}, '*');"><code>myfeats</code></a> 構造体に <code>nghttp2</code> のサポート機能（優先度制御、SHA256、無効ヘッダー処理、動的ウィンドウサイズ）を記録する。 2. **ドライラン判定**: <code>mod_http2_init_counter</code> キーを使用して、初回実行時はログを出力して即座に <code>APR_SUCCESS</code> を返す。 3. **初期化ログ**: 2回目以降の実行時、モジュールバージョン、有効な機能フラグ、および <code>nghttp2</code> のバージョンをログ出力する。 4. **MPM 互換性チェック**: <code>h2_mpm_supported()</code> を呼び出し、現在の MPM が HTTP/2 に対応していない場合は警告ログを出力する。 5. **プロトコル初期化**: <code>h2_protocol_init(p, s)</code> および <code>h2_switch_init(p, s)</code> を順次呼び出し、プロトコルスタックと切り替えロジックを準備する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: Apache のフックシステム（<code>ap_hook_post_config</code> により登録）。</li>
+<li>**呼び出し先**: </li>
+<li><code>h2_mpm_supported()</code></li>
+<li><code>h2_conn_mpm_name()</code></li>
+<li><code>h2_protocol_init()</code></li>
+<li><code>h2_switch_init()</code></li>
+<li><code>nghttp2_version()</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>server_rec</code>: サーバー設定情報。</li>
+<li><code>nghttp2_info</code>: <code>nghttp2</code> ライブラリのバージョン情報。</li>
+<li><code>apr_pool_t</code>: メモリ管理用プール。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_protocol.c.html#L423" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_protocol_c__h2_protocol_init.html&quot;}, '*');"><code>h2_protocol_init</code></a> または <a class="wiki-source-link" href="../../source/modules/http2/h2_switch.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__h2_switch_init.html&quot;}, '*');"><code>h2_switch_init</code></a> がエラーを返した場合、そのステータスコードをそのまま呼び出し元へ伝播させる。</li>
+<li>MPM が非対応の場合でも、警告ログを出力するのみで処理は継続される。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は Apache のフック仕様に従い、設定の二重適用を避けるための <code>userdata</code> 管理を行っている。</li>
+<li><code>h2_c1</code>（クライアント側）と <code>h2_c2</code>（バックエンド側）の初期化順序は、接続処理の安定性に直結するため、変更時は注意が必要である。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

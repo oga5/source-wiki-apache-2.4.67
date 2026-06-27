@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_debug.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_debug.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_debug.c.html&quot;}, '*');">server/util_debug.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server のデバッグおよび内部 API の互換性維持を目的としたユーティリティ関数群を提供します。主に、標準的な文字列操作関数のラッパーと、モジュール設定およびログレベル管理のためのアクセサ関数を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール内において、他のソースファイルが直接的なマクロ定義や複雑なポインタ演算に依存せず、安全かつ一貫した方法で内部データ構造（設定ベクトルやログ設定）にアクセスするための抽象化レイヤーとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**文字列操作の抽象化**: 標準ライブラリ関数（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2403" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>strchr</code></a> 等）を <code>ap_</code> 接頭辞付きの関数として再定義・ラップし、環境による挙動の差異やマクロ定義の競合を吸収する。</li>
+<li>**モジュール設定の管理**: 設定ベクトル (<a class="wiki-source-link" href="../../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a>) に対するモジュール固有データの読み書きを仲介する。</li>
+<li>**ログレベルの階層的解決**: サーバー、コネクション、リクエストの各コンテキストにおけるモジュールごとのログレベルを、フォールバックロジックに従って解決する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>文字列操作（ラッパー）</h3>
+<ul>
+<li><code>ap_strchr</code>, <code>ap_strchr_c</code>, <code>ap_strrchr</code>, <code>ap_strrchr_c</code>, <code>ap_strstr</code>, <code>ap_strstr_c</code>: 標準の文字列検索関数のラッパー。<code>_c</code> 接尾辞は <code>const char *</code> を扱うための型安全なバリアントです。</li>
+</ul>
+<h3>モジュール設定アクセサ</h3>
+<ul>
+<li><code>ap_get_module_config</code>, <code>ap_set_module_config</code>: 設定ベクトルから特定のモジュール用データを取得・設定します。内部的には <code>module_index</code> を用いた配列アクセスを行います。</li>
+<li><code>ap_get_core_module_config</code>, <code>ap_set_core_module_config</code>: <a class="wiki-source-link" href="../../source/include/http_core.h.html#L382" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>AP_CORE_MODULE_INDEX</code></a> を使用してコアモジュールの設定を直接操作します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_debug.c.html#L110" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_debug_c__ap_get_module_flags.html&quot;}, '*');"><code>ap_get_module_flags</code></a>: モジュールのバージョンチェックを行い、フラグを返します。</li>
+</ul>
+<h3>ログレベル解決</h3>
+<ul>
+<li><code>ap_get_server_module_loglevel</code>, <code>ap_get_conn_module_loglevel</code>, <code>ap_get_request_module_loglevel</code>: 各コンテキスト（Server/Conn/Request）において、モジュール固有のログレベルが未設定の場合に、親コンテキストのデフォルトレベルへフォールバックするロジックを提供します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**設定アクセス**: <a class="wiki-source-link" href="../../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a> を <code>void **</code> にキャストし、<code>module-&gt;module_index</code> をインデックスとして直接メモリを参照します。これは高速ですが、インデックスの正当性は呼び出し元に依存します。</li>
+<li>**ログレベル解決**: </li>
+<p>1. 指定された <code>module_index</code> が有効か確認。 2. <code>module_levels</code> 配列が存在し、かつ該当インデックスの値が負でないかを確認。 3. 条件を満たさない場合、コンテキスト（<code>server_rec</code> 等）のデフォルト <code>level</code> を返却するフォールバックフローを辿ります。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_want.h</code>: 標準文字列関数の定義を制御。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: <code>server_rec</code>, <code>conn_rec</code>, <code>request_rec</code> 等の主要構造体定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: <a class="wiki-source-link" href="../../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a> 構造体および設定ベクトル定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: <a class="wiki-source-link" href="../../source/include/http_core.h.html#L382" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>AP_CORE_MODULE_INDEX</code></a> 等のコア定数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>: 設定ベクトルの初期化やモジュールのロードに関連。</li>
+<li><a class="wiki-source-link" href="../../source/server/log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/log.c.html&quot;}, '*');"><code>server/log.c</code></a>: ログレベルの構造体 (<a class="wiki-source-link" href="../../source/include/httpd.h.html#L1325" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__httpd_h__ap_logconf.html&quot;}, '*');"><code>ap_logconf</code></a>) の定義と管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 本ファイル内の関数はメモリの所有権を持ちません。ポインタの受け渡しのみを行い、ライフサイクルは呼び出し側のコンテキスト（リクエストプール等）に依存します。</li>
+<li>**マクロのアンデフ**: ファイル冒頭で <a class="wiki-source-link" href="../../source/include/httpd.h.html#L2403" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>strchr</code></a> 等の標準マクロを <code>undef</code> していますが、これは <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a> 等で定義されたマクロと競合を避けるための意図的な処理です。</li>
+<li>**浅い実装**: 本ファイルは「デバッグ」という名称ですが、実態は「低レイヤーのアクセサ集」です。複雑なロジックは含まれず、主にインライン化可能な単純なアクセサとして設計されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_debug_c__ap_strchr.html" target="wiki-view"><code>ap_strchr</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_strchr_c.html" target="wiki-view"><code>ap_strchr_c</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_strrchr.html" target="wiki-view"><code>ap_strrchr</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_strrchr_c.html" target="wiki-view"><code>ap_strrchr_c</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_strstr.html" target="wiki-view"><code>ap_strstr</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_module_config.html" target="wiki-view"><code>ap_get_module_config</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_module_flags.html" target="wiki-view"><code>ap_get_module_flags</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_core_module_config.html" target="wiki-view"><code>ap_get_core_module_config</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_server_module_loglevel.html" target="wiki-view"><code>ap_get_server_module_loglevel</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_conn_module_loglevel.html" target="wiki-view"><code>ap_get_conn_module_loglevel</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_conn_server_module_loglevel.html" target="wiki-view"><code>ap_get_conn_server_module_loglevel</code></a></li>
+<li><a href="../symbols/server__util_debug_c__ap_get_request_module_loglevel.html" target="wiki-view"><code>ap_get_request_module_loglevel</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_build_filter.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L209" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_build_filter.html&quot;}, '*');">authn_ldap_build_filter</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/aaa/mod_authnz_ldap.c:209</code></li>
+</ul>
+<h2>目的</h2>
+<p>LDAP 検索用のフィルタ文字列を動的に構築し、ユーザー入力に含まれるメタ文字をエスケープすることで、LDAP インジェクション攻撃を防止する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t authn_ldap_build_filter(char filtbuf[FILTER_LENGTH],
+                                     request_rec *r,
+                                     const char *user,
+                                     const char *filter,
+                                     authn_ldap_config_t *sec)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>filtbuf</code>: 構築されたフィルタ文字列を格納するバッファ。</li>
+<li><code>r</code>: 現在のリクエストレコード。</li>
+<li><code>user</code>: 検索対象のユーザー名。</li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_filter.c.html#L759" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>filter</code></a>: 使用するベースフィルタ（NULL の場合は <code>sec-&gt;filter</code> を使用）。</li>
+<li><code>sec</code>: LDAP 設定構造体。</li>
+<li>**出力**:</li>
+<li><code>filtbuf</code> に結果が書き込まれる。</li>
+<li>成功時は <code>APR_SUCCESS</code>、バッファ不足等のエラー時は <code>APR_EGENERAL</code> を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>filtbuf</code> は <a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L208" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_ldap.c.html&quot;}, '*');"><code>FILTER_LENGTH</code></a> のサイズを持つ必要がある。</li>
+<li><code>sec-&gt;attribute</code> が有効な LDAP 属性名として設定されていること。</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_ldap.c.html&quot;}, '*');"><code>charset_conversions</code></a> が有効な場合、ユーザー名は UTF-8 に変換される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **フィルタ初期化**: <a class="wiki-source-link" href="../../source/modules/filters/mod_filter.c.html#L759" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>filter</code></a> 引数が指定されていない場合、<code>sec-&gt;filter</code> を使用する。 2. **文字コード変換**: <a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_ldap.c.html&quot;}, '*');"><code>charset_conversions</code></a> が有効な場合、<a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_ldap_c__get_conv_set.html&quot;}, '*');"><code>get_conv_set</code></a> を用いてユーザー名を UTF-8 に変換する。 3. **フィルタ構築**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_filter.c.html#L759" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>filter</code></a> が &quot;none&quot; または空の場合、<code>(attribute=user)</code> 形式のフィルタを作成する。</li>
+<li>それ以外の場合、<code>(&amp;(filter)(attribute=user))</code> 形式のフィルタを作成する。</li>
+<p>4. **エスケープ処理**: ユーザー名に含まれる <code>*</code>, <code>(</code>, <code>)</code>, <code>\</code> を LDAP 準拠の形式にエスケープする。<code>APR_HAS_MICROSOFT_LDAPSDK</code> が定義されている場合は数値エスケープを行い、それ以外はバックスラッシュによるエスケープを行う。 5. **終了処理**: フィルタの末尾に閉じ括弧を付与し、ヌル終端する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_ldap.c.html&quot;}, '*');"><code>modules/aaa/mod_authnz_ldap.c</code></a> 内の各認証・認可フェーズ（行 551, 704, 893, 1087, 1214, 1347, 1392）。</li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_ldap_c__get_conv_set.html&quot;}, '*');"><code>get_conv_set</code></a> (文字コード変換用)</li>
+<li><code>apr_pcalloc</code>, <code>apr_snprintf</code>, <code>apr_xlate_conv_buffer</code> (APR ユーティリティ)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_ldap_c__authn_ldap_config_t.html&quot;}, '*');"><code>authn_ldap_config_t</code></a>: LDAP 設定（属性名やベースフィルタを保持）。</li>
+<li><code>request_rec</code>: リクエストコンテキスト。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**バッファオーバーラン**: フィルタ構築中に <a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L208" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_ldap.c.html&quot;}, '*');"><code>FILTER_LENGTH</code></a> を超える場合、<code>APR_EGENERAL</code> を返し処理を中断する。</li>
+<li>**文字コード変換失敗**: <code>apr_xlate_conv_buffer</code> が失敗した場合、変換前のユーザー名がそのまま使用される。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は LDAP インジェクションを防ぐための重要なセキュリティ境界である。エスケープ対象文字の追加や変更を行う際は、<code>APR_HAS_MICROSOFT_LDAPSDK</code> の条件分岐に注意すること。</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_ldap.c.html#L208" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_ldap.c.html&quot;}, '*');"><code>FILTER_LENGTH</code></a> の定義値が、想定される最大フィルタ長に対して十分であることを確認すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

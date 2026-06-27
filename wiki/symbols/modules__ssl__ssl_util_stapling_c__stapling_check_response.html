@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__ssl__ssl_util_stapling_c__stapling_check_response.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_stapling.c.html#L386" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_check_response.html&quot;}, '*');">stapling_check_response</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/ssl/ssl_util_stapling.c:386</code></li>
+</ul>
+<h2>目的</h2>
+<p>OCSP レスポンスの妥当性を検証し、TLS ハンドシェイクにおいてクライアントへステータスを返却すべきかを判断する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>int stapling_check_response(server_rec *s, modssl_ctx_t *mctx, certinfo *cinf, OCSP_RESPONSE *rsp, BOOL *pok)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>mctx</code>: SSL コンテキスト。</li>
+<li><code>cinf</code>: 証明書情報（<a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_stapling.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__certinfo.html&quot;}, '*');"><code>certinfo</code></a>）。</li>
+<li><code>rsp</code>: 検証対象の OCSP レスポンス。</li>
+<li><code>pok</code>: 検証結果を格納するフラグへのポインタ（NULL の場合、キャッシュからの検証であることを示す）。</li>
+<li>**出力**:</li>
+<li>戻り値: <code>SSL_TLSEXT_ERR_OK</code>（レスポンスを送信）、または <code>SSL_TLSEXT_ERR_NOACK</code>（送信しない）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>rsp</code> が <code>OCSP_RESPONSE_STATUS_SUCCESSFUL</code> でない場合、設定に応じてエラーを無視するか、送信を拒否する。</li>
+<li><code>pok</code> が指定されている場合、検証成功時に <a class="wiki-source-link" href="../../source/modules/ssl/ssl_private.h.html#L77" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>TRUE</code></a> が設定される。</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_stapling.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_stapling.c.html&quot;}, '*');"><code>MAX_STAPLING_DER</code></a>（10KB）を超えるレスポンスは切り捨てられる可能性がある。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **ステータス確認**: <code>OCSP_response_status</code> を確認し、成功以外の場合は設定に従い <code>SSL_TLSEXT_ERR_OK</code> または <code>SSL_TLSEXT_ERR_NOACK</code> を返す。 2. **パース**: <code>OCSP_response_get1_basic</code> で基本レスポンスを取得。失敗時はエラーログを出力し、デフォルトで <code>SSL_TLSEXT_ERR_OK</code> を返す。 3. **ID 照合**: <code>OCSP_resp_find_status</code> を使用し、対象証明書（<code>cinf-&gt;cid</code>）のステータスを検索。見つからない場合は <code>SSL_TLSEXT_ERR_NOACK</code> を検討する。 4. **有効期限検証**: <code>OCSP_check_validity</code> を呼び出し、設定されたスキューと最大有効期間内で検証。期限切れや無効な場合は <code>SSL_TLSEXT_ERR_NOACK</code> を返す。 5. **ログ出力**: ステータスが <code>GOOD</code> 以外の場合、シリアル番号と共に詳細なステータスと理由をログに記録する。 6. **クリーンアップ**: <code>OCSP_BASICRESP_free</code> を呼び出し、メモリを解放して終了する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_util_stapling.c:570</code></li>
+<li><code>modules/ssl/ssl_util_stapling.c:750</code></li>
+<li>**呼び出し先**:</li>
+<li>OpenSSL OCSP API (<code>OCSP_response_status</code>, <code>OCSP_response_get1_basic</code>, <code>OCSP_resp_find_status</code>, <code>OCSP_check_validity</code>, <code>OCSP_BASICRESP_free</code>, <code>OCSP_id_get0_info</code>, <code>OCSP_cert_status_str</code>, <code>OCSP_crl_reason_str</code>)</li>
+<li>Apache ログ API (<code>ap_log_error</code>)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_stapling.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__certinfo.html&quot;}, '*');"><code>certinfo</code></a>: 証明書ハッシュや <code>CERTID</code> を保持。</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_private.h.html#L777" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__modssl_ctx_t.html&quot;}, '*');"><code>modssl_ctx_t</code></a>: OCSP 関連の設定（<code>stapling_return_errors</code>, <code>stapling_resptime_skew</code>, <code>stapling_resp_maxage</code>）を保持。</li>
+<li><code>OCSP_RESPONSE</code>, <code>OCSP_BASICRESP</code>: OpenSSL の OCSP 構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**パース失敗**: <code>OCSP_response_get1_basic</code> が NULL を返す場合、エラーログを出力して処理を継続する。</li>
+<li>**ID 不一致**: 証明書 ID がレスポンスに含まれない場合、設定に応じて <code>SSL_TLSEXT_ERR_NOACK</code> を返す。</li>
+<li>**期限切れ**: <code>OCSP_check_validity</code> が失敗した場合、キャッシュからのレスポンスであればデバッグログ、直接のレスポンスであればエラーログを出力し、送信を抑制する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は OpenSSL の ASN.1 パースに依存している。</li>
+<li><code>pok</code> 引数の有無により、キャッシュからの検証か、レスポンダーからの直接検証かを区別している。</li>
+<li>メモリ管理は OpenSSL の API に準拠しており、<code>OCSP_BASICRESP</code> の解放漏れに注意すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

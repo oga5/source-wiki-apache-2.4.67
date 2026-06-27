@@ -1,0 +1,99 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');">modules/proxy/mod_proxy.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>mod_proxy.c</code></a> は Apache HTTP Server のプロキシ機能の中核となるモジュールです。リクエストの転送、ロードバランシング、およびプロキシ設定の管理を統括します。このファイルは、プロキシのライフサイクル管理、設定の解析、およびリクエスト処理の各フェーズ（翻訳、修正、ハンドラ実行）を定義する巨大なエントリポイントです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> サブシステムにおける「司令塔」です。個別のプロトコルハンドラ（<code>mod_proxy_http</code>, <code>mod_proxy_ajp</code> 等）やユーティリティ（<a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a>）を統合し、Apache のリクエスト処理パイプラインとプロキシロジックを接続します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>ProxyPass</code>, <code>ProxyRemote</code>, <code>BalancerMember</code> などのディレクティブを解析し、サーバーおよびディレクトリごとの設定構造体を構築・マージする。</li>
+<li>**リクエストルーティング**: <code>translate_name</code> フックを通じて、リクエストがプロキシ対象かどうかを判定し、適切なハンドラへ割り当てる。</li>
+<li>**ライフサイクル管理**: プロキシ用ミューテックスの初期化、子プロセスでのワーカー初期化、およびシャットダウン時のリソース解放。</li>
+<li>**プロキシハンドラ**: <code>proxy-server</code> ハンドラを実装し、バックエンドへの接続、ロードバランシング、エラー処理、およびレスポンスの転送を制御する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L154" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_server_conf.html&quot;}, '*');"><code>proxy_server_conf</code></a>: サーバー単位のプロキシ設定（ワーカー、バランサー、リモートプロキシリスト等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_dir_conf.html&quot;}, '*');"><code>proxy_dir_conf</code></a>: ディレクトリ単位の設定（<code>ProxyPass</code> エイリアス、エラーオーバーライド設定等）。</li>
+</ul>
+<h3>コマンド・設定関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L2969" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>proxy_cmds</code></a>: Apache の設定ディレクティブを処理するコマンドテーブル。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1557" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__create_proxy_config.html&quot;}, '*');"><code>create_proxy_config</code></a> / <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1697" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__merge_proxy_config.html&quot;}, '*');"><code>merge_proxy_config</code></a>: サーバー設定の生成とマージ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1973" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__add_pass.html&quot;}, '*');"><code>add_pass</code></a> / <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L2607" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__add_member.html&quot;}, '*');"><code>add_member</code></a>: <code>ProxyPass</code> および <code>BalancerMember</code> の解析とワーカー/バランサーの定義。</li>
+</ul>
+<h3>リクエスト処理フック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1213" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__proxy_handler.html&quot;}, '*');"><code>proxy_handler</code></a>: プロキシリクエストのメインハンドラ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1054" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__proxy_translate_name.html&quot;}, '*');"><code>proxy_translate_name</code></a>: URL を <code>proxy:&lt;URL&gt;</code> 形式に変換し、プロキシ対象としてマークする。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1059" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__proxy_walk.html&quot;}, '*');"><code>proxy_walk</code></a>: <code>&lt;Proxy&gt;</code> セクションの設定をリクエストに適用する。</li>
+</ul>
+<h3>外部連携</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>proxy_mutex</code></a>: プロキシの共有リソースを保護するグローバルミューテックス。</li>
+<li><code>proxy_hcmethods[]</code>: ヘルスチェックメソッドの定義テーブル。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L2969" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>proxy_cmds</code></a> がディレクティブを読み込み、<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L154" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_server_conf.html&quot;}, '*');"><code>proxy_server_conf</code></a> にワーカーやバランサーを登録。<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1697" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__merge_proxy_config.html&quot;}, '*');"><code>merge_proxy_config</code></a> により親サーバーの設定が継承される。 2. **リクエスト翻訳**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1054" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__proxy_translate_name.html&quot;}, '*');"><code>proxy_translate_name</code></a> が URL を解析し、マッチする <code>ProxyPass</code> があれば <code>r-&gt;filename</code> を <code>proxy:...</code> に書き換え、ハンドラを <code>proxy-server</code> に設定。 3. **ハンドラ実行**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L1213" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__proxy_handler.html&quot;}, '*');"><code>proxy_handler</code></a> が呼び出される。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L2611" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_pre_request.html&quot;}, '*');"><code>ap_proxy_pre_request</code></a> で適切なワーカー/バランサーを選択。</li>
+<li><code>proxy_run_scheme_handler</code> を呼び出し、プロトコル固有のハンドラ（HTTP, AJP等）に処理を委譲。</li>
+<li>失敗時は <code>max_attempts</code> に基づき再試行。</li>
+<p>4. **クリーンアップ**: <a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L2669" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_post_request.html&quot;}, '*');"><code>ap_proxy_post_request</code></a> を呼び出し、接続の解放や統計情報の更新を行う。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: 公開インターフェースとデータ構造。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.h.html&quot;}, '*');"><code>proxy_util.h</code></a>: ユーティリティ関数（ワーカー管理、URL正規化など）。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache のリクエスト処理基盤。</li>
+<li><code>apr_global_mutex.h</code>: プロセス間同期。</li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.h.html&quot;}, '*');"><code>mod_ssl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_status.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_status.h.html&quot;}, '*');"><code>mod_status.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>proxy_util.c</code></a>: ワーカーの初期化、共有メモリ管理、URL解析などの低レベル実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>mod_proxy_http.c</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_ajp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_ajp.c.html&quot;}, '*');"><code>mod_proxy_ajp.c</code></a>: 具体的なプロトコルハンドラの実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_balancer.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_balancer.c.html&quot;}, '*');"><code>mod_proxy_balancer.c</code></a>: ロードバランシングアルゴリズムの実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定構造体は <code>apr_pool_t</code> を使用しており、リクエスト終了時やサーバー再起動時に適切に解放される設計です。</li>
+<li>**共有メモリ**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a> や <code>proxy_balancer</code> の一部の状態は共有メモリ上に保持されるため、<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>proxy_mutex</code></a> による排他制御が不可欠です。</li>
+<li>**設計の深さ**: このファイルは「プロキシの枠組み」を提供することに特化しており、具体的なプロトコル処理はフック（<code>scheme_handler</code>）を通じて外部モジュールへ委譲されています。</li>
+<li>**省略箇所**: 本ファイル内の <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L588" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__alias_match_servlet.html&quot;}, '*');"><code>alias_match_servlet</code></a> などの文字列マッチングロジックは、特定のパスパラメータ処理に特化しており、複雑な正規表現やパス操作を含みます。これらは <code>mod_jk</code> 等の挙動を模倣しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__set_worker_param.html" target="wiki-view"><code>set_worker_param</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__set_balancer_param.html" target="wiki-view"><code>set_balancer_param</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__alias_match.html" target="wiki-view"><code>alias_match</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__alias_match_servlet.html" target="wiki-view"><code>alias_match_servlet</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_detect.html" target="wiki-view"><code>proxy_detect</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__ap_proxy_trans_match.html" target="wiki-view"><code>ap_proxy_trans_match</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_trans.html" target="wiki-view"><code>proxy_trans</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_pre_translate_name.html" target="wiki-view"><code>proxy_pre_translate_name</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_translate_name.html" target="wiki-view"><code>proxy_translate_name</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_walk.html" target="wiki-view"><code>proxy_walk</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_map_location.html" target="wiki-view"><code>proxy_map_location</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_c__proxy_fixup.html" target="wiki-view"><code>proxy_fixup</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

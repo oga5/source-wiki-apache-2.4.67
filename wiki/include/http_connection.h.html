@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>include/http_connection.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');">include/http_connection.h</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるコネクション処理のライフサイクルを定義するヘッダーファイルです。接続の確立からプロトコル処理、そして終了（リンガリングクローズ）に至るまでの一連のインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>APACHE_CORE</code> サブシステムの一部として、コアの接続管理機能を提供します。MPM（Multi-Processing Module）が受け取ったソケットを、HTTP プロトコルレベルの処理へ橋渡しする役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続のライフサイクル管理**: 接続の開始、処理、終了の各フェーズをフックとして公開。</li>
+<li>**プロトコルドライバー**: <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> を通じて、登録されたプロトコルモジュールへ処理を委譲。</li>
+<li>**クローズ処理の最適化**: TCP RST を防ぐための「リンガリングクローズ（遅延クローズ）」の実装。</li>
+<li>**EOC（End Of Connection）管理**: 接続終了をフィルタチェーンに通知するためのバケット型の定義。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a>: 接続処理のメインエントリポイント。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a>: 接続終了時にデータを完全に送受信し切るための安全なクローズ処理。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_connection.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>AP_BUCKET_IS_EOC</code></a>: フィルタチェーン内で「接続終了」バケットを判定するマクロ。</li>
+<li><code>create_connection</code>, <code>pre_connection</code>, <code>process_connection</code>: 接続の各段階でモジュールが介入するための主要フック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **接続開始**: MPM がソケットを受け取り、<code>create_connection</code> フックが <code>conn_rec</code> を生成します。 2. **準備**: <code>pre_connection</code> フックが呼ばれ、フィルタのセットアップやプロトコル固有の初期化が行われます。 3. **処理**: <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> が呼び出され、登録されたプロトコルハンドラがリクエストを処理します。 4. **終了**: 処理完了後、<a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> が呼ばれ、クライアントからの残存データ読み込みや TCP 接続の正常な終了を試みます。この際、EOC バケットがフィルタチェーンに投入され、終了が伝播されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: ソケット等のネットワーク抽象化レイヤー。</li>
+<li><code>apr_buckets.h</code>: フィルタチェーンでデータを扱うためのバケット管理。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: <code>conn_rec</code> 構造体定義など、接続管理の基盤となるデータ構造。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: 接続に関連付けられたフィルタチェーンの操作。</li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>: MPM 側での接続受け入れ処理との連携。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「プロトコルモジュール」を開発する際の最重要インターフェースです。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> は、単一の接続に対して複数のプロトコルが順次処理を行う可能性がある（プロトコル切り替えなど）ことを考慮して設計されています。</li>
+<li>リンガリングクローズは、HTTP 1.1 のパイプライン処理や Keep-Alive 接続において、クライアントとの整合性を保つために不可欠な処理です。実装時にはこの挙動を意識してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

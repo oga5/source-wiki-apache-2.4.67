@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_expr_parse.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_expr_parse.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_parse.c.html&quot;}, '*');">server/util_expr_parse.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の式評価エンジン（<code>ap_expr</code>）における構文解析器の実装です。GNU Bison 2.5 によって生成された LALR(1) パーサーであり、<a class="wiki-source-link" href="../../source/server/util_expr_parse.y.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/server/util_expr_parse.y.html&quot;}, '*');"><code>util_expr_parse.y</code></a> から生成されています。式言語の文法定義に基づき、トークン列を抽象構文木（AST）へと変換する役割を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール内の式評価サブシステムの一部です。<a class="wiki-source-link" href="../../source/server/util_expr_scan.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_scan.c.html&quot;}, '*');"><code>util_expr_scan.c</code></a>（字句解析器）からトークンを受け取り、<a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_eval.c.html&quot;}, '*');"><code>util_expr_eval.c</code></a> で実行される AST を構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**構文解析**: <code>ap_expr_yyparse</code> を通じて、入力文字列を文法規則に従って解析する。</li>
+<li>**AST 構築**: <a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_make.html&quot;}, '*');"><code>ap_expr_make</code></a> などのヘルパー関数を呼び出し、ノードを生成してツリーを組み立てる。</li>
+<li>**エラーハンドリング**: 構文エラー発生時に <a class="wiki-source-link" href="../../source/server/util_expr_parse.c.html#L2126" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_parse_c__yyerror.html&quot;}, '*');"><code>yyerror</code></a> を呼び出し、コンテキスト構造体にエラーメッセージを格納する。</li>
+<li>**リソース管理**: 解析中に使用するメモリを <code>apr_pool_t</code> を介して管理する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>解析制御</h3>
+<ul>
+<li><code>ap_expr_yyparse</code>: 解析のメインエントリポイント。</li>
+<li><code>ap_expr_yylex</code>: 字句解析器を呼び出すインターフェース。</li>
+<li><code>ap_expr_yyerror</code>: 構文エラー発生時に呼び出されるコールバック。</li>
+</ul>
+<h3>データ構造</h3>
+<ul>
+<li><code>YYSTYPE</code>: パーサーのスタックで使用される共用体。<code>cpVal</code>（文字列）、<code>exVal</code>（AST ノード）、<code>num</code>（数値）を保持。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_private.h.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_private_h__ap_expr_parse_ctx_t.html&quot;}, '*');"><code>ap_expr_parse_ctx_t</code></a>: 解析コンテキスト。AST のルート、エラーメッセージ、メモリプール、スキャナー状態を保持する。</li>
+</ul>
+<h3>トークン定義</h3>
+<ul>
+<li><code>yytokentype</code>: 式言語の演算子（<code>T_OP_EQ</code> 等）、変数（<code>T_VAR_BEGIN</code> 等）、リテラル（<code>T_STRING</code> 等）を定義する列挙型。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 呼び出し元が <a class="wiki-source-link" href="../../source/server/util_expr_private.h.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_private_h__ap_expr_parse_ctx_t.html&quot;}, '*');"><code>ap_expr_parse_ctx_t</code></a> を準備し、<code>ap_expr_yyparse</code> を呼び出す。 2. **トークン取得**: <a class="wiki-source-link" href="../../source/server/util_expr_parse.c.html#L1249" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_parse_c__yyparse.html&quot;}, '*');"><code>yyparse</code></a> が <a class="wiki-source-link" href="../../source/server/util_expr_parse.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_parse.c.html&quot;}, '*');"><code>yylex</code></a> を呼び出し、入力からトークンを順次消費する。 3. **還元 (Reduction)**: 文法規則に一致すると、対応するアクションが実行される。ここで <a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_make.html&quot;}, '*');"><code>ap_expr_make</code></a> 等が呼ばれ、AST ノードが生成される。 4. **AST 構築**: 生成されたノードは <code>YYSTYPE</code> を通じて上位の規則へ渡され、最終的に <code>ctx-&gt;expr</code> にルートノードが格納される。 5. **終了**: 解析成功時は 0、失敗時は 1 または 2（メモリ不足等）を返す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_private.h.html&quot;}, '*');"><code>util_expr_private.h</code></a>: 内部的なデータ構造定義と <code>ap_expr</code> 関連の API 定義。</li>
+<li><code>apr_pool.h</code> (間接): メモリ管理に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_parse.y.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/server/util_expr_parse.y.html&quot;}, '*');"><code>util_expr_parse.y</code></a>: このファイルのソースとなる文法定義ファイル。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_scan.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_scan.c.html&quot;}, '*');"><code>util_expr_scan.c</code></a>: 字句解析器。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_eval.c.html&quot;}, '*');"><code>util_expr_eval.c</code></a>: 構築された AST を評価するエンジン。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての AST ノードとエラーメッセージは、コンテキストに含まれる <code>apr_pool_t</code> から割り当てられます。解析終了後にプールを破棄することでメモリリークを防ぎます。</li>
+<li>**自動生成コード**: このファイルは Bison によって自動生成されています。直接編集せず、必ず <a class="wiki-source-link" href="../../source/server/util_expr_parse.y.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/server/util_expr_parse.y.html&quot;}, '*');"><code>util_expr_parse.y</code></a> を修正してください。</li>
+<li>**エラー処理**: <a class="wiki-source-link" href="../../source/server/util_expr_parse.c.html#L674" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_parse.c.html&quot;}, '*');"><code>YYERROR</code></a> マクロが呼び出されると、パーサーはエラー回復ルーチンへ移行します。この際、<code>ctx-&gt;error</code> に詳細が設定されるため、呼び出し元は必ず確認してください。</li>
+<li>**省略された詳細**: Bison の内部スタック管理や <code>yyoverflow</code> などの低レベルなスタック操作ロジックは、標準的な Bison スケルトンコードであるため、本ページでは詳細な解説を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_expr_parse_c__yytokentype.html" target="wiki-view"><code>yytokentype</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__YYSTYPE.html" target="wiki-view"><code>YYSTYPE</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_uint8.html" target="wiki-view"><code>yytype_uint8</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_int8.html" target="wiki-view"><code>yytype_int8</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_uint16.html" target="wiki-view"><code>yytype_uint16</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yytype_int16.html" target="wiki-view"><code>yytype_int16</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__YYID.html" target="wiki-view"><code>YYID</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_symbol_value_print.html" target="wiki-view"><code>yy_symbol_value_print</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_symbol_print.html" target="wiki-view"><code>yy_symbol_print</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_stack_print.html" target="wiki-view"><code>yy_stack_print</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yy_reduce_print.html" target="wiki-view"><code>yy_reduce_print</code></a></li>
+<li><a href="../symbols/server__util_expr_parse_c__yysyntax_error.html" target="wiki-view"><code>yysyntax_error</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

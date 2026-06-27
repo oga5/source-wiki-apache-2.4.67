@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/module-test-modules-http2-htdocs-cgi.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Module: test/modules/http2/htdocs/cgi</h1>
+<h2>概念</h2>
+<p><code>test/modules/http2/htdocs/cgi</code> は、Apache HTTP Server（httpd）のHTTP/2モジュール（<code>mod_http2</code>）の統合テストにおいて、CGI（Common Gateway Interface）の動作を検証するために用意されたPythonスクリプト群です。これらは、HTTP/2プロトコルを経由したCGIプロセスの起動、データの送受信、環境変数の伝播、およびエラーハンドリングが正しく機能するかをテストするためのモックおよび検証用エンドポイントとして機能します。</p>
+<h2>なぜ重要か</h2>
+<p>HTTP/2は、単一のTCP接続上で複数のストリームを多重化するプロトコルです。従来のHTTP/1.1とは異なり、CGIプロセスへのリクエストボディのストリーミングやレスポンスの回収が非同期かつ並行して行われます。このディレクトリ内のスクリプト群は、以下のようなHTTP/2特有の挙動やエッジケースをシミュレートし、サーバーがデッドロックやデータ破損を起こさずにCGIと通信できるかを検証するために不可欠です。</p>
+<ul>
+<li>大容量データのアップロードとエコーバック</li>
+<li>チャンク化されたデータのハンドリング</li>
+<li>正確なCGI環境変数のマッピング</li>
+<li>ヘッダーの送受信処理</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/test__modules__http2__htdocs__cgi.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/test__modules__http2__htdocs__cgi.html&quot;, &quot;source&quot;: &quot;source/test/modules/http2/htdocs/cgi/echo.py.html&quot;}, '*');"><code>module:test/modules/http2/htdocs/cgi</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>このモジュールを構成する主なPythonスクリプトは以下の通りです。</p>
+<ul>
+<li>**<code>hello.py</code>**: 最もシンプルなCGIテスト。固定のテキストレスポンスを返し、基本的なCGI実行パスを検証します。</li>
+<li>**<a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/echo.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/echo.py.html&quot;}, '*');"><code>echo.py</code></a>**: クライアントから送信されたリクエストボディをそのままレスポンスとして送り返し、双方向データ転送を検証します。</li>
+<li>**<a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/echohd.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/echohd.py.html&quot;}, '*');"><code>echohd.py</code></a> / <a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/hecho.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/hecho.py.html&quot;}, '*');"><code>hecho.py</code></a>**: 送信されたHTTPリクエストヘッダーを解析し、レスポンスヘッダーまたはボディとしてエコーバックします。</li>
+<li>**<code>env.py</code>**: CGIプロセスに渡された環境変数（<code>REQUEST_METHOD</code> や HTTP/2固有の変数など）を出力し、環境変数の整合性を検証します。</li>
+<li>**<code>upload.py</code>**: ファイルアップロードやマルチパートデータの受信処理をシミュレートします。</li>
+<li>**<a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/necho.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/necho.py.html&quot;}, '*');"><code>necho.py</code></a>**: 特定のバイト数や特殊なパターンでのエコー処理を行います。</li>
+<li>**<a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/mnot164.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/mnot164.py.html&quot;}, '*');"><code>mnot164.py</code></a>**: 特定のテストシナリオ（RFC関連の検証など）に対応するカスタムレスポンスを生成します。</li>
+<li>**<code>requestparser.py</code>**: 上記の各CGIスクリプトがリクエストデータやマルチパートデータを解析するために共通で使用する内部ヘルパーライブラリです。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **テストの起動**: テストスイート（通常は <code>pytest</code> 等）が、HTTP/2経由でApacheサーバーに対して特定のCGIスクリプト（例: <code>/cgi/echo.py</code>）をターゲットとするリクエストを送信します。 2. **リクエストのハンドリング**: <code>mod_http2</code> がリクエストを受信し、内部リダイレクトまたはハンドラを介して <code>mod_cgi</code>（または <code>mod_cgid</code>）に処理を渡します。 3. **CGIの実行**: Apacheが該当するPythonスクリプトを子プロセスとして起動します。 4. **データの解析と処理**: スクリプトは <code>requestparser.py</code> を使用して標準入力からリクエストデータを読み込み、要求された処理（エコーや環境変数の出力など）を実行します。 5. **レスポンスの返却**: スクリプトが標準出力にHTTPステータス、ヘッダー、およびボディを書き込みます。ApacheはこれをHTTP/2フレームに変換してクライアントに返送します。</p>
+<p>*注意: テストフレームワーク側での具体的なアサーションロジックや、詳細なプロセス間通信（IPC）のライフサイクルは、提供されたファイル群の範囲外であるため、完全なエンドツーエンドの不変条件は未検証です。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**CGIプロトコルの遵守**: すべてのスクリプトは、RFC 3875（CGI/1.1）に準拠した形式で標準入出力を処理する必要があります。</li>
+<li>**非ブロッキング動作**: HTTP/2のフロー制御下において、CGIスクリプトが標準入力を読み込む際、または標準出力に書き出す際に、バッファリングの不整合によるデッドロックが発生しないこと。</li>
+</ul>
+<p>*注意: 内部バッファサイズやタイムアウト値などの具体的な不変条件の詳細は、提供されたメタデータからは特定されていません。*</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**Pythonのバージョン互換性**: テストが実行される環境のPythonインタープリタのバージョン（Python 2系と3系）によって、文字列とバイナリ（bytes）の扱い（特に <code>requestparser.py</code> や <a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/echo.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/echo.py.html&quot;}, '*');"><code>echo.py</code></a> での入出力）が異なり、テストが破損する可能性があります。</li>
+<li>**実行権限とシバン（Shebang）**: スクリプトが実行可能（<code>chmod +x</code>）であり、シバン（<code>#!/usr/bin/env python3</code> など）がテスト環境のパスと一致していない場合、Apacheが <code>500 Internal Server Error</code> を返してテストが失敗します。</li>
+<li>**バッファリング問題**: Pythonが標準出力をバッファリングすることにより、ヘッダーやボディの送信タイミングが遅れ、HTTP/2のストリームタイムアウトを引き起こすことがあります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/requestparser.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/requestparser.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/requestparser.py</code></a> （共通解析ロジックの理解）</li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/echo.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/echo.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/echo.py</code></a> （データ転送テストの基準実装）</li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/env.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/env.py</code></a> （環境変数検証の基準実装）</li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/hello.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/hello.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/hello.py</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/echohd.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/echohd.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/echohd.py</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/hecho.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/hecho.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/hecho.py</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/mnot164.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/mnot164.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/mnot164.py</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/necho.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/necho.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/necho.py</code></a></li>
+<li><a class="wiki-source-link" href="../../source/test/modules/http2/htdocs/cgi/upload.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/htdocs/cgi/upload.py.html&quot;}, '*');"><code>test/modules/http2/htdocs/cgi/upload.py</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

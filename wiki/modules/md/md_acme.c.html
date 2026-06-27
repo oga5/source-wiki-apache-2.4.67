@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/md_acme.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');">modules/md/md_acme.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> は、ACME プロトコル（RFC 8555等）を用いた証明書管理の通信層を担う中心的なファイルです。ACME サーバーとのディレクトリ情報の取得、リクエストの署名（JWS）、ノンストップな通信のためのノンスト管理、およびサーバーからのエラー（Problem）の解釈を抽象化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ACME プロトコルの「クライアント」としての役割を果たします。<a class="wiki-source-link" href="../../../source/modules/md/md_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.c.html&quot;}, '*');"><code>md_http.c</code></a> を利用して低レベルな HTTP 通信を行い、<a class="wiki-source-link" href="../../../source/modules/md/md_jws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_jws.c.html&quot;}, '*');"><code>md_jws.c</code></a> を利用して署名付きリクエストを生成します。上位層（<a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_order.c.html&quot;}, '*');"><code>md_acme_order.c</code></a> や <a class="wiki-source-link" href="../../../source/modules/md/md_acme_acct.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_acct.c.html&quot;}, '*');"><code>md_acme_acct.c</code></a>）が ACME のビジネスロジックを実装するのに対し、本ファイルはプロトコル特有の通信規約を隠蔽します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ACME プロトコル通信**: GET/POST リクエストの抽象化と、ACME サーバーへの適応（v1/v2 バージョン判定）。</li>
+<li>**リクエストのライフサイクル管理**: リクエストごとのメモリプール管理、ノンスト（Nonce）の更新、再試行ロジックの実行。</li>
+<li>**エラーハンドリング**: ACME サーバーから返される <code>application/problem+json</code> の解析と、Apache 内部ステータスへのマッピング。</li>
+<li>**アカウント管理**: アカウント情報のロード、検証、および保存のインターフェース提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト・通信制御</h3>
+<ul>
+<li><code>md_acme_req_create()</code>: リクエスト用のメモリプールを確保し、初期状態を構築する。</li>
+<li><code>md_acme_req_send()</code>: ACME リクエストの送信エンジン。Nonce の付与、署名、再試行ロジックを内包する。</li>
+<li><code>md_acme_POST()</code> / <code>md_acme_GET()</code>: 上位層向けの公開 API。コールバック関数を介して非同期的なレスポンス処理を行う。</li>
+</ul>
+<h3>プロトコル・エラー解析</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__acme_problem_status_t.html&quot;}, '*');"><code>acme_problem_status_t</code></a>: ACME エラー型と Apache ステータスコードの対応表。</li>
+<li><code>inspect_problem()</code>: サーバーからのエラーレスポンスを解析し、再試行が必要か（<code>APR_EAGAIN</code>）を判定する。</li>
+<li><code>md_acme_problem_is_input_related()</code>: エラーがユーザー入力に起因するものか判定する。</li>
+</ul>
+<h3>セットアップ・状態管理</h3>
+<ul>
+<li><code>md_acme_create()</code>: ACME サーバーとの通信用コンテキスト（<a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_h__md_acme_t.html&quot;}, '*');"><code>md_acme_t</code></a>）を初期化する。</li>
+<li><code>md_acme_setup()</code>: サーバーのディレクトリ情報を取得し、API エンドポイントを特定する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L624" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_create.html&quot;}, '*');"><code>md_acme_create</code></a> でコンテキストを作成し、<a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_setup.html&quot;}, '*');"><code>md_acme_setup</code></a> でサーバーのディレクトリ情報を取得して <a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_h__md_acme_t.html&quot;}, '*');"><code>md_acme_t</code></a> を構成する。 2. **リクエスト送信**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L435" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_POST.html&quot;}, '*');"><code>md_acme_POST</code></a> 等が呼ばれると、<a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_req_create.html&quot;}, '*');"><code>md_acme_req_create</code></a> でリクエスト専用プールが作成される。 3. **署名と送信**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_req_send.html&quot;}, '*');"><code>md_acme_req_send</code></a> 内で <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L228" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__acmev2_req_init.html&quot;}, '*');"><code>acmev2_req_init</code></a> が呼ばれ、<a class="wiki-source-link" href="../../../source/modules/md/md_jws.c.html#L42" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_jws_c__md_jws_sign.html&quot;}, '*');"><code>md_jws_sign</code></a> を用いてペイロードが署名される。 4. **レスポンス処理**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L276" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__on_response.html&quot;}, '*');"><code>on_response</code></a> コールバックが HTTP レスポンスを捕捉。Nonce を更新し、JSON 解析後に成功時は <code>on_json</code>、エラー時は <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L170" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__inspect_problem.html&quot;}, '*');"><code>inspect_problem</code></a> へ委譲する。 5. **終了**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L258" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_req_done.html&quot;}, '*');"><code>md_acme_req_done</code></a> で結果を <a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_h__md_acme_t.html&quot;}, '*');"><code>md_acme_t</code></a> の <code>last</code> フィールドにコピーし、リクエスト用プールを破棄する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: <code>apr_pool_t</code>, <code>apr_table_t</code> 等によるメモリとデータ構造の管理。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');">md_http.h</a>**: HTTP 通信の実行。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_jws.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_jws.h.html&quot;}, '*');">md_jws.h</a>**: ACME リクエストの署名。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');">md_json.h</a>**: ACME プロトコルで多用される JSON の読み書き。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.h.html&quot;}, '*');">md_acme.h</a>**: 公開インターフェースとデータ構造の定義。</li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_uri.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.h.html&quot;}, '*');"><code>md_acme.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_acct.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_acct.h.html&quot;}, '*');"><code>md_acme_acct.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.h.html&quot;}, '*');"><code>md_crypt.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');"><code>md_json.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_jws.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_jws.h.html&quot;}, '*');"><code>md_jws.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_result.h.html&quot;}, '*');"><code>md_result.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.h.html&quot;}, '*');"><code>md_store.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.h.html&quot;}, '*');"><code>md_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_version.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_version.h.html&quot;}, '*');"><code>md_version.h</code></a></li>
+<li><code>stdlib.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_acct.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_acct.c.html&quot;}, '*');"><code>md_acme_acct.c</code></a>: アカウントの永続化と検証。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_order.c.html&quot;}, '*');"><code>md_acme_order.c</code></a>: 証明書発行フローの制御。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_jws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_jws.c.html&quot;}, '*');"><code>md_jws.c</code></a>: リクエストの署名ロジックの詳細。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_h__md_acme_req_t.html&quot;}, '*');"><code>md_acme_req_t</code></a> はリクエストごとに独自の <code>apr_pool_t</code> を持ちます。<a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L258" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_req_done.html&quot;}, '*');"><code>md_acme_req_done</code></a> で確実に破棄されるため、リクエスト処理中に確保したメモリはリクエストプールに紐付ける必要があります。</li>
+<li>**再試行**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_req_send.html&quot;}, '*');"><code>md_acme_req_send</code></a> は <code>APR_EAGAIN</code> を受け取ると再帰的に再試行を行います。無限ループを防ぐため <code>max_retries</code> が設定されています。</li>
+<li>**省略された詳細**: 本ファイルは通信の「実行」に特化しており、証明書の生成や秘密鍵の暗号化ロジックは <a class="wiki-source-link" href="../../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>md_crypt.c</code></a> に委譲されています。また、ACME v1 の実装は v2 への移行に伴い、現在は v2 が優先される設計となっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_c__acme_problem_status_t.html" target="wiki-view"><code>acme_problem_status_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__problem_status_get.html" target="wiki-view"><code>problem_status_get</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__md_acme_problem_is_input_related.html" target="wiki-view"><code>md_acme_problem_is_input_related</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__req_update_nonce.html" target="wiki-view"><code>req_update_nonce</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__http_update_nonce.html" target="wiki-view"><code>http_update_nonce</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__md_acme_req_create.html" target="wiki-view"><code>md_acme_req_create</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__acmev2_new_nonce.html" target="wiki-view"><code>acmev2_new_nonce</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__md_acme_init.html" target="wiki-view"><code>md_acme_init</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__inspect_problem.html" target="wiki-view"><code>inspect_problem</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__acmev2_req_init.html" target="wiki-view"><code>acmev2_req_init</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__json_ctx.html" target="wiki-view"><code>json_ctx</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_c__update_dir_ctx.html" target="wiki-view"><code>update_dir_ctx</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

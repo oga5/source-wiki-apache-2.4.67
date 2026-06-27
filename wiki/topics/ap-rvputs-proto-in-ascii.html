@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/ap-rvputs-proto-in-ascii.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_rvputs_proto_in_ascii</h1>
+<h2>概念</h2>
+<p><code>ap_rvputs_proto_in_ascii</code> は、EBCDIC環境において可変長引数として渡された複数の文字列をASCII形式に変換し、HTTPレスポンスストリームへ一括して出力するためのユーティリティ関数です。</p>
+<h2>なぜ重要か</h2>
+<p>EBCDICを採用するメインフレームなどの環境において、HTTPプロトコルに準拠したデータ（ヘッダーや特定のレスポンスボディなど）を送信する際には、文字コードをASCIIに変換する必要があります。この関数は、メモリ確保、EBCDICからASCIIへの変換、およびストリームへの書き込みという一連の処理をカプセル化します。また、非EBCDIC環境ではマクロによって空に置換されるため、プラットフォーム依存の条件分岐コードを呼び出し側に記述することなく、共通のソースコードを維持できる設計になっています。</p>
+<h2>関与するモジュール</h2>
+<p>提供された構成情報に基づき、以下のモジュールが関与しています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本機能に関連する主要なエンティティは以下の通りです。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>symbol:include/util_ebcdic.h#ap_rvputs_proto_in_ascii</code></a></li>
+<p>非EBCDIC環境におけるマクロ置換、およびEBCDIC環境におけるプロトタイプ宣言を管理します。</p>
+<li><a class="wiki-entity-link" href="../symbols/server__util_ebcdic_c__ap_rvputs_proto_in_ascii.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_rvputs_proto_in_ascii.html&quot;, &quot;source&quot;: &quot;source/server/util_ebcdic.c.html#L91&quot;}, '*');"><code>symbol:server/util_ebcdic.c#ap_rvputs_proto_in_ascii</code></a></li>
+<p>EBCDIC環境下で動作する、実際の変換および出力ロジックの実装です。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>modules/http/http_protocol.c</code></a> などの呼び出し元から、リクエスト情報 <code>request_rec</code> と <code>NULL</code> で終端された任意の数の文字列引数が渡されます。 2. **引数の走査と複製**: <code>va_start</code> を用いて引数を順次取得し、<code>NULL</code> に達するまで以下の処理を繰り返します。</p>
+<ul>
+<li><code>apr_pstrmemdup</code> を使用して、リクエストのメモリプール（<code>r-&gt;pool</code>）上に各文字列のコピーを作成します。</li>
+<p>3. **文字コード変換**: コピーされたバッファに対して <code>ap_xlate_proto_to_ascii</code> を呼び出し、EBCDICからASCIIへインプレースで変換します。 4. **レスポンス出力**: 変換された文字列を <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L487" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_rputs.html&quot;}, '*');"><code>ap_rputs</code></a> を介してレスポンスストリームへ書き出します。 5. **終了処理**: すべての引数の処理が完了すると、<code>va_end</code> を呼び出して合計書き込みバイト数を返します。途中で <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L487" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_rputs.html&quot;}, '*');"><code>ap_rputs</code></a> がエラー（負の値）を返した場合は、即座に処理を中断し <code>-1</code> を返します。</p>
+</ul>
+<p>※非EBCDIC環境における詳細なバイパス挙動や、呼び出し元（<a class="wiki-source-link" href="../../source/modules/http/http_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_protocol.c.html&quot;}, '*');"><code>modules/http/http_protocol.c</code></a>）における具体的なエラーハンドリングの全容は、提供された情報からは完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**EBCDIC環境限定**: 本関数の実体は <code>APR_CHARSET_EBCDIC</code> が定義されている環境でのみ有効です。非EBCDIC環境では、ヘッダー定義により空のマクロに置換されます。</li>
+<li>**NULL終端の義務**: 可変長引数リストの末尾は、必ず <code>NULL</code> で終端されていなければなりません。</li>
+<li>**メモリプールの生存期間**: 文字列の複製には <code>r-&gt;pool</code> が使用されるため、呼び出し時にこのプールが有効である必要があります。なお、複製されたメモリはリクエスト終了時にプールごと解放されるため、呼び出し側での個別解放は不要です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**末尾のNULL忘れ**: 可変長引数の最後に <code>NULL</code> を指定し忘れると、関数が引数の終端を検知できず、メモリの不正アクセスやクラッシュ（未定義の動作）を引き起こします。</li>
+<li>**戻り値の確認漏れ**: <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L487" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_rputs.html&quot;}, '*');"><code>ap_rputs</code></a> の書き込み失敗時に <code>-1</code> が返されますが、呼び出し側でこのエラー戻り値を適切にチェックしない場合、部分的な書き込み失敗や切断を検知できない可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>include/util_ebcdic.h</code></a> (マクロ定義および関数プロトタイプ)</li>
+<li><a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_ebcdic.c.html&quot;}, '*');"><code>server/util_ebcdic.c</code></a> (関数の具体的な実装コード)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

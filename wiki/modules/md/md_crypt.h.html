@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/md_crypt.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.h.html&quot;}, '*');">modules/md/md_crypt.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.h.html&quot;}, '*');"><code>md_crypt.h</code></a> は、<code>mod_md</code> モジュールにおける暗号化操作の抽象化レイヤーです。OpenSSL をバックエンドとして利用し、秘密鍵の生成・管理、X.509 証明書の処理、および ACME プロトコルに必要な署名やダイジェスト計算機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、低レイヤーの OpenSSL API をラップし、Apache HTTP Server の <code>apr_pool_t</code> ベースのメモリ管理と統合する役割を担います。他のモジュール（<a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> や <a class="wiki-source-link" href="../../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a> など）は、OpenSSL の複雑な構造体を直接操作せず、本ヘッダーで定義された <code>md_pkey_t</code> や <code>md_cert_t</code> を通じて暗号化機能を利用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**乱数生成**: セキュアな乱数生成器の初期化と提供。</li>
+<li>**秘密鍵管理**: RSA/EC 鍵の生成、JSON 形式との相互変換、ファイル入出力。</li>
+<li>**証明書管理**: X.509 証明書の読み込み、検証、属性抽出、および自己署名証明書の作成。</li>
+<li>**暗号学的ハッシュ・署名**: SHA256 ダイジェスト計算、HMAC 生成、JWS 等で使用する署名処理。</li>
+<li>**ACME 特化機能**: TLS-ALPN-01 チャレンジ用証明書の生成や、証明書透明性（CT）情報の抽出。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>秘密鍵管理</h3>
+<ul>
+<li><code>md_pkey_t</code>: 秘密鍵を保持する不透明な構造体。<code>apr_pool_t</code> に紐付き、自動解放される。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_crypt_h__md_pkey_spec_t.html&quot;}, '*');"><code>md_pkey_spec_t</code></a>: 鍵の生成要件（RSA ビット数や EC 曲線名）を定義する仕様構造体。</li>
+<li><code>md_pkey_gen()</code>: 仕様に基づき新しい秘密鍵を生成する。</li>
+<li><code>md_pkey_fload()</code> / <code>md_pkey_fsave()</code>: 秘密鍵のファイル入出力（パスフレーズ対応）。</li>
+</ul>
+<h3>証明書管理</h3>
+<ul>
+<li><code>md_cert_t</code>: X.509 証明書をラップする構造体。</li>
+<li><code>md_cert_make()</code> / <code>md_cert_wrap()</code>: メモリ所有権の管理戦略（<code>make</code> は所有権取得、<code>wrap</code> は参照のみ）。</li>
+<li><code>md_cert_self_sign()</code>: ACME 認証等で使用する自己署名証明書の作成。</li>
+<li><code>md_cert_state_get()</code>: 証明書の有効期限状態（VALID/EXPIRED）を判定。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>md_crypt_init()</code>: OpenSSL ライブラリの初期化と乱数シードの生成。</li>
+<li><code>md_crypt_sha256_digest64()</code>: データに対する SHA256 ダイジェストの Base64URL エンコード。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: モジュール起動時に <code>md_crypt_init()</code> が呼ばれ、OpenSSL のアルゴリズム登録と乱数生成器のシード設定が行われます。 2. **鍵生成**: <a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_crypt_h__md_pkeys_spec_t.html&quot;}, '*');"><code>md_pkeys_spec_t</code></a> で要件を定義し、<code>md_pkey_gen()</code> を呼び出すことで <code>md_pkey_t</code> が生成されます。 3. **証明書操作**: <code>md_cert_read_http()</code> 等で外部から取得した証明書を <code>md_cert_t</code> に変換し、<code>md_cert_covers_domain()</code> 等でドメイン整合性を検証します。 4. **メモリ管理**: すべての <code>md_pkey_t</code> および <code>md_cert_t</code> は <code>apr_pool_t</code> に紐付いており、プール破棄時に OpenSSL の内部オブジェクトも適切に解放されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_file_io.h</code>: ファイル入出力操作。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a>: モジュール共通の型定義。</li>
+<li><code>openssl/evp.h</code>, <code>openssl/x509v3.h</code>: OpenSSL のコア機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>md_crypt.c</code></a>: 本ヘッダーで宣言された関数の実装。乱数シード生成のロジックが含まれる。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_jws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_jws.c.html&quot;}, '*');"><code>md_jws.c</code></a>: 本ヘッダーの署名機能を利用して ACME プロトコルの JWS ペイロードを構築する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>: 証明書や秘密鍵の永続化ストレージ管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>md_cert_make()</code> は <code>apr_pool_t</code> による自動解放を前提としますが、<code>md_cert_wrap()</code> は所有権を移転しません。呼び出し側が OpenSSL オブジェクトの寿命を管理する必要があります。</li>
+<li>**OpenSSL バージョン**: <code>OPENSSL_VERSION_NUMBER</code> に基づき、CT（Certificate Transparency）機能の有無や API の差異を吸収するマクロが実装されています。</li>
+<li>**スレッド安全性**: <code>md_crypt_init()</code> は静的フラグ <a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_curl.c.html&quot;}, '*');"><code>initialized</code></a> を使用して一度だけ実行されるよう制御されています。</li>
+<li>**省略された詳細**: 本ヘッダーには OpenSSL の詳細な内部構造体定義は含まれていません。これは <code>mod_md</code> が OpenSSL の実装詳細から分離されることを意図しているためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_pkey_t.html" target="wiki-view"><code>md_pkey_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_pkey_type_t.html" target="wiki-view"><code>md_pkey_type_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_pkey_rsa_params_t.html" target="wiki-view"><code>md_pkey_rsa_params_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_pkey_ec_params_t.html" target="wiki-view"><code>md_pkey_ec_params_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_pkey_spec_t.html" target="wiki-view"><code>md_pkey_spec_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_pkeys_spec_t.html" target="wiki-view"><code>md_pkeys_spec_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_cert_t.html" target="wiki-view"><code>md_cert_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_cert_state_t.html" target="wiki-view"><code>md_cert_state_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_crypt_h__md_sct.html" target="wiki-view"><code>md_sct</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

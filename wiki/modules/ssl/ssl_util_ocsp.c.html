@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_util_ocsp.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');">modules/ssl/ssl_util_ocsp.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> における OCSP (Online Certificate Status Protocol) クライアント機能を実装しています。外部の OCSP レスポンダと通信し、証明書の有効性を検証するためのリクエスト送信およびレスポンス受信を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> の OCSP サブシステムの一部であり、主に <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_ocsp.c.html&quot;}, '*');"><code>ssl_engine_ocsp.c</code></a> や <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_stapling.c.html&quot;}, '*');"><code>ssl_util_stapling.c</code></a> から呼び出される低レベルな通信ユーティリティを提供します。HTTP クライアントライブラリに依存しない、スタンドアロンな簡易 HTTP/1.0 実装を含みます。</p>
+<h2>責務</h2>
+<ul>
+<li>**OCSP リクエストのシリアライズ**: <code>OCSP_REQUEST</code> オブジェクトを HTTP POST リクエスト形式に変換する。</li>
+<li>**ネットワーク通信**: 指定された URI に対して TCP ソケットを確立し、リクエストの送信とレスポンスの受信を行う。</li>
+<li>**レスポンスの解析**: 受信した HTTP レスポンスから OCSP データを抽出し、<code>OCSP_RESPONSE</code> オブジェクトへデコードする。</li>
+<li>**証明書管理**: OCSP 検証に必要な信頼済み証明書チェーンを PEM ファイルから読み込む。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__modssl_dispatch_ocsp_request.html&quot;}, '*');"><code>modssl_dispatch_ocsp_request</code></a>: OCSP 通信のメインエントリポイント。リクエストの送信からレスポンスの取得までを制御する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__serialize_request.html&quot;}, '*');"><code>serialize_request</code></a>: OCSP リクエストを HTTP POST メッセージとして BIO に書き出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__read_response.html&quot;}, '*');"><code>read_response</code></a>: ソケットから HTTP レスポンスを読み取り、OCSP 応答をデコードする。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L401" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__ssl_init_ocsp_certificates.html&quot;}, '*');"><code>ssl_init_ocsp_certificates</code></a>: 設定ファイルで指定された OCSP 信頼証明書を読み込み、検証フラグを更新する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト生成**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__modssl_dispatch_ocsp_request.html&quot;}, '*');"><code>modssl_dispatch_ocsp_request</code></a> が <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__serialize_request.html&quot;}, '*');"><code>serialize_request</code></a> を呼び出し、メモリ BIO に HTTP POST リクエストを作成する。 2. **送信**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L67" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__send_request.html&quot;}, '*');"><code>send_request</code></a> がソケットをオープンし、BIO の内容をネットワークへ送出する。 3. **受信**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__read_response.html&quot;}, '*');"><code>read_response</code></a> がソケットから HTTP ヘッダーを解析し、ボディを BIO に蓄積する。 4. **デコード**: 蓄積された BIO から <code>d2i_OCSP_RESPONSE_bio</code> を用いて OpenSSL の OCSP オブジェクトを生成する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> 内部の共通定義およびマクロ。</li>
+<li><code>apr_buckets.h</code>: HTTP レスポンスのストリーム処理に使用。</li>
+<li><code>apr_uri.h</code>: OCSP レスポンダの URI 解析に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_ocsp.c.html&quot;}, '*');"><code>ssl_engine_ocsp.c</code></a>: OCSP 検証のロジック層。本ファイルの通信関数を利用する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_stapling.c.html&quot;}, '*');"><code>ssl_util_stapling.c</code></a>: OCSP Stapling 実装。証明書検証の文脈で本ファイルと密接に関連する。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**HTTP 実装の限定性**: 本ファイル内の HTTP クライアントは「おもちゃ（toy）」と称される簡易実装です。将来的に Apache が標準的な HTTP クライアントライブラリを採用した際には、大部分が置き換えられる予定です。</li>
+<li>**メモリ保護**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>MAX_HEADERS</code></a> および <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ocsp.c.html#L199" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>MAX_CONTENT</code></a> 定数により、不正なレスポンスによるメモリ枯渇を防ぐための制限が設けられています。</li>
+<li>**OpenSSL 依存**: <code>OPENSSL_NO_OCSP</code> が定義されている環境では、本ファイルの内容は無効化されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__serialize_request.html" target="wiki-view"><code>serialize_request</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__send_request.html" target="wiki-view"><code>send_request</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__get_line.html" target="wiki-view"><code>get_line</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__read_response.html" target="wiki-view"><code>read_response</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__modssl_dispatch_ocsp_request.html" target="wiki-view"><code>modssl_dispatch_ocsp_request</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__modssl_read_ocsp_certificates.html" target="wiki-view"><code>modssl_read_ocsp_certificates</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_ocsp_c__ssl_init_ocsp_certificates.html" target="wiki-view"><code>ssl_init_ocsp_certificates</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

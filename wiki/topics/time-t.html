@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/time-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>time_t</h1>
+<h2>概念</h2>
+<p><code>time_t</code> は、C標準ライブラリで定義されているシステム時刻を保持するためのデータ型です。Apache httpdの <code>modules/md</code> や <code>modules/ssl</code> モジュールにおいては、暗号処理やSSL/TLS通信で使用される擬似乱数生成器（PRNG）を初期化する際、エントロピー（乱雑さ）を供給するための補助的なデータ源として利用されます。</p>
+<h2>なぜ重要か</h2>
+<p>安全な暗号処理や通信を行うためには、予測不可能な乱数生成器の初期化（シード生成）が不可欠です。<code>time_t</code> を用いて取得した現在のシステム時刻は、プロセスID（<code>pid_t</code>）などのプロセス固有の情報と組み合わせることで、初期化時の一意性を高め、乱数シードの予測可能性を低減させるために重要な役割を果たします。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__ssl.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__ssl.html&quot;, &quot;source&quot;: &quot;source/modules/ssl/mod_ssl.c.html&quot;}, '*');"><code>module:modules/ssl</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__md__md_crypt_c__time_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_crypt_c__time_t.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_crypt.c.html#L114&quot;}, '*');"><code>symbol:modules/md/md_crypt.c#time_t</code></a>**</li>
+<p><a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>modules/md/md_crypt.c</code></a> 内で定義されているローカルな構造体 <code>my_seed</code> のメンバとして使用されます。プロセス起動時に現在の時刻とプロセスIDを組み合わせ、乱数状態を確立するために利用されます。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__ssl__ssl_engine_rand_c__time_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_rand_c__time_t.html&quot;, &quot;source&quot;: &quot;source/modules/ssl/ssl_engine_rand.c.html#L96&quot;}, '*');"><code>symbol:modules/ssl/ssl_engine_rand.c#time_t</code></a>**</li>
+<p><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');"><code>modules/ssl/ssl_engine_rand.c</code></a> 内で、組み込みの乱数シード生成（<code>SSL_RSSRC_BUILTIN</code>）を行う際に使用されます。システム時刻をエントロピー源の一部として取得し、OpenSSLの内部状態を初期化するために利用されます。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **時刻の取得**: 乱数シードの生成プロセスにおいて、標準ライブラリ（<code>time()</code> 関数など）を介して現在のシステム時刻が <code>time_t</code> 型として取得されます。 2. **シード構造体の構築**: 取得した <code>time_t</code> 型の時刻は、プロセスID（<code>pid_t</code>）と共に、エントロピー収集用のローカルな構造体 <code>my_seed</code> に格納されます。 ``<code>c struct { time_t t; pid_t pid; } my_seed; </code>`` 3. **乱数生成器への供給**:</p>
+<ul>
+<li>**<code>modules/ssl</code>**: <code>ssl_rand_seed</code> 関数内において、この <code>my_seed</code> 構造体がバイナリデータとして <code>RAND_seed()</code> に渡され、OpenSSLのPRNGの初期化に寄与します。</li>
+<li>**<code>modules/md</code>**: プロセス起動時の乱数状態の確立に使用されますが、提供されたソース情報からは、本シンボルを直接操作する具体的な関数呼び出し元のエンドツーエンドの詳細は完全には特定されていません。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**システム時刻の取得可能性**: 乱数シードの初期化が正しく機能するためには、システム時刻が適切に取得可能である必要があります。</li>
+<li>**一意性の補強**: <code>time_t</code> 単体ではなく、必ずプロセスID（<code>pid_t</code>）と組み合わせた構造体 <code>my_seed</code> として初期化に使用されることで、同一時刻に起動した異なるプロセス間でのシードの重複を防ぐ設計となっています。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**エントロピー強度の過信**: <code>time_t</code>（システム時刻）と <code>pid_t</code> の組み合わせによるシード生成（<code>SSL_RSSRC_BUILTIN</code> など）は、あくまで補助的な手法です。システム時刻が固定されている組み込み環境や、時刻が容易に予測可能な環境ではエントロピーとしての強度が著しく低下するため、この手法のみに依存したセキュリティ設計は避ける必要があります。</li>
+<li>**プラットフォーム依存性**: <code>time_t</code> のサイズやオーバーフローの挙動はプラットフォームの仕様に依存するため、移植性の観点で注意が必要です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>modules/md/md_crypt.c</code></a>（<code>my_seed</code> 構造体を用いた乱数初期化の実装）</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_rand.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_rand.c.html&quot;}, '*');"><code>modules/ssl/ssl_engine_rand.c</code></a>（<code>ssl_rand_seed</code> 関数および <code>SSL_RSSRC_BUILTIN</code> によるシード生成処理）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

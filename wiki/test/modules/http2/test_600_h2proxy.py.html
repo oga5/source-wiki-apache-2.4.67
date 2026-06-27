@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/http2/test_600_h2proxy.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_600_h2proxy.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_600_h2proxy.py.html&quot;}, '*');">test/modules/http2/test_600_h2proxy.py</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_proxy_http2</code> モジュール（h2proxy）の機能検証を行うための統合テストスイートです。HTTP/2 プロキシとしての基本的な動作、接続の再利用、ヘッダー転送、およびエラー処理の妥当性を検証します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> サブシステムの一部として、プロキシ関連のテストケースを網羅します。他のテストファイルが HTTP/2 の基本機能やプロトコル仕様に焦点を当てるのに対し、本ファイルは「バックエンドへのプロキシ転送」という特定のユースケースに特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロキシ設定の検証**: <code>ProxyPass</code> や <code>ProxyPreserveHost</code> を用いた多様なプロキシ構成のテスト。</li>
+<li>**接続再利用の確認**: <code>enablereuse</code> 設定が HTTP/2 ストリームの再利用に与える影響の検証。</li>
+<li>**ヘッダー転送の整合性**: <code>X-Forwarded-*</code> ヘッダーが HTTP/1.1 プロキシと HTTP/2 プロキシ間で一貫しているかの確認。</li>
+<li>**エラーハンドリング**: バックエンドからの 5xx エラーやタイムアウト発生時のプロキシ側の挙動（RST または 502/503 レスポンス）の検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>TestH2Proxy</code>: テストケースを保持するメインクラス。</li>
+<li><code>H2Conf</code>: テスト用の Apache 設定を動的に生成・インストールするためのユーティリティクラス。</li>
+<li><code>env.curl_get</code> / <code>env.curl_raw</code>: <code>curl</code> を用いてプロキシ経由のリクエストを実行し、レスポンスを解析するヘルパー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: 各テストメソッド内で <code>H2Conf</code> を使用し、特定の <code>ProxyPass</code> ルールを含む Apache 設定を生成します。 2. **デプロイ**: <code>env.apache_restart()</code> を呼び出し、生成した設定を反映させます。 3. **実行**: <code>curl</code> を使用してプロキシ経由でバックエンドの CGI スクリプトを叩きます。 4. **検証**: レスポンスに含まれる JSON データ（プロトコルバージョン、ホスト名、ストリーム ID、ヘッダー情報）をアサーションで確認します。 5. **接続再利用の追跡**: <code>h2_stream_id</code> を監視し、同一接続上で複数のリクエストが処理されているかを判定します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>.env</code>: <code>H2Conf</code> および <code>H2TestEnv</code> を提供し、テスト環境の構築と制御を担います。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/env.py.html&quot;}, '*');"><code>test/modules/http2/env.py</code></a>: テスト環境の基盤。<code>H2Conf</code> の詳細な実装が含まれます。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_500_proxy.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_500_proxy.py.html&quot;}, '*');"><code>test/modules/http2/test_500_proxy.py</code></a>: HTTP/1.1 プロキシのテスト。本ファイルとの比較対象として有用です。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**バージョン依存**: 一部のテスト（<code>test_h2_600_04</code> など）には、Apache HTTP Server のバージョン（<code>2.4.60</code> 以上か否か）による挙動の分岐が含まれています。これは、HTTP/2 接続再利用の仕様変更を考慮したものです。</li>
+<li>**デバッグ**: テストが失敗した場合、<code>env.apache_restart()</code> の戻り値や、生成された設定ファイル（通常は <code>gen/</code> ディレクトリ配下）を確認してください。</li>
+<li>**CGI 依存**: バックエンドの検証には <code>htdocs/cgi</code> にあるスクリプトが利用されています。これらはリクエスト情報を JSON で返すため、プロキシの挙動を詳細にトレース可能です。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/set-signals.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>set_signals</h1>
+<h2>概念</h2>
+<p><code>set_signals</code> は、Apache HTTP Serverの特定のマルチプロセッシングモジュール（MPM）において、プロセスの終了、再起動、割り込みなどのシグナルに対するハンドラを登録するための静的関数（<code>static void set_signals(void)</code>）です。プラットフォーム（OS/2やNetWare）ごとに異なるシグナル処理メカニズムを抽象化し、それぞれの環境に適したシグナルハンドリングをセットアップする役割を持ちます。</p>
+<h2>なぜ重要か</h2>
+<p>サーバープロセスが外部からの終了要求（<code>SIGTERM</code>、<code>SIGINT</code>、<code>SIGABRT</code>）や再起動要求（<code>SIGHUP</code>、<code>SIGUSR1</code>）を適切に検知し、安全なシャットダウンや設定の再読み込みといったライフサイクル管理を正しく行うために不可欠です。適切なハンドラをバインドすることで、プロセスの暴走を防ぎ、クリーンな状態遷移を保証します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__mpmt_os2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__mpmt_os2.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/mpmt_os2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__netware.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__netware.html&quot;, &quot;source&quot;: &quot;source/server/mpm/netware/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/netware</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__mpmt_os2__mpmt_os2_c__set_signals.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__set_signals.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpmt_os2.c.html#L377&quot;}, '*');"><code>symbol:server/mpm/mpmt_os2/mpmt_os2.c#set_signals</code></a>（OS/2 親プロセス/共通向け）</li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__set_signals.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__set_signals.html&quot;, &quot;source&quot;: &quot;source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L475&quot;}, '*');"><code>symbol:server/mpm/mpmt_os2/mpmt_os2_child.c#set_signals</code></a>（OS/2 子プロセス向け）</li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__netware__mpm_netware_c__set_signals.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__set_signals.html&quot;, &quot;source&quot;: &quot;source/server/mpm/netware/mpm_netware.c.html#L301&quot;}, '*');"><code>symbol:server/mpm/netware/mpm_netware.c#set_signals</code></a>（NetWare 向け）</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>各プラットフォームおよびプロセスにおける呼び出しと登録の流れは以下の通りです。</p>
+<p>1. **OS/2 親プロセス/共通 (<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>mpmt_os2.c</code></a>)**:</p>
+<ul>
+<li>メイン処理から呼び出され、<code>struct sigaction</code> を使用して <code>SIGTERM</code> および <code>SIGINT</code> に <code>sig_term</code> ハンドラを、<code>SIGHUP</code> および <code>SIGUSR1</code> に <code>sig_restart</code> ハンドラを登録します。</li>
+<li>登録失敗時は <code>ap_log_error</code> で警告をログ出力します。</li>
+</ul>
+<p>2. **OS/2 子プロセス (<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>mpmt_os2_child.c</code></a>)**:</p>
+<ul>
+<li>子プロセスの初期化処理（<code>mpmt_os2_child.c:109</code> など）から呼び出され、<code>struct sigaction</code> を使用して <code>SIGTERM</code> に <code>sig_term</code> ハンドラを、<code>SIGHUP</code> に <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L467" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__sig_hup.html&quot;}, '*');"><code>sig_hup</code></a> ハンドラを登録します。</li>
+<li>登録失敗時は <code>ap_log_error</code> で警告をログ出力します。</li>
+</ul>
+<p>3. **NetWare (<a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>mpm_netware.c</code></a>)**:</p>
+<ul>
+<li><code>mpm_netware.c:896</code> から呼び出され、APR（Apache Portable Runtime）の <code>apr_signal</code> を使用して <code>SIGTERM</code> および <code>SIGABRT</code> に <code>sig_term</code> ハンドラを登録します。</li>
+</ul>
+<p>*注意: シグナルが送信されてから各ハンドラがどのように協調して動作するかといった、システム全体における完全なエンドツーエンドのシグナル伝播フローの全容は、提供された情報からは完全には特定されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**初期化の順序**: OS/2 子プロセスの <code>set_signals</code> では、エラーログ出力に <a class="wiki-source-link" href="../../source/server/config.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_server_conf</code></a> を使用するため、この関数が呼び出される時点でサーバー設定（<a class="wiki-source-link" href="../../source/server/config.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_server_conf</code></a>）が初期化済みでなければなりません。</li>
+<li>**ハンドラの存在**: 登録対象となるハンドラ関数（<code>sig_term</code>, <code>sig_restart</code>, <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L467" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__sig_hup.html&quot;}, '*');"><code>sig_hup</code></a>）が、それぞれのソースファイルとリンク可能、または同一ファイル内で定義されている必要があります。</li>
+<li>**プラットフォーム依存**: 同名の関数 <code>set_signals</code> であっても、OS/2環境では標準の <code>sigaction</code> システムコールを使用し、NetWare環境では <code>apr_signal</code> を使用するという実装上の違いが存在します。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**エラーハンドリングの不完全さ**:</li>
+<li>OS/2環境では、<code>sigaction</code> が失敗した際に警告ログを出力しますが、プロセスの実行自体は継続されます。この場合、シグナルによる終了や再起動が機能しなくなる可能性があります。</li>
+<li>NetWare環境では、<code>apr_signal</code> が失敗した場合の明示的なエラーハンドリングが行われておらず、失敗がサイレントに無視される恐れがあります。</li>
+<li>**プラットフォーム間の混同**: <code>set_signals</code> は複数のMPMで同名で定義されていますが、シグナルの種類や登録方法（<code>sigaction</code> vs <code>apr_signal</code>）が異なります。一方の変更が他方に影響を与えないよう、プラットフォーム固有の実装であることを意識する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a>（OS/2 親プロセスのシグナル設定とハンドラ実装）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a>（OS/2 子プロセスのシグナル設定とハンドラ実装）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a>（NetWare 環境における <code>apr_signal</code> を用いたシグナル設定）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

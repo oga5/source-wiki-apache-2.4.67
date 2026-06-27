@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_push.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_push.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.c.html&quot;}, '*');">modules/http2/h2_push.c</a></h1>
+<h2>概要</h2>
+<p>HTTP/2 のサーバープッシュ機能（Server Push）を管理するモジュールです。主に、レスポンスヘッダーに含まれる <code>Link</code> ヘッダーの解析によるプッシュ候補の抽出と、重複プッシュを防ぐための「プッシュ日記（Push Diary）」の実装を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> の一部として、HTTP/2 ストリームのライフサイクル中にプッシュすべきリソースを特定し、クライアントへ重複したプッシュを送信しないよう制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**Link ヘッダー解析**: <code>Link</code> ヘッダー（<code>rel=preload</code>）を構文解析し、プッシュ対象の URI やパラメータを抽出する。</li>
+<li>**プッシュ候補の生成**: 抽出された情報に基づき、<a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_request.html&quot;}, '*');"><code>h2_request</code></a> オブジェクトを構築する。</li>
+<li>**プッシュ日記（Push Diary）の管理**: 過去にプッシュしたリソースのハッシュ値を保持し、重複プッシュを抑制する。</li>
+<li>**キャッシュダイジェストのエンコード**: Golomb Coded Set (GCS) を用いて、プッシュ日記の内容をバイナリ形式に圧縮・変換する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>Link ヘッダー解析</h3>
+<ul>
+<li><code>link_ctx</code>: 解析状態を保持するコンテキスト構造体。</li>
+<li><code>inspect_link()</code>: <code>Link</code> ヘッダー文字列を走査し、各リンクを解析するエントリポイント。</li>
+<li><code>add_push()</code>: 解析結果からプッシュ条件（<code>preload</code> 等）を検証し、<a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push.html&quot;}, '*');"><code>h2_push</code></a> を生成する。</li>
+</ul>
+<h3>プッシュ日記（Push Diary）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push_diary.html&quot;}, '*');"><code>h2_push_diary</code></a>: プッシュ済みリソースのハッシュ履歴を保持する構造体。</li>
+<li><code>h2_push_diary_create()</code>: 日記インスタンスの初期化。</li>
+<li><code>h2_push_diary_update()</code>: 新たなプッシュ候補を日記に登録し、重複を確認する。</li>
+<li><code>h2_push_diary_digest_get()</code>: 日記の内容を GCS 形式でシリアライズする。</li>
+</ul>
+<h3>ハッシュ計算</h3>
+<ul>
+<li><code>calc_sha256_hash()</code>: OpenSSL 使用時のハッシュ生成（SHA256）。</li>
+<li><code>calc_apr_hash()</code>: OpenSSL 未使用時のフォールバック（<code>apr_hashfunc_default</code>）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **収集**: <code>h2_push_collect()</code> がレスポンスヘッダーを走査し、<code>link_ctx</code> を用いて <code>Link</code> ヘッダーを解析。 2. **検証**: <code>add_push()</code> が <code>rel=preload</code> を確認し、同一権限（authority）内であることを検証して <a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push.html&quot;}, '*');"><code>h2_push</code></a> を作成。 3. **更新**: <code>h2_push_diary_update()</code> が、生成されたプッシュ候補のハッシュを計算し、日記に存在するか確認。</p>
+<ul>
+<li>存在する場合: <code>move_to_last()</code> で最近使用済みリストの末尾へ移動。</li>
+<li>存在しない場合: <code>h2_push_diary_append()</code> で追加。</li>
+<p>4. **圧縮**: <code>h2_push_diary_digest_get()</code> が日記内のハッシュをソートし、<a class="wiki-source-link" href="../../../source/modules/http2/h2_push.c.html#L703" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_c__gset_encoder.html&quot;}, '*');"><code>gset_encoder</code></a> を用いてビットストリームとしてエンコード。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_hash.h</code>, <code>apr_tables.h</code>: データ構造の管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: HTTP ヘッダー処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_request.h.html&quot;}, '*');"><code>h2_request.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>h2_stream.h</code></a>: プッシュリクエストの構築とストリーム状態の参照。</li>
+<li><code>openssl/evp.h</code>: (条件付き) 高精度なハッシュ計算。</li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_time.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.h.html&quot;}, '*');"><code>h2_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.h.html&quot;}, '*');"><code>h2_push.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.h.html&quot;}, '*');"><code>h2_session.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>stdio.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_push.h.html&quot;}, '*');"><code>h2_push.h</code></a>: 公開インターフェースとデータ構造の定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>h2_stream.c</code></a>: ストリームごとのプッシュポリシーの保持と本モジュールの呼び出し。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>h2_session.c</code></a>: セッション単位でのプッシュ日記の保持。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>link_ctx</code> や <a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push_diary.html&quot;}, '*');"><code>h2_push_diary</code></a> はすべて <code>apr_pool_t</code> を介して管理されます。</li>
+<li>**キャッシュダイジェスト**: 本実装は IETF で廃案となった <code>Cache-Digest</code> ドラフトの概念を継承していますが、現在はクライアントからの値を受け取るのではなく、サーバー側のプッシュ履歴を管理する目的で利用されています。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_push.h.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push_diary.html&quot;}, '*');"><code>h2_push_diary</code></a> は最大サイズ（<code>N</code>）に達すると古いエントリから破棄する LRU 的な挙動をします。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_push.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_c__h2_push_collect.html&quot;}, '*');"><code>h2_push_collect</code></a> 内の <code>TODO</code> にある通り、現在は <code>Link</code> ヘッダーのみがプッシュのソースですが、将来的にフックによる拡張が想定されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_push_c__policy_str.html" target="wiki-view"><code>policy_str</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__link_ctx.html" target="wiki-view"><code>link_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__attr_char.html" target="wiki-view"><code>attr_char</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__ptoken_char.html" target="wiki-view"><code>ptoken_char</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__skip_ws.html" target="wiki-view"><code>skip_ws</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__find_chr.html" target="wiki-view"><code>find_chr</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__read_chr.html" target="wiki-view"><code>read_chr</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__mk_str.html" target="wiki-view"><code>mk_str</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__read_qstring.html" target="wiki-view"><code>read_qstring</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__read_ptoken.html" target="wiki-view"><code>read_ptoken</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__h2_push_diary_entry.html" target="wiki-view"><code>h2_push_diary_entry</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_push_c__gset_encoder.html" target="wiki-view"><code>gset_encoder</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

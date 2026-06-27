@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/arch/netware/mod_nw_ssl.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_nw_ssl.c.html&quot;}, '*');">modules/arch/netware/mod_nw_ssl.c</a></h1>
+<h2>概要</h2>
+<p>NetWare プラットフォーム専用の Apache HTTP Server SSL/TLS モジュールです。NetWare OS が提供するネイティブな SSL/TLS 実装（WinSock 拡張）を Apache に統合し、<code>SecureListen</code> ディレクティブによるセキュアなリスニングポートの作成や、RFC 2817 に基づく TLS アップグレード機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p>NetWare 環境における SSL/TLS 処理のゲートウェイです。Apache の標準的な <a class="wiki-source-link" href="../../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> とは異なり、OS レベルの WinSock IOCTL を直接呼び出すことで、NetWare の SSL スタックを利用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リスナー管理**: <code>SecureListen</code> による専用 SSL ポートの作成と、既存リスナーとの統合。</li>
+<li>**TLS アップグレード**: <code>NWSSLUpgradeable</code> による、平文接続から TLS への動的移行（RFC 2817）。</li>
+<li>**接続の抽象化**: <code>ssl_is_https</code> や <code>ssl_var_lookup</code> などのオプション関数を提供し、他モジュール（<code>mod_proxy</code> 等）との連携を可能にする。</li>
+<li>**証明書管理**: NetWare の証明書ストア（KMO）と連携するための証明書リストの構築。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__NWSSLSrvConfigRec.html&quot;}, '*');"><code>NWSSLSrvConfigRec</code></a>: サーバーごとの SSL 設定（リスナーテーブル、アップグレード可能ポートテーブル）を保持。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L104" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__seclisten_rec.html&quot;}, '*');"><code>seclisten_rec</code></a> / <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__seclistenup_rec.html&quot;}, '*');"><code>seclistenup_rec</code></a>: セキュアリスナーおよびアップグレード可能リスナーの定義を保持するリンクリスト構造体。</li>
+</ul>
+<h3>接続・ソケット操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L246" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__make_secure_socket.html&quot;}, '*');"><code>make_secure_socket</code></a>: WinSock IOCTL を使用して SSL 対応のリスニングソケットを生成。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L329" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__convert_secure_socket.html&quot;}, '*');"><code>convert_secure_socket</code></a>: 既存の接続を SSL/TLS に変換する。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L393" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__SSLize_Socket.html&quot;}, '*');"><code>SSLize_Socket</code></a>: アップグレード時にソケットを SSL モードへ切り替える。</li>
+</ul>
+<h3>フック関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L642" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_pre_config.html&quot;}, '*');"><code>nwssl_pre_config</code></a> / <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L730" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_post_config.html&quot;}, '*');"><code>nwssl_post_config</code></a>: 起動時のリスナー再構成とソケットの初期化。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L713" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_pre_connection.html&quot;}, '*');"><code>nwssl_pre_connection</code></a>: 接続開始時に SSL 状態を判定し、必要に応じて設定を適用。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L1148" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__ssl_io_filter_Upgrade.html&quot;}, '*');"><code>ssl_io_filter_Upgrade</code></a>: アップグレード要求を処理する出力フィルタ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L642" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_pre_config.html&quot;}, '*');"><code>nwssl_pre_config</code></a> が既存のリスナーを一時退避させ、<a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L730" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_post_config.html&quot;}, '*');"><code>nwssl_post_config</code></a> が <code>SecureListen</code> で定義された設定に基づき、WinSock を介して SSL 対応ソケットを生成・登録します。 2. **接続時**: <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L713" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_pre_connection.html&quot;}, '*');"><code>nwssl_pre_connection</code></a> が接続を監視し、SSL 接続であれば <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L106" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__secsocket_data.html&quot;}, '*');"><code>secsocket_data</code></a> を接続コンテキストに付与します。 3. **アップグレード**: <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L1148" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__ssl_io_filter_Upgrade.html&quot;}, '*');"><code>ssl_io_filter_Upgrade</code></a> が <code>Upgrade: TLS/1.0</code> ヘッダーを検知すると、101 Switching Protocols を返送し、<a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L393" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__SSLize_Socket.html&quot;}, '*');"><code>SSLize_Socket</code></a> を呼び出してソケットを暗号化状態へ遷移させます。 4. **変数参照**: <code>ssl_var_lookup</code> がリクエストや接続情報から SSL 関連環境変数を抽出します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a> 系: Apache コア API。</li>
+<li><code>apr_portable.h</code> / <code>apr_strings.h</code>: APR 抽象化レイヤー。</li>
+<li><code>unilib.h</code>: NetWare の Unicode 変換ライブラリ。</li>
+<li><code>WinSock (WSAIoctl)</code>: NetWare ネイティブの SSL/TLS 制御インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><code>apr_optional.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_netware.c.html&quot;}, '*');"><code>modules/arch/netware/mod_netware.c</code></a>: NetWare MPM のメインモジュール。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/netware/libprews.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/libprews.c.html&quot;}, '*');"><code>modules/arch/netware/libprews.c</code></a>: NetWare 固有の WinSock 補助関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ほとんどの動的メモリは Apache の <code>pool</code> に紐付けられており、明示的な <code>free</code> は不要です。</li>
+<li>**制約**: NetWare の SSL スタックに依存しているため、<a class="wiki-source-link" href="../../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> のような OpenSSL ベースの柔軟な設定（暗号スイートの細かな制御など）は提供されません。</li>
+<li>**未実装部分**: <code>ssl_var_lookup</code> 内のいくつかの SSL 固有変数（<code>SSL_CIPHER</code> 等）は、NetWare の API 制限により取得できず、コメントアウトされています。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../../../source/modules/arch/netware/mod_nw_ssl.c.html#L642" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_nw_ssl_c__nwssl_pre_config.html&quot;}, '*');"><code>nwssl_pre_config</code></a> でリスナーを操作しているため、このモジュールのロード順序や MPM との整合性は非常に重要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__NWSSLSrvConfigRec.html" target="wiki-view"><code>NWSSLSrvConfigRec</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__seclisten_rec.html" target="wiki-view"><code>seclisten_rec</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__seclistenup_rec.html" target="wiki-view"><code>seclistenup_rec</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__secsocket_data.html" target="wiki-view"><code>secsocket_data</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__build_cert_list.html" target="wiki-view"><code>build_cert_list</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__parse_addr.html" target="wiki-view"><code>parse_addr</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__find_secure_listener.html" target="wiki-view"><code>find_secure_listener</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__get_port_key.html" target="wiki-view"><code>get_port_key</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__make_secure_socket.html" target="wiki-view"><code>make_secure_socket</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__convert_secure_socket.html" target="wiki-view"><code>convert_secure_socket</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__SSLize_Socket.html" target="wiki-view"><code>SSLize_Socket</code></a></li>
+<li><a href="../../../symbols/modules__arch__netware__mod_nw_ssl_c__set_secure_listener.html" target="wiki-view"><code>set_secure_listener</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

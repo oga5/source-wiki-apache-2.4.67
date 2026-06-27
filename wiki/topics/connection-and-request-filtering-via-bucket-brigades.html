@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/connection-and-request-filtering-via-bucket-brigades.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Connection and Request Filtering via Bucket Brigades</h1>
+<h2>概念</h2>
+<p>Apache HTTP Serverにおけるフィルタリングメカニズムは、入力および出力データを **Bucket Brigades**（バケットブリゲード：データのコンテナであるバケットの双方向連結リスト）を介して段階的に処理するアーキテクチャです。</p>
+<p>この仕組みにより、ネットワークから読み込まれた生データは、接続（Connection）レベルおよびリクエスト（Request）レベルのフィルタチェーンを経由して、プロトコル解析、データの変換（圧縮や暗号化など）、およびコンテンツの生成へとシームレスに渡されます。</p>
+<h2>なぜ重要か</h2>
+<ul>
+<li>**メモリ効率の最適化**: データを一括でメモリに展開するのではなく、バケット単位でストリーミング処理するため、大容量ファイルの転送時でもメモリ消費量を最小限に抑えられます。</li>
+<li>**高いモジュール性と柔軟性**: SSL/TLS処理、データの圧縮（DEFLATE）、HTTPプロトコルのフレーミングなどの個々の機能を独立したフィルタとして実装し、動的にチェーンへ挿入・結合できます。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a>** (<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>): フィルタの登録、チェーンの構築、およびフィルタ操作のためのコアAPIとデータ構造を定義します。</li>
+<li>**<a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a>** (<a class="wiki-source-link" href="../../source/modules/http/http_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_core.c.html&quot;}, '*');"><code>modules/http/http_core.c</code></a>, <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>): HTTPプロトコル固有の入力・出力フィルタ（ヘッダー処理、チャンクエンコーディングなど）を実装し、リクエスト処理ライフサイクルに統合します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<code>ap_filter_t</code>** (<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>): 実行中のフィルタインスタンスを表す構造体。チェーン内の次のフィルタ（<code>next</code>）へのポインタや、関連するリクエスト（<code>request_rec</code>）、接続（<code>conn_rec</code>）のコンテキストを保持します。</li>
+<li>**<code>ap_filter_rec_t</code>** (<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>): 登録されたフィルタの静的定義。フィルタ名、処理関数ポインタ、およびフィルタの適用タイプ（プロトコルレベル、コンテンツレベルなど）を保持します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> / <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_header_filter.html&quot;}, '*');"><code>ap_http_header_filter</code></a>** (<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>): HTTPリクエストボディの読み込みや、HTTPレスポンスヘッダーの生成・送信を担う、HTTPプロトコル層の具体的なフィルタ実装です。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、ネットワークソケットの初期化から各フィルタの呼び出しに至る完全なエンドツーエンドの実行フローおよびトリガー条件の全容は完全には特定されていません。</p>
+<p>一般的な処理の流れは以下の通りです： 1. クライアントからの接続が確立されると、接続レベルのフィルタチェーンが構築されます。 2. リクエストヘッダーが解析された後、リクエストレベルの入力・出力フィルタ（<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L340" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_filter.html&quot;}, '*');"><code>ap_http_filter</code></a> や <a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html#L1425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__ap_http_header_filter.html&quot;}, '*');"><code>ap_http_header_filter</code></a> など）がチェーンに挿入されます。 3. コンテンツハンドラがデータを生成して出力する際、データは <code>apr_bucket_brigade</code> に格納され、出力フィルタチェーンを順次通過しながら加工され、最終的にネットワークへ書き込まれます。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、ソースコードから抽出された厳密な不変条件の全容は完全には特定されていません。</p>
+<p>一般的に維持されるべき不変条件は以下の通りです：</p>
+<ul>
+<li>**チェーンの伝播**: 各フィルタは、自身が処理した（または処理をスキップした）Bucket Brigadeを、必ず次のフィルタ（<code>f-&gt;next</code>）に渡さなければなりません。</li>
+<li>**メタデータバケットの尊重**: <code>EOS</code>（End of Stream）や <a class="wiki-source-link" href="../../source/modules/filters/mod_proxy_html.c.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_proxy_html.c.html&quot;}, '*');"><code>FLUSH</code></a> などのメタデータバケットは、データの終端やフラッシュのタイミングを示す重要なシグナルであり、フィルタ内で不適切に破棄してはなりません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**メタデータバケットのハンドリング漏れ**: <code>APR_BUCKET_IS_METADATA</code> で判定されるバケット（特に <code>EOS</code>）を適切に後続フィルタに転送しないと、接続がハングアップしたり、クライアントへのレスポンスが未完了のまま終了したりする原因になります。</li>
+<li>**フィルタの挿入順序の誤り**: フィルタのタイプ（<a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a>）や登録順序が不適切である場合、例えば圧縮フィルタが暗号化フィルタの後に実行されてしまい、データが正しく処理できなくなるなどの問題が発生します。</li>
+<li>**ブリゲードのライフサイクル管理不備**: 一時的に作成したバケットやブリゲードのクリーンアップを怠ると、メモリリークや、解放済みメモリへの不正アクセス（Use-After-Free）を引き起こす可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a>**: フィルタAPIの基本構造、フィルタタイプ、およびチェーン操作関数の定義を確認してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a>**: HTTPプロトコルにおける具体的な入力・出力フィルタの実装例を読み、Bucket Brigadeがどのように操作されるかを理解してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_core.c.html&quot;}, '*');"><code>modules/http/http_core.c</code></a>**: HTTPコアモジュールにおけるフィルタの登録と初期化のプロセスを参照してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

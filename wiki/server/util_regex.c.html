@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_regex.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_regex.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_regex.c.html&quot;}, '*');">server/util_regex.c</a></h1>
+<h2>概要</h2>
+<p>Perl互換の正規表現（PCRE）をラップし、Apache HTTP Server内でより高レベルな操作（コンパイル、置換、マッチング）を簡素化するためのユーティリティ群を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、設定解析やリクエスト処理において正規表現を扱うための抽象化レイヤーを提供します。低レイヤーの <a class="wiki-source-link" href="../../source/include/ap_regex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regex.h.html&quot;}, '*');"><code>ap_regex.h</code></a>（PCREラッパー）を直接操作する負担を軽減します。</p>
+<h2>責務</h2>
+<ul>
+<li>**正規表現のコンパイル**: Perl形式の構文（<code>s/rx/subs/</code> や <code>/rx/</code>）を解析し、実行可能な <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L219" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_rxplus_t.html&quot;}, '*');"><code>ap_rxplus_t</code></a> 構造体を生成する。</li>
+<li>**置換処理**: 正規表現マッチングに基づいた文字列置換を実行する。</li>
+<li>**メモリ管理**: <code>apr_pool_t</code> を利用し、正規表現オブジェクトのライフサイクルを管理する。</li>
+<li>**マッチング情報の抽出**: マッチした部分文字列の取得や、キャプチャグループの管理を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L219" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_rxplus_t.html&quot;}, '*');"><code>ap_rxplus_t</code></a>: 正規表現、置換文字列、フラグ、マッチング結果を保持するメイン構造体。</li>
+<li><code>ap_rxplus_compile()</code>: パターン文字列から <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L219" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_rxplus_t.html&quot;}, '*');"><code>ap_rxplus_t</code></a> を生成するコンストラクタ。</li>
+<li><code>ap_rxplus_exec()</code>: コンパイル済みオブジェクトを用いてマッチングおよび置換を実行する。</li>
+<li><code>ap_rxplus_pmatch()</code>: 特定のキャプチャグループの内容をプールから割り当てられた文字列として取得する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **コンパイル**: <a class="wiki-source-link" href="../../source/server/util_regex.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_regex_c__ap_rxplus_compile.html&quot;}, '*');"><code>ap_rxplus_compile</code></a> が入力文字列を解析し、区切り文字やフラグ（<code>i</code>, <code>m</code>, <code>g</code> 等）を抽出。<a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regcomp.html&quot;}, '*');"><code>ap_regcomp</code></a> を呼び出し、結果をプールに登録されたクリーンアップ関数と共に格納する。 2.  **実行**: <a class="wiki-source-link" href="../../source/server/util_regex.c.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_regex_c__ap_rxplus_exec.html&quot;}, '*');"><code>ap_rxplus_exec</code></a> が <a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L395" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regexec.html&quot;}, '*');"><code>ap_regexec</code></a> を呼び出す。置換（<code>s///</code>）が指定されている場合、<a class="wiki-source-link" href="../../source/server/util.c.html#L457" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_pregsub.html&quot;}, '*');"><code>ap_pregsub</code></a> を用いて置換文字列を生成し、必要に応じて再帰的にマッチングを継続（<code>g</code> フラグ）して文字列を構築する。 3.  **取得**: <a class="wiki-source-link" href="../../source/server/util_regex.c.html#L193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_regex_c__ap_rxplus_match.html&quot;}, '*');"><code>ap_rxplus_match</code></a> や <a class="wiki-source-link" href="../../source/server/util_regex.c.html#L205" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_regex_c__ap_rxplus_pmatch.html&quot;}, '*');"><code>ap_rxplus_pmatch</code></a> を通じて、呼び出し元がマッチした部分文字列にアクセスする。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_pools.h</code>, <code>apr_strings.h</code>: APRのメモリ管理および文字列操作。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_regex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regex.h.html&quot;}, '*');"><code>ap_regex.h</code></a>: Apache標準の正規表現API。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: Apacheのコア定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr_lib.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_pcre.c.html&quot;}, '*');"><code>server/util_pcre.c</code></a>: PCREライブラリとのより直接的な統合。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_regex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regex.h.html&quot;}, '*');"><code>include/ap_regex.h</code></a>: 本ファイルがラップしている低レイヤーAPIの定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**Perl形式のサポート**: 現状のパーサーは単純化されており、複雑なエスケープシーケンスや入れ子構造には制限があります。</li>
+<li>**メモリの安全性**: <code>rx-&gt;match</code> は <a class="wiki-source-link" href="../../source/server/util_regex.c.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_regex_c__ap_rxplus_exec.html&quot;}, '*');"><code>ap_rxplus_exec</code></a> に渡された元の文字列へのポインタです。<code>exec</code> を呼び出すたびに内容が更新されるため、マッチ結果を保持したい場合は <a class="wiki-source-link" href="../../source/server/util_regex.c.html#L205" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_regex_c__ap_rxplus_pmatch.html&quot;}, '*');"><code>ap_rxplus_pmatch</code></a> を使用してコピーを作成してください。</li>
+<li>**TODO**: コード内のコメントにある通り、置換文字列内の高度な解析や、Perlの前後参照（look-around）などは未実装です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_regex_c__rxplus_cleanup.html" target="wiki-view"><code>rxplus_cleanup</code></a></li>
+<li><a href="../symbols/server__util_regex_c__ap_rxplus_compile.html" target="wiki-view"><code>ap_rxplus_compile</code></a></li>
+<li><a href="../symbols/server__util_regex_c__ap_rxplus_exec.html" target="wiki-view"><code>ap_rxplus_exec</code></a></li>
+<li><a href="../symbols/server__util_regex_c__ap_rxplus_nmatch.html" target="wiki-view"><code>ap_rxplus_nmatch</code></a></li>
+<li><a href="../symbols/server__util_regex_c__ap_rxplus_match.html" target="wiki-view"><code>ap_rxplus_match</code></a></li>
+<li><a href="../symbols/server__util_regex_c__ap_rxplus_pmatch.html" target="wiki-view"><code>ap_rxplus_pmatch</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

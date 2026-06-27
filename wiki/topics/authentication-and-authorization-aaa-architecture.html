@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/authentication-and-authorization-aaa-architecture.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Authentication and Authorization (AAA) Architecture</h1>
+<h2>概念</h2>
+<p>Apache HTTP ServerにおけるAAA（認証・認可）アーキテクチャは、認証（Authentication: authn）と認可（Authorization: authz）の処理を分離し、それぞれを独立したプロバイダーとしてプラグイン可能（疎結合）にする設計パターンです。 認証プロバイダー（<a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;}, '*');"><code>authn_provider</code></a>）がユーザーの身元（資格情報）を検証し、認可プロバイダー（<a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_provider.html&quot;}, '*');"><code>authz_provider</code></a>）がそのユーザーに対するアクセス権限を判定します。</p>
+<h2>なぜ重要か</h2>
+<p>このアーキテクチャにより、認証方式（Basic認証など）と、バックエンドのユーザーデータベース（ファイル、LDAP、データベースなど）、および認可ルール（<code>Require</code> ディレクティブ）を柔軟に組み合わせて構成することが可能になります。コアモジュールが仲介役となることで、個々の認証・認可モジュールは自身の固有ロジックに専念できます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__aaa.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__aaa.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_access_compat.c.html&quot;}, '*');"><code>module:modules/aaa</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__mod_auth_h__authn_provider.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;, &quot;source&quot;: &quot;source/include/mod_auth.h.html#L80&quot;}, '*');"><code>symbol:include/mod_auth.h#authn_provider</code></a>**: 認証プロバイダーが実装すべきインターフェース。パスワード検証用の <code>check_password</code> や、レルムハッシュ取得用の <code>get_realm_hash</code> を定義します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/include__mod_auth_h__authz_provider.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_provider.html&quot;, &quot;source&quot;: &quot;source/include/mod_auth.h.html#L103&quot;}, '*');"><code>symbol:include/mod_auth.h#authz_provider</code></a>**: 認可プロバイダーが実装すべきインターフェース。<code>Require</code> 設定行の解析を行う <code>parse_require_line</code> と、アクセス可否を判定する <code>check_authorization</code> を定義します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_auth_basic.c.html#L291&quot;}, '*');"><code>symbol:modules/aaa/mod_auth_basic.c#authenticate_basic_user</code></a>**: HTTP Basic 認証の仲介を行う関数。登録された <a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;}, '*');"><code>authn_provider</code></a> を順次呼び出して資格情報を検証します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__aaa__mod_authz_core_c__authorize_user.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authorize_user.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_authz_core.c.html#L919&quot;}, '*');"><code>symbol:modules/aaa/mod_authz_core.c#authorize_user</code></a>**: 認可処理のコア部分で呼び出される関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **設定解析時**: サーバー起動時または設定再読み込み時に、<a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_provider.html&quot;}, '*');"><code>authz_provider</code></a> の <code>parse_require_line</code> が呼び出され、<code>Require</code> ディレクティブの構文チェックと最適化が行われます。 2. **リクエスト受信時（認証フェーズ）**:</p>
+<ul>
+<li><code>AuthType Basic</code> などの設定に基づき、<a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_basic.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html&quot;}, '*');"><code>authenticate_basic_user</code></a> などの認証ハンドラが起動します。</li>
+<li>クライアントから送られた <code>Authorization</code> ヘッダーから資格情報を抽出します。</li>
+<li>設定された <a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;}, '*');"><code>authn_provider</code></a> の <code>check_password</code> または <code>get_realm_hash</code> を呼び出して検証します。</li>
+<p>3. **リクエスト受信時（認可フェーズ）**:</p>
+<li>認証成功後、<code>mod_authz_core</code> などの認可コアモジュールが <a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html#L919" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authorize_user.html&quot;}, '*');"><code>authorize_user</code></a> を介して認可処理を進行します。</li>
+<li>登録された <a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_provider.html&quot;}, '*');"><code>authz_provider</code></a> の <code>check_authorization</code> を呼び出し、アクセスを許可（<code>AUTHZ_GRANTED</code>）するかどうかを判定します。</li>
+</ul>
+<p>*注意: 認証から認可へ至る詳細な内部遷移や、<a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html#L919" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authorize_user.html&quot;}, '*');"><code>authorize_user</code></a> の具体的な内部フローなど、エンドツーエンドの完全な流れは現時点ではすべて解明されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**認証プロバイダーの戻り値**: <code>check_password</code> および <code>get_realm_hash</code> は、成否に応じて適切な <a class="wiki-source-link" href="../../source/include/mod_auth.h.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_status.html&quot;}, '*');"><code>authn_status</code></a> を返さなければなりません。</li>
+<li>**認可設定の事前解析**: <code>parse_require_line</code> は設定読み込み時に一度だけ実行され、リクエスト処理時の負荷を軽減するために解析結果を <code>parsed_require_line</code> に格納して引き渡す必要があります。</li>
+<li>**権限委譲（Authoritative）**: <a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_basic.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html&quot;}, '*');"><code>authenticate_basic_user</code></a> において、<code>authoritative</code> 設定が有効な場合は認証失敗時に即座に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L513" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_UNAUTHORIZED</code></a> を返しますが、無効な場合は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a> を返して後続の認証モジュールへ処理を委譲します。</li>
+</ul>
+<p>*注意: モジュール間におけるその他の詳細な不変条件やスレッドセーフティに関する制約は、現時点ではすべて解明されていません。*</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**AuthNameの未設定**: Basic認証を使用する際、<code>AuthName</code> が設定されていないと <a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_basic.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html&quot;}, '*');"><code>authenticate_basic_user</code></a> は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> を返します。</li>
+<li>**プロバイダーの未登録/ロード失敗**: 必要な認証プロバイダーがロードされていない、または登録されていない場合、デフォルトプロバイダーの取得に失敗し、サーバーエラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a>）となります。</li>
+<li>**解析エラーによる起動失敗**: <code>parse_require_line</code> がエラーメッセージ（文字列）を返した場合、サーバーの設定読み込み自体が失敗し、起動できなくなります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>include/mod_auth.h</code></a> (認証・認可プロバイダーの構造体定義)</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_auth_basic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_basic.c.html&quot;}, '*');"><code>modules/aaa/mod_auth_basic.c</code></a> (Basic認証の仲介処理の実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authn_core.c</code></a> (認証コアの管理ロジック)</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authz_core.c</code></a> (認可コアおよび <a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html#L919" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authorize_user.html&quot;}, '*');"><code>authorize_user</code></a> の実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

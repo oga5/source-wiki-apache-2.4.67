@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/http2/ws_server.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/http2/ws_server.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/ws_server.py.html&quot;}, '*');">test/modules/http2/ws_server.py</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、HTTP/2 テストスイート内で使用されるスタンドアロンの WebSocket エコーサーバーです。主に WebSocket プロトコルの挙動検証や、サーバー側の応答テストを目的として実装されています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> ディレクトリにおいて、WebSocket 関連のテストケース（例: <a class="wiki-source-link" href="../../../../source/test/modules/http2/test_800_websockets.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_800_websockets.py.html&quot;}, '*');"><code>test_800_websockets.py</code></a>）が通信相手として利用するサーバープロセスを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>指定されたポートで WebSocket サーバーを起動し、接続を待機する。</li>
+<li>リクエストパスに基づいたルーティング（<a class="wiki-source-link" href="../../../../source/modules/echo/mod_echo.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/echo/mod_echo.c.html&quot;}, '*');"><code>echo</code></a>, <a class="wiki-source-link" href="../../../../source/modules/filters/sed0.c.html#L869" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__sed0_c__text.html&quot;}, '*');"><code>text</code></a>, <code>file</code>）の実行。</li>
+<li>ファイル転送時のバッファサイズ制御や遅延挿入など、テスト用の特殊な応答パターンの生成。</li>
+<li>接続終了時の適切なステータスコード返却。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>on_async_conn</code>: 接続ごとのハンドラ。パスを解析し、エンドポイントに応じた処理を振り分ける中心的な関数。</li>
+<li><code>run_server</code>: <code>websockets.server.serve</code> を用いてサーバーを非同期実行する。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/echo/mod_echo.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/echo/mod_echo.c.html&quot;}, '*');"><code>echo</code></a>: <code>/echo</code> エンドポイント専用のループ処理。受信したメッセージをそのまま送信する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **起動**: <code>main()</code> が引数からポート番号を受け取り、<code>run_server()</code> を呼び出す。 2. **接続**: <code>on_async_conn</code> が新しい WebSocket 接続を捕捉し、パス（<code>rpath</code>）を分割して処理を分岐する。 3. **処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/echo/mod_echo.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/echo/mod_echo.c.html&quot;}, '*');"><code>echo</code></a>: <code>async for</code> ループでメッセージを反復処理し、即座に返送。</li>
+<li><code>file</code>: 指定されたファイルをバイナリモードで読み込み、設定されたバッファサイズと遅延時間に従ってチャンク単位で送信。</li>
+<p>4. **終了**: 処理完了後、<code>conn.close()</code> を呼び出し接続をクローズする。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>asyncio</code>: 非同期処理の基盤。</li>
+<li><code>websockets</code>: WebSocket プロトコル実装ライブラリ。</li>
+<li><code>argparse</code>, <code>logging</code>, <code>os</code>, <code>sys</code>: 標準ライブラリによる環境設定およびロギング。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_800_websockets.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_800_websockets.py.html&quot;}, '*');"><code>test/modules/http2/test_800_websockets.py</code></a>: 本サーバーをテスト対象として呼び出し、クライアント側の挙動を検証するテストコード。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本サーバーはテスト専用であり、セキュリティや堅牢性は考慮されていません。</li>
+<li><code>file</code> エンドポイントでは、パスの先頭に <code>../</code> を付与してファイルシステムにアクセスするため、実行ディレクトリには注意が必要です。</li>
+<li><code>time.sleep</code> が使用されているため、大量のデータ転送や遅延設定時にはイベントループがブロックされる可能性がある点に留意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

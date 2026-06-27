@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html&quot;}, '*');">parent_info_t</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2.c:100</code></li>
+</ul>
+<h2>目的</h2>
+<p>OS/2 プラットフォームにおいて、親プロセスから子プロセスへリスナーソケット情報と同期用ミューテックスを共有メモリ経由で受け渡すためのデータ構造です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct {
+    HMTX accept_mutex;
+    listen_socket_t listeners[1];
+} parent_info_t;</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: 親プロセスが共有メモリを確保する際、リスナー数に応じて動的にサイズを計算し、本構造体を配置します。</li>
+<li>**出力**: 子プロセスが共有メモリから本構造体を読み取り、リスナーソケットの取得およびミューテックスによる排他制御を行います。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>親プロセスによって共有メモリ上に確保される必要があります。</li>
+<li><code>listeners</code> 配列は、実際のリスナー数に応じてメモリ領域が拡張されることを前提としています（<code>sizeof(parent_info_t) + num_listeners * sizeof(listen_socket_t)</code> で確保）。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. 親プロセスが <code>DosAllocSharedMem</code> を使用して本構造体をメモリ上に確保します。 2. 親プロセスがリスナーソケット情報を <code>listeners</code> 配列に格納します。 3. 子プロセスが <code>DosGetNamedSharedMem</code> を通じてこのメモリ領域にアクセスし、共有されたソケットとミューテックスを取得します。 4. 子プロセス終了後、共有メモリは解放されます。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/mpm/mpmt_os2/mpmt_os2.c:114</code> (変数宣言)</li>
+<li><code>server/mpm/mpmt_os2/mpmt_os2.c:196</code> (変数宣言)</li>
+<li><code>server/mpm/mpmt_os2/mpmt_os2.c:217</code> (メモリ確保時のサイズ計算)</li>
+<li>**呼び出し先**: 構造体内部の <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__listen_socket_t.html&quot;}, '*');"><code>listen_socket_t</code></a> および OS/2 API の <code>HMTX</code> 型（ミューテックスハンドル）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__listen_socket_t.html&quot;}, '*');"><code>listen_socket_t</code></a>: 本構造体に含まれる、リスナーソケット情報を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>共有メモリの確保に失敗した場合、プロセス間でのソケット受け渡しが不可能となり、子プロセスの起動が失敗します。</li>
+<li><code>listeners[1]</code> は固定長ですが、実際にはメモリ確保時に後続の領域を含めてアクセスされるため、確保サイズと実際のリスナー数の整合性が取れていない場合、メモリ破壊が発生します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は OS/2 の共有メモリモデルに強く依存しています。</li>
+<li><code>listeners</code> 配列のサイズは動的であるため、構造体定義の <code>[1]</code> はあくまでプレースホルダーとして扱われています。メモリ確保ロジックを変更する際は、<code>sizeof</code> 計算箇所との整合性に注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__mpmt_os2__mpmt_os2_c__master_main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>master_main</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2.c:192</code></li>
+</ul>
+<h2>目的</h2>
+<p>OS/2 MPM における親プロセスのメイン処理を実行し、子プロセスの生成、監視、およびライフサイクル管理を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int master_main()</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>入力: グローバル変数 <a class="wiki-source-link" href="../../source/server/config.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_server_conf</code></a>（サーバー設定）、<code>ap_listeners</code>（リスナーソケットリスト）、<a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a>（スコアボード）。</li>
+<li>出力: 終了ステータス（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> または <a class="wiki-source-link" href="../../source/include/httpd.h.html#L462" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DONE</code></a>）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L711" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_setup_listeners.html&quot;}, '*');"><code>ap_setup_listeners</code></a> が成功し、リスナーソケットが利用可能であること。</li>
+<li>共有メモリ（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html&quot;}, '*');"><code>parent_info_t</code></a>）およびスコアボード用の共有メモリが正常に確保されていること。</li>
+<li><code>HARD_SERVER_LIMIT</code>（10）がプロセス数の上限として適用される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: シグナルハンドラを設定し、リスナーソケットを準備する。 2. **共有リソース確保**: リスナーソケット情報を格納する共有メモリを <code>DosAllocSharedMem</code> で確保し、OS/2 ミューテックス <code>ap_mpm_accept_mutex</code> を作成する。 3. **スコアボード初期化**: 未初期化であればスコアボード用共有メモリを確保し初期化する。 4. **メインループ**:</p>
+<ul>
+<li>現在の稼働プロセス数をカウントし、<code>ap_daemons_to_start</code> に達するまで <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');"><code>spawn_child</code></a> を呼び出して子プロセスを生成する。</li>
+<li><code>DosWaitChild</code> で子プロセスの終了を非ブロックで監視する。</li>
+<li>子プロセスが終了していればスコアボードを更新し、致命的エラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a>）であればループを抜ける。</li>
+<li>終了フラグが立つまで <code>apr_sleep</code> で待機する。</li>
+<p>5. **終了処理**: 全子プロセスにシグナル（<code>SIGTERM</code> または <code>SIGHUP</code>）を送信し、共有メモリを解放して終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>呼び出し元: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L111" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__mpmt_os2_run.html&quot;}, '*');"><code>mpmt_os2_run</code></a>（<code>server/mpm/mpmt_os2/mpmt_os2.c:171</code>）。</li>
+<li>呼び出し先: <code>set_signals</code>, <a class="wiki-source-link" href="../../source/server/listen.c.html#L711" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__ap_setup_listeners.html&quot;}, '*');"><code>ap_setup_listeners</code></a>, <code>DosAllocSharedMem</code>, <code>apr_psprintf</code>, <code>apr_os_sock_get</code>, <code>DosCreateMutexSem</code>, <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L150" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_init_scoreboard.html&quot;}, '*');"><code>ap_init_scoreboard</code></a>, <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L138" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_calc_scoreboard_size.html&quot;}, '*');"><code>ap_calc_scoreboard_size</code></a>, <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L93" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__ap_mpm_child_main.html&quot;}, '*');"><code>ap_mpm_child_main</code></a>, <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');"><code>spawn_child</code></a>, <code>DosWaitChild</code>, <code>apr_sleep</code>, <code>kill</code>, <code>DosFreeMem</code>。</li>
+<li>注記: <code>server/mpm/winnt/</code> 内のコードにも同名のシンボルへの言及があるが、本ファイル（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>mpmt_os2.c</code></a>）の文脈とは異なる。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__parent_info_t.html&quot;}, '*');"><code>parent_info_t</code></a>: リスナーソケット情報とミューテックスを保持する共有メモリ構造体。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__listen_socket_t.html&quot;}, '*');"><code>listen_socket_t</code></a>: 個別のリスナーソケット情報を保持。</li>
+<li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__scoreboard.html&quot;}, '*');"><code>scoreboard</code></a>: プロセス状態を管理する共有メモリ領域。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>リスナーソケットのセットアップ失敗時: <code>!OK</code> を返して終了。</li>
+<li>共有メモリ確保失敗時: <code>!OK</code> を返して終了。</li>
+<li>ミューテックス作成失敗時: <code>!OK</code> を返して終了。</li>
+<li>子プロセスが <a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a> で終了した場合: ループを中断しサーバーを停止する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は OS/2 の <code>Dos</code> 系 API に強く依存しており、移植性は考慮されていない。</li>
+<li><code>HARD_SERVER_LIMIT</code> によるプロセス数制限（10）がハードコードされている点に注意すること。</li>
+<li>共有メモリの解放（<code>DosFreeMem</code>）はループ終了後のクリーンアップ時にのみ行われる。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

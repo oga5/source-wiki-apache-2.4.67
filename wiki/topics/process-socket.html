@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/process-socket.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>process_socket</h1>
+<h2>概念</h2>
+<p><code>process_socket</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）である <code>event</code> および <code>worker</code> において、クライアントから受け入れた個々のネットワークソケット接続を処理するための内部関数です。</p>
+<h2>なぜ重要か</h2>
+<p>この関数は、各MPMのワーカースレッド（<code>worker_thread</code>）から直接呼び出され、接続の初期化、ステータスの更新、および実際の接続処理をキックする重要なエントリーポイントです。MPMのアーキテクチャ（スレッド駆動の <code>worker</code> と、イベント駆動の <code>event</code>）に応じて、ソケットのライフサイクルを適切に管理する役割を担っています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__process_socket.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__process_socket.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L1005&quot;}, '*');"><code>symbol:server/mpm/event/event.c#process_socket</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__process_socket.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__process_socket.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L477&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#process_socket</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>詳細なエンドツーエンドの流れは完全には解析されていませんが、静的解析から以下の流れが確認されています。</p>
+<p>1. **呼び出し元**: どちらのMPMでも、ワーカースレッドである <code>worker_thread</code> から <code>process_socket</code> が呼び出されます。 2. **共通の初期処理**: どちらの関数も、スコアボードハンドルの作成や更新（<a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L432" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_create_sb_handle.html&quot;}, '*');"><code>ap_create_sb_handle</code></a>, <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_update_sb_handle.html&quot;}, '*');"><code>ap_update_sb_handle</code></a>）を行います。 3. **worker MPM での流れ**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> を呼び出して接続を同期的に処理します。</li>
+<li>処理終了後、<a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> を呼び出してソケットを閉じます。</li>
+<p>4. **event MPM での流れ**:</p>
+<li>非同期イベント駆動処理に対応するため、接続状態（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L215" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_conn_state_t.html&quot;}, '*');"><code>event_conn_state_t</code></a>）を管理します。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L5355" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_pre_connection.html&quot;}, '*');"><code>ap_pre_connection</code></a> による事前処理、キューへの追加・削除（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__TO_QUEUE_APPEND.html&quot;}, '*');"><code>TO_QUEUE_APPEND</code></a>, <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L317" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__TO_QUEUE_REMOVE.html&quot;}, '*');"><code>TO_QUEUE_REMOVE</code></a>）、サスペンドやレジュームの通知（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L831" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__notify_suspend.html&quot;}, '*');"><code>notify_suspend</code></a>, <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L838" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__notify_resume.html&quot;}, '*');"><code>notify_resume</code></a>）など、イベントループと連携した複雑な制御を行います。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<p>現時点では、詳細な不変条件は解析されていません。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では、具体的な落とし穴や失敗モードは解析されていません。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （<code>process_socket</code> の定義およびイベント駆動処理の実装）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （<code>process_socket</code> の定義およびスレッド駆動処理の実装）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

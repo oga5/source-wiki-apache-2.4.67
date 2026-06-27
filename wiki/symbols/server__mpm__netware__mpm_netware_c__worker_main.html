@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__netware__mpm_netware_c__worker_main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>worker_main</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/netware/mpm_netware.c:336</code></li>
+</ul>
+<h2>目的</h2>
+<p>NetWare 環境における Apache ワーカースレッドのメインループを実行し、リスニングソケットの監視、クライアント接続の受け入れ、およびリクエスト処理を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>void worker_main(void *arg)</code></pre>
+<ul>
+<li><code>arg</code>: スレッド識別番号（<code>int</code> 型としてキャストして使用）。</li>
+</ul>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>arg</code>（スレッド番号）。グローバル変数 <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>listenfds</code></a>（監視対象ソケット）、<code>pmain</code>（メインプール）、<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a> 等を参照。</li>
+<li>**出力**: なし（戻り値は <code>void</code>）。副作用としてスコアボードの更新、接続の処理、およびスレッドの終了を行う。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>呼び出し時に <code>pmain</code> プールが初期化されていること。</li>
+<li><code>die_now</code> フラグが偽である間、スレッドは生存し続ける。</li>
+<li><code>requests_this_child</code> が <a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a> を超えた場合、または終了シグナルが検知された場合にスレッドは終了する。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: スレッド固有のメモリプール（<code>ptrans</code>）とバケットアロケータを作成し、<a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L143" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>worker_thread_count</code></a> をインクリメントする。 2. **メインループ**: <code>die_now</code> が真になるまで以下を繰り返す。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>ap_max_requests_per_child</code></a> に達していないか確認し、超過時は終了処理へ移行。</li>
+<li><code>select()</code> を使用して <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>listenfds</code></a> を監視し、接続要求を待機する。</li>
+<li>接続要求を検知した場合、<code>apr_socket_accept()</code> でソケットを受け入れる。</li>
+<li><code>ap_run_create_connection</code> を呼び出し、接続を確立する。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> でリクエストを処理し、<a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> で接続を閉じる。</li>
+<p>3. **終了処理**: <code>clean_child_exit</code> を呼び出し、リソースを解放してスレッドを終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/netware/mpm_netware.c:553</code> において、<code>NXContextAlloc</code> の引数として関数ポインタが渡されている。</li>
+<li>**呼び出し先**: <code>clean_child_exit</code>, <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L575" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_update_child_status_from_indexes.html&quot;}, '*');"><code>ap_update_child_status_from_indexes</code></a>, <code>select</code>, <code>apr_socket_accept</code>, <code>ap_run_create_connection</code>, <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a>, <a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> 等。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_pool_t *ptrans</code>: リクエストごとのトランザクション用メモリプール。</li>
+<li><code>ap_listen_rec</code>: リスニングソケットのリスト。</li>
+<li><code>fd_set main_fds</code>: <code>select()</code> 用のファイル記述子セット。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>select()</code> がエラーを返した場合、ログを出力し <code>apr_thread_yield()</code> を実行して再試行する。</li>
+<li><code>apr_socket_accept()</code> が <code>EAGAIN</code> 以外のエラーを返した場合、エラーの種類に応じてログ出力または <code>clean_child_exit</code> によるスレッド終了を行う。</li>
+<li>ネットワーク層が停止している場合（<code>ENETDOWN</code>）、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L345" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDFATAL</code></a> を指定してサーバー全体の終了を試みる。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は NetWare の NKS スレッドとして動作するため、ブロッキング操作には注意が必要。</li>
+<li><code>last_lr</code> を保持することで、複数のリスニングソケット間での負荷分散（スターベーション防止）を行っている。</li>
+<li><code>DBINFO_ON</code> が定義されている場合、デバッグ用の統計情報が収集される。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

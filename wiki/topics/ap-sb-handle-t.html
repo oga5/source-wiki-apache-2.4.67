@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/ap-sb-handle-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_sb_handle_t</h1>
+<h2>概念</h2>
+<p><code>ap_sb_handle_t</code> は、Apache HTTP Server において特定のワーカープロセスまたはスレッドのスコアボード（実行時状態）を識別・参照するためのハンドルです。</p>
+<p>公開ヘッダである <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a> では不透明な構造体（Opaque Structure）として宣言されており、実装ファイルである <a class="wiki-source-link" href="../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a> 内部で具体的なメンバが定義されています。</p>
+<h2>なぜ重要か</h2>
+<p>MPM（Multi-Processing Module）や各種モジュール（<code>mod_echo</code> など）が、共有メモリ上に配置されたスコアボード内の特定のスロット（<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__worker_score.html&quot;}, '*');"><code>worker_score</code></a>）を特定し、状態の更新や統計情報の読み書きを安全に行うための共通の識別キーとして機能するためです。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__scoreboard_h__ap_sb_handle_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__ap_sb_handle_t.html&quot;, &quot;source&quot;: &quot;source/include/scoreboard.h.html#L167&quot;}, '*');"><code>symbol:include/scoreboard.h#ap_sb_handle_t</code></a>**</li>
+<p>外部モジュール向けに公開されている不透明な型定義。直接メンバにアクセスさせず、API 経由での操作を強制します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__scoreboard_c__ap_sb_handle_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_sb_handle_t.html&quot;, &quot;source&quot;: &quot;source/server/scoreboard.c.html#L107&quot;}, '*');"><code>symbol:server/scoreboard.c#ap_sb_handle_t</code></a>**</li>
+<p>スコアボード実装内部で定義されている具体的な構造体。以下のメンバを持ち、共有メモリ上のオフセットを特定するために使用されます。 ``<code>c struct ap_sb_handle_t { int child_num; int thread_num; }; </code>``</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **ハンドルの生成**: <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L432" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_create_sb_handle.html&quot;}, '*');"><code>ap_create_sb_handle</code></a> などの関数を通じて、特定の <code>child_num</code> および <code>thread_num</code> を保持する <code>ap_sb_handle_t</code> が生成・初期化されます。 2. **状態の更新・参照**: MPM やモジュール（例: <code>mod_echo</code> 内の <a class="wiki-source-link" href="../../source/modules/echo/mod_echo.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__update_echo_child_status.html&quot;}, '*');"><code>update_echo_child_status</code></a>）が、このハンドルを <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L590" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_update_child_status.html&quot;}, '*');"><code>ap_update_child_status</code></a> や <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L692" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_get_scoreboard_worker.html&quot;}, '*');"><code>ap_get_scoreboard_worker</code></a> などのスコアボード操作 API に引数として渡します。 3. **共有メモリへのアクセス**: API 内部でハンドル内のインデックス情報を基に、共有メモリ上の該当する <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__worker_score.html&quot;}, '*');"><code>worker_score</code></a> 構造体を特定し、統計情報や状態の書き換えを行います。</p>
+<p>※なお、ハンドルが生成されてから破棄されるまでの完全なライフサイクルや、具体的なメモリ確保・解放の全容は提供された情報からは完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**有効なインデックスの保持**: ハンドル内の <code>child_num</code> および <code>thread_num</code> は、常にスコアボードの有効な範囲内のインデックスを指していなければなりません。</li>
+<li>**単一所有者による書き込み**: 本ハンドルが指すスコアボード上のスロットは、単一の所有者（ワーカー）のみが書き込むことを想定しており、排他制御なしでの更新が可能です。</li>
+<li>**インデックスの不変性**: メモリレイアウト設計上、このハンドルが指すインデックスは初期化後に変更されない前提で運用されます。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**直接アクセスの禁止**: <code>ap_sb_handle_t</code> は不透明な型として設計されているため、外部モジュールから直接メンバにアクセスしてはいけません。必ず <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L692" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_get_scoreboard_worker.html&quot;}, '*');"><code>ap_get_scoreboard_worker</code></a> などの公開 API を経由する必要があります。</li>
+<li>**未初期化・無効なハンドルの使用**: 初期化されていない、または無効なインデックスを保持したハンドルを使用すると、スコアボードのメモリ領域外へのアクセスや、誤った統計情報の更新といった未定義動作を引き起こす原因になります。</li>
+<li>**定義の不整合**: 本構造体は <a class="wiki-source-link" href="../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a> と <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a> の両方に関連定義が存在するため、構造を変更する際は両者の整合性を慎重に確認する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/include__scoreboard_h__ap_sb_handle_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__ap_sb_handle_t.html&quot;, &quot;source&quot;: &quot;source/include/scoreboard.h.html#L167&quot;}, '*');"><code>symbol:include/scoreboard.h#ap_sb_handle_t</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/server__scoreboard_c__ap_sb_handle_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_sb_handle_t.html&quot;, &quot;source&quot;: &quot;source/server/scoreboard.c.html#L107&quot;}, '*');"><code>symbol:server/scoreboard.c#ap_sb_handle_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

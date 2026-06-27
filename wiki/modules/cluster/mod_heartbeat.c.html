@@ -1,0 +1,85 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/cluster/mod_heartbeat.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartbeat.c.html&quot;}, '*');">modules/cluster/mod_heartbeat.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_heartbeat</code> は、Apache HTTP Server の現在の負荷状況（Ready/Busy 状態）を定期的に UDP マルチキャストで外部へ通知するためのモジュールです。<code>mod_watchdog</code> を利用してバックグラウンドで動作し、サーバーのスコアボード情報を集計して送信します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/cluster</code> サブシステムにおいて、本モジュールは「情報発信側」の役割を担います。対となる <code>mod_heartmonitor</code> が受信した情報を収集・管理するのに対し、本モジュールは自身の稼働状況をネットワーク上にブロードキャストします。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷情報の集計**: スコアボードを走査し、現在のプロセス/スレッドの稼働状態（Ready/Busy）をカウントする。</li>
+<li>**定期通知の実行**: <code>mod_watchdog</code> のフックを利用し、一定間隔で UDP パケットを送信する。</li>
+<li>**設定管理**: <code>HeartbeatAddress</code> ディレクティブによるマルチキャスト先アドレスの定義と、モジュール設定の保持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・状態管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_ctx_t.html&quot;}, '*');"><code>hb_ctx_t</code></a>: モジュールのサーバー設定構造体。マルチキャスト先アドレス、スレッド/サーバー制限値、アクティブフラグを保持。</li>
+<li><code>heartbeat_module</code>: Apache モジュール定義構造体。</li>
+</ul>
+<h3>Watchdog フック（ライフサイクル）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_init.html&quot;}, '*');"><code>hb_watchdog_init</code></a>: MPM の制限値（スレッド/サーバー数）を初期化時に取得。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_step.html&quot;}, '*');"><code>hb_watchdog_step</code></a>: メインのループ処理。<a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_monitor.html&quot;}, '*');"><code>hb_monitor</code></a> を呼び出し、負荷情報を送信する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L140" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_need.html&quot;}, '*');"><code>hb_watchdog_need</code></a>: <a class="wiki-source-link" href="../../../source/modules/core/mod_watchdog.h.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WATCHDOG_SINGLETON</code></a> を要求し、単一プロセスでの実行を保証。</li>
+</ul>
+<h3>処理・設定コマンド</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_monitor.html&quot;}, '*');"><code>hb_monitor</code></a>: スコアボードを走査し、UDP ソケット経由で <code>v=1&amp;ready=X&amp;busy=Y</code> 形式の文字列を送信する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L166" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__cmd_hb_address.html&quot;}, '*');"><code>cmd_hb_address</code></a>: <code>HeartbeatAddress</code> ディレクティブのハンドラ。アドレスの解析と <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_ctx_t.html&quot;}, '*');"><code>hb_ctx_t</code></a> への格納を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_register_hooks.html&quot;}, '*');"><code>hb_register_hooks</code></a> が <code>mod_watchdog</code> の各フェーズを登録。 2. **設定**: <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L166" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__cmd_hb_address.html&quot;}, '*');"><code>cmd_hb_address</code></a> が設定を解析し、<a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_ctx_t.html&quot;}, '*');"><code>hb_ctx_t</code></a> に <code>apr_sockaddr_t</code> を生成・保持。 3. **定期実行**: <code>mod_watchdog</code> が <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_step.html&quot;}, '*');"><code>hb_watchdog_step</code></a> を呼び出す。 4. **集計と送信**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_monitor.html&quot;}, '*');"><code>hb_monitor</code></a> が <a class="wiki-source-link" href="../../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a> を走査。</li>
+<li><code>mpm_generation</code> を確認し、現在の世代のプロセスのみをカウント対象とする。</li>
+<li><code>apr_socket_sendto</code> を使用して UDP パケットを送信。</li>
+<li>送信後、ソケットは即座にクローズされる。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_watchdog.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>mod_watchdog.h</code></a>: 定期実行のトリガー。</li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: サーバーの稼働状況取得。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: MPM の制限値および世代情報の取得。</li>
+<li><code>apr_network_io.h</code> (間接的): ソケット通信。</li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartmonitor.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>modules/cluster/mod_heartmonitor.c</code></a>: 本モジュールが送信したパケットを受信し、クラスター全体の負荷状況を追跡する対となるモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_ctx_t.html&quot;}, '*');"><code>hb_ctx_t</code></a> はサーバープール (<a class="wiki-source-link" href="../../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>) 上に割り当てられます。ソケット通信に使用するプールは <a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cluster__mod_heartbeat_c__hb_monitor.html&quot;}, '*');"><code>hb_monitor</code></a> に渡される一時的なプールであり、送信ごとにソケットの生成・破棄が行われます。</li>
+<li>**制約**: <code>HeartbeatAddress</code> はグローバルコンテキストでのみ指定可能です。</li>
+<li>**エラー処理**: ソケット作成や送信失敗時は <code>ap_log_error</code> で警告が出力されますが、処理は継続されます。</li>
+<li>**未実装/浅い部分**: 本モジュールは送信のみに特化しており、受信側の確認やパケットの暗号化・認証機能は含まれていません。また、<a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartbeat.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartbeat.c.html&quot;}, '*');"><code>HEARTBEAT_INTERVAL</code></a> はコンパイル時定数として固定されており、実行時の動的な変更はできません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_ctx_t.html" target="wiki-view"><code>hb_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_monitor.html" target="wiki-view"><code>hb_monitor</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_init.html" target="wiki-view"><code>hb_watchdog_init</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_exit.html" target="wiki-view"><code>hb_watchdog_exit</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_step.html" target="wiki-view"><code>hb_watchdog_step</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_watchdog_need.html" target="wiki-view"><code>hb_watchdog_need</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_register_hooks.html" target="wiki-view"><code>hb_register_hooks</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__hb_create_config.html" target="wiki-view"><code>hb_create_config</code></a></li>
+<li><a href="../../symbols/modules__cluster__mod_heartbeat_c__cmd_hb_address.html" target="wiki-view"><code>cmd_hb_address</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/authentication-and-authorization-provider-architecture.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Authentication and Authorization Provider Architecture</h1>
+<h2>概念</h2>
+<p>Apache HTTP Server（httpd）における **Authentication and Authorization Provider Architecture**（認証・認可プロバイダアーキテクチャ）は、ユーザーの本人確認を行う「認証（Authentication / authn）」と、リソースへのアクセス権限を検証する「認可（Authorization / authz）」の機能を分離し、それぞれをプラグイン可能なプロバイダとしてモジュール化する共通フレームワークです。</p>
+<p>このアーキテクチャにより、コアとなるアクセス制御ロジックと、具体的なバックエンド（テキストファイル、データベース、LDAPなど）への問い合わせロジックが疎結合に保たれます。</p>
+<h2>なぜ重要か</h2>
+<p>1. **柔軟な拡張性**: 新しい認証方式や認可ルールを導入する際、コアモジュールを書き換えることなく、独自のプロバイダモジュールを追加するだけで対応できます。 2. **設定の共通化と組み合わせ**: <code>mod_authn_core</code> および <code>mod_authz_core</code> が提供する共通ディレクティブ（<code>AuthBasicProvider</code> や <code>&lt;RequireAll&gt;</code> などの論理コンテナ）を使用することで、複数のプロバイダを組み合わせた複雑なアクセス制御を統一された方法で記述できます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__aaa.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__aaa.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_access_compat.c.html&quot;}, '*');"><code>module:modules/aaa</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>include/mod_auth.h</code></a>**: </li>
+<p>認証および認可プロバイダが実装すべきインターフェース（構造体定義や共通の戻り値ステータスなど）を定義します。プロバイダ登録のための共通APIやマクロが提供されます。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authn_core.c</code></a>**: </li>
+<p>認証（authn）のコアフレームワークです。認証プロバイダ（例: <code>file</code>, <code>dbm</code>）の登録管理、および <code>AuthType</code> や <code>AuthName</code> などの認証ディレクティブの処理を担当します。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authz_core.c</code></a>**: </li>
+<p>認可（authz）のコアフレームワークです。認可プロバイダ（例: <code>user</code>, <code>group</code>, <code>ip</code>）の登録管理、および <code>Require</code> ディレクティブや、それらをネストして論理評価するコンテナ（<code>&lt;RequireAll&gt;</code>, <code>&lt;RequireAny&gt;</code>, <code>&lt;RequireNone&gt;</code>）の処理を担当します。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **リクエストの受信とフェーズの開始**: クライアントからのリクエストがアクセス制限されたディレクトリに到達すると、Apacheのフック機構を介してAAA処理が開始されます。 2. **認証（Authentication）フェーズ**:</p>
+<ul>
+<li><code>mod_authn_core</code> が、設定された認証プロバイダ（例: <code>AuthBasicProvider file</code> であれば <code>mod_authn_file</code>）を呼び出します。</li>
+<li>プロバイダは <a class="wiki-source-link" href="../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>include/mod_auth.h</code></a> で定義されたインターフェースに従い、クライアントから送られた資格情報（パスワードなど）を検証します。</li>
+<p>3. **認可（Authorization）フェーズ**:</p>
+<li>認証が成功すると、<code>mod_authz_core</code> が <code>Require</code> ディレクティブに指定された認可プロバイダを呼び出します。</li>
+<li>認可プロバイダは、認証されたユーザー名やクライアントのIPアドレスなどの属性を基に、アクセスを許可するかどうかを判定します。</li>
+</ul>
+<p>*注意: 提供されたソースコード（<a class="wiki-source-link" href="../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>, <a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>mod_authn_core.c</code></a>, <a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>mod_authz_core.c</code></a>）の範囲外にある具体的なフックの呼び出し順序や、他モジュールとの詳細な内部遷移フローの全容は、本コンテキストからは完全には特定されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**認証と認可の分離**: 認可処理（authz）は、認証処理（authn）によってユーザーの識別子が確定しているか、あるいはアノニマスアクセスが明示的に許可されていることを前提として動作します。</li>
+<li>**プロバイダ登録のライフサイクル**: すべての認証・認可プロバイダは、Apacheの起動（初期化）フェーズにおいて、<a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a> を用いて対応するコアモジュール（<code>authn</code> または <code>authz</code> グループ）に登録されていなければなりません。</li>
+</ul>
+<p>*注意: スレッドセーフティやメモリ管理に関する詳細な不変条件は、提供されたコンテキストからは完全には特定されていません。*</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**プロバイダの未ロード**: 設定ファイル（<code>httpd.conf</code>）で <code>AuthBasicProvider file</code> のようにプロバイダを指定していても、該当する実体モジュール（<code>mod_authn_file</code> など）がロードされていない場合、実行時にプロバイダが見つからずエラーとなります。</li>
+<li>**認可コンテナの評価順序の誤解**: <code>&lt;RequireAll&gt;</code> や <code>&lt;RequireAny&gt;</code> などのコンテナをネストさせる際、評価の優先順位や否定条件（<code>Require not</code>）の挙動を誤解すると、意図しないアクセス許可や拒否が発生しやすくなります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>include/mod_auth.h</code></a> (プロバイダ構造体定義と共通APIの確認)</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authn_core.c</code></a> (認証プロバイダの登録とディレクティブ処理の実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authz_core.c</code></a> (認可プロバイダの登録とRequireコンテナの評価ロジックの実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

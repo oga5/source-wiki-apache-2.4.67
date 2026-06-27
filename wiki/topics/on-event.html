@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/on-event.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>on_event</h1>
+<h2>概念</h2>
+<p><code>on_event</code> は、Apache HTTP Server（httpd-2.4.67）の複数の独立したモジュール（<code>mod_http2</code> および <code>mod_md</code>）において、イベント駆動型の処理や状態遷移、通知処理を行うために定義されている内部関数またはコールバック関数です。これらは同名ですが、それぞれ異なる目的と文脈で使用される独立したシンボルです。</p>
+<h2>なぜ重要か</h2>
+<ul>
+<li>**<code>mod_http2</code> における重要性**: HTTP/2 ストリームの状態遷移ロジックをカプセル化し、発生したイベント（<code>h2_stream_event_t</code>）に応じた適切な状態遷移を保証するために不可欠です。また、外部モニターへのイベント通知も担います。</li>
+<li>**<code>mod_md</code> における重要性**: ACME などのマネージドドメイン（Managed Domains）管理において、<code>md_event</code> サブシステムからのイベント通知を受け取り、関連するジョブの通知処理（<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__notify.html&quot;}, '*');"><code>notify</code></a>）へ転送する役割を果たします。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_stream_c__on_event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__on_event.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_stream.c.html#L167&quot;}, '*');"><code>symbol:modules/http2/h2_stream.c#on_event</code></a>: HTTP/2 ストリームの状態遷移およびモニター通知を行う関数。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__md__mod_md_c__on_event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__on_event.html&quot;, &quot;source&quot;: &quot;source/modules/md/mod_md.c.html#L222&quot;}, '*');"><code>symbol:modules/md/mod_md.c#on_event</code></a>: <code>md_event</code> サブシステムからのイベントを <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__notify.html&quot;}, '*');"><code>notify</code></a> 関数へ転送するコールバック関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>これら2つの関数は独立して動作するため、システム全体を横断する単一のエンドツーエンドの流れは存在しません。それぞれのモジュールにおける流れは以下の通りです。</p>
+<h3><code>mod_http2</code> における流れ</h3>
+<p>1. ストリームの状態遷移を伴う処理（<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>h2_stream.c</code></a> 内の各所、例: <code>399</code>, <code>469</code>, <code>523</code> 行目など）から <code>on_event</code> が呼び出されます。 2. ストリームに <code>monitor</code> が登録されている場合、<code>stream-&gt;monitor-&gt;on_event</code> コールバックが呼び出され、イベントが通知されます。 3. イベント <code>ev</code> が状態遷移テーブル <code>trans_on_event</code> の範囲内にあるか検証されます。 4. 範囲内であれば、<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L132" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__on_map.html&quot;}, '*');"><code>on_map</code></a> を介して現在の <code>stream-&gt;state</code> とイベントから次の状態を算出して返します。範囲外の場合は現在の状態をそのまま返します。</p>
+<h3><code>mod_md</code> における流れ</h3>
+<p>1. <code>modules/md/mod_md.c:891</code> において、<a class="wiki-source-link" href="../../source/modules/md/md_event.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_event_c__md_event_subscribe.html&quot;}, '*');"><code>md_event_subscribe</code></a> を通じて本関数がイベント購読者として登録されます。 2. <code>md_event</code> サブシステムからイベントが通知されると、本関数が呼び出されます。 3. 本関数は、受け取った引数（<code>job</code>、<code>event</code>、<code>result</code>、<a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>、<code>baton</code>）をそのまま <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__notify.html&quot;}, '*');"><code>notify</code></a> 関数に引き渡して実行し、その結果（<code>apr_status_t</code>）を返します。なお、<code>mdomain</code> 引数は無視されます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**<code>mod_http2</code>**:</li>
+<li>関数開始時に <code>H2_STRM_ASSERT_MAGIC(stream, H2_STRM_MAGIC_OK)</code> が実行され、ストリーム構造体の整合性が常に検証されます。</li>
+<li>イベント <code>ev</code> が定義範囲外（<code>trans_on_event</code> の範囲外）の場合、状態は遷移せず、現在の <code>stream-&gt;state</code> が維持されます。</li>
+<li>**<code>mod_md</code>**:</li>
+<li><code>mdomain</code> 引数は関数内で使用されず、明示的にキャストされて無視されます。</li>
+<li>イベント処理の結果は、呼び出し先の <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__notify.html&quot;}, '*');"><code>notify</code></a> 関数の実行結果に完全に依存します。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**名前の混同**: <code>modules/http2</code> の <code>on_event</code> と <code>modules/md</code> の <code>on_event</code> は、名前は同じですが完全に異なるシグネチャと目的を持つ独立した関数です。これらを混同しないよう注意が必要です。</li>
+<li>**<code>mod_http2</code> における変更**: 状態遷移ルールを変更する際、<code>on_event</code> 自体ではなく、状態遷移テーブル <code>trans_on_event</code> の定義を適切に更新する必要があります。</li>
+<li>**<code>mod_md</code> における拡張**: 本関数は現状、<a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__notify.html&quot;}, '*');"><code>notify</code></a> への単なるパススルー（転送）として実装されています。将来的にイベントのフィルタリングやログ出力を追加する場合は、この関数内に実装を追加する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a> (特に <code>on_event</code> の定義、<code>trans_on_event</code> テーブル、および <a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L132" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__on_map.html&quot;}, '*');"><code>on_map</code></a> 関数)</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a> (特に <code>on_event</code> の定義、<a class="wiki-source-link" href="../../source/modules/md/md_event.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_event_c__md_event_subscribe.html&quot;}, '*');"><code>md_event_subscribe</code></a> による登録箇所、および <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__notify.html&quot;}, '*');"><code>notify</code></a> 関数)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/input-and-output-filters-bucket-brigades.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Input and Output Filters (Bucket Brigades)</h1>
+<h2>概念</h2>
+<p>Apache HTTP Serverにおけるフィルタシステムは、リクエストおよびレスポンスのデータを段階的に処理・加工するための仕組みです。データは「バケットブリゲード（<code>apr_bucket_brigade</code>）」と呼ばれるバケットの連結リスト構造に格納され、フィルタチェーン（登録されたフィルタの連鎖）を介して順次受け渡されます。</p>
+<h2>なぜ重要か</h2>
+<p>この仕組みにより、データの生成元（コンテンツハンドラなど）と、データの加工処理（バイトレンジの切り出し、チャンクエンコーディングなど）を独立したモジュールとして分離できます。各フィルタは、バケットブリゲードを受け取り、必要な加工を施して次のフィルタへ渡す（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a>）という単一の責務に集中できるため、柔軟で拡張性の高いHTTP処理パイプラインが実現されます。</p>
+<h2>関与するモジュール</h2>
+<p>提供されたソースコード情報に基づき、以下のモジュールが関与しています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (フィルタ定義のヘッダーファイルなど)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a> (HTTPプロトコル固有のフィルタ実装)</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> (フィルタチェーンの基盤管理)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__util_filter_h__ap_filter_rec_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_rec_t.html&quot;, &quot;source&quot;: &quot;source/include/util_filter.h.html#L199&quot;}, '*');"><code>symbol:include/util_filter.h#ap_filter_rec_t</code></a>**: フィルタの定義情報（名前、実行関数、フィルタ型、プロトコル制約など）を保持する構造体。フィルタチェーンの構築や順序付けに使用されます。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http__byterange_filter_c__ap_byterange_filter.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html#L399&quot;}, '*');"><code>symbol:modules/http/byterange_filter.c#ap_byterange_filter</code></a>**: HTTP <code>Range</code> リクエストを処理し、指定されたバイト範囲のみを切り出して送信する出力フィルタ。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html&quot;, &quot;source&quot;: &quot;source/modules/http/chunk_filter.c.html#L47&quot;}, '*');"><code>symbol:modules/http/chunk_filter.c#ap_http_chunk_filter</code></a>**: HTTP/1.1 のチャンク転送エンコーディングを適用し、レスポンスボディをチャンク形式に変換する出力フィルタ。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **フィルタの登録**: 各フィルタ（<a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html#L399" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;}, '*');"><code>ap_byterange_filter</code></a> や <a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html&quot;}, '*');"><code>ap_http_chunk_filter</code></a> など）は、<code>ap_filter_rec_t</code> を用いてシステムに登録されます。 2. **フィルタチェーンの構築**: リクエスト処理時に、登録されたフィルタがその型（<a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a>）に基づいてソートされ、チェーンが形成されます。 3. **データの処理と伝播**:</p>
+<ul>
+<li>上流からバケットブリゲード（<code>apr_bucket_brigade</code>）が渡されます。</li>
+<li>各フィルタはブリゲード内のバケットを走査・加工します。</li>
+<li>例: <a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html#L399" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;}, '*');"><code>ap_byterange_filter</code></a> は、指定された範囲のデータを抽出し、適切なヘッダーを付与します。</li>
+<li>例: <a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html&quot;}, '*');"><code>ap_http_chunk_filter</code></a> は、データ長を計算して16進数のサイズヘッダーと <code>CRLF</code> を付与し、チャンク化します。</li>
+<li>加工されたブリゲードは <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介して次の下流フィルタへ送信されます。</li>
+<p>4. **終了処理**: <code>EOS</code>（End of Stream）バケットを検出すると、フィルタは自身の役割を終え、必要に応じてフィルタチェーンから自身を削除（<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L475" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_remove_output_filter.html&quot;}, '*');"><code>ap_remove_output_filter</code></a>）します。</p>
+</ul>
+<p>*注意: フィルタチェーン全体の初期化から最終的なネットワーク送信に至る完全なエンドツーエンドの制御フローの詳細は、提供されたモジュール情報からはすべて特定されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**フィルタの順序**: フィルタは <a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a> に基づいて厳密にソートされます。</li>
+<li>**サブリクエストの制限**: <code>AP_FTYPE_CONNECTION</code> 以上の型を持つフィルタは、サブリクエスト内では使用できません。</li>
+<li>**バイトレンジ処理の前提**: <a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html#L399" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;}, '*');"><code>ap_byterange_filter</code></a> が動作するためには、ブリゲード内に <code>EOS</code> バケットが存在し、かつすべてのバケットの長さが確定している必要があります。条件を満たさない場合、フィルタは自身を削除して処理をバイパスします。</li>
+<li>**チャンクフィルタのスタック変数**: <a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html&quot;}, '*');"><code>ap_http_chunk_filter</code></a> 内の <code>chunk_hdr</code> はスタック上に確保されるため、関数を抜ける前にデータがコピーされる必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**不適切なフィルタ順序**: フィルタの登録順序や型定義（<a class="wiki-source-link" href="../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a>）が不適切な場合、意図しない順序でフィルタが実行され、データが破損する可能性があります。</li>
+<li>**データ長不明時のバイパス**: パイプなどから読み込まれたデータでバケット長が不明（<code>-1</code>）な場合、<a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html#L399" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__byterange_filter_c__ap_byterange_filter.html&quot;}, '*');"><code>ap_byterange_filter</code></a> は安全のために処理をスキップします。これを考慮しないと、レンジリクエストが機能しない原因になります。</li>
+<li>**エラー時の不完全な終了処理**: <a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__chunk_filter_c__ap_http_chunk_filter.html&quot;}, '*');"><code>ap_http_chunk_filter</code></a> において、バックエンドエラー（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L541" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_BAD_GATEWAY</code></a>）が発生した場合は、最終チャンクマーカー（<code>0\r\n\r\n</code>）の付与を意図的にスキップします。これを誤って付与すると、クライアントが不完全なレスポンスを正常終了と誤認する落とし穴があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> (フィルタ構造体およびAPI定義)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/byterange_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/byterange_filter.c.html&quot;}, '*');"><code>modules/http/byterange_filter.c</code></a> (バイトレンジフィルタの実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http/chunk_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/chunk_filter.c.html&quot;}, '*');"><code>modules/http/chunk_filter.c</code></a> (チャンクエンコーディングフィルタの実装)</li>
+<li><a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a> (コアフィルタの実装と管理)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

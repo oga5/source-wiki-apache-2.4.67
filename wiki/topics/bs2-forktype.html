@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/bs2-forktype.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>bs2_ForkType</h1>
+<h2>概念</h2>
+<p><code>bs2_ForkType</code> は、BS2000（OSD/POSIX）環境において Apache HTTP Server がプロセスを生成（fork）する際の手法を識別・管理するための列挙型（<code>enum</code>）です。この型は、標準の <code>fork()</code> を使用するか、BS2000 特有の <code>ufork()</code> を使用するか、あるいはフォークを行わないかを決定するために用いられます。</p>
+<h2>なぜ重要か</h2>
+<p>BS2000 環境では、実行時のユーザー権限（uid）や起動オプション（<code>-X</code> フラグなど）に応じて、適切なプロセス生成手法を選択する必要があります。特に、ユーザーIDの切り替えが必要な場合には、OS固有の <code>ufork()</code> を使用する必要があり、<code>bs2_ForkType</code> はこのプロセス生成戦略を安全かつ適切に切り替えるための識別子として機能します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/os__bs2000.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__bs2000.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/ebcdic.c.html&quot;}, '*');"><code>module:os/bs2000</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/os__unix.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__unix.html&quot;, &quot;source&quot;: &quot;source/os/unix/os.h.html&quot;}, '*');"><code>module:os/unix</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/os__bs2000__os_c__bs2_ForkType.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__bs2000__os_c__bs2_ForkType.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/os.c.html#L35&quot;}, '*');"><code>symbol:os/bs2000/os.c#bs2_ForkType</code></a>: BS2000 固有の OS 処理コードにおける列挙型定義。</li>
+<li><a class="wiki-entity-link" href="../symbols/os__unix__unixd_c__bs2_ForkType.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_c__bs2_ForkType.html&quot;, &quot;source&quot;: &quot;source/os/unix/unixd.c.html#L635&quot;}, '*');"><code>symbol:os/unix/unixd.c#bs2_ForkType</code></a>: UNIX 互換レイヤー（BS2000 サポートを含む）における列挙型定義。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **初期状態**: 各ソースファイル内の静的変数 <code>static bs2_ForkType forktype</code> は、初期状態として <code>bs2_unknown</code> に設定されます。 2. **判定**: <code>os_forktype()</code> 関数（<a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> および <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> に存在）が呼び出され、実行環境の条件（引数 <code>one_process</code>、ユーザーIDが 0 か否かなど）に基づいて適切な <code>bs2_ForkType</code> を判定し、静的変数 <code>forktype</code> にキャッシュします。</p>
+<ul>
+<li><code>-X</code> フラグ指定時などは <code>bs2_noFORK</code> と判定されます。</li>
+<li>ユーザーIDが 0（<a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a>）以外の場合は <code>bs2_FORK</code>（標準の <code>fork()</code>）と判定されます。</li>
+<li>ユーザーIDの切り替えが必要な通常状態では <code>bs2_UFORK</code>（<code>ufork()</code>）と判定されます。</li>
+<p>3. **実行**: <code>os_fork()</code> などのプロセス生成処理において、キャッシュされた <code>forktype</code> の値に応じた分岐が行われ、実際のプロセス生成が実行されます。</p>
+</ul>
+<p>※なお、詳細な初期化タイミングや、<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> と <a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> の間での具体的な呼び出し連携の完全なエンドツーエンドの制御フローは、提供された情報からは完全には特定されていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**プラットフォーム限定**: 本列挙型および関連ロジックは、<code>_OSD_POSIX</code> マクロが定義されている BS2000 環境でのみ有効です。一般的な Unix/Linux 環境では使用されません。</li>
+<li>**初期値**: 未初期化状態を示す値は常に <code>bs2_unknown</code> です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**重複定義と整合性**: <code>bs2_ForkType</code> は <a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> と <a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> の両方で個別に定義されています。そのため、一方の定義や判定ロジックを変更する際は、もう一方との整合性を維持する必要があります。</li>
+<li>**未初期化状態の参照**: <code>forktype</code> が <code>bs2_unknown</code> のままプロセス生成ロジックが進行した場合の挙動については、提供されたソース情報からは判断できません。</li>
+<li>**OS固有の制約**: <code>bs2_UFORK</code> で使用される <code>ufork()</code> は、ユーザー名の大文字変換など BS2000 固有の制約を伴うため、挙動の変更には注意が必要です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> : <code>bs2_ForkType</code> の定義、および <code>os_forktype()</code>, <code>os_fork()</code> による具体的な判定と分岐ロジック。</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> : UNIX 互換レイヤー側での <code>bs2_ForkType</code> の定義と <code>os_forktype()</code> の実装。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

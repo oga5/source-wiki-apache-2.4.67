@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__connection_c__ap_start_lingering_close.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/connection.c.html#L121" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_start_lingering_close.html&quot;}, '*');">ap_start_lingering_close</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/connection.c:121</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP 接続終了時、TCP レベルでの正常な終了（FIN ハンドシェイク）を保証するために、残存データのフラッシュと書き込み側のシャットダウンを開始する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>int ap_start_lingering_close(conn_rec *c)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>conn_rec *c</code>（対象となる接続のレコード）</li>
+<li>**出力**: <code>int</code> 型。成功または処理継続が必要な場合は <code>0</code>、エラー発生時や即時終了が決定した場合は <code>1</code> を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>c</code> に関連付けられたソケット（<code>csd</code>）が有効であること（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2332" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_assert</code></a> により検証）。</li>
+<li>呼び出し前に <a class="wiki-source-link" href="../../source/server/connection.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_prep_lingering_close.html&quot;}, '*');"><code>ap_prep_lingering_close</code></a> が実行され、リンガリングの準備が整っていること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <a class="wiki-source-link" href="../../source/server/core.c.html#L5204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_get_conn_socket.html&quot;}, '*');"><code>ap_get_conn_socket</code></a> を介して接続ソケットを取得する。 2. <code>ap_prep_lingering_close(c)</code> を呼び出し、準備が完了していれば <code>1</code> を返して終了する。 3. <code>ap_flush_conn(c)</code> を呼び出し、バッファ内に残っているデータをクライアントへ送信する。 4. <code>NO_LINGCLOSE</code> が定義されていない場合、<code>apr_socket_shutdown(csd, APR_SHUTDOWN_WRITE)</code> を実行し、クライアントに対して FIN パケットを送信して書き込み側を閉じる。 5. 接続が既に異常終了（<code>c-&gt;aborted</code>）している場合、またはシャットダウンに失敗した場合は <code>1</code> を返す。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/connection.c:165</code></li>
+<li><code>server/mpm/event/event.c:1557</code></li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L5204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_get_conn_socket.html&quot;}, '*');"><code>ap_get_conn_socket</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_prep_lingering_close.html&quot;}, '*');"><code>ap_prep_lingering_close</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L93" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_flush_conn.html&quot;}, '*');"><code>ap_flush_conn</code></a></li>
+<li><code>apr_socket_shutdown</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>conn_rec</code>: 接続状態を保持する構造体。<code>aborted</code> フラグが含まれる。</li>
+<li><code>apr_socket_t</code>: APR レベルのソケットハンドル。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>csd</code> が <code>NULL</code> の場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2332" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_assert</code></a> によりプロセスが異常終了する。</li>
+<li><code>apr_socket_shutdown</code> が失敗した場合、その戻り値（非ゼロ）がそのまま関数の戻り値として伝播する。</li>
+<li><code>c-&gt;aborted</code> が真の場合、シャットダウン処理をスキップして <code>1</code> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はリンガリング・クローズの「開始」フェーズを担当する。この後、実際にソケットを閉じるまでの待機処理は <a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> が担う。</li>
+<li><code>NO_LINGCLOSE</code> マクロが定義されている環境では、リンガリング処理がバイパスされる点に注意すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

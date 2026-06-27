@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/automated-certificate-management-mod-md.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Automated Certificate Management (mod_md)</h1>
+<h2>概念</h2>
+<p><code>Automated Certificate Management (mod_md)</code> は、Apache HTTP ServerにおいてACME（Automated Certificate Management Environment）プロトコルを利用し、SSL/TLS証明書の自動取得、更新、および管理を行う仕組みです。これにより、手動での証明書更新作業を不要にし、Webサーバー単体でセキュアな通信環境を維持できます。</p>
+<h2>なぜ重要か</h2>
+<p>従来のSSL/TLS証明書管理では、有効期限の監視、CSR（証明書署名要求）の作成、認証局（CA）への申請、証明書の配置、およびサーバーの再起動を手動で行う必要があり、期限切れによるサービス停止のリスクが常に存在していました。<code>mod_md</code> を導入することで、これらのプロセスがバックグラウンドで自動化され、運用コストの削減と設定ミスの防止が実現されます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本機能は主に以下のソースファイルで定義されるコンポーネント群によって構成されています。</p>
+<ul>
+<li>**ACMEドライバ (<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>modules/md/md_acme.c</code></a>)**: CA（Let&#x27;s Encryptなど）とのACMEプロトコルに基づく通信、アカウント登録、チャレンジ（検証）の実行、および証明書のダウンロードを処理します。</li>
+<li>**レジストリ (<a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>modules/md/md_reg.c</code></a>)**: 管理対象ドメイン（Managed Domains）の設定、状態、および更新スケジュールの管理を司ります。</li>
+<li>**ストア (<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>modules/md/md_store.c</code></a>)**: 取得した証明書、秘密鍵、アカウントメタデータなどをローカルのファイルシステム等に安全に保存・ロードする永続化レイヤーを提供します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細な関数呼び出しレベルでのエンドツーエンドのフロー（例：特定のイベントトリガーから証明書がメモリにロードされるまでの厳密なコールスタックやシグナルハンドリング）は完全には判明していません。</p>
+<p>一般的な処理の流れは以下の通りです。 1. **ドメイン監視**: <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a> が管理対象ドメインの証明書有効期限を監視し、更新が必要なタイミングを判定します。 2. **ACMEプロトコルの実行**: 更新が必要な場合、<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> がCAに対して証明書発行要求を送信し、指定されたチャレンジ（HTTP-01など）を実行します。 3. **証明書の永続化**: チャレンジ成功後、CAから発行された証明書と秘密鍵を <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> を介してストレージに安全に保存します。 4. **適用**: 新しい証明書がWebサーバーに適用されます。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、コードレベルでの厳密な不変条件（例：トランザクション処理中のファイルロックの排他制御、ACMEチャレンジ実行中の状態遷移の整合性など）は完全には特定されていません。</p>
+<p>設計上の基本的な不変条件は以下の通りです。</p>
+<ul>
+<li>**秘密鍵の秘匿性**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> によって保存される秘密鍵は、適切なファイルパーミッションによって保護され、外部から直接アクセスできない状態を維持しなければなりません。</li>
+<li>**通信の安全性**: <a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> によるCAとの通信は、常に暗号化されたHTTPS接続を介して行われなければなりません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>現時点では、具体的なエラーコードや特定のネットワークトポロジーにおける詳細な不具合（例：ファイアウォールによるACMEチャレンジポートの遮断、DNSレコードの伝播遅延による検証失敗など）の具体的な挙動は完全には特定されていません。</p>
+<p>一般的な運用上の注意点として、CA側のレートリミット（発行回数制限）への抵触や、チャレンジ検証用の一時ディレクトリに対するWebサーバープロセスの書き込み権限不足などが挙げられます。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>modules/md/md_acme.c</code></a>: ACMEプロトコルの詳細な通信仕様とチャレンジ処理の実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>modules/md/md_reg.c</code></a>: 管理対象ドメインのライフサイクル管理および更新スケジューリングロジック。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>modules/md/md_store.c</code></a>: 証明書や鍵情報の安全な保存・管理方法の実装。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

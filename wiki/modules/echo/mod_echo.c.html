@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/echo/mod_echo.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/echo/mod_echo.c.html&quot;}, '*');">modules/echo/mod_echo.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server 用のシンプルなエコーサーバーモジュールです。クライアントから受信したデータをそのまま送り返すプロトコルハンドラを実装しており、主に接続処理のデモンストレーションやテスト用途として機能します。</p>
+<h2>モジュール内での役割</h2>
+<p>本ファイルは <code>mod_echo</code> モジュールの唯一のソースコードであり、Apache の接続処理フック（<code>process_connection</code>）を乗っ取ることで、HTTP 以外の独自プロトコル処理を実装する際のテンプレートとしての役割を果たします。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>ProtocolEcho</code> ディレクティブによるモジュールの有効/無効の制御。</li>
+<li>**接続処理**: <code>process_connection</code> フックを通じたクライアントとの入出力ループの実行。</li>
+<li>**ステータス更新**: <a class="wiki-source-link" href="../../../source/include/scoreboard.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__scoreboard.html&quot;}, '*');"><code>scoreboard</code></a> を利用した、現在処理中の接続状態（読み込み中、書き込み中等）の可視化。</li>
+<li>**データ転送**: <code>apr_bucket_brigade</code> を用いた効率的なストリームデータの読み書き。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>echo_module</code>: モジュールのエントリポイントとなる構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__process_echo_connection.html&quot;}, '*');"><code>process_echo_connection</code></a>: 接続ごとのメインループを実行するコア関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__EchoConfig.html&quot;}, '*');"><code>EchoConfig</code></a>: モジュールの有効状態を保持する設定構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__brigade_peek.html&quot;}, '*');"><code>brigade_peek</code></a>: <a class="wiki-source-link" href="../../../source/include/scoreboard.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__scoreboard.html&quot;}, '*');"><code>scoreboard</code></a> に表示する文字列をバッファから抽出するヘルパー関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>register_hooks</code> が <code>process_connection</code> フックを登録します。 2. **接続開始**: <a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__process_echo_connection.html&quot;}, '*');"><code>process_echo_connection</code></a> が呼び出され、設定が有効か確認します。 3. **ループ処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> でクライアントからデータを読み込みます。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__update_echo_child_status.html&quot;}, '*');"><code>update_echo_child_status</code></a> でスコアボードを更新します。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で受信したデータをクライアントへ送り返します。</li>
+<p>4. **終了**: 接続が切断されるまでループし、最後にリソースを解放します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>: Apache 接続処理の基盤。</li>
+<li><code>apr_buckets.h</code>, <a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: フィルタチェーンを通じたデータストリーム操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: サーバーの稼働状況を外部（<code>server-status</code> 等）に公開するためのインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_core.c.html&quot;}, '*');"><code>modules/http/http_core.c</code></a>: 標準的な HTTP 処理の実装。本モジュールと比較することで、プロトコルハンドラの独自実装の差異を理解できます。</li>
+<li><a class="wiki-source-link" href="../../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__update_echo_child_status.html&quot;}, '*');"><code>update_echo_child_status</code></a> が内部で利用しているスコアボードの管理ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を <code>AP_MODE_GETLINE</code> モードで使用しており、行単位の処理を前提としています。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/echo/mod_echo.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__echo__mod_echo_c__brigade_peek.html&quot;}, '*');"><code>brigade_peek</code></a> はスコアボード表示用の文字列を生成するために <code>memchr</code> を使用して LF を探すなど、バッファ操作の典型的なパターンを含んでいます。</li>
+<li>独自プロトコルを実装する際は、<code>process_connection</code> フック内で <a class="wiki-source-link" href="../../../source/server/core.c.html#L5204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_get_conn_socket.html&quot;}, '*');"><code>ap_get_conn_socket</code></a> を取得し、タイムアウト設定を適切に行う必要がある点に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__echo__mod_echo_c__EchoConfig.html" target="wiki-view"><code>EchoConfig</code></a></li>
+<li><a href="../../symbols/modules__echo__mod_echo_c__create_echo_server_config.html" target="wiki-view"><code>create_echo_server_config</code></a></li>
+<li><a href="../../symbols/modules__echo__mod_echo_c__echo_on.html" target="wiki-view"><code>echo_on</code></a></li>
+<li><a href="../../symbols/modules__echo__mod_echo_c__brigade_peek.html" target="wiki-view"><code>brigade_peek</code></a></li>
+<li><a href="../../symbols/modules__echo__mod_echo_c__update_echo_child_status.html" target="wiki-view"><code>update_echo_child_status</code></a></li>
+<li><a href="../../symbols/modules__echo__mod_echo_c__process_echo_connection.html" target="wiki-view"><code>process_echo_connection</code></a></li>
+<li><a href="../../symbols/modules__echo__mod_echo_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

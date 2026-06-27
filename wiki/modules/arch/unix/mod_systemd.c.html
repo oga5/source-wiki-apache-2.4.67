@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/arch/unix/mod_systemd.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">modules/arch/unix/mod_systemd.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');"><code>mod_systemd.c</code></a> は、Apache HTTP Server を <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> 管理下のサービスとして統合するためのモジュールです。サーバーの起動状態、リロード、および稼働状況（統計情報）を <code>sd_notify</code> プロトコルを通じて <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> に通知し、ソケットの引き継ぎ（Socket Activation）をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/arch/unix</code> ディレクトリ内で、OS 固有のプロセス管理機能を提供する役割を担います。他の Unix 系モジュール（<code>mod_unixd</code> 等）が権限管理やプロセス制御を行うのに対し、本モジュールは外部のサービスマネージャ（<a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a>）との通信インターフェースに特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**ライフサイクル通知**: サーバーの起動、設定読み込み、リロード完了を <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> に通知。</li>
+<li>**稼働状況の可視化**: <code>ExtendedStatus</code> が有効な場合、リクエスト数や負荷状況を <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> のステータス文字列として定期的に更新。</li>
+<li>**ソケット管理**: <code>sd_listen_fds</code> を介したソケット引き継ぎのサポート。</li>
+<li>**セキュリティ情報**: SELinux が有効な場合、起動時に現在のコンテキストをログ出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フック関数（ライフサイクル管理）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L42" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_pre_config.html&quot;}, '*');"><code>systemd_pre_config</code></a>: 設定読み込み開始を通知し、<a class="wiki-source-link" href="../../../../source/server/scoreboard.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_extended_status</code></a> を強制有効化。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_post_config.html&quot;}, '*');"><code>systemd_post_config</code></a>: 設定完了とサービス準備完了（READY=1）を通知。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_pre_mpm.html&quot;}, '*');"><code>systemd_pre_mpm</code></a>: MPM 起動直前に PID を通知。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L97" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_monitor.html&quot;}, '*');"><code>systemd_monitor</code></a>: 定期的に呼び出され、現在の負荷状況を <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> に送信。</li>
+</ul>
+<h3>公開インターフェース（オプション関数）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__ap_systemd_listen_fds.html&quot;}, '*');"><code>ap_systemd_listen_fds</code></a>: <code>sd_listen_fds</code> のラッパー。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L125" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__ap_find_systemd_socket.html&quot;}, '*');"><code>ap_find_systemd_socket</code></a>: 環境変数から特定のポートに対応するファイルディスクリプタを検索。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__log_selinux_context.html&quot;}, '*');"><code>log_selinux_context</code></a>: SELinux コンテキストをログ出力（<code>HAVE_SELINUX</code> 定義時）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_register_hooks.html&quot;}, '*');"><code>systemd_register_hooks</code></a> が各フックを登録。 2. **起動フロー**: <code>pre_config</code> → <code>post_config</code> の順で <code>sd_notify</code> を呼び出し、<a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> に状態を伝達。 3. **監視フロー**: <code>ap_hook_monitor</code> により <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L97" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_monitor.html&quot;}, '*');"><code>systemd_monitor</code></a> が定期実行される。<a class="wiki-source-link" href="../../../../source/server/util.c.html#L3305" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_get_sload.html&quot;}, '*');"><code>ap_get_sload</code></a> でスコアボードから統計を取得し、<code>sd_notifyf</code> で <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> に文字列として送信。 4. **ソケット検索**: <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L125" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__ap_find_systemd_socket.html&quot;}, '*');"><code>ap_find_systemd_socket</code></a> は <code>getenv(&quot;LISTEN_FDS&quot;)</code> を参照し、<code>sd_is_socket_inet</code> を用いて指定ポートと一致する FD を特定する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>systemd/sd-daemon.h</code>: <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> 通知プロトコルの核。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: サーバーの稼働統計（<a class="wiki-source-link" href="../../../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a>）へのアクセス。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>: MPM 関連の共通ユーティリティ。</li>
+<li><code>selinux/selinux.h</code>: SELinux 状態確認用。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_pools.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>stdint.h</code></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');"><code>modules/arch/unix/mod_unixd.c</code></a>: Unix 固有のプロセス制御全般。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>include/ap_listen.h</code></a>: ソケットリスニングの管理構造。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>include/scoreboard.h</code></a>: サーバーの実行時統計構造。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>sd_notify</code> 関連の文字列はスタックまたは一時的なバッファで処理されます。<a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__log_selinux_context.html&quot;}, '*');"><code>log_selinux_context</code></a> 内の <code>con</code> は <code>freecon</code> で解放されます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L97" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_systemd_c__systemd_monitor.html&quot;}, '*');"><code>systemd_monitor</code></a> は <a class="wiki-source-link" href="../../../../source/server/scoreboard.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_extended_status</code></a> が無効な場合は何も行わず <a class="wiki-source-link" href="../../../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a> を返します。</li>
+<li>**設計上の注意**: <code>post_config</code> で <code>READY=1</code> を送信していますが、これは listen() 完了後に行われるため、接続が拒否されるリスクを最小化しています。</li>
+<li>**省略箇所**: <code>sd_notify</code> の内部実装や、<a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');">systemd</a> 側のソケットアクティベーションの詳細は本ファイルには含まれず、外部ライブラリ（<code>libsystemd</code>）に依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__systemd_pre_config.html" target="wiki-view"><code>systemd_pre_config</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__log_selinux_context.html" target="wiki-view"><code>log_selinux_context</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__systemd_post_config.html" target="wiki-view"><code>systemd_post_config</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__systemd_pre_mpm.html" target="wiki-view"><code>systemd_pre_mpm</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__systemd_monitor.html" target="wiki-view"><code>systemd_monitor</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__ap_find_systemd_socket.html" target="wiki-view"><code>ap_find_systemd_socket</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__ap_systemd_listen_fds.html" target="wiki-view"><code>ap_systemd_listen_fds</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_systemd_c__systemd_register_hooks.html" target="wiki-view"><code>systemd_register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

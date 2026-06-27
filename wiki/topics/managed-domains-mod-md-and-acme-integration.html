@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/managed-domains-mod-md-and-acme-integration.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Managed Domains (mod_md) and ACME Integration</h1>
+<h2>概念</h2>
+<p><code>mod_md</code>（Managed Domains）は、Apache HTTP Server において SSL/TLS 証明書の管理を自動化するためのサブシステムです。ACME（Automated Certificate Management Environment）プロトコルを統合することで、外部の認証局（CA）と連携し、ドメインごとの証明書の取得、更新、およびローカルストレージへの安全な保存を自動的に行います。</p>
+<h2>なぜ重要か</h2>
+<p>手動での SSL/TLS 証明書の更新作業は、期限切れによるサービス停止や設定ミスのリスクを伴います。<code>mod_md</code> と ACME の統合により、以下の重要性がもたらされます。</p>
+<ul>
+<li>**運用の自動化**: 証明書のライフサイクル（取得・更新・適用）を完全に自動化し、管理コストを削減します。</li>
+<li>**安全なストレージ管理**: 秘密鍵や証明書、アカウント情報を抽象化されたストレージ層を介して一貫した方法で永続化します。</li>
+<li>**ポリシーの統合**: ドメインごとの更新ウィンドウや再試行ポリシーをレジストリを介して一元管理します。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本統合において、以下のシンボルが中核的な役割を果たします。</p>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__md__md_acme_c__md_acme_init.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_init.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_acme.c.html#L164&quot;}, '*');"><code>symbol:modules/md/md_acme.c#md_acme_init</code></a>**: ACME モジュールの初期化関数。製品名（<a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>base_product</code></a>）の設定や、必要に応じた暗号化ライブラリ（<code>md_crypt</code>）の初期化を担当します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__md__md_reg_c__md_reg_create.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_create.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_reg.c.html#L98&quot;}, '*');"><code>symbol:modules/md/md_reg.c#md_reg_create</code></a>**: 管理対象ドメイン（MD）のレジストリインスタンス（<code>md_reg_t</code>）を生成します。永続化層である <a class="wiki-source-link" href="../../source/modules/md/md_store.h.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_h__md_store_t.html&quot;}, '*');"><code>md_store_t</code></a> や再試行ポリシー、更新ウィンドウなどをバインドし、ACME プロトコルハンドラを登録します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__md__md_store_c__md_store_load.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_c__md_store_load.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_store.c.html#L70&quot;}, '*');"><code>symbol:modules/md/md_store.c#md_store_load</code></a>**: ストレージ層から特定のドメイン関連データ（証明書、秘密鍵、JSON設定、アカウント情報など）を読み込むための抽象化された汎用インターフェースです。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードの範囲からは、ACME サーバーとの通信、チャレンジの検証、証明書の最終的なインストールに至る完全なエンドツーエンドのプロトコルフローの全容は完全には明らかになっていません。</p>
+<p>現時点で判明している初期化およびセットアップ段階の流れは以下の通りです。</p>
+<p>1. **モジュールの初期化**: <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a> から <a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html#L164" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_init.html&quot;}, '*');"><code>md_acme_init</code></a> が呼び出され、製品識別子が設定され、暗号化サブシステムが初期化されます。 2. **レジストリの生成**: <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a> から <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_create.html&quot;}, '*');"><code>md_reg_create</code></a> が呼び出され、<code>md_reg_t</code> が初期化されます。この過程で、利用可能な ACME プロトコルハンドラが登録され、既存のプロパティがストレージからロードされます。 3. **データのロード**: 証明書の更新やチャレンジの検証の際、<a class="wiki-source-link" href="../../source/modules/md/md_store.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_c__md_store_load.html&quot;}, '*');"><code>md_store_load</code></a> を介して、アカウント鍵（<a class="wiki-source-link" href="../../source/modules/md/md_acme_acct.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_acct.c.html&quot;}, '*');"><code>md_acme_acct.c</code></a>）、チャレンジデータ（<a class="wiki-source-link" href="../../source/modules/md/md_acme_authz.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_authz.c.html&quot;}, '*');"><code>md_acme_authz.c</code></a>）、または設定 JSON（<a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a>）がストレージからメモリ上にロードされます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**ストレージの有効性**: <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_create.html&quot;}, '*');"><code>md_reg_create</code></a> を呼び出す際、渡される <code>store</code>（<a class="wiki-source-link" href="../../source/modules/md/md_store.h.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_h__md_store_t.html&quot;}, '*');"><code>md_store_t</code></a>）は事前に適切に初期化されていなければなりません。また、初期化時の既存プロパティのロード（<a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__load_props.html&quot;}, '*');"><code>load_props</code></a>）が失敗した場合、レジストリの生成自体が失敗します。</li>
+<li>**メモリプールの生存期間**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_c__md_store_load.html&quot;}, '*');"><code>md_store_load</code></a> によってロードされたデータの生存期間は、引数として渡された <code>apr_pool_t</code> の生存期間に拘束されます。</li>
+<li>**暗号化の初期化**: <a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html#L164" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_init.html&quot;}, '*');"><code>md_acme_init</code></a> で <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_c__init_ssl.html&quot;}, '*');"><code>init_ssl</code></a> が真に設定されている場合、内部の <a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_crypt_c__md_crypt_init.html&quot;}, '*');"><code>md_crypt_init</code></a> が正常に完了（<code>APR_SUCCESS</code> を返却）しなければ、ACME モジュールの初期化は成功しません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**ストレージ関数の未初期化**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_c__md_store_load.html&quot;}, '*');"><code>md_store_load</code></a> は実際の I/O 処理を <code>store-&gt;load</code> 関数ポインタに委譲するラッパーです。<code>store</code> やその関数ポインタが NULL の状態で呼び出すと、セグメンテーションフォールトを引き起こします。</li>
+<li>**メモリの早期解放**: <a class="wiki-source-link" href="../../source/modules/md/md_store.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_store_c__md_store_load.html&quot;}, '*');"><code>md_store_load</code></a> でロードした証明書や鍵データを保持するメモリプール（<code>apr_pool_t</code>）を誤って早期にクリアまたは破棄すると、データへのアクセス時に未定義動作が発生します。</li>
+<li>**CAファイルパスの特殊値**: <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_create.html&quot;}, '*');"><code>md_reg_create</code></a> において、<code>ca_file</code> に <code>&quot;none&quot;</code> という文字列が指定された場合、内部的には <code>NULL</code> として扱われます。これにより、証明書検証の挙動が意図せず変化する可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>modules/md/md_acme.c</code></a>: ACME 統合の初期化およびプロトコルハンドラの管理。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>modules/md/md_reg.c</code></a>: 管理対象ドメインのレジストリ（<code>md_reg_t</code>）の構築とポリシー管理。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>modules/md/md_store.c</code></a>: 証明書やアカウント情報の永続化を担うストレージ抽象化レイヤーの実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>modules/md/mod_md.c</code></a>: <code>mod_md</code> のメインモジュールコードであり、初期化フローの起点。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

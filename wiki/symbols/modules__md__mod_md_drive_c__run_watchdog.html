@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__md__mod_md_drive_c__run_watchdog.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>run_watchdog</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/md/mod_md_drive.c:254</code></li>
+</ul>
+<h2>目的</h2>
+<p><code>mod_watchdog</code> のコールバックとして動作し、マネージドドメイン（MD）の証明書更新ジョブを定期的に監視・実行する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t run_watchdog(int state, void *baton, apr_pool_t *ptemp)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>state</code>: <code>mod_watchdog</code> の現在の状態（<a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WATCHDOG_STATE_STARTING</code></a>, <code>RUNNING</code>, <code>STOPPING</code>）。</li>
+<li><code>baton</code>: <code>md_renew_ctx_t</code> 型のコンテキスト構造体へのポインタ。</li>
+<li><code>ptemp</code>: 一時的なメモリ割り当てに使用するプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 常に <code>APR_SUCCESS</code> を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>baton</code> は有効な <code>md_renew_ctx_t</code> を指している必要がある。</li>
+<li><code>mod_watchdog</code> により、サーバー内で単一スレッドとして実行されることが保証されている。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **状態遷移**:</p>
+<ul>
+<li><code>AP_WATCHDOG_STATE_STARTING/STOPPING</code>: ログ出力のみを行う。</li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WATCHDOG_STATE_RUNNING</code></a>: 以下のループを実行する。</li>
+<p>2. **ジョブ処理**:</p>
+<li><code>next_run_default</code> を用いて次回のデフォルト実行時刻を算出。</li>
+<li><code>dctx-&gt;jobs</code> に含まれる全ジョブを走査し、現在時刻が <code>job-&gt;next_run</code> を過ぎている場合に <a class="wiki-source-link" href="../../source/modules/md/mod_md_drive.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__process_drive_job.html&quot;}, '*');"><code>process_drive_job</code></a> を呼び出して更新処理を実行。</li>
+<li>各ジョブの <code>next_run</code> を比較し、最も早い時刻を次回の実行タイミングとして保持。</li>
+<p>3. **再スケジュール**:</p>
+<li><code>wd_set_interval</code> を呼び出し、算出した <code>wait_time</code> 後に再度 <code>run_watchdog</code> が実行されるようスケジュールする。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>mod_watchdog</code>（コールバックとして）</li>
+<li><code>modules/md/mod_md_drive.c:406</code> (<a class="wiki-source-link" href="../../source/modules/md/mod_md_drive.c.html#L309" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__md_renew_start_watching.html&quot;}, '*');"><code>md_renew_start_watching</code></a>)</li>
+<li><code>modules/md/mod_md_ocsp.c:275</code> (OCSP監視用)</li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/mod_md_drive.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__process_drive_job.html&quot;}, '*');"><code>process_drive_job</code></a></li>
+<li><code>next_run_default</code></li>
+<li><code>wd_set_interval</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>md_renew_ctx_t</code>: 更新プロセス全体のコンテキスト。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_status.h.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_h__md_job_t.html&quot;}, '*');"><code>md_job_t</code></a>: 個別の更新ジョブの状態とスケジュール情報。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>job-&gt;next_run</code> が 0 の場合、そのジョブは通常の定期実行対象として扱われる。</li>
+<li><code>wait_time</code> が負の値になる可能性があるかについては、<code>next_run</code> の算出ロジックに依存する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/md/mod_md_drive.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_drive.c.html&quot;}, '*');"><code>mod_md_drive.c</code></a> と <a class="wiki-source-link" href="../../source/modules/md/mod_md_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_ocsp.c.html&quot;}, '*');"><code>mod_md_ocsp.c</code></a> の両方からコールバックとして登録されているため、修正時は両方のコンテキストへの影響を考慮すること。</li>
+<li><code>mod_watchdog</code> の特性上、スレッドの生存期間中は同一プロセスで繰り返し呼び出される。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

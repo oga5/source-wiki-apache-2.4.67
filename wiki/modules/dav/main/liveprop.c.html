@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/dav/main/liveprop.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/liveprop.c.html&quot;}, '*');">modules/dav/main/liveprop.c</a></h1>
+<h2>概要</h2>
+<p>WebDAV における「ライブプロパティ（Live Property）」の名前空間管理およびプロパティ検索を司るモジュールです。サーバーがサポートするライブプロパティの URI を一元管理し、プロパティ名と名前空間から対応するフックや ID を解決する機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> のプロパティ処理サブシステムの一部です。<a class="wiki-source-link" href="../../../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>props.c</code></a> がプロパティの読み書きを抽象化するのに対し、本ファイルは「どのプロパティがどの名前空間に属し、どのプロバイダによって処理されるか」というメタデータ構造の解決を担当します。</p>
+<h2>責務</h2>
+<ul>
+<li>**名前空間の登録とインデックス化**: ライブプロパティで使用される URI を一意な数値 ID にマッピングし、グローバルな名前空間テーブルを維持する。</li>
+<li>**プロパティ検索**: 指定された名前空間とプロパティ名から、該当する <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1023" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_liveprop_spec.html&quot;}, '*');"><code>dav_liveprop_spec</code></a> および処理用フックを特定する。</li>
+<li>**XML 出力支援**: プロパティのシリアライズ時に必要な <code>xmlns</code> 属性の生成を補助する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>名前空間管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>dav_liveprop_uris</code></a>: 登録された URI をキー、インデックスを値とする <code>apr_hash_t</code>。</li>
+<li><code>dav_register_liveprop_namespace()</code>: URI をハッシュに登録し、インデックスを割り当てる。</li>
+<li><code>dav_get_liveprop_ns_index()</code>: URI に対応するグローバルインデックスを取得する。</li>
+</ul>
+<h3>プロパティ検索・解決</h3>
+<ul>
+<li><code>dav_do_find_liveprop()</code>: 名前空間とプロパティ名から、対応するプロパティ ID とフックを検索する。</li>
+<li><code>dav_get_liveprop_info()</code>: プロパティ ID から仕様情報（<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1023" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_liveprop_spec.html&quot;}, '*');"><code>dav_liveprop_spec</code></a>）を逆引きする。</li>
+<li><code>dav_register_liveprop_group()</code>: プロバイダが提供するプロパティ群を登録し、関連する名前空間を初期化する。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>dav_add_all_liveprop_xmlns()</code>: 登録済みの全名前空間を <code>xmlns:lpN=&quot;URI&quot;</code> 形式で出力バッファに追加する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **登録フェーズ**: モジュール初期化時に <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__liveprop_c__dav_register_liveprop_group.html&quot;}, '*');"><code>dav_register_liveprop_group</code></a> が呼ばれ、プロバイダが定義する名前空間リストが <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>dav_liveprop_uris</code></a> ハッシュに登録されます。 2. **検索フェーズ**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__liveprop_c__dav_do_find_liveprop.html&quot;}, '*');"><code>dav_do_find_liveprop</code></a> は、提供された <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1039" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_liveprop_group.html&quot;}, '*');"><code>dav_liveprop_group</code></a> 内の <code>namespace_uris</code> 配列を走査して名前空間を特定し、次に <code>specs</code> 配列を走査してプロパティ名の一致を確認します。 3. **データフロー**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__liveprop_c__dav_add_all_liveprop_xmlns.html&quot;}, '*');"><code>dav_add_all_liveprop_xmlns</code></a> は <code>apr_hash_t</code> をイテレートし、メモリプール <a class="wiki-source-link" href="../../../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> を介して <code>apr_text_header</code> に文字列を蓄積します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pools.h</code>, <code>apr_hash.h</code>: 名前空間の永続化とハッシュ管理。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/util_xml.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_xml.h.html&quot;}, '*');"><code>util_xml.h</code></a>: XML 出力用テキストヘッダー操作。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>mod_dav.h</code></a>: <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1039" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_liveprop_group.html&quot;}, '*');"><code>dav_liveprop_group</code></a> や <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1023" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_liveprop_spec.html&quot;}, '*');"><code>dav_liveprop_spec</code></a> などのデータ構造定義。</li>
+<li><code>apr_errno.h</code></li>
+<li><code>apr_strings.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/std_liveprop.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/std_liveprop.c.html&quot;}, '*');"><code>std_liveprop.c</code></a>: 標準的なライブプロパティの実装例。本モジュールの検索機能を利用する主要なクライアント。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>props.c</code></a>: プロパティデータベースの操作。本モジュールで特定したフックを使用して実際の値を取得する。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>dav_liveprop_uris</code></a> はプロセス生存期間中保持される静的変数ですが、<code>apr_pool_cleanup_register</code> によりプール破棄時にクリーンアップされる設計です。</li>
+<li>**インデックスの性質**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L26" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>dav_liveprop_count</code></a> は 1 から始まる連番であり、XML 出力時の <code>lp1</code>, <code>lp2</code> といったプレフィックス生成に使用されます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/liveprop.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__liveprop_c__dav_do_find_liveprop.html&quot;}, '*');"><code>dav_do_find_liveprop</code></a> は線形探索を行うため、プロパティ数が多い場合はパフォーマンスに影響する可能性がありますが、通常は小規模なセットであるため許容されています。</li>
+<li>**省略箇所**: 本ファイルはメタデータの管理に特化しており、実際のプロパティ値の取得ロジック（<code>get</code> や <code>set</code>）は各プロバイダのフックに委譲されているため、ここには含まれません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_cleanup_liveprops.html" target="wiki-view"><code>dav_cleanup_liveprops</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_register_liveprop_namespace.html" target="wiki-view"><code>dav_register_liveprop_namespace</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_get_liveprop_ns_index.html" target="wiki-view"><code>dav_get_liveprop_ns_index</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_get_liveprop_ns_count.html" target="wiki-view"><code>dav_get_liveprop_ns_count</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_add_all_liveprop_xmlns.html" target="wiki-view"><code>dav_add_all_liveprop_xmlns</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_do_find_liveprop.html" target="wiki-view"><code>dav_do_find_liveprop</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_get_liveprop_info.html" target="wiki-view"><code>dav_get_liveprop_info</code></a></li>
+<li><a href="../../../symbols/modules__dav__main__liveprop_c__dav_register_liveprop_group.html" target="wiki-view"><code>dav_register_liveprop_group</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

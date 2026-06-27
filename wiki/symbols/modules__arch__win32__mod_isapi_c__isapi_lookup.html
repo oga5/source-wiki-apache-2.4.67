@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__arch__win32__mod_isapi_c__isapi_lookup.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L326" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_lookup.html&quot;}, '*');">isapi_lookup</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/arch/win32/mod_isapi.c:326</code></li>
+</ul>
+<h2>目的</h2>
+<p>ISAPI 拡張 DLL を検索・ロードし、その状態を管理するキャッシュ機構へのアクセスを提供します。DLL のロード状況を追跡し、複数スレッドからの同時ロード要求を排他制御します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t isapi_lookup(apr_pool_t *p, server_rec *s, request_rec *r,
+                          const char *fpath, isapi_loaded** isa)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: メモリ割り当て用プール。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>r</code>: リクエストレコード（NULL の場合あり）。</li>
+<li><code>fpath</code>: ロード対象 DLL のファイルパス。</li>
+<li><code>isa</code>: <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_loaded.html&quot;}, '*');"><code>isapi_loaded</code></a> 構造体へのポインタを格納する出力先。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 操作結果（<code>APR_SUCCESS</code> 等）。</li>
+<li><code>*isa</code>: 検索またはロードされた <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_loaded.html&quot;}, '*');"><code>isapi_loaded</code></a> 構造体。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>loaded.lock</code> ミューテックスによるグローバルな排他制御下でハッシュ検索が行われます。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_loaded.html&quot;}, '*');"><code>isapi_loaded</code></a> 構造体内の <code>in_progress</code> ロックは、DLL のロード中における他スレッドの待機を制御します。</li>
+<li>ロード成功後、<code>in_progress</code> は <code>NULL</code> に設定されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>loaded.hash</code> から <code>fpath</code> をキーに検索。 2. **キャッシュヒット時**:</p>
+<ul>
+<li>ロード完了済みであれば即時返却。</li>
+<li>ロード中であれば <code>in_progress</code> ロックで完了を待機。</li>
+<li>ロード失敗時、<a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_isapi.c.html&quot;}, '*');"><code>ISAPI_RETRY</code></a> 期間経過後であれば再ロードを試行。</li>
+<p>3. **キャッシュミス時**:</p>
+<li>新規 <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_loaded.html&quot;}, '*');"><code>isapi_loaded</code></a> 構造体を生成しハッシュに登録。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L254" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_load.html&quot;}, '*');"><code>isapi_load</code></a> を呼び出し DLL をロード。</li>
+<li>ロード結果をキャッシュに反映し、待機中のスレッドを解放。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/arch/win32/mod_isapi.c:80</code> (プロトタイプ宣言)</li>
+<li><code>modules/arch/win32/mod_isapi.c:156</code> (設定処理)</li>
+<li><code>modules/arch/win32/mod_isapi.c:1448</code> (リクエストハンドラ)</li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L254" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_load.html&quot;}, '*');"><code>isapi_load</code></a> (DLL の実ロード)</li>
+<li><code>apr_thread_mutex_lock/unlock</code></li>
+<li><code>apr_thread_rwlock_rdlock/wrlock/unlock</code></li>
+<li><code>apr_hash_get/set</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_isapi_c__isapi_loaded.html&quot;}, '*');"><code>isapi_loaded</code></a>: DLL のハンドル、関数ポインタ、ロード状態を保持する構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L199" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_isapi.c.html&quot;}, '*');"><code>loaded</code></a>: グローバルなキャッシュ管理構造体（ハッシュテーブルとミューテックスを含む）。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_dso_load</code> が失敗した場合、<code>last_load_rv</code> にエラーコードが保持され、再試行ロジックが適用されます。</li>
+<li><code>r</code> が NULL の場合、リクエスト固有のロック処理をスキップする分岐が存在します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_isapi.c.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_isapi.c.html&quot;}, '*');"><code>ISAPI_RETRY</code></a> 期間内の再試行はブロックされます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>in_progress</code> ロックの生存期間は <code>loaded.pool</code> に依存しており、リクエストプール (<code>r-&gt;pool</code>) を使用する場合の競合リスクに注意が必要です。</li>
+<li><code>fake_async</code> 関連の処理は同期的な待機を伴うため、高負荷時のスレッド枯渇に留意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

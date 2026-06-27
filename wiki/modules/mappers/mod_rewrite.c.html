@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/mappers/mod_rewrite.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');">modules/mappers/mod_rewrite.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_rewrite</code> は、Apache HTTP Server の強力な URL 書き換えエンジンです。正規表現ベースのルールエンジンを用いて、リクエストされた URL を動的に書き換えます。サーバー全体（<code>httpd.conf</code>）およびディレクトリ単位（<code>.htaccess</code>）の両方のコンテキストで動作し、外部データベース（DBM, DBD）や外部プログラムとの連携による高度な URL 置換をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/mappers</code> サブシステムにおいて、リクエストの変換（Translation）および修正（Fixup）フェーズを担う最も複雑なモジュールです。他のマッパーモジュール（<code>mod_alias</code> 等）よりも柔軟かつ動的なパス操作を提供し、リクエストの内部リダイレクト、外部リダイレクト、プロキシ転送のトリガーとなります。</p>
+<h2>責務</h2>
+<ul>
+<li>**ルールエンジン**: <code>RewriteRule</code> および <code>RewriteCond</code> の解析と実行。</li>
+<li>**変数展開**: HTTP ヘッダー、環境変数、時刻、SSL 情報などの動的変数展開。</li>
+<li>**外部マップ連携**: テキストファイル、DBM、DBD（SQL）、外部プログラム（PRG）を用いたルックアップ。</li>
+<li>**リクエスト制御**: MIME タイプやハンドラーの強制設定、リダイレクト処理。</li>
+<li>**キャッシュ管理**: 外部マップルックアップのパフォーマンス向上のためのキャッシュ機構。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L361" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewrite_server_conf.html&quot;}, '*');"><code>rewrite_server_conf</code></a>: サーバー全体のエンジン状態、マップ、ルールを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L372" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewrite_perdir_conf.html&quot;}, '*');"><code>rewrite_perdir_conf</code></a>: ディレクトリ単位のエンジン状態、ルールを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L272" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewritemap_entry.html&quot;}, '*');"><code>rewritemap_entry</code></a>: 外部マップの定義（ファイルパス、タイプ、プログラム実行用パイプ等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewriterule_entry.html&quot;}, '*');"><code>rewriterule_entry</code></a> / <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L328" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewritecond_entry.html&quot;}, '*');"><code>rewritecond_entry</code></a>: 解析済みのルールと条件式。</li>
+</ul>
+<h3>実行コンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L422" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__rewrite_ctx.html&quot;}, '*');"><code>rewrite_ctx</code></a>: ルール適用時のリクエスト状態、URI、バックリファレンス情報を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L406" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__backrefinfo.html&quot;}, '*');"><code>backrefinfo</code></a>: 正規表現のキャプチャ結果を保持。</li>
+</ul>
+<h3>主要フック関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L4898" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__hook_uri2file.html&quot;}, '*');"><code>hook_uri2file</code></a>: サーバーコンテキストの書き換え（Translation フェーズ）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L5249" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__hook_fixup.html&quot;}, '*');"><code>hook_fixup</code></a>: ディレクトリコンテキストの書き換え（Fixup フェーズ）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L5622" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__hook_mimetype.html&quot;}, '*');"><code>hook_mimetype</code></a>: <code>[T=...]</code> や <code>[H=...]</code> フラグによる強制設定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>pre_config</code> でマップ関数を登録し、<code>post_config</code> で外部プログラムマップを起動。 2. **ルール適用**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L4638" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__apply_rewrite_list.html&quot;}, '*');"><code>apply_rewrite_list</code></a> がルールセットを反復処理。 3. **条件評価**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L4117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__apply_rewrite_cond.html&quot;}, '*');"><code>apply_rewrite_cond</code></a> が条件を評価し、一致すれば <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L4356" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__apply_rewrite_rule.html&quot;}, '*');"><code>apply_rewrite_rule</code></a> で置換を実行。 4. **展開**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L2429" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__do_expand.html&quot;}, '*');"><code>do_expand</code></a> が文字列内の変数（<code>%{}</code>, <code>${}</code>）やバックリファレンス（<code>$N</code>）を再帰的に解決。 5. **結果適用**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L837" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__splitout_queryargs.html&quot;}, '*');"><code>splitout_queryargs</code></a> や <a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L971" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__fully_qualify_uri.html&quot;}, '*');"><code>fully_qualify_uri</code></a> を経て、<code>r-&gt;filename</code> や <code>r-&gt;status</code> を更新。 6. **リダイレクト**: 内部リダイレクトが必要な場合、<a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L5651" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_rewrite_c__handler_redirect.html&quot;}, '*');"><code>handler_redirect</code></a> を経由して <a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L774" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_internal_redirect.html&quot;}, '*');"><code>ap_internal_redirect</code></a> を呼び出す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr</code> (Hash, DBM, DBD, Thread Mutex, File IO)</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.h.html&quot;}, '*');"><code>mod_rewrite.h</code></a> (Optional function registration)</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a> (条件式の解析)</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_dbd.h</code></li>
+<li><code>apr_dbm.h</code></li>
+<li><code>apr_global_mutex.h</code></li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_mutex.h</code></li>
+<li><code>apr_user.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><code>apu_version.h</code></li>
+<li><code>ctype.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_vhost.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_vhost.h.html&quot;}, '*');"><code>http_vhost.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.h.html&quot;}, '*');"><code>mod_dbd.h</code></a></li>
+<li><code>netinet/in.h</code></li>
+<li><code>stdarg.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>test_char.h</code></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.h.html&quot;}, '*');"><code>modules/mappers/mod_rewrite.h</code></a>: モジュール間連携用の公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a>: <a class="wiki-source-link" href="../../../source/server/util.c.html#L457" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_pregsub.html&quot;}, '*');"><code>ap_pregsub</code></a> や <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L1849" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_escape_uri</code></a> 等のユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.c.html&quot;}, '*');"><code>modules/database/mod_dbd.c</code></a>: DBD マップ利用時のバックエンド。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ほとんどの動的割り当ては <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動解放されます。キャッシュ関連のみ <code>cachep-&gt;pool</code> を使用し、生存期間が異なります。</li>
+<li>**スレッド安全性**: <code>APR_HAS_THREADS</code> が有効な場合、マップキャッシュや外部プログラムとの通信には <code>apr_thread_mutex_t</code> や <code>apr_global_mutex_t</code> による排他制御が行われます。</li>
+<li>**エッジケース**: <code>[N]</code> フラグによる無限ループを防ぐため、<a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.c.html#L261" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.c.html&quot;}, '*');"><code>REWRITE_MAX_ROUNDS</code></a> による制限があります。また、<code>[PT]</code> フラグは Apache 1.x 互換のためのハックであり、使用には注意が必要です。</li>
+<li>**省略箇所**: 本ページでは、複雑な正規表現置換の詳細や、各 OS 特有のファイルシステムパス処理の細部は省略しています。これらは <a class="wiki-source-link" href="../../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a> の実装に強く依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__rewritemap_entry.html" target="wiki-view"><code>rewritemap_entry</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__pattern_type.html" target="wiki-view"><code>pattern_type</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__rule_return_type.html" target="wiki-view"><code>rule_return_type</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__cond_return_type.html" target="wiki-view"><code>cond_return_type</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__rewritecond_entry.html" target="wiki-view"><code>rewritecond_entry</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__data_item.html" target="wiki-view"><code>data_item</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__rewriterule_entry.html" target="wiki-view"><code>rewriterule_entry</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__rewrite_server_conf.html" target="wiki-view"><code>rewrite_server_conf</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__rewrite_perdir_conf.html" target="wiki-view"><code>rewrite_perdir_conf</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__cache.html" target="wiki-view"><code>cache</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__cachedmap.html" target="wiki-view"><code>cachedmap</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_rewrite_c__backrefinfo.html" target="wiki-view"><code>backrefinfo</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/dav-stream.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_stream</h1>
+<h2>概念</h2>
+<p><code>dav_stream</code> は、WebDAV リソースに対する読み込み、書き込み、シーク、クローズなどのストリーム操作を抽象化するための構造体です。</p>
+<p>この構造体は、役割に応じて2つのレイヤーで異なる定義を持ちます。</p>
+<ul>
+<li>**コアレイヤー (<code>mod_dav</code>)**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> において、具体的なメンバを持たない不透明な（opaque）構造体として宣言されています。</li>
+<li>**プロバイダーレイヤー (<code>mod_dav_fs</code>)**: <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a> において、実際のファイル記述子や一時ファイルパス、メモリプールなどを管理する具体的な構造体として定義されています。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p><code>dav_stream</code> を不透明な構造体として定義することにより、<code>mod_dav</code> コアはバックエンドの具体的なストレージ実装（ファイルシステムやデータベースなど）に依存することなく、統一されたインターフェースを介してストリームを操作できます。これにより、WebDAV コアロジックと具体的なストレージプロバイダーの実装が明確に分離され、システムの拡張性と保守性が向上します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__main.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>module:modules/dav/main</code></a> (<code>mod_dav</code> コア)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a> (<code>mod_dav_fs</code> プロバイダー)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__main__mod_dav_h__dav_stream.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_stream.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/mod_dav.h.html#L1906&quot;}, '*');"><code>symbol:modules/dav/main/mod_dav.h#dav_stream</code></a>: コア側で定義される不透明な構造体。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__fs__repos_c__dav_stream.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_stream.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/repos.c.html#L197&quot;}, '*');"><code>symbol:modules/dav/fs/repos.c#dav_stream</code></a>: ファイルシステムプロバイダー側で定義される、以下のメンバを持つ具体的な構造体。</li>
+<li><code>apr_pool_t *p</code>: 操作に関連付けられたメモリプール。</li>
+<li><code>apr_file_t *f</code>: 開いているファイルハンドル。</li>
+<li><code>const char *pathname</code>: 対象ファイルのパス。</li>
+<li><code>char *temppath</code>: 書き込み用の一時ファイルパス。</li>
+<li><code>int unlink_on_error</code>: エラー時に一時ファイルを削除するかを示すフラグ。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **ストリームの生成**: <code>mod_dav</code> コアがリポジトリプロバイダーのフック（<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L908" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_open_stream.html&quot;}, '*');"><code>dav_fs_open_stream</code></a> など）を呼び出し、<code>dav_stream</code> 構造体が初期化されます。 2. **データの操作**: コアは、プロバイダーが提供する関数ポインタ（<code>write_stream</code> や <code>seek_stream</code> など）を介して、<code>dav_stream</code> インスタンスを引数に渡し、データの書き込みやシークを行います。 3. **ストリームのクローズと確定**: 操作完了時、コアは <code>close_stream</code>（<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L983" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_close_stream.html&quot;}, '*');"><code>dav_fs_close_stream</code></a>）を呼び出します。この際、<code>commit</code> 引数の真偽値に応じて、一時ファイル（<code>temppath</code>）から本来のパス（<code>pathname</code>）へのリネーム、またはエラー時のクリーンアップが実行されます。</p>
+<p>*注意: <code>mod_dav</code> コア全体における詳細なエンドツーエンドの呼び出しフロー（どのHTTPメソッドやリクエストハンドラから直接呼び出されるかなど）の全容は、提供されたコンテキストからは完全には明らかになっていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**メモリプールの同期**: <code>dav_stream</code> 内の <code>apr_pool_t</code> は、関連するリクエストのライフサイクルと同期している必要があります。</li>
+<li>**一時ファイルのコミット/クリーンアップ**: 書き込み操作において <code>temppath</code> が設定されている場合、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L983" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_close_stream.html&quot;}, '*');"><code>dav_fs_close_stream</code></a> のクローズ時に <code>commit</code> が真であればリネーム処理が行われ、エラーが発生して <code>unlink_on_error</code> が真であれば一時ファイルが削除されなければなりません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**不透明な型への直接アクセスの禁止**: <code>mod_dav</code> コアや他のモジュールからは <code>dav_stream</code> の内部メンバ（<code>f</code> や <code>temppath</code> など）に直接アクセスすることはできません。これらは <code>mod_dav_fs</code> の内部実装に隠蔽されているため、必ず提供された関数ポインタ（フック）を介して操作する必要があります。</li>
+<li>**クローズ処理の未実施によるリソース漏洩**: エラー発生時のクリーンアップ（一時ファイルの削除など）は <a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L983" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_close_stream.html&quot;}, '*');"><code>dav_fs_close_stream</code></a> の呼び出しと <code>unlink_on_error</code> フラグに依存しているため、ストリームを適切にクローズしないと、不要な一時ファイルが残る可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a>: 不透明な <code>dav_stream</code> の宣言と、リポジトリプロバイダーのフック定義（<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L270" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_hooks_repository.html&quot;}, '*');"><code>dav_hooks_repository</code></a>）。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>: <code>dav_stream</code> の具体的な構造体定義と、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L908" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_open_stream.html&quot;}, '*');"><code>dav_fs_open_stream</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L1018" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_write_stream.html&quot;}, '*');"><code>dav_fs_write_stream</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html#L983" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__repos_c__dav_fs_close_stream.html&quot;}, '*');"><code>dav_fs_close_stream</code></a> などの実装。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

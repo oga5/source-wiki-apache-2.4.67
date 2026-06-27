@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/http2/test_200_header_invalid.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_200_header_invalid.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_200_header_invalid.py.html&quot;}, '*');">test/modules/http2/test_200_header_invalid.py</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_http2</code> における HTTP/2 ヘッダー処理の堅牢性を検証するテストスイートです。不正な文字、過大なヘッダーサイズ、およびヘッダー数制限に対するサーバーの挙動（エラーレスポンスや接続切断）を網羅的にテストします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> モジュールの一部として、プロトコル仕様（RFC）への準拠およびセキュリティ境界の検証を担当します。特に、HTTP/2 のストリーム制御と Apache のリクエスト制限設定（<code>LimitRequest*</code> ディレクティブ）の相互作用を検証する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**不正文字の検証**: ヘッダー名や値に含まれる制御文字（0x01-0x1F, 0x7F）に対するサーバーの拒否動作の確認。</li>
+<li>**リクエスト制限の検証**: <code>LimitRequestLine</code>, <code>LimitRequestFieldSize</code>, <code>LimitRequestFields</code> ディレクティブの設定値が、HTTP/2 通信において正しく適用されるかの検証。</li>
+<li>**エラーハンドリングの確認**: 制限超過時に適切な HTTP ステータスコード（400, 414, 431）が返されるか、あるいはプロトコルレベルの RST_STREAM が発生するかの検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>TestInvalidHeaders</code>: テストクラス。<code>pytest</code> のクラススコープフィクスチャを使用して、テストごとに Apache を再起動し、CGI 環境を構築します。</li>
+<li><code>env.curl_post_data</code> / <code>env.curl_get</code>: <code>curl</code> を用いて不正なヘッダーやデータを送信するためのヘルパーメソッド。</li>
+<li><code>env.nghttp</code>: <code>nghttp</code> クライアントを使用して、より低レイヤーな HTTP/2 フレーム制御が必要なテストを実行します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>_class_scope</code> フィクスチャが <code>H2Conf</code> を介して Apache 設定を書き換え、<code>apache_restart()</code> で設定を反映します。 2. **実行**: 各テストメソッドが <code>curl</code> や <code>nghttp</code> を呼び出し、意図的に不正なリクエスト（長大なヘッダー、制御文字など）を送信します。 3. **検証**:</p>
+<ul>
+<li>期待される HTTP ステータスコード（4xx系）の確認。</li>
+<li>接続が切断された場合（<code>r.response is None</code>）の挙動確認。</li>
+<li><code>env.httpd_error_log</code> を使用し、サーバー内部で期待通りのエラーログ（AH02429, AH02430 等）が出力されているかを検証します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>re</code>: ログ解析のための正規表現処理。</li>
+<li><code>.env</code>: <code>H2Conf</code> および <code>H2TestEnv</code> を提供し、テスト環境の構築と制御を抽象化します。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/env.py.html&quot;}, '*');"><code>test/modules/http2/env.py</code></a>: テスト環境の基盤。設定のインストールやプロセス管理のロジックが含まれます。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_201_header_conditional.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_201_header_conditional.py.html&quot;}, '*');"><code>test/modules/http2/test_201_header_conditional.py</code></a>: ヘッダー関連のテストの続きとして、条件付きリクエストの検証を行います。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本テストは Apache のバージョン（特に 2.5.0 以降）によって挙動が異なるケースがあるため、<code>env.httpd_is_at_least(&#x27;2.5.0&#x27;)</code> による条件分岐が含まれています。</li>
+<li><code>LimitRequestFields 0</code> のような境界値設定のテストが含まれており、設定値の解釈が正しく行われているかを確認する際の参考になります。</li>
+<li>ログの無視（<code>ignore_recent</code>）やスキャン（<code>scan_recent</code>）は、テスト実行時に発生する意図的なエラーログを適切に処理するために不可欠です。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

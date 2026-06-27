@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__core_filters_c__sendfile_nonblocking.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L836" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__sendfile_nonblocking.html&quot;}, '*');">sendfile_nonblocking</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/core_filters.c:836</code></li>
+</ul>
+<h2>目的</h2>
+<p>ファイルバケットの内容を、非ブロッキングモードでソケットへ転送します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t sendfile_nonblocking(apr_socket_t *s,
+                                         apr_bucket *bucket,
+                                         core_output_filter_ctx_t *ctx,
+                                         conn_rec *c)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: 送信先ソケット。</li>
+<li><code>bucket</code>: 送信対象のファイルバケット。</li>
+<li><code>ctx</code>: 出力フィルタのコンテキスト（書き込み済みバイト数の更新に使用）。</li>
+<li><code>c</code>: 接続レコード（ログ出力およびトラフィック統計用）。</li>
+<li>**出力**:</li>
+<li>戻り値: <code>apr_status_t</code> 型のステータスコード（成功時は <code>APR_SUCCESS</code>、部分書き込み時は <code>APR_EAGAIN</code> 等）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>bucket</code> は <code>apr_bucket_file</code> 型である必要があります。</li>
+<li><code>ctx-&gt;bytes_written</code> は、本関数によって送信されたバイト数分だけ加算されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>apr_socket_sendfile</code> を呼び出し、ファイルの内容をソケットへ転送します。 2. <code>ap__logio_add_bytes_out</code> が定義されている場合、送信したバイト数を統計情報として記録します。 3. 送信完了したバイト数を <code>ctx-&gt;bytes_written</code> に加算します。 4. 送信結果に基づきバケットを処理します：</p>
+<ul>
+<li>全て送信された場合: <code>apr_bucket_delete</code> でバケットを削除します。</li>
+<li>一部のみ送信された場合: <code>apr_bucket_split</code> で送信済み分を切り離して削除し、残りのバケットを保持します。この際、戻り値を <code>APR_EAGAIN</code> に設定します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a> 内の <a class="wiki-source-link" href="../../source/server/core_filters.c.html#L453" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__ap_core_output_filter.html&quot;}, '*');"><code>ap_core_output_filter</code></a>（行678付近）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_socket_sendfile</code> (APR)</li>
+<li><code>ap__logio_add_bytes_out</code> (モジュール間連携)</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html#L492" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_cerror</code></a> (ログ出力)</li>
+<li><code>apr_bucket_delete</code>, <code>apr_bucket_split</code> (APR Bucket API)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_socket_t</code>: ソケット抽象化。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_util.h.html#L476" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>apr_bucket</code></a>: データバケット。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html#L787" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_output_filter_ctx_t.html&quot;}, '*');"><code>core_output_filter_ctx_t</code></a>: 出力フィルタの永続状態。</li>
+<li><code>conn_rec</code>: 接続状態。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_socket_sendfile</code> がエラーを返した場合、そのステータスがそのまま戻り値となります。</li>
+<li>部分書き込みが発生した場合、バケットの分割処理が行われ、呼び出し元に対して再試行を促す <code>APR_EAGAIN</code> が返されます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は非ブロッキング I/O を前提としています。</li>
+<li><code>bytes_written</code> が 0 の場合、バケットの削除や分割は行われません。</li>
+<li><code>ap__logio_add_bytes_out</code> はオプションのフックであるため、NULL チェックが必須です。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

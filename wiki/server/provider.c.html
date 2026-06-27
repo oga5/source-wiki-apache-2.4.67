@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/provider.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/provider.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/provider.c.html&quot;}, '*');">server/provider.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における「プロバイダー」メカニズムの中核を担うソースファイルです。モジュール間で機能（プロバイダー）を動的に登録・検索するための汎用的なレジストリ機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、特定の機能実装を分離し、疎結合なプラグインアーキテクチャを実現するための基盤を提供します。認証、認可、フィルタなど、複数の実装が競合または共存する機能の管理に利用されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロバイダーの登録**: <code>group</code>, <code>name</code>, <a class="wiki-source-link" href="../../source/modules/metadata/mod_version.c.html#L304" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_version.c.html&quot;}, '*');"><code>version</code></a> をキーとして、任意の関数ポインタやデータ構造をグローバルなハッシュテーブルに格納します。</li>
+<li>**プロバイダーの検索**: 指定されたキーに基づき、登録済みのプロバイダーを高速に取得します。</li>
+<li>**メタデータの管理**: 登録されているプロバイダーのグループ名やバージョンの一覧を動的に提供します。</li>
+<li>**リソース管理**: プロセス終了時にハッシュテーブルをクリーンアップするためのフックを管理します。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/provider.c.html#L24" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/provider.c.html&quot;}, '*');"><code>global_providers</code></a>: プロバイダーの実体（関数ポインタ等）を保持する階層型ハッシュテーブル。</li>
+<li><a class="wiki-source-link" href="../../source/server/provider.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/provider.c.html&quot;}, '*');"><code>global_providers_names</code></a>: プロバイダーのメタデータ（グループ名やバージョン）を逆引きするためのハッシュテーブル。</li>
+<li><a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a>: プロバイダーを登録する公開 API。</li>
+<li><a class="wiki-source-link" href="../../source/server/provider.c.html#L99" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_lookup_provider.html&quot;}, '*');"><code>ap_lookup_provider</code></a>: 特定のプロバイダーを取得する公開 API。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: 初めて <a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a> が呼ばれた際、<code>apr_pool_cleanup_register</code> を使用してグローバルなハッシュテーブルの初期化とクリーンアップ設定が行われます。 2.  **登録**: 3階層のハッシュ（グループ → 名前 → バージョン）にプロバイダーを格納します。同時に、検索効率化のために <a class="wiki-source-link" href="../../source/server/provider.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/provider.c.html&quot;}, '*');"><code>global_providers_names</code></a> にも情報を複製します。 3.  **検索**: <a class="wiki-source-link" href="../../source/server/provider.c.html#L99" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_lookup_provider.html&quot;}, '*');"><code>ap_lookup_provider</code></a> は、提供されたキーをハッシュテーブルで辿り、該当するポインタを返します。 4.  **一覧取得**: <a class="wiki-source-link" href="../../source/server/provider.c.html#L127" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_list_provider_names.html&quot;}, '*');"><code>ap_list_provider_names</code></a> や <a class="wiki-source-link" href="../../source/server/provider.c.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_list_provider_groups.html&quot;}, '*');"><code>ap_list_provider_groups</code></a> は、ハッシュテーブルをイテレートし、結果を <code>apr_array_header_t</code> に詰め替えて返却します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pools.h</code>: メモリ管理（プール）用。</li>
+<li><code>apr_hash.h</code>: プロバイダー管理用ハッシュテーブル。</li>
+<li><code>apr_tables.h</code>: 一覧取得時の配列管理。</li>
+<li><code>apr_strings.h</code>: 文字列操作。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a>: プロバイダー関連の型定義とインターフェース。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>include/ap_provider.h</code></a>: このファイルで実装されている関数のプロトタイプ宣言と、プロバイダーのデータ構造定義が含まれています。</li>
+<li>各モジュール（<code>modules/</code> 配下）: 実際に <a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a> を呼び出して機能を登録する側です。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**スレッドセーフティ**: この実装は Apache の起動時（設定読み込みフェーズ）に登録が行われることを前提としています。実行時の動的な登録・削除は想定されていないため、マルチスレッド環境での実行時変更には注意が必要です。</li>
+<li>**ハッシュ構造**: 3階層のハッシュ構造になっているため、検索時は <code>group</code> → <code>name</code> → <a class="wiki-source-link" href="../../source/modules/metadata/mod_version.c.html#L304" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_version.c.html&quot;}, '*');"><code>version</code></a> の順でキーを特定する必要があります。</li>
+<li>**メモリ管理**: 登録に使用するプールは、通常はサーバーのライフサイクルに紐付いたものが渡されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__provider_c__cleanup_global_providers.html" target="wiki-view"><code>cleanup_global_providers</code></a></li>
+<li><a href="../symbols/server__provider_c__ap_register_provider.html" target="wiki-view"><code>ap_register_provider</code></a></li>
+<li><a href="../symbols/server__provider_c__ap_lookup_provider.html" target="wiki-view"><code>ap_lookup_provider</code></a></li>
+<li><a href="../symbols/server__provider_c__ap_list_provider_names.html" target="wiki-view"><code>ap_list_provider_names</code></a></li>
+<li><a href="../symbols/server__provider_c__ap_list_provider_groups.html" target="wiki-view"><code>ap_list_provider_groups</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

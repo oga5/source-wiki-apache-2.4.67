@@ -1,0 +1,95 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/config.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');">server/config.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の設定管理およびモジュールライフサイクル管理の中核を担うファイルです。設定ファイルのパース、モジュールの動的ロード、設定ベクトルのマージ、およびサーバーの初期化プロセスを統括します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールにおける「設定のエンジン」です。<a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a> で定義されたインターフェースを実装し、他のモジュールが提供する設定コマンドを統合して、サーバー全体の構成を構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**モジュール管理**: モジュールのロード、登録、削除、およびフックの管理。</li>
+<li>**設定パース**: 設定ファイル（<code>httpd.conf</code> や <code>.htaccess</code>）の読み込みとツリー構造への変換。</li>
+<li>**設定ベクトル管理**: モジュールごとの設定データ（ディレクトリ、サーバー、リクエスト単位）の作成、マージ、保持。</li>
+<li>**コマンドディスパッチ**: 設定ファイル内のディレクティブを対応するモジュールのハンドラへ振り分け。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>モジュール・フック管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html#L228" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>ap_top_module</code></a>: ロード済みモジュールリストの先頭。</li>
+<li><code>ap_add_module()</code> / <code>ap_remove_module()</code>: モジュールの動的追加・削除。</li>
+<li><code>ap_register_hooks()</code>: モジュールのフック関数を登録。</li>
+</ul>
+<h3>設定ベクトル・マージ</h3>
+<ul>
+<li><code>ap_merge_per_dir_configs()</code>: ディレクトリ設定のマージ（継承）。</li>
+<li><code>create_default_per_dir_config()</code>: デフォルトのディレクトリ設定を作成。</li>
+<li><code>merger_func_cache</code>: マージ関数をキャッシュし、高速なアクセスを実現。</li>
+</ul>
+<h3>設定パース・実行</h3>
+<ul>
+<li><code>ap_build_config()</code>: 設定ファイルを読み込み、<code>ap_directive_t</code> ツリーを構築。</li>
+<li><code>ap_walk_config()</code>: 構築されたツリーを走査し、各ディレクティブを実行。</li>
+<li><code>invoke_cmd()</code>: 特定のディレクティブに対応するモジュールのコマンド関数を呼び出す。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: <code>ap_setup_prelinked_modules()</code> が静的モジュールを登録し、設定ベクトル領域を確保。 2.  **パース**: <code>ap_process_resource_config()</code> がファイルを開き、<code>ap_build_config()</code> が行単位でディレクティブを解析。 3.  **ツリー構築**: <code>ap_build_config_sub()</code> がディレクティブを <code>ap_directive_t</code> ノードとしてツリーに追加。 4.  **実行**: <code>ap_walk_config()</code> がツリーを再帰的に走査し、<code>invoke_cmd()</code> を介して各モジュールの設定関数を起動。 5.  **マージ**: リクエスト処理時やサーバー起動時に、<code>ap_merge_per_dir_configs()</code> が階層的な設定をマージして最終的な設定を決定。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_strings.h</code>: APR（Apache Portable Runtime）によるメモリ管理と文字列操作。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: サーバーの基本構造と設定インターフェース。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_cfgtree.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_cfgtree.h.html&quot;}, '*');"><code>util_cfgtree.h</code></a>: 設定ツリー構造の定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: 設定エラーのログ出力。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_fnmatch.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_vhost.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_vhost.h.html&quot;}, '*');"><code>http_vhost.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>util_varbuf.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_cfgtree.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_cfgtree.c.html&quot;}, '*');"><code>server/util_cfgtree.c</code></a>: 設定ツリーのノード操作関数群。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: コアモジュール固有の設定コマンドの実装。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>: 本ファイルで実装されている関数の宣言。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定データは主に <code>apr_pool_t</code> を使用して管理されます。ライフサイクルはサーバーの起動・再起動サイクルに依存します。</li>
+<li>**パフォーマンス**: <code>merger_func_cache</code> は、モジュールリストを毎回辿るコストを避けるための最適化です。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../source/server/config.c.html#L224" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>conf_vector_length</code></a> は動的モジュールのロード数に影響されます。<a class="wiki-source-link" href="../../source/include/httpd.h.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DYNAMIC_MODULE_LIMIT</code></a> を超える場合は再コンパイルが必要です。</li>
+<li>**省略**: 本ファイル内の <code>ap_hook_*</code> マクロ展開や、詳細なエラーハンドリングのロジックは、コードの可読性を優先して詳細な解説を省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__config_c__request_rec.html" target="wiki-view"><code>request_rec</code></a></li>
+<li><a href="../symbols/server__config_c__apr_pool_t.html" target="wiki-view"><code>apr_pool_t</code></a></li>
+<li><a href="../symbols/server__config_c__create_empty_config.html" target="wiki-view"><code>create_empty_config</code></a></li>
+<li><a href="../symbols/server__config_c__ap_create_request_config.html" target="wiki-view"><code>ap_create_request_config</code></a></li>
+<li><a href="../symbols/server__config_c__ap_create_conn_config.html" target="wiki-view"><code>ap_create_conn_config</code></a></li>
+<li><a href="../symbols/server__config_c__ap_create_per_dir_config.html" target="wiki-view"><code>ap_create_per_dir_config</code></a></li>
+<li><a href="../symbols/server__config_c__ap_mod_list.html" target="wiki-view"><code>ap_mod_list</code></a></li>
+<li><a href="../symbols/server__config_c__ap_mod_list_struct.html" target="wiki-view"><code>ap_mod_list_struct</code></a></li>
+<li><a href="../symbols/server__config_c__ap_reset_module_loglevels.html" target="wiki-view"><code>ap_reset_module_loglevels</code></a></li>
+<li><a href="../symbols/server__config_c__arr_elts_param_t.html" target="wiki-view"><code>arr_elts_param_t</code></a></li>
+<li><a href="../symbols/server__config_c__configs.html" target="wiki-view"><code>configs</code></a></li>
+<li><a href="../symbols/server__config_c__ap_init_virtual_host.html" target="wiki-view"><code>ap_init_virtual_host</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

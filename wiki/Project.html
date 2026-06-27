@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>Project.md</title><link rel="stylesheet" href="../styles.css"></head><body><h1>httpd-2.4.67</h1>
+<h2>このシステムは何か</h2>
+<p><code>httpd-2.4.67</code> は、Apache HTTP Server のソースコードベースです。モジュール式アーキテクチャを採用しており、コアエンジン、マルチプロセッシングモジュール（MPM）、および認証・キャッシュ・プロキシ・HTTP/2 などの多様な機能モジュールで構成されています。</p>
+<h2>アーキテクチャ概観</h2>
+<p>本システムは、リクエスト処理のライフサイクルを「フック（Hook）」と「フィルタ（Filter）」で制御するパイプライン構造を核としています。</p>
+<ul>
+<li>**コア**: プロセス/スレッド管理（MPM）、設定解析、リクエストディスパッチを統括。</li>
+<li>**MPM**: OS 固有の並行処理モデル（Event, Worker, Prefork 等）を抽象化。</li>
+<li>**モジュール**: 認証（AAA）、キャッシュ、プロキシ、HTTP/2 等の機能をフック経由でパイプラインに挿入。</li>
+<li>**ストレージ抽象化**: <code>socache</code> や <a class="wiki-source-link" href="../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> などの共通 API を通じて、共有メモリや外部キャッシュを透過的に利用。</li>
+</ul>
+<h2>主要モジュール</h2>
+<ul>
+<li>**<code>server</code>**: サーバーの起動、設定管理、MPM の基盤。</li>
+<li>**<code>modules/http</code> / <code>modules/http2</code>**: HTTP プロトコル処理および多重化ストリーム管理。</li>
+<li>**<code>modules/proxy</code>**: ロードバランサおよびバックエンド転送機能。</li>
+<li>**<code>modules/aaa</code>**: 認証・認可のプロバイダフレームワーク。</li>
+<li>**<code>modules/cache</code>**: コンテンツおよび共有オブジェクトキャッシュ。</li>
+<li>**<code>modules/md</code>**: ACME プロトコルによる証明書自動管理。</li>
+</ul>
+<h2>実行時ライフサイクル</h2>
+<p>1. **起動**: <code>main</code> 関数が設定を読み込み、MPM を初期化。 2. **リスナー**: <code>listener_thread</code> がソケットを監視し、接続を受け付け。 3. **ディスパッチ**: <code>process_socket</code> を経由して、リクエストがワーカースレッドへ割り当て。 4. **処理**: <a class="wiki-source-link" href="../source/modules/http/http_request.c.html#L480" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_process_request.html&quot;}, '*');"><code>ap_process_request</code></a> がフック（<code>translate_name</code>, <code>fixups</code>, <code>handler</code> 等）を順次実行。 5. **フィルタリング**: <code>Bucket Brigade</code> を介してデータがフィルタチェーンを通過。 6. **終了**: <code>clean_child_exit</code> 等によりリソースを解放し、プロセス/スレッドを終了。</p>
+<h2>中核データ構造</h2>
+<ul>
+<li>**<code>request_rec</code>**: リクエストの全コンテキスト（URI、ヘッダー、プール等）を保持。</li>
+<li>**<code>conn_rec</code>**: 接続ごとの状態（ソケット、フィルタチェーン等）を保持。</li>
+<li>**<code>ap_filter_t</code>**: フィルタチェーンの各ノード。</li>
+<li>**<code>apr_bucket_brigade</code>**: フィルタ間を流れるデータストリームのコンテナ。</li>
+<li>**<a class="wiki-source-link" href="../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a>**: モジュールのエントリポイントとフックを定義する構造体。</li>
+</ul>
+<h2>横断的トピック</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を用いた階層的なメモリ管理（リクエスト終了時に一括解放）。</li>
+<li>**同期・排他制御**: <code>apr_proc_mutex</code> や <a class="wiki-source-link" href="../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> によるプロセス間通信・排他制御。</li>
+<li>**ロギング**: <code>ap_log_error</code> 等の API を通じたモジュールごとのログレベル制御。</li>
+<li>**プロトコル抽象化**: <code>socache</code> や <a class="wiki-source-link" href="../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> によるストレージ/メモリの抽象化。</li>
+</ul>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a> (基本構造の理解) 2. <a class="wiki-source-link" href="../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> (設定解析とモジュールロード) 3. <a class="wiki-source-link" href="../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> (並行処理モデルの理解) 4. <a class="wiki-source-link" href="../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a> (リクエスト処理フロー) 5. <a class="wiki-source-link" href="../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> (フィルタアーキテクチャ) 6. <a class="wiki-source-link" href="../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a> (高度なプロトコル実装例)</p>
+<h2>未解決の問い</h2>
+<ul>
+<li>各 MPM 間での <code>child_main</code> や <code>perform_idle_server_maintenance</code> の詳細な差異の網羅的比較。</li>
+<li><code>mod_lua</code> や <code>mod_md</code> などの複雑なモジュールにおける、メモリプールと外部リソースのライフサイクル管理の厳密な検証。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

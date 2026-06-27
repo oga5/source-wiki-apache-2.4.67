@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/mod_md_drive.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_drive.c.html&quot;}, '*');">modules/md/mod_md_drive.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_md</code> におけるマネージドドメイン（MD）の証明書自動更新プロセスを制御するバックグラウンド実行エンジンです。<code>mod_watchdog</code> を利用して、証明書の有効期限監視と更新処理を非同期に実行します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> サブシステムにおいて、証明書更新の「駆動（Drive）」を担当します。設定の読み込みや証明書の管理を行う <code>md_reg</code> や <code>md_store</code> と連携し、定期的なタスクとして更新処理をスケジュールします。</p>
+<h2>責務</h2>
+<ul>
+<li>**監視の開始**: <code>mod_watchdog</code> を利用した更新用スレッドの登録と初期化。</li>
+<li>**更新ジョブの実行**: 各 MD に対して、証明書の更新が必要か（期限切れ、OCSP 破棄、ARI による推奨など）を判定し、必要に応じて更新処理を実行。</li>
+<li>**エラーリカバリ**: 再起動時に前回の更新失敗が残っている場合、<code>STAGING</code> 領域をパージして再試行を促す。</li>
+<li>**イベント通知**: 更新の開始、成功、失敗などの状態変化をイベントハンドラ経由で通知。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html#L309" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__md_renew_start_watching.html&quot;}, '*');"><code>md_renew_start_watching</code></a>: 更新監視プロセスを開始するメインエントリーポイント。</li>
+<li><code>run_watchdog</code>: <code>mod_watchdog</code> から呼び出されるコールバック関数。更新ジョブのループを制御。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__process_drive_job.html&quot;}, '*');"><code>process_drive_job</code></a>: 個別の MD に対して更新判定と実行を行うコアロジック。</li>
+<li><code>md_renew_ctx_t</code>: 更新プロセス全体の状態を保持するコンテキスト構造体。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html#L309" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__md_renew_start_watching.html&quot;}, '*');"><code>md_renew_start_watching</code></a> が呼ばれ、監視対象の MD ごとに <a class="wiki-source-link" href="../../../source/modules/md/md_status.h.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_h__md_job_t.html&quot;}, '*');"><code>md_job_t</code></a> を作成し、<code>mod_watchdog</code> にコールバックを登録。 2. **ループ実行**: <code>run_watchdog</code> が定期的に起動。各ジョブの <code>next_run</code> を確認し、期限に達したジョブに対して <a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__process_drive_job.html&quot;}, '*');"><code>process_drive_job</code></a> を実行。 3. **判定と更新**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__process_drive_job.html&quot;}, '*');"><code>process_drive_job</code></a> 内で <a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__md_will_renew_cert.html&quot;}, '*');"><code>md_will_renew_cert</code></a> を呼び出し、更新が必要か判断。必要であれば <a class="wiki-source-link" href="../../../source/modules/md/md_reg.c.html#L1202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew.html&quot;}, '*');"><code>md_reg_renew</code></a> を実行し、結果を <code>STAGING</code> 領域に保存。 4. **再スケジュール**: 全ジョブの処理後、最も早い <code>next_run</code> を計算し、<code>wd_set_interval</code> で次回の実行タイミングを更新。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_watchdog.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>mod_watchdog.h</code></a>: 非同期タスク実行のための基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_reg.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.h.html&quot;}, '*');"><code>md_reg.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/md/md_store.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.h.html&quot;}, '*');"><code>md_store.h</code></a>: 証明書登録管理およびストレージ操作。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.h.html&quot;}, '*');"><code>md_acme.h</code></a>: ACME プロトコルによる証明書取得ロジック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_private.h.html&quot;}, '*');"><code>mod_md_private.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/md/mod_md_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_config.h.html&quot;}, '*');"><code>mod_md_config.h</code></a>: モジュール内部設定とプライベート定義。</li>
+<li><code>apr_date.h</code></li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_authz.h.html&quot;}, '*');"><code>md_acme_authz.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.h.html&quot;}, '*');"><code>md_crypt.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_curl.h.html&quot;}, '*');"><code>md_curl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_event.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_event.h.html&quot;}, '*');"><code>md_event.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');"><code>md_json.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_result.h.html&quot;}, '*');"><code>md_result.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_status.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_status.h.html&quot;}, '*');"><code>md_status.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store_fs.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store_fs.h.html&quot;}, '*');"><code>md_store_fs.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.h.html&quot;}, '*');"><code>md_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_version.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_version.h.html&quot;}, '*');"><code>md_version.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.h.html&quot;}, '*');"><code>mod_md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_drive.h.html&quot;}, '*');"><code>mod_md_drive.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_status.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_status.h.html&quot;}, '*');"><code>mod_md_status.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_drive.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_drive.h.html&quot;}, '*');"><code>mod_md_drive.h</code></a>: 本ファイルの公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a>: 証明書更新の具体的なロジック（<a class="wiki-source-link" href="../../../source/modules/md/md_reg.c.html#L1202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew.html&quot;}, '*');"><code>md_reg_renew</code></a> など）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>: 更新中の証明書データが一時保存される <code>STAGING</code> 領域の管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**マルチプロセス環境**: <code>mod_watchdog</code> を使用しているため、サーバー内の単一プロセスでのみ更新処理が実行されることが保証されています。</li>
+<li>**状態の永続化**: 更新処理の進捗は <code>STAGING</code> 領域の JSON ファイルに保存されます。これにより、プロセスが再起動しても更新状態が維持されます。</li>
+<li>**ARI (ACME Renewal Information)**: 本ファイルは ARI をサポートしており、CA からの推奨更新タイミングを考慮した柔軟なスケジュール調整が行われます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__mod_md_drive_c__md_renew_ctx_t.html" target="wiki-view"><code>md_renew_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_drive_c__process_drive_job.html" target="wiki-view"><code>process_drive_job</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_drive_c__md_will_renew_cert.html" target="wiki-view"><code>md_will_renew_cert</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_drive_c__next_run_default.html" target="wiki-view"><code>next_run_default</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_drive_c__run_watchdog.html" target="wiki-view"><code>run_watchdog</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_drive_c__md_renew_start_watching.html" target="wiki-view"><code>md_renew_start_watching</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/debugging/mod_dumpio.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/debugging/mod_dumpio.c.html&quot;}, '*');">modules/debugging/mod_dumpio.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/debugging/mod_dumpio.c.html&quot;}, '*');"><code>mod_dumpio.c</code></a> は、Apache HTTP Server の入出力フィルタチェーンを流れるデータを傍受し、エラーログ（<a class="wiki-source-link" href="../../../source/include/http_log.h.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_TRACE7</code></a> レベル）へダンプするデバッグ用モジュールです。SSL 復号後および暗号化前の生のデータストリームを可視化するために設計されています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/debugging</code> ディレクトリにおいて、ネットワーク I/O の低レイヤーにおけるデータフローを監視する「スニファー」の役割を果たします。フィルタチェーンの <code>AP_FTYPE_CONNECTION + 3</code> に位置し、SSL フィルタよりも内側で動作します。</p>
+<h2>責務</h2>
+<ul>
+<li>**フィルタ登録**: 入力用 (<code>DUMPIO_IN</code>) および出力用 (<code>DUMPIO_OUT</code>) フィルタを接続フェーズで挿入。</li>
+<li>**データダンプ**: バケット内のデータを読み取り、ログ出力可能な形式に変換して記録。</li>
+<li>**設定管理**: <code>DumpIOInput</code> および <code>DumpIOOutput</code> ディレクティブによる機能の有効/無効化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_conf_t.html&quot;}, '*');"><code>dumpio_conf_t</code></a>: 入出力の有効状態を保持するサーバー設定構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L213" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_create_sconfig.html&quot;}, '*');"><code>dumpio_create_sconfig</code></a>: 設定構造体の初期化（メモリ確保）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L239" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/debugging/mod_dumpio.c.html&quot;}, '*');"><code>dumpio_cmds</code></a>: <code>DumpIOInput</code> / <code>DumpIOOutput</code> ディレクティブの定義。</li>
+</ul>
+<h3>フィルタ処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L126" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_input_filter.html&quot;}, '*');"><code>dumpio_input_filter</code></a>: 入力ストリームを傍受し、<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を呼び出した後にデータをダンプ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_output_filter.html&quot;}, '*');"><code>dumpio_output_filter</code></a>: 出力ストリームを傍受し、データをダンプした後に <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で後続へ渡す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpit.html&quot;}, '*');"><code>dumpit</code></a>: 共通のダンプ処理関数。バケットの内容を読み取り、ログ出力を行う。</li>
+</ul>
+<h3>フックと登録</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L199" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_register_hooks.html&quot;}, '*');"><code>dumpio_register_hooks</code></a>: フィルタの登録と <code>pre_connection</code> フックの設定。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L180" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_pre_conn.html&quot;}, '*');"><code>dumpio_pre_conn</code></a>: 接続開始時に設定に基づきフィルタをチェーンに追加。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L180" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_pre_conn.html&quot;}, '*');"><code>dumpio_pre_conn</code></a> が接続ごとに呼び出され、設定が有効であればフィルタをチェーンに挿入します。 2. **入力フロー**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L126" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_input_filter.html&quot;}, '*');"><code>dumpio_input_filter</code></a> が <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を実行し、取得したバケット群を <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpit.html&quot;}, '*');"><code>dumpit</code></a> に渡してログ出力します。 3. **出力フロー**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpio_output_filter.html&quot;}, '*');"><code>dumpio_output_filter</code></a> がバケット群を走査し、<a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpit.html&quot;}, '*');"><code>dumpit</code></a> でログ出力した後、<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で後続のフィルタへデータを渡します。 4. **ダンプ処理**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpit.html&quot;}, '*');"><code>dumpit</code></a> は <code>apr_bucket_read</code> を使用してデータを取得します。EBCDIC 環境では文字コード変換を行い、それ以外ではバイナリデータをそのままログ出力します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: Apache コアおよび接続管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: ログ出力およびコア機能。</li>
+<li><code>apr_strings.h</code>: 文字列操作。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: フィルタチェーンの仕組みを理解するために参照。</li>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲードの操作（<code>apr_bucket_read</code> 等）の理解に必須。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**パフォーマンス**: 非常に大量のログを出力するため、本番環境での有効化は推奨されません。<a class="wiki-source-link" href="../../../source/include/http_log.h.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_TRACE7</code></a> レベルで動作するため、ログレベル設定に注意してください。</li>
+<li>**メモリ**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpit.html&quot;}, '*');"><code>dumpit</code></a> 内で <code>apr_bucket_read</code> を使用しており、バケットの読み取り時にメモリが確保される場合があります。</li>
+<li>**制限事項**: ソース内のコメントにある通り、バイナリデータ内の <code>\0</code>（ヌル文字）の扱いには課題があり、ログ出力時にエスケープ処理が不完全な場合があります。</li>
+<li>**省略箇所**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_dumpio_c__dumpit.html&quot;}, '*');"><code>dumpit</code></a> 内の EBCDIC 変換ロジックは、特定のプラットフォームでのみ有効なため、一般的な環境では無視されます。また、フィルタの挿入位置（<code>AP_FTYPE_CONNECTION + 3</code>）は、SSL フィルタとの順序関係を意図的に制御しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_conf_t.html" target="wiki-view"><code>dumpio_conf_t</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpit.html" target="wiki-view"><code>dumpit</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_input_filter.html" target="wiki-view"><code>dumpio_input_filter</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_output_filter.html" target="wiki-view"><code>dumpio_output_filter</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_pre_conn.html" target="wiki-view"><code>dumpio_pre_conn</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_register_hooks.html" target="wiki-view"><code>dumpio_register_hooks</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_create_sconfig.html" target="wiki-view"><code>dumpio_create_sconfig</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_enable_input.html" target="wiki-view"><code>dumpio_enable_input</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_dumpio_c__dumpio_enable_output.html" target="wiki-view"><code>dumpio_enable_output</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

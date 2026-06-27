@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/metadata/mod_unique_id.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_unique_id.c.html&quot;}, '*');">modules/metadata/mod_unique_id.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_unique_id</code> は、Apache HTTP Server の各リクエストに対して、システム全体で一意となる識別子（<code>UNIQUE_ID</code>）を生成するモジュールです。この識別子は、ログ記録やリクエスト追跡、分散環境でのセッション管理などに利用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> ディレクトリに属し、リクエスト処理の初期段階で環境変数 <code>UNIQUE_ID</code> を設定します。他のモジュールがこの値を参照することで、リクエストのライフサイクル全体を通じた一貫した追跡が可能になります。</p>
+<h2>責務</h2>
+<ul>
+<li>**一意性の保証**: タイムスタンプ、プロセス/スレッド情報、乱数（PRNG）を組み合わせ、クラスタ環境や複数プロセス環境でも衝突しにくいIDを生成する。</li>
+<li>**URLセーフなエンコーディング**: 生成したバイナリデータを <code>[A-Za-z0-9@-_]</code> の文字セットでエンコードし、URLに含めても安全な形式に変換する。</li>
+<li>**ライフサイクル管理**: リクエストの開始時にIDを生成し、内部リダイレクト時にもIDを維持する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_unique_id_c__unique_id_rec.html&quot;}, '*');"><code>unique_id_rec</code></a>: ID生成の元となる構造体。タイムスタンプ、乱数ルート、カウンタ、スレッドIDで構成される。</li>
+<li><code>gen_unique_id()</code>: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_unique_id_c__unique_id_rec.html&quot;}, '*');"><code>unique_id_rec</code></a> を構築し、UUエンコードを施して文字列を返すコア関数。</li>
+<li><code>set_unique_id()</code>: <code>post_read_request</code> フックで呼ばれ、環境変数 <code>UNIQUE_ID</code> を設定する。</li>
+<li><code>generate_log_id()</code>: エラーログ生成時にIDが必要な場合、既存のIDを再利用または新規生成する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L146" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_unique_id_c__unique_id_global_init.html&quot;}, '*');"><code>unique_id_global_init</code></a> で構造体のオフセットを計算し、<a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L170" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_unique_id_c__unique_id_child_init.html&quot;}, '*');"><code>unique_id_child_init</code></a> でプロセス固有の乱数ルートを生成する。 2. **生成**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_unique_id_c__gen_unique_id.html&quot;}, '*');"><code>gen_unique_id</code></a> が呼ばれると、現在の時刻、接続ID、カウンタを構造体に詰め、パディングを除去したバイナリを生成する。 3. **エンコード**: バイナリデータをカスタムのUUエンコードアルゴリズムで24文字の文字列に変換する。 4. **注入**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_unique_id_c__set_unique_id.html&quot;}, '*');"><code>set_unique_id</code></a> がリクエストの <code>subprocess_env</code> に値を格納し、後続のモジュールが利用可能にする。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_want.h</code>, <code>apr_general.h</code>: APRの基本機能とバイト順序変換。</li>
+<li><code>apr_atomic.h</code>: スレッドセーフなカウンタ操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: ApacheのコアAPIおよびフック定義。</li>
+<li><code>apr_network_io.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_headers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_headers.c.html&quot;}, '*');"><code>modules/metadata/mod_headers.c</code></a>: 生成された <code>UNIQUE_ID</code> をHTTPヘッダーとして出力する場合の参考。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_expr_eval.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_eval.c.html&quot;}, '*');"><code>server/util_expr_eval.c</code></a>: ログフォーマット等で <code>%{UNIQUE_ID}e</code> を評価する際の仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**不透明なトークン**: このIDは内部構造が将来変更される可能性があるため、他のアプリケーションは中身を解析せず、不透明な文字列として扱うべきです。</li>
+<li>**スレッド安全性**: カウンタのインクリメントには <code>apr_atomic_inc32</code> を使用しており、マルチスレッド環境での競合を考慮しています。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_unique_id.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_unique_id.c.html&quot;}, '*');"><code>cur_unique_id</code></a> の更新はキャッシュ効率を考慮した設計が求められており、コード内の <code>XXX</code> コメントにある通り、さらなる最適化の余地が議論されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__unique_id_rec.html" target="wiki-view"><code>unique_id_rec</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__unique_id_global_init.html" target="wiki-view"><code>unique_id_global_init</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__unique_id_child_init.html" target="wiki-view"><code>unique_id_child_init</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__gen_unique_id.html" target="wiki-view"><code>gen_unique_id</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__generate_log_id.html" target="wiki-view"><code>generate_log_id</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__set_unique_id.html" target="wiki-view"><code>set_unique_id</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_unique_id_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

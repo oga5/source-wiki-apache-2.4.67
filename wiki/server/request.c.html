@@ -1,0 +1,98 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/request.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/request.c.html&quot;}, '*');">server/request.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/server/request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/request.c.html&quot;}, '*');"><code>server/request.c</code></a> は、Apache HTTP Server におけるリクエスト処理のライフサイクルと、ディレクトリ/ファイル単位の設定マージ（Walk）を管理する中核ファイルです。リクエストの正規化、翻訳、認証、認可、およびサブリクエストの生成といった一連のフェーズを制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> の一部として、HTTP リクエストが接続からハンドラへ渡されるまでの「前処理」を担当します。<a class="wiki-source-link" href="../../source/server/core.c.html#L5821" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>core</code></a> モジュールの設定をリクエストのコンテキストに適用し、リクエストのパスに基づいた設定の階層的なマージを最適化する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト処理のオーケストレーション**: <a class="wiki-source-link" href="../../source/server/request.c.html#L187" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_process_request_internal.html&quot;}, '*');"><code>ap_process_request_internal</code></a> を通じて、URI の正規化から認可までの各フェーズを順次実行する。</li>
+<li>**設定の階層的マージ**: <code>&lt;Directory&gt;</code>, <code>&lt;Location&gt;</code>, <code>&lt;Files&gt;</code>, <code>&lt;If&gt;</code> セクションの設定をリクエストパスに従ってマージする。</li>
+<li>**サブリクエスト管理**: サブリクエストの生成、実行、およびメモリ管理（プール破棄）を行う。</li>
+<li>**認証・認可の最適化**: 設定の変更がない場合に、以前の計算結果を再利用するためのキャッシュ機構を提供。</li>
+<li>**シンボリックリンクの制御**: <code>FollowSymLinks</code> や <code>SymLinksIfOwnerMatch</code> に基づくファイルシステムアクセスの検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L187" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_process_request_internal.html&quot;}, '*');"><code>ap_process_request_internal</code></a>: リクエスト処理のメインロジック。URI 正規化、翻訳、アクセス制御、型チェック、修正（fixups）を順次実行。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L127" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_some_authn_required.html&quot;}, '*');"><code>ap_some_authn_required</code></a>: 認証が必要かどうかを判定する。</li>
+</ul>
+<h3>設定マージ（Walk）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L661" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_directory_walk.html&quot;}, '*');"><code>ap_directory_walk</code></a>: ファイルシステムパスに基づき <code>&lt;Directory&gt;</code> 設定をマージ。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L1452" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_location_walk.html&quot;}, '*');"><code>ap_location_walk</code></a>: URI パスに基づき <code>&lt;Location&gt;</code> 設定をマージ。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L1655" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_file_walk.html&quot;}, '*');"><code>ap_file_walk</code></a>: ファイル名に基づき <code>&lt;Files&gt;</code> 設定をマージ。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L1992" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_if_walk.html&quot;}, '*');"><code>ap_if_walk</code></a>: <code>&lt;If&gt;</code> 条件式を評価し設定をマージ。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__walk_cache_t.html&quot;}, '*');"><code>walk_cache_t</code></a>: マージ結果をキャッシュし、サブ/リダイレクト時の再計算を回避する構造体。</li>
+</ul>
+<h3>サブリクエスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L2015" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__make_sub_request.html&quot;}, '*');"><code>make_sub_request</code></a>: サブリクエスト用の <code>request_rec</code> を初期化。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L2297" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_sub_req_lookup_uri.html&quot;}, '*');"><code>ap_sub_req_lookup_uri</code></a> / <a class="wiki-source-link" href="../../source/server/request.c.html#L2433" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_sub_req_lookup_file.html&quot;}, '*');"><code>ap_sub_req_lookup_file</code></a>: URI またはファイルパスからサブリクエストを生成。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html#L2528" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_run_sub_req.html&quot;}, '*');"><code>ap_run_sub_req</code></a>: サブリクエストを実行し、ハンドラを呼び出す。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/request.c.html#L187" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_process_request_internal.html&quot;}, '*');"><code>ap_process_request_internal</code></a> が呼ばれると、URI の正規化が行われる。 2. **Walk フェーズ**: <a class="wiki-source-link" href="../../source/server/request.c.html#L661" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_directory_walk.html&quot;}, '*');"><code>ap_directory_walk</code></a> 等が呼ばれ、<a class="wiki-source-link" href="../../source/server/request.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__walk_cache_t.html&quot;}, '*');"><code>walk_cache_t</code></a> を介して設定がマージされる。キャッシュが存在すれば、<code>dir_conf_tested</code> を比較して再利用する。 3. **認証・認可**: <a class="wiki-source-link" href="../../source/server/core.c.html#L821" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_satisfies.html&quot;}, '*');"><code>ap_satisfies</code></a> に基づき、<code>access_checker</code> や <code>check_user_id</code> などのフックが実行される。 4. **サブリクエスト**: <a class="wiki-source-link" href="../../source/server/request.c.html#L2015" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__make_sub_request.html&quot;}, '*');"><code>make_sub_request</code></a> で親リクエストのプールから派生した新しいプールを持つ <code>request_rec</code> が作成され、独立した処理フローが実行される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strings.h</code>, <code>apr_file_io.h</code>: 文字列操作およびファイル I/O。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache の基本構造体および設定管理。</li>
+<li><a class="wiki-source-link" href="../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a>, <a class="wiki-source-link" href="../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>: コアモジュールおよび認証モジュールのインターフェース。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><code>apr_fnmatch.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/mod_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>mod_request.h</code></a></li>
+<li><code>stdarg.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/util_charset.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_charset.h.html&quot;}, '*');"><code>util_charset.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: <a class="wiki-source-link" href="../../source/include/http_core.h.html#L527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_dir_config.html&quot;}, '*');"><code>core_dir_config</code></a> の定義および設定マージの基礎ロジック。</li>
+<li><a class="wiki-source-link" href="../../source/server/protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/protocol.c.html&quot;}, '*');"><code>server/protocol.c</code></a>: リクエストの読み込みとプロトコル処理。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_eval.c.html&quot;}, '*');"><code>server/util_expr_eval.c</code></a>: <code>&lt;If&gt;</code> 条件式の評価。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: サブリクエストは <code>r-&gt;pool</code> を使用して作成され、<a class="wiki-source-link" href="../../source/server/request.c.html#L2547" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_destroy_sub_req.html&quot;}, '*');"><code>ap_destroy_sub_req</code></a> で明示的に破棄する必要があります。メモリリークを防ぐため、サブリクエスト生成後は必ず破棄してください。</li>
+<li>**キャッシュの重要性**: <a class="wiki-source-link" href="../../source/server/request.c.html#L441" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__walk_cache_t.html&quot;}, '*');"><code>walk_cache_t</code></a> はパフォーマンスに直結します。設定の変更頻度が高い環境では、このキャッシュのヒット率が重要になります。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../source/server/request.c.html#L187" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_process_request_internal.html&quot;}, '*');"><code>ap_process_request_internal</code></a> 内のロジックはセキュリティモデルの根幹です。この関数内の順序を変更すると、認可バイパスなどの脆弱性を生む可能性があるため、慎重な変更が求められます。</li>
+<li>**省略された詳細**: 正規表現のコンパイルや、特定の MPM 固有の最適化については、このファイルでは抽象化されており、各モジュール側の実装に依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__request_c__decl_die.html" target="wiki-view"><code>decl_die</code></a></li>
+<li><a href="../symbols/server__request_c__ap_some_authn_required.html" target="wiki-view"><code>ap_some_authn_required</code></a></li>
+<li><a href="../symbols/server__request_c__walk_location_and_if.html" target="wiki-view"><code>walk_location_and_if</code></a></li>
+<li><a href="../symbols/server__request_c__ap_process_request_internal.html" target="wiki-view"><code>ap_process_request_internal</code></a></li>
+<li><a href="../symbols/server__request_c__walk_walked_t.html" target="wiki-view"><code>walk_walked_t</code></a></li>
+<li><a href="../symbols/server__request_c__walk_cache_t.html" target="wiki-view"><code>walk_cache_t</code></a></li>
+<li><a href="../symbols/server__request_c__prep_walk_cache.html" target="wiki-view"><code>prep_walk_cache</code></a></li>
+<li><a href="../symbols/server__request_c__resolve_symlink.html" target="wiki-view"><code>resolve_symlink</code></a></li>
+<li><a href="../symbols/server__request_c__core_opts_t.html" target="wiki-view"><code>core_opts_t</code></a></li>
+<li><a href="../symbols/server__request_c__core_opts_merge.html" target="wiki-view"><code>core_opts_merge</code></a></li>
+<li><a href="../symbols/server__request_c__ap_directory_walk.html" target="wiki-view"><code>ap_directory_walk</code></a></li>
+<li><a href="../symbols/server__request_c__ap_update_mtime.html" target="wiki-view"><code>ap_update_mtime</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

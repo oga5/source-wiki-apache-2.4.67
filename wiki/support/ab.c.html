@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/ab.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');">support/ab.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>ab.c</code></a> は Apache HTTP Server プロジェクトに含まれる標準的な HTTP ベンチマークツール「ApacheBench (ab)」のソースコードです。非同期 I/O と <code>apr_pollset_t</code> を活用し、単一プロセスで多数の同時接続をシミュレートしてサーバーの性能を測定します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュールにおける主要なユーティリティの一つです。他のサポートツールが管理や設定に特化しているのに対し、本ファイルはサーバーの負荷試験と統計解析という動的な役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷生成**: 指定された同時接続数（<a class="wiki-source-link" href="../../source/support/ab.c.html#L311" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');">concurrency</a>）に基づき、非同期に HTTP リクエストを送信する。</li>
+<li>**統計計測**: 接続時間、処理時間、待機時間、転送量などのメトリクスを収集・計算する。</li>
+<li>**SSL/TLS 対応**: OpenSSL を用いた HTTPS 通信のサポート。</li>
+<li>**レポート出力**: テキスト形式または HTML 形式での結果出力、および GNUplot/CSV 用のデータエクスポート。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>接続管理</h3>
+<ul>
+<li><code>struct connection</code>: 各接続の状態、ソケット、SSL コンテキスト、タイムスタンプを保持する構造体。</li>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html#L251" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__connect_state_e.html&quot;}, '*');"><code>connect_state_e</code></a>: 接続のライフサイクル（UNCONNECTED, CONNECTING, CONNECTED, READ）を定義。</li>
+<li><code>start_connect()</code>: 非同期接続を開始し、<code>apr_pollset_t</code> に登録する。</li>
+<li><code>close_connection()</code>: 接続を終了し、統計を保存して次のリクエストへ遷移させる。</li>
+</ul>
+<h3>処理・通信</h3>
+<ul>
+<li><code>write_request()</code>: HTTP リクエストをソケットへ書き込む。</li>
+<li><code>read_connection()</code>: サーバーからのレスポンスを読み込み、ヘッダー解析とボディの受信を行う。</li>
+<li><code>ssl_proceed_handshake()</code>: SSL/TLS ハンドシェイクを非同期に進行させる。</li>
+</ul>
+<h3>統計・出力</h3>
+<ul>
+<li><code>struct data</code>: 個別のリクエストごとの時間計測データを保持。</li>
+<li><code>output_results()</code>: 収集した統計の集計、平均、標準偏差、パーセンタイル計算、および標準出力への表示。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>main()</code> で引数を解析し、APR プールと <code>apr_pollset_t</code> を作成。 2. **接続開始**: <code>test()</code> が最初の接続を <code>start_connect()</code> で開始。 3. **イベントループ**: <code>apr_pollset_poll()</code> を使用して、ソケットの読み込み/書き込み可能イベントを待機。 4. **状態遷移**: イベントに応じて <code>write_request()</code>（送信）または <code>read_connection()</code>（受信）を呼び出し、<a class="wiki-source-link" href="../../source/support/ab.c.html#L251" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__connect_state_e.html&quot;}, '*');"><code>connect_state_e</code></a> を更新。 5. **完了処理**: 全リクエスト終了後、<code>output_results()</code> が <a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htcacheclean_c__stats.html&quot;}, '*');"><code>stats</code></a> 配列をソートし、統計情報を計算して出力。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: ソケット、メモリプール、時間計測、ポーリング、シグナル処理の抽象化に使用。</li>
+<li>**OpenSSL**: <code>libssl</code>, <code>libcrypto</code> を使用した HTTPS 通信の実装。</li>
+<li>**標準ライブラリ**: <code>stdio.h</code>, <code>stdlib.h</code>, <code>math.h</code> 等。</li>
+<li><code>ap_config_auto.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_release.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_release.h.html&quot;}, '*');"><code>ap_release.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_base64.h</code></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_network_io.h</code></li>
+<li><code>apr_poll.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_time.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><code>apr_xlate.h</code></li>
+<li><code>ctype.h</code></li>
+<li><code>limits.h</code></li>
+<li><code>openssl/applink.c</code></li>
+<li><code>openssl/core_names.h</code></li>
+<li><code>openssl/crypto.h</code></li>
+<li><code>openssl/err.h</code></li>
+<li><code>openssl/evp.h</code></li>
+<li><code>openssl/opensslv.h</code></li>
+<li><code>openssl/pem.h</code></li>
+<li><code>openssl/rand.h</code></li>
+<li><code>openssl/ssl.h</code></li>
+<li><code>openssl/x509.h</code></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>support/rotatelogs.c</code></a>: ログ管理ツール。</li>
+<li><a class="wiki-source-link" href="../../source/support/htpasswd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htpasswd.c.html&quot;}, '*');"><code>support/htpasswd.c</code></a>: 認証ファイル管理ツール。</li>
+<li><code>apr_pollset_t</code> 関連 API: APR のドキュメントを参照することで、本ファイルの非同期 I/O モデルが理解しやすくなります。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>apr_pool_t</code> を使用してメモリを管理しており、<code>cntxt</code> プールが破棄される際に一括解放されます。</li>
+<li>**レイアウト**: <code>struct connection</code> 配列は <a class="wiki-source-link" href="../../source/support/ab.c.html#L311" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>concurrency</code></a> 分だけ動的に確保されます。</li>
+<li>**既知の制限**: HTTP/1.x の解析は完全な仕様準拠ではなく、パフォーマンスを優先した簡易的な実装です。</li>
+<li>**注意点**: <code>ab</code> は非常に古いコードベースを含んでおり、一部のバッファ操作に <code>strcpy</code> 等の古い関数が残っています。また、SSL 関連のコードは OpenSSL のバージョンによって条件分岐が複雑化しているため、ビルド環境の OpenSSL バージョンに注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__ab_c__X509_STACK_TYPE.html" target="wiki-view"><code>X509_STACK_TYPE</code></a></li>
+<li><a href="../symbols/support__ab_c__connect_state_e.html" target="wiki-view"><code>connect_state_e</code></a></li>
+<li><a href="../symbols/support__ab_c__connection.html" target="wiki-view"><code>connection</code></a></li>
+<li><a href="../symbols/support__ab_c__data.html" target="wiki-view"><code>data</code></a></li>
+<li><a href="../symbols/support__ab_c__apr_err.html" target="wiki-view"><code>apr_err</code></a></li>
+<li><a href="../symbols/support__ab_c__abort_on_oom.html" target="wiki-view"><code>abort_on_oom</code></a></li>
+<li><a href="../symbols/support__ab_c__set_polled_events.html" target="wiki-view"><code>set_polled_events</code></a></li>
+<li><a href="../symbols/support__ab_c__set_conn_state.html" target="wiki-view"><code>set_conn_state</code></a></li>
+<li><a href="../symbols/support__ab_c__ssl_print_cb.html" target="wiki-view"><code>ssl_print_cb</code></a></li>
+<li><a href="../symbols/support__ab_c__ssl_state_cb.html" target="wiki-view"><code>ssl_state_cb</code></a></li>
+<li><a href="../symbols/support__ab_c__ssl_rand_choosenum.html" target="wiki-view"><code>ssl_rand_choosenum</code></a></li>
+<li><a href="../symbols/support__ab_c__ssl_rand_seed.html" target="wiki-view"><code>ssl_rand_seed</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/webdav-repository-and-locking-engine.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>WebDAV Repository and Locking Engine</h1>
+<h2>概念</h2>
+<p><code>WebDAV Repository and Locking Engine</code> は、Apache HTTP Server（<code>mod_dav</code>）において、WebDAVリソースのプロパティ（メタデータ）管理および排他制御（ロック）を司る抽象化レイヤーとバックエンドプロバイダーの仕組みです。</p>
+<ul>
+<li>**プロパティ管理**: <code>dav_propdb</code> 構造体や <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L530" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_open_propdb.html&quot;}, '*');"><code>dav_open_propdb</code></a> 関数を介して、WebDAVリソースに紐づくプロパティデータベースの操作を抽象化します。</li>
+<li>**ロック管理**: <code>dav_lockdb_private</code> や <code>dav_lock_private</code> などの不透明（opaque）なデータ構造を用いて、バックエンド固有のロック情報を隠蔽し、一貫したロック制御を提供します。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p>WebDAVプロトコル（RFC 4918等）では、リソースのプロパティ設定・取得（<code>PROPFIND</code>/<code>PROPPATCH</code>）や、複数クライアント間での編集競合を防ぐためのロック制御（<code>LOCK</code>/<code>UNLOCK</code>）がコア機能として定義されています。</p>
+<p><code>mod_dav</code> は、これらプロパティやロックの具体的な永続化ロジックをコアから分離し、プロバイダー（ファイルシステムをバックエンドとする <code>mod_dav_fs</code> など）が独自の実装を提供できるように抽象化しています。これにより、ストレージの実装に依存しない、柔軟で一貫したWebDAVプロトコル処理が可能になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav.html&quot;}, '*');"><code>module:modules/dav</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__main.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>module:modules/dav/main</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_fs_open_lockdb.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_open_lockdb.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L333&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_fs_open_lockdb</code></a>**: ファイルシステムバックエンド（<code>mod_dav_fs</code>）において、ロックデータベースを開くための関数。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__main__mod_dav_h__dav_lock_private.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lock_private.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/mod_dav.h.html#L1332&quot;}, '*');"><code>symbol:modules/dav/main/mod_dav.h#dav_lock_private</code></a>**: ロックデータベースの実装において、リポジトリ固有のロック情報を保持するための不透明なデータ構造。<code>dav_lock</code> 構造体の <a class="wiki-source-link" href="../../source/modules/generators/mod_info.c.html#L1010" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_info.c.html&quot;}, '*');"><code>info</code></a> メンバーとして保持されます。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__main__mod_dav_h__dav_lockdb_private.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb_private.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/mod_dav.h.html#L1327&quot;}, '*');"><code>symbol:modules/dav/main/mod_dav.h#dav_lockdb_private</code></a>**: ロックデータベースプロバイダー固有のプライベートデータを保持するための不透明な構造体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__main__mod_dav_h__dav_propdb.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_propdb.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/mod_dav.h.html#L1691&quot;}, '*');"><code>symbol:modules/dav/main/mod_dav.h#dav_propdb</code></a>**: WebDAVプロパティデータベースへのアクセスおよび操作を管理するためのコンテキスト構造体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__main__props_c__dav_open_propdb.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_open_propdb.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/props.c.html#L530&quot;}, '*');"><code>symbol:modules/dav/main/props.c#dav_open_propdb</code></a>**: WebDAVプロパティデータベース（<code>dav_propdb</code>）をオープンし、初期化するための関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報からは、リクエスト受信からプロパティ・ロックデータベースの操作、レスポンス返却に至る完全なエンドツーエンドの制御フローはまだ十分に判明していません。</p>
+<p>現時点で判明している部分的な流れは以下の通りです：</p>
+<p>1. **プロパティ操作の開始**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html#L2422" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_c__dav_method_proppatch.html&quot;}, '*');"><code>dav_method_proppatch</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html#L1456" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_c__dav_gen_supported_live_props.html&quot;}, '*');"><code>dav_gen_supported_live_props</code></a> などの呼び出し元から <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L530" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_open_propdb.html&quot;}, '*');"><code>dav_open_propdb</code></a> が呼び出され、内部で <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_popen_propdb.html&quot;}, '*');"><code>dav_popen_propdb</code></a> を介してプロパティデータベース（<code>dav_propdb</code>）がオープンされます。 2. **ロックデータベースのオープン**: ファイルシステムバックエンドでは、<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L333" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_open_lockdb.html&quot;}, '*');"><code>dav_fs_open_lockdb</code></a> が呼び出され、内部で <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L300" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_really_open_lockdb.html&quot;}, '*');"><code>dav_fs_really_open_lockdb</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/fs/mod_dav_fs.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__mod_dav_fs_c__dav_get_lockdb_path.html&quot;}, '*');"><code>dav_get_lockdb_path</code></a> を用いてロックデータベースが開かれます。</p>
+<h2>重要な不変条件</h2>
+<p>提供された情報からは、システム全体の詳細な不変条件は完全には判明していません。現時点で判明している局所的な不変条件は以下の通りです：</p>
+<ul>
+<li>**メモリ管理のライフサイクル**: <code>dav_lock_private</code> や <code>dav_propdb</code> などの構造体のメモリ管理は、関連付けられたApacheのリクエストプール（<code>apr_pool_t</code>）の生存期間に依存します。</li>
+<li>**プロパティ操作のクローズ**: <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L530" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_open_propdb.html&quot;}, '*');"><code>dav_open_propdb</code></a> によってオープンされた <code>dav_propdb</code> は、処理の終了時に <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_close_propdb.html&quot;}, '*');"><code>dav_close_propdb</code></a> を通じて明示的にクローズされ、リソースが解放されなければなりません。</li>
+<li>**不透明ポインタの整合性**: <code>dav_lock_private</code> や <code>dav_lockdb_private</code> は前方宣言のみの不透明ポインタであるため、これらを扱う各プロバイダーの実装側で型安全性を担保する必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**プロバイダー間の型安全性の欠如**: <code>dav_lock_private</code> や <code>dav_lockdb_private</code> は具体的なメンバーが公開されていないため、異なるプロバイダーの実装間で誤ってキャストして使用すると、未定義の動作やメモリ破損を引き起こす可能性があります。</li>
+<li>**リソースリーク**: プロパティデータベースのオープン後、エラーハンドリングの経路などで <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_close_propdb.html&quot;}, '*');"><code>dav_close_propdb</code></a> による明示的なクローズを怠ると、リソースリークに繋がる恐れがあります。</li>
+<li>**プロバイダー未定義時のエラー**: プロパティデータベースのオープン時（<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L530" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_open_propdb.html&quot;}, '*');"><code>dav_open_propdb</code></a>）に、対応するプロバイダーが未定義であったり、データベースへの接続に失敗したりすると、後続のプロパティ操作はすべて実行できなくなります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_engine_io.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_io.c.html&quot;}, '*');">modules/ssl/ssl_engine_io.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_io.c.html&quot;}, '*');"><code>ssl_engine_io.c</code></a> は、Apache HTTP Server のフィルタチェーンと OpenSSL の BIO (Basic I/O) 抽象化レイヤーを接続するブリッジです。HTTPD の <code>apr_bucket_brigade</code> を用いて暗号化・復号化されたデータを効率的に転送し、SSL/TLS のハンドシェイク、データ読み書き、および接続終了を管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> の I/O サブシステムの中核であり、HTTPD の接続フィルタとして動作します。OpenSSL がネットワークソケットを直接操作する代わりに、このファイルで定義されたカスタム BIO を通じて HTTPD のフィルタスタックを読み書きします。</p>
+<h2>責務</h2>
+<ul>
+<li>**SSL フィルタ管理**: 入力 (<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1569" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_input.html&quot;}, '*');"><code>ssl_io_filter_input</code></a>) および出力 (<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1930" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_output.html&quot;}, '*');"><code>ssl_io_filter_output</code></a>) フィルタの提供。</li>
+<li>**BIO 抽象化**: OpenSSL が期待する <code>BIO_METHOD</code> を実装し、HTTPD のバケット操作と統合。</li>
+<li>**データバッファリング**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L318" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__char_buffer_t.html&quot;}, '*');"><code>char_buffer_t</code></a> による読み取りデータのキャッシュと、<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1723" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__coalesce_ctx.html&quot;}, '*');"><code>coalesce_ctx</code></a> による出力データの結合（TLS レコード効率化）。</li>
+<li>**ハンドシェイク制御**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1197" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_handshake.html&quot;}, '*');"><code>ssl_io_filter_handshake</code></a> による接続開始時のネゴシエーションと、プロキシ接続時の検証。</li>
+<li>**エラーハンドリング**: HTTP-over-HTTPS 検出や SSL エラーのログ出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンテキスト構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L104" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_filter_ctx_t.html&quot;}, '*');"><code>ssl_filter_ctx_t</code></a>: SSL 接続のメインコンテキスト。SSL オブジェクト、BIO、フィルタへのポインタを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L323" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_in_ctx_t.html&quot;}, '*');"><code>bio_filter_in_ctx_t</code></a>: 入力フィルタ用コンテキスト。復号化前のバッファと <code>apr_bucket_brigade</code> を管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_ctx_t.html&quot;}, '*');"><code>bio_filter_out_ctx_t</code></a>: 出力フィルタ用コンテキスト。暗号化前のデータを保持するブリゲードを管理。</li>
+</ul>
+<h3>BIO メソッド (OpenSSL 連携)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L464" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_in_read.html&quot;}, '*');"><code>bio_filter_in_read</code></a> / <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_write.html&quot;}, '*');"><code>bio_filter_out_write</code></a>: OpenSSL からの読み書き要求を HTTPD フィルタへ転送するコア関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_create.html&quot;}, '*');"><code>bio_filter_create</code></a> / <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_destroy.html&quot;}, '*');"><code>bio_filter_destroy</code></a>: BIO のライフサイクル管理。</li>
+</ul>
+<h3>フィルタ関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1569" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_input.html&quot;}, '*');"><code>ssl_io_filter_input</code></a>: 入力フィルタ。<code>SSL_read</code> を呼び出し、復号化されたデータを HTTPD に渡す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1930" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_output.html&quot;}, '*');"><code>ssl_io_filter_output</code></a>: 出力フィルタ。<code>SSL_write</code> を呼び出し、暗号化データを下位フィルタへ渡す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1728" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_coalesce.html&quot;}, '*');"><code>ssl_io_filter_coalesce</code></a>: 出力データを結合し、TLS レコードの断片化を抑制する最適化フィルタ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **入力**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1569" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_input.html&quot;}, '*');"><code>ssl_io_filter_input</code></a> が呼ばれると、<code>SSL_read</code> が実行される。<code>SSL_read</code> は <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L464" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_in_read.html&quot;}, '*');"><code>bio_filter_in_read</code></a> を呼び出し、HTTPD の <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> でネットワークからデータを取得。復号化後、呼び出し元へ戻る。 2. **出力**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1930" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_output.html&quot;}, '*');"><code>ssl_io_filter_output</code></a> が呼ばれると、データは <code>SSL_write</code> を経由。<code>SSL_write</code> は <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_write.html&quot;}, '*');"><code>bio_filter_out_write</code></a> を呼び出し、暗号化されたデータを <code>apr_bucket_brigade</code> に格納して <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で下位へ送る。 3. **バッファリング**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L318" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__char_buffer_t.html&quot;}, '*');"><code>char_buffer_t</code></a> は <code>AP_MODE_GETLINE</code> 等で発生する「読みすぎたデータ」を保持し、次回の読み取り時に再利用する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> 内部の共有定義と構造体。</li>
+<li><code>apr_date.h</code>: 日付処理ユーティリティ。</li>
+<li>OpenSSL BIO API: <code>BIO_new</code>, <code>BIO_meth_new</code> 等。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_init.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_init.c.html&quot;}, '*');"><code>ssl_engine_init.c</code></a>: フィルタの初期化と設定の適用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLConnRec.html&quot;}, '*');"><code>SSLConnRec</code></a> 等の接続状態管理構造体の定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.c.html&quot;}, '*');"><code>mod_ssl.c</code></a>: モジュールのエントリポイントとフック登録。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>apr_bucket_brigade</code> は <code>conn_rec</code> のプールに関連付けられており、フィルタのライフサイクルと同期します。</li>
+<li>**レイアウト**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L323" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_in_ctx_t.html&quot;}, '*');"><code>bio_filter_in_ctx_t</code></a> と <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_ctx_t.html&quot;}, '*');"><code>bio_filter_out_ctx_t</code></a> は、OpenSSL の BIO データ領域に <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L265" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>BIO_set_data</code></a> で格納されます。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L1728" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_filter_coalesce.html&quot;}, '*');"><code>ssl_io_filter_coalesce</code></a> は、小さなバケットを結合して TLS レコード数を減らすための重要な最適化です。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L310" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_IOBUFSIZE</code></a> (8192バイト) が読み取りの最大単位としてハードコードされています。</li>
+<li>**省略**: 本ページでは、デバッグ用のダンプ関数 (<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html#L2312" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_io_c__ssl_io_data_dump.html&quot;}, '*');"><code>ssl_io_data_dump</code></a>) の詳細な実装ロジックは省略しています。これらは主にトレースログ出力用であり、メインの I/O フローには影響しません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__ssl_filter_ctx_t.html" target="wiki-view"><code>ssl_filter_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_ctx_t.html" target="wiki-view"><code>bio_filter_out_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_ctx_new.html" target="wiki-view"><code>bio_filter_out_ctx_new</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_pass.html" target="wiki-view"><code>bio_filter_out_pass</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_flush.html" target="wiki-view"><code>bio_filter_out_flush</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_create.html" target="wiki-view"><code>bio_filter_create</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_destroy.html" target="wiki-view"><code>bio_filter_destroy</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_out_read.html" target="wiki-view"><code>bio_filter_out_read</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__char_buffer_t.html" target="wiki-view"><code>char_buffer_t</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__bio_filter_in_ctx_t.html" target="wiki-view"><code>bio_filter_in_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__coalesce_ctx.html" target="wiki-view"><code>coalesce_ctx</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_io_c__modssl_buffer_ctx.html" target="wiki-view"><code>modssl_buffer_ctx</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

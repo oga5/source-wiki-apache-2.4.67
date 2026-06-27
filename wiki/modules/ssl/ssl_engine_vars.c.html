@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_engine_vars.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_vars.c.html&quot;}, '*');">modules/ssl/ssl_engine_vars.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_vars.c.html&quot;}, '*');"><code>ssl_engine_vars.c</code></a> は、Apache HTTP Server の設定式（<code>ap_expr</code>）やログ設定から SSL/TLS 関連の情報を取得・抽出するための変数ルックアップ機能を提供します。証明書情報、セッション状態、暗号スイートなどの内部状態を文字列として公開するインターフェースです。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> の中核となる変数解決エンジンです。他のモジュール（<code>mod_log_config</code> など）が SSL 情報を必要とする際のゲートウェイとして機能し、OpenSSL の複雑なデータ構造を Apache のメモリ管理（<code>apr_pool_t</code>）に適した文字列形式に変換します。</p>
+<h2>責務</h2>
+<ul>
+<li>**変数解決**: <code>SSL_</code> で始まる変数や <code>SSL()</code> 関数に対するリクエストを処理し、適切な値を返す。</li>
+<li>**証明書解析**: X.509 証明書から DN（識別名）、SAN（サブジェクト代替名）、有効期限、シリアル番号などを抽出する。</li>
+<li>**ログ統合**: <code>mod_log_config</code> 用のハンドラを登録し、ログフォーマット文字列（<code>%c</code>, <code>%x</code>）経由での SSL 情報出力をサポートする。</li>
+<li>**OpenSSL 抽象化**: OpenSSL のバージョン差異を吸収し、BIO を介した安全な文字列変換を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>変数解決・登録</h3>
+<ul>
+<li><code>ssl_var_lookup</code>: 公開 API。リクエスト、接続、サーバー情報に基づき変数を解決するメイン関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L136" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_register.html&quot;}, '*');"><code>ssl_var_register</code></a>: モジュール初期化時に <code>ap_expr</code> フックとオプション関数を登録する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L101" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_expr_lookup.html&quot;}, '*');"><code>ssl_expr_lookup</code></a>: <code>ap_expr</code> の構文解析時に SSL 関連の関数や変数を解決するためのフック関数。</li>
+</ul>
+<h3>証明書・セッション抽出</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L346" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl.html&quot;}, '*');"><code>ssl_var_lookup_ssl</code></a>: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLConnRec.html&quot;}, '*');"><code>SSLConnRec</code></a> から SSL 固有の情報を抽出するディスパッチャ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L474" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert.html&quot;}, '*');"><code>ssl_var_lookup_ssl_cert</code></a>: 証明書（<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_pphrase.c.html#L899" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_pphrase_c__X509.html&quot;}, '*');">X509</a>）から特定の属性（DN, SAN, 有効期限等）を抽出する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L942" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__modssl_var_extract_dns.html&quot;}, '*');"><code>modssl_var_extract_dns</code></a> / <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L988" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__modssl_var_extract_san_entries.html&quot;}, '*');"><code>modssl_var_extract_san_entries</code></a>: 証明書情報をテーブルに一括抽出するユーティリティ。</li>
+</ul>
+<h3>ログハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L1174" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_log_config_register.html&quot;}, '*');"><code>ssl_var_log_config_register</code></a>: <code>mod_log_config</code> にログハンドラを登録する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L1191" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_log_handler_c.html&quot;}, '*');"><code>ssl_var_log_handler_c</code></a> / <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L1221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_log_handler_x.html&quot;}, '*');"><code>ssl_var_log_handler_x</code></a>: ログ出力用の変数解決ハンドラ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト**: <code>ap_expr</code> またはログハンドラが <code>ssl_var_lookup</code> を呼び出す。 2. **解決**:</p>
+<ul>
+<li>リクエスト依存（HTTP ヘッダ等）、接続依存（SSL 状態）、独立（時刻等）の順で検索。</li>
+<li><code>SSL_</code> プレフィックスがある場合、<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L346" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl.html&quot;}, '*');"><code>ssl_var_lookup_ssl</code></a> へ委譲。</li>
+<p>3. **抽出**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L346" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl.html&quot;}, '*');"><code>ssl_var_lookup_ssl</code></a> は <code>SSL</code> オブジェクトから証明書を取得し、<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L474" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert.html&quot;}, '*');"><code>ssl_var_lookup_ssl_cert</code></a> 等のヘルパーを介して BIO を使用して文字列化する。 4. **メモリ管理**: 全ての戻り値は <code>apr_pool_t</code> 上で確保され、呼び出し元が解放を管理する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLConnRec.html&quot;}, '*');"><code>SSLConnRec</code></a> などの内部構造体定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.h.html&quot;}, '*');"><code>mod_ssl.h</code></a>: 公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a>: Apache 式評価エンジンとの統合。</li>
+<li><code>apr_time.h</code>: 時刻関連の計算。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.h.html&quot;}, '*');"><code>mod_log_config.h</code></a>: ログ出力機能との統合。</li>
+<li><code>../../modules/loggers/mod_log_config.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_ssl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ssl.c.html&quot;}, '*');"><code>ssl_util_ssl.c</code></a>: OpenSSL の低レベルなラッパー関数群。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_kernel.c.html&quot;}, '*');"><code>ssl_engine_kernel.c</code></a>: SSL 接続のライフサイクル管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.c.html&quot;}, '*');"><code>mod_ssl.c</code></a>: モジュールのメインエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>ssl_var_lookup</code> は <code>apr_pstrdup</code> を多用します。大量の変数参照が発生する環境ではメモリ消費に注意してください。</li>
+<li>**OpenSSL 依存**: <code>OPENSSL_VERSION_NUMBER</code> による条件分岐が随所にあり、OpenSSL 1.1.x 以降とそれ以前の API 差異を吸収しています。</li>
+<li>**証明書ライフサイクル**: <code>SSL_get_peer_certificate</code> は参照カウントを増やすため、必ず <code>X509_free</code> が対になるよう設計されています。<code>SSL_get_certificate</code> は参照カウントを増やさないため、解放は不要です。</li>
+<li>**未実装・浅い部分**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L562" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_vars.c.html&quot;}, '*');"><code>ssl_var_lookup_ssl_cert_dn_rec</code></a> に含まれない特定の証明書拡張フィールドの抽出は、汎用的な <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_vars.c.html#L1046" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_vars_c__ssl_ext_list.html&quot;}, '*');"><code>ssl_ext_list</code></a> を介して行う必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_get_effective_config.html" target="wiki-view"><code>ssl_get_effective_config</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_conn_is_ssl.html" target="wiki-view"><code>ssl_conn_is_ssl</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__expr_peer_ext_list_fn.html" target="wiki-view"><code>expr_peer_ext_list_fn</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__expr_var_fn.html" target="wiki-view"><code>expr_var_fn</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__expr_func_fn.html" target="wiki-view"><code>expr_func_fn</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_expr_lookup.html" target="wiki-view"><code>ssl_expr_lookup</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_register.html" target="wiki-view"><code>ssl_var_register</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup.html" target="wiki-view"><code>ssl_var_lookup</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl.html" target="wiki-view"><code>ssl_var_lookup_ssl</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert_dn_oneline.html" target="wiki-view"><code>ssl_var_lookup_ssl_cert_dn_oneline</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert.html" target="wiki-view"><code>ssl_var_lookup_ssl_cert</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_vars_c__ssl_var_lookup_ssl_cert_dn.html" target="wiki-view"><code>ssl_var_lookup_ssl_cert_dn</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

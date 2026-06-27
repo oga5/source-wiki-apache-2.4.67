@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_ws_c__h2_ws_rewrite_request.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__h2_ws_rewrite_request.html&quot;}, '*');">h2_ws_rewrite_request</a></h1>
+<h2>定義</h2>
+<ul>
+<li>**種別**: <code>function</code></li>
+<li>**定義箇所**: <code>modules/http2/h2_ws.c:76</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 の拡張 <code>CONNECT</code> メソッドを、内部的な HTTP/1.1 形式の <code>GET</code> リクエストに変換し、WebSocket ハンドシェイクを処理するための出力フィルタを挿入する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>const h2_request *h2_ws_rewrite_request(const h2_request *req,
+                                        conn_rec *c2, int no_body)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>req</code>: 変換対象の <a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_request.html&quot;}, '*');"><code>h2_request</code></a> オブジェクト。</li>
+<li><code>c2</code>: 処理対象の <code>conn_rec</code>（子接続）。</li>
+<li><code>no_body</code>: ボディの有無を示すフラグ。</li>
+<li>**出力**:</li>
+<li>変換後の <a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_request.html&quot;}, '*');"><code>h2_request</code></a> オブジェクト。変換が不要な場合やエラー時は元の <code>req</code> または <code>NULL</code> を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>req-&gt;protocol</code> が <code>&quot;websocket&quot;</code> であること。</li>
+<li><code>req-&gt;method</code> が <code>&quot;CONNECT&quot;</code> であること。</li>
+<li><code>req-&gt;scheme</code> および <code>req-&gt;path</code> が存在すること。</li>
+<li>処理は <code>c2-&gt;pool</code> を使用してメモリ管理を行う。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **検証**: プロトコル、メソッド、必須フィールド（scheme, path）をチェックし、条件を満たさない場合は入力をそのまま返す。 2. **変換**: <a class="wiki-source-link" href="../../source/modules/http2/h2_request.c.html#L220" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_request_c__h2_request_clone.html&quot;}, '*');"><code>h2_request_clone</code></a> でリクエストを複製し、メソッドを <code>&quot;GET&quot;</code> に変更、<code>Upgrade: websocket</code> および <code>Connection: Upgrade</code> ヘッダーを追加する。 3. **キー生成**: <code>Sec-WebSocket-Key</code> を生成し、リクエストヘッダーに設定する。 4. **フィルタ設定**: <a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__gen_ws_accept.html&quot;}, '*');"><code>gen_ws_accept</code></a> で期待される <code>Sec-WebSocket-Accept</code> 値を計算し、<a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L51" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__ws_filter_ctx.html&quot;}, '*');"><code>ws_filter_ctx</code></a> に格納する。 5. **フィルタ挿入**: <code>H2_C2_WS_OUT</code> フィルタを <code>H2_C2_NET_OUT</code> の直前に挿入する。 6. **状態更新**: <code>conn_ctx-&gt;is_upgrade</code> を 1 に設定し、アップグレード接続であることをマークする。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_c2.c:741</code></li>
+<li><code>modules/http2/h2_c2_filter.c:118</code></li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_request.c.html#L220" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_request_c__h2_request_clone.html&quot;}, '*');"><code>h2_request_clone</code></a></li>
+<li><code>apr_generate_random_bytes</code></li>
+<li><code>apr_pencode_base64_binary</code></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__gen_ws_accept.html&quot;}, '*');"><code>gen_ws_accept</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L510" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_remove_output_filter_byhandle.html&quot;}, '*');"><code>ap_remove_output_filter_byhandle</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L427" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_add_output_filter.html&quot;}, '*');"><code>ap_add_output_filter</code></a></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_request.html&quot;}, '*');"><code>h2_request</code></a>: HTTP/2 リクエストの内部表現。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_ws.c.html#L51" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_ws_c__ws_filter_ctx.html&quot;}, '*');"><code>ws_filter_ctx</code></a>: フィルタの実行状態を保持する構造体。</li>
+<li><code>h2_conn_ctx_t</code>: 接続ごとのコンテキスト（<code>is_upgrade</code> フラグ等）。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>Sec-WebSocket-Key</code> の生成に失敗した場合、<code>NULL</code> を返す。</li>
+<li>必要なヘッダー（scheme, path）が欠落している場合、変換を行わず元のリクエストを返す。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>H2_USE_WEBSOCKETS</code></a> マクロが未定義の場合、本関数は実質的に NOP として動作する（モジュール概要より）。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は WebSocket ハンドシェイクの変換に特化しており、実際のデータフレーム転送は行わない。</li>
+<li>フィルタの挿入順序（<code>H2_C2_WS_OUT</code> が <code>H2_C2_NET_OUT</code> の前）は、レスポンスのインターセプトを確実にするために重要である。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

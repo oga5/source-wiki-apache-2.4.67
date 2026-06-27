@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/get-line.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>get_line</h1>
+<h2>概念</h2>
+<p><code>get_line</code> は、Apache HTTP Server 内の複数の異なるモジュールやユーティリティにおいて、入力ソース（バケットブリゲードやファイルストリーム）からテキストを1行単位で読み取るために定義されている、同名の独立したヘルパー関数群です。これらは共通のライブラリ関数ではなく、それぞれのコンテキスト（HTTP/2 接続フィルタ、OCSP クライアント、htdigest ツール）のデータ構造や要件に合わせて個別に実装されています。</p>
+<h2>なぜ重要か</h2>
+<p>各モジュールにおいて、プロトコルヘッダーや設定ファイルなどの行指向データを解析する際の基礎的なビルディングブロックとして機能します。それぞれの処理系（バケットブリゲードのフラット化、メモリプール管理、ファイルI/O）に最適化された行切り出しロジックを提供することで、安全かつ効率的なパース処理を支えています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__ssl.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__ssl.html&quot;, &quot;source&quot;: &quot;source/modules/ssl/mod_ssl.c.html&quot;}, '*');"><code>module:modules/ssl</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/support.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/support.html&quot;, &quot;source&quot;: &quot;source/support/ab.c.html&quot;}, '*');"><code>module:support</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__http2__h2_c2_filter_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__get_line.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_c2_filter.c.html#L418&quot;}, '*');"><code>symbol:modules/http2/h2_c2_filter.c#get_line</code></a>**: HTTP/1.1 形式のレスポンスデータ（ブリゲード）から CRLF で終了する1行を読み取り、指定バッファにコピーします。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__ssl__ssl_util_ocsp_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__get_line.html&quot;, &quot;source&quot;: &quot;source/modules/ssl/ssl_util_ocsp.c.html#L154&quot;}, '*');"><code>symbol:modules/ssl/ssl_util_ocsp.c#get_line</code></a>**: OCSP レスポンダからの HTTP レスポンスストリームから1行読み取り、改行を除去してメモリプール上に割り当てた文字列を返します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/support__htdigest_c__get_line.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htdigest_c__get_line.html&quot;, &quot;source&quot;: &quot;source/support/htdigest.c.html#L100&quot;}, '*');"><code>symbol:support/htdigest.c#get_line</code></a>**: <code>htdigest</code> ユーティリティにおいて、ファイルストリームから1行を読み込み、指定バッファに格納します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>これらは独立したヘルパー関数であり、システム全体を横断する単一の「エンドツーエンドの流れ」は存在しません。それぞれのコンテキストにおける個別の流れは以下の通りです。</p>
+<p>1. **HTTP/2 接続フィルタ (<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>)**</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html#L629" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_c2_filter_catch_h1_out.html&quot;}, '*');"><code>h2_c2_filter_catch_h1_out</code></a> などの解析ロジックから呼び出されます。</li>
+<li><code>apr_brigade_split_line</code> で入力ブリゲードから1行分を一時ブリゲードに切り出します。</li>
+<li><code>apr_brigade_flatten</code> でバッファにコピーし、行末の CRLF を除去してヌル終端します。</li>
+<li>データが不完全な場合は、一時ブリゲードの内容を退避させて <code>APR_EAGAIN</code> で中断し、次回呼び出し時に再開します。</li>
+</ul>
+<p>2. **OCSP クライアント (<a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>ssl_util_ocsp.c</code></a>)**</p>
+<ul>
+<li>OCSP レスポンスの解析処理から呼び出されます。</li>
+<li><code>apr_brigade_split_line</code> を用いて、最大 8192 バイトまで入力ブリゲードから切り出します。</li>
+<li><code>apr_brigade_pflatten</code> でメモリプール上にフラット化し、行末の LF（および直前の CR）をヌル文字に置換して返します。</li>
+</ul>
+<p>3. **htdigest ユーティリティ (<a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>htdigest.c</code></a>)**</p>
+<ul>
+<li>ファイルから行を読み込むループ内で呼び出されます。</li>
+<li><code>apr_file_getc</code> を用いて、改行（<code>\n</code>）に達するかバッファサイズ制限に達するまで1文字ずつ読み込み、バッファに格納してヌル終端します。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<p>各関数は、それぞれのコンテキストにおいて以下の不変条件を維持または前提とします。</p>
+<ul>
+<li>**<code>h2_c2_filter.c#get_line</code>**</li>
+<li>不完全な行の断片は、次回呼び出しまで <code>parser-&gt;saveto</code> に保持されなければなりません。</li>
+<li>正常に取得された行は、必ず末尾の CRLF が除去され、ヌル終端されます。</li>
+<li>**<code>ssl_util_ocsp.c#get_line</code>**</li>
+<li>読み取られた行は、必ず <code>APR_ASCII_LF</code> で終了している必要があります（そうでない場合はエラー）。</li>
+<li>一時格納用のブリゲード <code>bbout</code> は、呼び出しのたびにクリーンアップされます。</li>
+<li>**<code>htdigest.c#get_line</code>**</li>
+<li>格納先バッファ <code>s</code> は、少なくとも <code>n</code> バイトの領域が確保されている必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**名前の混同**: 同名でありながら、シグネチャ、戻り値の型、エラーハンドリングの挙動が全く異なるため、コードリーディングや静的解析の際に混同しないよう注意が必要です。</li>
+<li>**バッファサイズ制限とエラー挙動の違い**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a> では、行の長さがバッファサイズを超えると <code>APR_ENOSPC</code> を返します。また、LF のみで CR がない場合の挙動に未定義の部分があります。</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>ssl_util_ocsp.c</code></a> では、8192 バイトを超える行、または LF で終わらない行はエラーとして <code>NULL</code> を返します。</li>
+<li><a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>htdigest.c</code></a> では、バッファサイズ <code>n - 2</code> を超える文字は読み込まれず、途中で打ち切られてヌル終端されます（呼び出し側で EOF とエラーの区別が必要です）。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a> （HTTP/2 フィルタ内でのパース処理）</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_ocsp.c.html&quot;}, '*');"><code>modules/ssl/ssl_util_ocsp.c</code></a> （OCSP 簡易 HTTP クライアント実装）</li>
+<li><a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>support/htdigest.c</code></a> （htdigest ユーティリティのファイル処理）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_workers_c__activate_slot.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__activate_slot.html&quot;}, '*');">activate_slot</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_workers.c:108</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 ワーカープールにおいて、利用可能なスロット（<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_slot.html&quot;}, '*');"><code>h2_slot</code></a>）を確保し、新しいワーカースレッドを生成して処理を開始します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t activate_slot(h2_workers *workers)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>workers</code> (<code>h2_workers *</code>) - ワーカープール全体の管理構造体。</li>
+<li>**出力**: <code>apr_status_t</code> - 成功時は <code>APR_SUCCESS</code>、スロットが不足している場合は <code>APR_EAGAIN</code>、スレッド生成失敗時はエラーコードを返します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>workers-&gt;free</code> リングが空でないこと（空の場合は <code>APR_EAGAIN</code> を返します）。</li>
+<li>呼び出し側で <code>workers-&gt;lock</code> による排他制御が行われていることが前提です。</li>
+<li>選択された <code>slot</code> の状態は <code>H2_SLOT_FREE</code> である必要があります。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>workers-&gt;free</code> リングから最初の空きスロットを取得し、リングから取り除きます。 2. スロットの状態を <code>H2_SLOT_RUN</code> に更新し、<code>active_slots</code> カウンタをインクリメントします。 3. スロット専用のサブプール（<code>apr_pool_create</code>）を生成します。 4. <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__slot_run.html&quot;}, '*');"><code>slot_run</code></a> をエントリポイントとして <code>ap_thread_create</code>（または <code>apr_thread_create</code>）を呼び出し、新しいスレッドを起動します。 5. スレッド生成に失敗した場合は、サブプールを破棄し、スロットを <code>H2_SLOT_FREE</code> に戻して <code>workers-&gt;free</code> リングの末尾に再挿入します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>modules/http2/h2_workers.c:197</code></li>
+<li><code>modules/http2/h2_workers.c:521</code></li>
+<li>**呼び出し先**: </li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__slot_run.html&quot;}, '*');"><code>slot_run</code></a> (スレッドのエントリポイントとして指定)</li>
+<li><code>apr_pool_create</code>, <code>apr_pool_destroy</code>, <code>apr_pool_tag</code></li>
+<li><code>ap_thread_create</code> / <code>apr_thread_create</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>h2_workers</code>: ワーカープールの管理構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_slot.html&quot;}, '*');"><code>h2_slot</code></a>: 個々のワーカーの状態を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**スロット不足**: <code>workers-&gt;free</code> が空の場合、<code>APR_EAGAIN</code> を返します。</li>
+<li>**プール生成失敗**: <code>apr_pool_create</code> が失敗した場合、エラーを返し終了します。</li>
+<li>**スレッド生成失敗**: <code>apr_thread_create</code> が失敗した場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2342" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_DEBUG_ASSERT</code></a> をトリガーし、スロットの状態を復元してエラーを返します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>workers-&gt;lock</code> による保護下で実行されることを想定しています。</li>
+<li><code>slot-&gt;pool</code> はスレッド終了時にクリーンアップされるため、スレッド生成失敗時のメモリリーク防止処理が <code>cleanup</code> ラベル配下に実装されています。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L2490" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_HAS_THREAD_LOCAL</code></a> の有無によりスレッド生成関数が分岐しますが、いずれも <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__slot_run.html&quot;}, '*');"><code>slot_run</code></a> を実行します。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

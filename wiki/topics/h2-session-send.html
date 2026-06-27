@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/h2-session-send.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>h2_session_send</h1>
+<h2>概念</h2>
+<p><code>h2_session_send</code> は、Apache HTTP Server（httpd-2.4.67）のHTTP/2実装（<code>mod_http2</code>）およびテスト用クライアント（<code>h2ws</code>）において、セッションデータの送信処理を担う関数です。</p>
+<p>これらは同名ですが、それぞれ異なるコンテキストとシグネチャを持っています。</p>
+<ul>
+<li>**サーバー側（<code>mod_http2</code>）**: <code>h2_session</code> 構造体を引数に取り、サーバーからクライアントへのデータ送信やI/Oのフラッシュを制御します。</li>
+<li>**テストクライアント側（<code>h2ws</code>）**: <code>nghttp2</code> ライブラリの送信コールバックとして機能し、指定されたバッファデータを送信します。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p>HTTP/2プロトコルにおけるフレームやデータの送信処理を適切に制御・実行するために重要です。</p>
+<ul>
+<li>サーバー側では、セッションのイベント処理やI/Oバッファのフラッシュ（<a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L349" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_assure_flushed.html&quot;}, '*');"><code>h2_c1_io_assure_flushed</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L329" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_needs_flush.html&quot;}, '*');"><code>h2_c1_io_needs_flush</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L339" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_pass.html&quot;}, '*');"><code>h2_c1_io_pass</code></a> など）と連携し、クライアントへのデータ送信を確実に行う役割を果たします。</li>
+<li>テストクライアント側では、<code>nghttp2</code> セッションからの送信データをソケットや出力ストリームへ橋渡しする役割を持ちます。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/test__clients.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/test__clients.html&quot;, &quot;source&quot;: &quot;source/test/clients/h2ws.c.html&quot;}, '*');"><code>module:test/clients</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_session_c__h2_session_send.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_send.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_session.c.html#L1346&quot;}, '*');"><code>symbol:modules/http2/h2_session.c#h2_session_send</code></a></li>
+<li>シグネチャ: <code>static apr_status_t h2_session_send(h2_session *session)</code></li>
+<li>サーバー側のセッション送信処理を担当。</li>
+<li><a class="wiki-entity-link" href="../symbols/test__clients__h2ws_c__h2_session_send.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__h2_session_send.html&quot;, &quot;source&quot;: &quot;source/test/clients/h2ws.c.html#L403&quot;}, '*');"><code>symbol:test/clients/h2ws.c#h2_session_send</code></a></li>
+<li>シグネチャ: <code>static ssize_t h2_session_send(nghttp2_session *ngh2, const uint8_t *data, size_t length, int flags, void *user_data)</code></li>
+<li>テストクライアントにおける <code>nghttp2</code> 向けの送信コールバック。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細なエンドツーエンドのデータフロー全体は完全には解明されていません。提供された情報から判明している呼び出し関係は以下の通りです。</p>
+<ul>
+<li>**サーバー側**:</li>
+<p>1. <a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L1838" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_process.html&quot;}, '*');"><code>h2_session_process</code></a> から <code>h2_session_send</code> が呼び出されます。 2. <code>h2_session_send</code> 内部で、I/O制御関数（<a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L349" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_assure_flushed.html&quot;}, '*');"><code>h2_c1_io_assure_flushed</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L329" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_needs_flush.html&quot;}, '*');"><code>h2_c1_io_needs_flush</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L339" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_pass.html&quot;}, '*');"><code>h2_c1_io_pass</code></a>）やイベントディスパッチ関数（<a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L1772" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_dispatch_event.html&quot;}, '*');"><code>h2_session_dispatch_event</code></a>）が呼び出され、実際の送信処理が実行されます。</p>
+</ul>
+<ul>
+<li>**テストクライアント側**:</li>
+<p>1. <a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L1838" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_process.html&quot;}, '*');"><code>h2_session_process</code></a> から <code>h2_session_send</code> が呼び出されます。 2. 送信エラーなどの異常が発生した場合は、<a class="wiki-source-link" href="../../source/test/clients/h2ws.c.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__log_errf.html&quot;}, '*');"><code>log_errf</code></a> を呼び出してエラーを記録します。</p>
+</ul>
+<h2>重要な不変条件</h2>
+<p>現時点では、具体的な前提条件や不変条件（スレッド安全性、バッファの状態、ロック要件など）は解析されておらず、未解明です。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では、具体的な失敗モードや境界条件、よくある落とし穴は解析されておらず、未解明です。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a> の <code>h2_session_send</code> 実装</li>
+<li><a class="wiki-source-link" href="../../source/test/clients/h2ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>test/clients/h2ws.c</code></a> の <code>h2_session_send</code> 実装</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>
