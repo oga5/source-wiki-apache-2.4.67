@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__generators__mod_cgid_c__sock_readhdr.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html#L352" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_cgid_c__sock_readhdr.html&quot;}, '*');">sock_readhdr</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/generators/mod_cgid.c:352</code></li>
+</ul>
+<h2>目的</h2>
+<p>Unixドメインソケットから指定されたサイズのデータ（ヘッダー情報）を読み取り、オプションで補助的なファイルディスクリプタ（<code>errfd</code>）を受信します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t sock_readhdr(int fd, int *errfd, void *vbuf, size_t buf_size)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>fd</code>: 読み取り対象のソケットファイルディスクリプタ。</li>
+<li><code>errfd</code>: 補助的なファイルディスクリプタを受け取るためのポインタ（不要な場合は <code>NULL</code>）。</li>
+<li><code>vbuf</code>: 受信データを格納するバッファへのポインタ。</li>
+<li><code>buf_size</code>: 読み取るデータのバイト数。</li>
+<li>**出力**:</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>。エラー時は <code>errno</code> または <code>ECONNRESET</code>、<code>APR_INCOMPLETE</code>。</li>
+<li><code>errfd</code>: 補助的なファイルディスクリプタが受信された場合、その値が格納されます。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>HAVE_CGID_FDPASSING</code> が定義されている場合、<code>recvmsg</code> を使用してデータと補助データ（<code>SCM_RIGHTS</code>）を同時に取得します。</li>
+<li><code>HAVE_CGID_FDPASSING</code> が定義されていない場合、<code>read</code> を使用して指定バイト数に達するまでループします。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **データ読み取り**:</p>
+<ul>
+<li><code>HAVE_CGID_FDPASSING</code> 未定義時: <code>read</code> を呼び出し、<code>EINTR</code> を考慮しつつ <code>buf_size</code> に達するまで読み取りを継続します。</li>
+<li><code>HAVE_CGID_FDPASSING</code> 定義時: <code>recvmsg</code> に <code>MSG_WAITALL</code> を指定して呼び出し、指定されたデータ長を一度の操作で取得しようと試みます。</li>
+<p>2. **エラーハンドリング**:</p>
+<li>読み取り中に接続が切断された場合は <code>ECONNRESET</code> を返します。</li>
+<li>システムエラー発生時は <code>errno</code> を返します。</li>
+<li><code>recvmsg</code> で指定バイト数と異なるデータが返された場合は <code>APR_INCOMPLETE</code> を返します。</li>
+<p>3. **補助ディスクリプタの抽出**:</p>
+<li><code>errfd</code> が指定されている場合、<code>cmsghdr</code> を解析し、<code>SCM_RIGHTS</code> 型のデータからファイルディスクリプタを抽出して <code>*errfd</code> に格納します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/generators/mod_cgid.c:426</code> (補助ディスクリプタなしのラッパー関数内)</li>
+<li><code>modules/generators/mod_cgid.c:512</code></li>
+<li>**呼び出し先**:</li>
+<li><code>read</code> (システムコール)</li>
+<li><code>recvmsg</code> (システムコール)</li>
+<li><code>CMSG_FIRSTHDR</code>, <code>CMSG_LEN</code>, <code>CMSG_DATA</code> (マクロ)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>struct msghdr</code></li>
+<li><code>struct iovec</code></li>
+<li><code>struct cmsghdr</code></li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>read</code>/<code>recvmsg</code> が <code>0</code> を返した場合、接続が予期せず閉じられたと判断し <code>ECONNRESET</code> を返します。</li>
+<li><code>read</code>/<code>recvmsg</code> が負の値を返した場合、<code>errno</code> を返します。</li>
+<li><code>MSG_WAITALL</code> を使用してもなお読み取りサイズが一致しない場合、<code>APR_INCOMPLETE</code> を返します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>HAVE_CGID_FDPASSING</code> の有無により実装が大きく分岐するため、プラットフォームごとのソケット通信仕様に依存します。</li>
+<li><code>errfd</code> の抽出ロジックは、<code>cmsg_len</code> や <code>cmsg_level</code> 等の厳密なチェックを行っており、変更時は <code>msghdr</code> 構造体の整合性に注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

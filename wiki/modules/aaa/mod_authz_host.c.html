@@ -1,0 +1,92 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/aaa/mod_authz_host.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');">modules/aaa/mod_authz_host.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');"><code>mod_authz_host.c</code></a> は、Apache HTTP Server におけるホストベースおよびIPベースのアクセス制御を提供する認証モジュールです。<code>Require</code> ディレクティブを通じて、クライアントの IP アドレス、ホスト名、またはローカル接続判定に基づいた認可判断を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_authz_core</code> が提供する認可プロバイダーインターフェースを実装するプラグインの一つです。他の認証モジュール（<code>mod_authn_*</code>）がユーザー認証を担うのに対し、本モジュールはネットワーク層のメタデータに基づいたアクセス制限を担当します。</p>
+<h2>責務</h2>
+<ul>
+<li>**IP アドレス制限**: CIDR 表記や単一 IP によるアクセス制御。</li>
+<li>**ホスト名制限**: DNS 逆引き結果を用いたドメインマッチング。</li>
+<li>**Forward DNS 制限**: クライアント IP が指定ホスト名の正引き結果に含まれるかの検証。</li>
+<li>**ローカル接続判定**: リクエストがサーバー自身からのものかどうかの判定。</li>
+<li>**設定の最適化**: 複数の仮想ホストで同一サブネットが指定された際、メモリ節約のためにハッシュテーブルを用いてサブネット情報を共有する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロバイダー定義 (<a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_provider.html&quot;}, '*');">authz_provider</a>)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L330" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');"><code>authz_ip_provider</code></a>: <code>ip</code> プロバイダー。<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L146" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__ip_check_authorization.html&quot;}, '*');"><code>ip_check_authorization</code></a> を使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L336" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');"><code>authz_host_provider</code></a>: <code>host</code> プロバイダー。<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__host_check_authorization.html&quot;}, '*');"><code>host_check_authorization</code></a> を使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L342" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');"><code>authz_forward_dns_provider</code></a>: <code>forward-dns</code> プロバイダー。<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L227" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__forward_dns_check_authorization.html&quot;}, '*');"><code>forward_dns_check_authorization</code></a> を使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L348" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');"><code>authz_local_provider</code></a>: <code>local</code> プロバイダー。<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__local_check_authorization.html&quot;}, '*');"><code>local_check_authorization</code></a> を使用。</li>
+</ul>
+<h3>設定解析・検証</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__ip_parse_config.html&quot;}, '*');"><code>ip_parse_config</code></a>: <code>Require ip</code> の引数を解析し、<code>apr_ipsubnet_t</code> の配列に変換。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L311" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__host_parse_config.html&quot;}, '*');"><code>host_parse_config</code></a>: <code>Require host</code> 等の引数を <a class="wiki-source-link" href="../../../source/include/ap_expr.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_info_t.html&quot;}, '*');"><code>ap_expr_info_t</code></a>（式）としてコンパイル。</li>
+</ul>
+<h3>内部ユーティリティ</h3>
+<ul>
+<li><code>in_domain</code>: ホスト名が指定ドメインのサブドメインであるかを判定する文字列比較関数。</li>
+<li><code>parsed_subnets</code>: 設定解析フェーズで使用される、サブネット共有用の一時的なハッシュテーブル。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html#L355" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_host_c__authz_host_pre_config.html&quot;}, '*');"><code>authz_host_pre_config</code></a> で <code>parsed_subnets</code> を初期化し、ローカルホスト用サブネットを登録。<code>post_config</code> でハッシュを破棄し、<code>.htaccess</code> 等での誤用を防ぐ。 2. **設定時**: <code>parse_config</code> 関数群が <code>Require</code> 行を解析し、認可時に使用する構造体（<code>apr_ipsubnet_t</code> 配列や <a class="wiki-source-link" href="../../../source/include/ap_expr.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_expr_h__ap_expr_info_t.html&quot;}, '*');"><code>ap_expr_info_t</code></a>）を生成。 3. **認可時**: <code>check_authorization</code> 関数群がリクエストの <code>r-&gt;useragent_addr</code> を取得し、解析済みデータと照合。<code>AUTHZ_GRANTED</code> または <code>AUTHZ_DENIED</code> を返す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: IP サブネット操作およびソケットアドレス処理。</li>
+<li><code>apr_hash.h</code>: サブネット情報のキャッシュ管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: モジュールフックおよび設定コマンド処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>: 認可プロバイダーの定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a> (間接的): <code>host</code> および <code>forward-dns</code> での式評価。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><code>apr_md5.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>netinet/in.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authz_core.c</code></a>: 本モジュールが登録するプロバイダーを呼び出す認可の基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_access_compat.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_access_compat.c.html&quot;}, '*');"><code>modules/aaa/mod_access_compat.c</code></a>: 旧来の <code>Allow</code>/<code>Deny</code> 構文との互換性レイヤー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>parsed_subnets</code> は設定解析中（<code>ptemp</code> プール）のみ有効です。実行時の認可判断には影響しません。</li>
+<li>**DNS 依存**: <code>host</code> プロバイダーは DNS 逆引き（<a class="wiki-source-link" href="../../../source/include/http_core.h.html#L118" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>REMOTE_DOUBLE_REV</code></a>）に依存しており、DNS サーバーの応答速度や設定にパフォーマンスが左右されます。</li>
+<li>**エッジケース**: <code>forward-dns</code> は正引き結果のリストを走査するため、DNS 構成によっては複数の IP がマッチする可能性があります。</li>
+<li>**省略された詳細**: <code>ap_expr</code> の詳細な構文解析ロジックは <a class="wiki-source-link" href="../../../source/server/core.c.html#L5821" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>core</code></a> モジュール側に委譲されているため、本ファイルでは評価結果の利用に焦点を当てています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__in_domain.html" target="wiki-view"><code>in_domain</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__ip_parse_config.html" target="wiki-view"><code>ip_parse_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__ip_check_authorization.html" target="wiki-view"><code>ip_check_authorization</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__host_check_authorization.html" target="wiki-view"><code>host_check_authorization</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__forward_dns_check_authorization.html" target="wiki-view"><code>forward_dns_check_authorization</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__local_check_authorization.html" target="wiki-view"><code>local_check_authorization</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__host_parse_config.html" target="wiki-view"><code>host_parse_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__authz_host_pre_config.html" target="wiki-view"><code>authz_host_pre_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__authz_host_post_config.html" target="wiki-view"><code>authz_host_post_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_host_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

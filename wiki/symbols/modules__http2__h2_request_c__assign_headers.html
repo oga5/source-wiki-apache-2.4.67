@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_request_c__assign_headers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_request.c.html#L319" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_request_c__assign_headers.html&quot;}, '*');">assign_headers</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_request.c:319</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 リクエスト (<a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_request.html&quot;}, '*');"><code>h2_request</code></a>) から Apache のネイティブなリクエスト構造体 (<code>request_rec</code>) へヘッダー情報を転送し、HTTP/2 特有の擬似ヘッダー（<code>:authority</code>）を標準的な <code>Host</code> ヘッダーへ変換・統合する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void assign_headers(request_rec *r, const h2_request *req,
+                           int no_body, int is_connect)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 構築対象の Apache リクエスト構造体。</li>
+<li><code>req</code>: 変換元の HTTP/2 リクエスト表現。</li>
+<li><code>no_body</code>: ボディが存在しないことを示すフラグ。</li>
+<li><code>is_connect</code>: <code>CONNECT</code> メソッドであるかを示すフラグ。</li>
+<li>**出力**: なし（<code>r-&gt;headers_in</code> および <code>r-&gt;subprocess_env</code> を直接更新）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>r-&gt;pool</code> が有効であること。</li>
+<li><code>req-&gt;headers</code> が <code>apr_table_t</code> として初期化されていること。</li>
+<li><code>is_connect</code> が真の場合、<code>Host</code> ヘッダーの補完処理はスキップされる。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **ヘッダーの複製**: <code>req-&gt;headers</code> を <code>r-&gt;pool</code> 上に複製し、<code>r-&gt;headers_in</code> に割り当てる。 2. **<code>:authority</code> の処理**:</p>
+<ul>
+<li><code>is_connect</code> が偽の場合、<code>:authority</code> を <code>Host</code> ヘッダーとして設定する。</li>
+<li>既存の <code>Host</code> ヘッダーと <code>:authority</code> が異なる場合、元の <code>Host</code> を <code>H2_ORIGINAL_HOST</code> 環境変数に退避させ、<code>:authority</code> の値で上書きする。</li>
+<p>3. **コンテンツ長ガード**:</p>
+<li><code>no_body</code> が真かつ <code>Content-Type</code> が存在する場合、<code>Content-Length</code> を &quot;0&quot; に設定する。</li>
+<li><code>is_connect</code> が偽かつ <code>Content-Length</code> が未指定の場合、<code>Transfer-Encoding: chunked</code> を追加する（<a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>AP_HAS_RESPONSE_BUCKETS</code></a> が定義されていない環境のみ）。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_request.c:387</code></li>
+<li><code>modules/http2/h2_request.c:484</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_table_clone</code>, <code>apr_table_get</code>, <code>apr_table_setn</code>, <code>apr_table_mergen</code> (APR テーブル操作)</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_rerror</code></a> (ログ出力)</li>
+<li><code>strcmp</code> (文字列比較)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>request_rec</code>: Apache のリクエスト処理用構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_request.html&quot;}, '*');"><code>h2_request</code></a>: HTTP/2 プロトコル層のリクエスト表現。</li>
+<li><code>apr_table_t</code>: ヘッダー保持に使用される APR のキーバリューテーブル。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>:authority</code> と <code>Host</code> の不一致時はログ出力のみ行い、処理を継続する（RFC 9113 に基づく厳格な拒否は行わない）。</li>
+<li><code>Content-Length</code> が欠落している場合、HTTP/1.1 互換のために <code>chunked</code> エンコーディングを強制する設計となっている。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/http2/h2_request.c.html#L374" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_request_c__h2_create_request_rec.html&quot;}, '*');"><code>h2_create_request_rec</code></a> の一部として呼び出され、HTTP/2 から Apache へのブリッジングの要となる。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>AP_HAS_RESPONSE_BUCKETS</code></a> の有無によって <code>Transfer-Encoding</code> の付与ロジックが分岐するため、ビルド環境の差異に注意すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

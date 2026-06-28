@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/http-2-multiplexing-and-session-management.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>HTTP/2 Multiplexing and Session Management</h1>
+<h2>概念</h2>
+<p><code>HTTP/2 Multiplexing and Session Management</code>（HTTP/2 多重化およびセッション管理）は、単一の物理的なTCP接続（セッション）上で、複数の独立した双方向データストリームを同時に並行して処理する仕組みです。<code>mod_http2</code> においては、クライアントとの接続を維持するセッション、個々のリクエスト/レスポンスを表現するストリーム、そしてそれらを多重化してワーカーに仲介・スケジューリングするマルチプレクサ（mplx）の協調動作によって実現されます。</p>
+<h2>なぜ重要か</h2>
+<p>従来の HTTP/1.1 では、1つの接続で同時に1つのリクエストしか処理できず、ヘッドオブラインブロッキング（HOLB）が発生していました。HTTP/2 のマルチプレキシングにより、単一の接続を効率的に再利用し、サーバーリソースの消費を抑えつつ、複数のリクエストを並行して高速に処理することが可能になります。これを安全かつ効率的に行うには、セッション、ストリーム、およびワーカー間の厳密な状態管理とタスクスケジューリングが不可欠です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本トピックに関与する主要なソースファイルとエンティティは以下の通りです：</p>
+<ul>
+<li>**<code>h2_session</code> (<a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a>)**: クライアントとの物理的な HTTP/2 接続全体を管理します。フレームの送受信、セッション状態の維持、およびストリームの生成・破棄を制御します。</li>
+<li>**<code>h2_stream</code> (<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a>)**: HTTP/2 接続上の個々の論理的なストリームを表します。ストリームの状態遷移（オープン、クローズ、リセットなど）や、ヘッダー・データのバッファリングを管理します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> (<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a>)**: セッションとワーカー（<code>h2_workers</code>）を仲介するマルチプレクサです。ストリームからのタスクをキューイングし、ワーカーへのスケジューリングや、バケットビーム（bucket beam）を介したデータ転送を制御します。</li>
+<li>**<code>h2_workers</code> (<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>modules/http2/h2_workers.c</code></a>)**: 実際の HTTP リクエスト処理を実行するスレッドプールです。<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> からタスクを受け取り、並行して処理を実行します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードの直接的な解析結果がないため、詳細なエンドツーエンドの実行フロー（関数呼び出しの正確な順序やエラーハンドリングの全容など）は完全には判明していません。</p>
+<p>一般的な想定フローは以下の通りです： 1. クライアントからの接続を <code>h2_session</code> が受け入れ、HTTP/2 フレームを解析します。 2. 新しいストリーム（<code>h2_stream</code>）が作成され、リクエストデータが受信されます。 3. <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> がこのストリームの処理タスクをスケジュールし、<code>h2_workers</code> の空きワーカーに割り当てます。 4. ワーカーがリクエストを処理し、レスポンスデータを <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> を介して <code>h2_session</code> に戻します。 5. <code>h2_session</code> がレスポンスフレームをクライアントに送信します。</p>
+<h2>重要な不変条件</h2>
+<p>提供されたソースコードの直接的な解析結果がないため、詳細な不変条件（スレッドセーフティのロック順序、状態遷移の厳密なアサーションなど）は完全には判明していません。</p>
+<p>一般的に維持されるべき不変条件には以下が含まれます：</p>
+<ul>
+<li>ストリームのIDは、同一セッション内で一意であり、昇順でなければなりません。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> 内でのタスクの追加・削除や、ワーカーへの割り当ては、セッションやストリームの寿命（ライフサイクル）と同期し、メモリリークや二重解放を防ぐために厳密に同期制御される必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>提供されたソースコードの直接的な解析結果がないため、具体的な実装上の落とし穴（特定のデッドロックシナリオや競合状態など）は完全には判明していません。</p>
+<p>想定される一般的な落とし穴：</p>
+<ul>
+<li>**スレッド間のデッドロック**: <code>h2_session</code>（メイン接続スレッド）と <code>h2_workers</code>（ワーカースレッド）が <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> のロックを競合して取得する際、ロック順序が不適切だとデッドロックが発生する可能性があります。</li>
+<li>**リソース枯渇**: 多数のストリームが同時にオープンされた場合、メモリやワーカースレッドが枯渇するのを防ぐため、最大同時ストリーム数の制限（<code>SETTINGS_MAX_CONCURRENT_STREAMS</code>）を厳密に適用する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a> - セッションのライフサイクルとフレーム処理の理解</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a> - ストリームの状態遷移とデータ管理の理解</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a> - マルチプレキシングとスレッド間通信の理解</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>modules/http2/h2_workers.c</code></a> - ワーカースレッドの管理とタスクスケジューリングの理解</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

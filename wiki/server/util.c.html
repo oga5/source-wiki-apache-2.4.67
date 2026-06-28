@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');">server/util.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a> は、Apache HTTP Server のコア機能で頻繁に使用される低レベルな文字列操作、パス正規化、設定ファイル解析、およびユーティリティ関数群を保持する汎用ライブラリです。HTTP プロトコル処理や設定読み込みに必要な「泥臭い」処理を抽象化し、一貫したインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> の基盤として、他の多くのソースファイル（<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>config.c</code></a>, <a class="wiki-source-link" href="../../source/server/protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/protocol.c.html&quot;}, '*');"><code>protocol.c</code></a>, <a class="wiki-source-link" href="../../source/server/request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/request.c.html&quot;}, '*');"><code>request.c</code></a> など）から呼び出されるユーティリティ層です。特に、文字列のパターンマッチング、URL のエスケープ処理、設定ファイルの行単位読み込みといった、HTTPD の動作に不可欠な共通処理を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**文字列操作と変換**: 大文字小文字を無視した比較、プレフィックス除去、トークン抽出、HTML/ログ用エスケープ。</li>
+<li>**パスとURIの処理**: パスの正規化（<code>..</code> の解決）、絶対パス判定、URL のアンエスケープ、ディレクトリ操作。</li>
+<li>**設定ファイル解析**: <a class="wiki-source-link" href="../../source/include/http_config.h.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_configfile_t.html&quot;}, '*');"><code>ap_configfile_t</code></a> を介した設定ファイルの読み込み、行継続の処理、トークン化。</li>
+<li>**HTTP ヘッダー解析**: リスト形式のヘッダー値のパース、トークンリストの抽出、ETag 比較。</li>
+<li>**プロセス・スレッド管理**: スレッドローカルストレージの管理、プロセス間通信の補助。</li>
+<li>**セキュリティ**: タイミング攻撃耐性のある文字列比較、メモリ割り当て失敗時の強制終了処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>文字列・パターンマッチング</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L175" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_strcmp_match.html&quot;}, '*');"><code>ap_strcmp_match</code></a>, <a class="wiki-source-link" href="../../source/server/util.c.html#L199" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_strcasecmp_match.html&quot;}, '*');"><code>ap_strcasecmp_match</code></a>: ワイルドカード（<code>*</code>, <code>?</code>）を含む文字列比較。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L289" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_strcasestr.html&quot;}, '*');"><code>ap_strcasestr</code></a>: 大文字小文字を無視した部分文字列検索。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L723" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_getword.html&quot;}, '*');"><code>ap_getword</code></a>, <a class="wiki-source-link" href="../../source/server/util.c.html#L833" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_getword_conf.html&quot;}, '*');"><code>ap_getword_conf</code></a>: 区切り文字や引用符を考慮したトークン抽出。</li>
+</ul>
+<h3>パス・URI 処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L489" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_normalize_path.html&quot;}, '*');"><code>ap_normalize_path</code></a>: パスの正規化（<code>..</code> や <code>//</code> の解決）。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L1939" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_unescape_url.html&quot;}, '*');"><code>ap_unescape_url</code></a>: URL のデコード。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L2068" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_escape_path_segment.html&quot;}, '*');"><code>ap_escape_path_segment</code></a>, <a class="wiki-source-link" href="../../source/server/util.c.html#L2124" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_escape_urlencoded.html&quot;}, '*');"><code>ap_escape_urlencoded</code></a>: URL エンコード。</li>
+</ul>
+<h3>設定ファイル解析</h3>
+<ul>
+<li><code>ap_pcfg_openfile</code>: 設定ファイルを開き、<a class="wiki-source-link" href="../../source/include/http_config.h.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_configfile_t.html&quot;}, '*');"><code>ap_configfile_t</code></a> を初期化。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L1198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cfg_getline.html&quot;}, '*');"><code>ap_cfg_getline</code></a>: 設定ファイルから1行読み込み、行継続を処理。</li>
+</ul>
+<h3>セキュリティ・ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L3783" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_memeq_timingsafe.html&quot;}, '*');"><code>ap_memeq_timingsafe</code></a>, <a class="wiki-source-link" href="../../source/server/util.c.html#L3789" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_streq_timingsafe.html&quot;}, '*');"><code>ap_streq_timingsafe</code></a>: タイミング攻撃を防ぐための定数時間比較関数。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L3136" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_abort_on_oom.html&quot;}, '*');"><code>ap_abort_on_oom</code></a>: メモリ割り当て失敗時にログを出力してプロセスを終了させる。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**設定読み込み**: <code>ap_pcfg_openfile</code> でファイルハンドルをラップし、<a class="wiki-source-link" href="../../source/server/util.c.html#L1198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cfg_getline.html&quot;}, '*');"><code>ap_cfg_getline</code></a> が内部で <a class="wiki-source-link" href="../../source/server/util.c.html#L951" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__cfg_getstr.html&quot;}, '*');"><code>cfg_getstr</code></a> を呼び出してバッファを埋めます。行継続（<code>\</code>）やコメント除去は <a class="wiki-source-link" href="../../source/server/util.c.html#L1079" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cfg_getline_core.html&quot;}, '*');"><code>ap_cfg_getline_core</code></a> で行われます。</li>
+<li>**URL デコード**: <a class="wiki-source-link" href="../../source/server/util.c.html#L1877" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__unescape_url.html&quot;}, '*');"><code>unescape_url</code></a> がメインのロジックであり、<a class="wiki-source-link" href="../../source/server/util.c.html#L1845" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__x2c.html&quot;}, '*');"><code>x2c</code></a>（16進数から文字への変換）を呼び出してインプレースで変換を行います。</li>
+<li>**フォームデータ解析**: <a class="wiki-source-link" href="../../source/server/util.c.html#L2787" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_parse_form_data.html&quot;}, '*');"><code>ap_parse_form_data</code></a> は、入力フィルターからバケットブリゲードを読み込み、状態マシン（<a class="wiki-source-link" href="../../source/server/util.c.html#L2777" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_form_type_t.html&quot;}, '*');"><code>ap_form_type_t</code></a>）を用いて <code>application/x-www-form-urlencoded</code> データをパースします。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr_strings.h</code>, <code>apr_lib.h</code>, <code>apr_fnmatch.h</code>, <code>apr_base64.h</code> 等。</li>
+<li>**HTTPD Core**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>。</li>
+<li>**システムヘッダー**: <code>unistd.h</code>, <code>pwd.h</code>, <code>grp.h</code> 等（プラットフォーム依存の機能用）。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><code>netdb.h</code></li>
+<li><code>process.h</code></li>
+<li><code>sys/loadavg.h</code></li>
+<li><code>test_char.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>util_ebcdic.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_varbuf.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>util_varbuf.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_regex.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_regex.c.html&quot;}, '*');"><code>server/util_regex.c</code></a>: 正規表現関連のユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_expr_eval.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_eval.c.html&quot;}, '*');"><code>server/util_expr_eval.c</code></a>: 式評価エンジン。</li>
+<li><a class="wiki-source-link" href="../../source/server/gen_test_char.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/gen_test_char.c.html&quot;}, '*');"><code>server/gen_test_char.c</code></a>: <code>test_char.h</code> を生成するツール。</li>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>: 設定ツリーの構築。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 多くの関数が <code>apr_pool_t</code> を引数に取り、メモリのライフサイクルをプールに依存させています。<a class="wiki-source-link" href="../../source/server/util.c.html#L262" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_pregcomp.html&quot;}, '*');"><code>ap_pregcomp</code></a> のように、クリーンアップハンドラを登録して自動解放を行う設計が随所に見られます。</li>
+<li>**パフォーマンス**: <code>ucharmap</code> テーブルを用いた大文字小文字変換や、<code>test_char.h</code> による文字種判定など、頻繁に呼ばれる処理は最適化されています。</li>
+<li>**セキュリティ**: <a class="wiki-source-link" href="../../source/server/util.c.html#L489" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_normalize_path.html&quot;}, '*');"><code>ap_normalize_path</code></a> はセキュリティ上の脆弱性（ディレクトリトラバーサル）を防ぐための重要な関数です。変更時は RFC 3986 等の仕様を十分に確認してください。</li>
+<li>**省略範囲**: <a class="wiki-source-link" href="../../source/include/util_varbuf.h.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_varbuf_h__ap_varbuf.html&quot;}, '*');"><code>ap_varbuf</code></a> 関連の動的バッファ管理は、大規模な文字列構築を効率化するためのものであり、本ファイル内でも重要な役割を果たしていますが、実装の詳細は <code>util_varbuf.c</code> に委譲されている部分もあります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_c__ap_get_list_item.html" target="wiki-view"><code>ap_get_list_item</code></a></li>
+<li><a href="../symbols/server__util_c__ap_etag_e.html" target="wiki-view"><code>ap_etag_e</code></a></li>
+<li><a href="../symbols/server__util_c__ap_get_token.html" target="wiki-view"><code>ap_get_token</code></a></li>
+<li><a href="../symbols/server__util_c__ap_get_local_host.html" target="wiki-view"><code>ap_get_local_host</code></a></li>
+<li><a href="../symbols/server__util_c__ap_form_type_t.html" target="wiki-view"><code>ap_form_type_t</code></a></li>
+<li><a href="../symbols/server__util_c__ap_varbuf_info.html" target="wiki-view"><code>ap_varbuf_info</code></a></li>
+<li><a href="../symbols/server__util_c__ap_realloc.html" target="wiki-view"><code>ap_realloc</code></a></li>
+<li><a href="../symbols/server__util_c__thread_ctx.html" target="wiki-view"><code>thread_ctx</code></a></li>
+<li><a href="../symbols/server__util_c__ap_get_sload.html" target="wiki-view"><code>ap_get_sload</code></a></li>
+<li><a href="../symbols/server__util_c__ap_get_loadavg.html" target="wiki-view"><code>ap_get_loadavg</code></a></li>
+<li><a href="../symbols/server__util_c__ap_get_exec_line.html" target="wiki-view"><code>ap_get_exec_line</code></a></li>
+<li><a href="../symbols/server__util_c__fnames.html" target="wiki-view"><code>fnames</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

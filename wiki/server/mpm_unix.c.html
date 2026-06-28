@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm_unix.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_unix.c.html&quot;}, '*');">server/mpm_unix.c</a></h1>
+<h2>概要</h2>
+<p>Unix系OSにおけるマルチプロセスMPM（Multi-Processing Module）共通のユーティリティ関数群を実装するファイルです。プロセス管理、シグナル処理、および子プロセスとの通信（POD: Pipe of Death）に関する基盤機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、プラットフォーム非依存（Unix共通）のプロセス制御ロジックを抽象化します。特定のMPM（<code>worker</code>, <code>event</code>, <code>prefork</code> 等）が直接実装すべきではない、再利用性の高いプロセス管理の定型処理を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセスライフサイクル管理**: 子プロセスの追跡、再起動時の回収（reclaim）、および異常終了時のシグナル送信。</li>
+<li>**POD (Pipe of Death) 実装**: 親プロセスから子プロセスへ終了や再起動の合図を送るためのパイプ通信機構。</li>
+<li>**シグナルハンドリング**: コアダンプ発生時のフック処理や、安全なシグナル送信（プロセスグループの検証）。</li>
+<li>**コマンドライン引数処理**: <code>httpd -k</code> 等の制御コマンドの解析と実行。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロセス管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L184" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_reclaim_child_processes.html&quot;}, '*');"><code>ap_reclaim_child_processes</code></a>: 終了処理中に全子プロセスを段階的に回収する。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L286" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_relieve_child_processes.html&quot;}, '*');"><code>ap_relieve_child_processes</code></a>: 終了中の子プロセスを非同期に回収する。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L331" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_mpm_safe_kill.html&quot;}, '*');"><code>ap_mpm_safe_kill</code></a>: プロセスグループを検証し、安全にシグナルを送信する。</li>
+</ul>
+<h3>POD (Pipe of Death)</h3>
+<ul>
+<li><code>ap_mpm_pod_open/check/close</code>: 標準的なPODのライフサイクル管理。</li>
+<li><code>ap_mpm_podx_open/check/close/signal</code>: 拡張版POD（再起動/グレースフル再起動の区別が可能）。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L625" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__dummy_connection.html&quot;}, '*');"><code>dummy_connection</code></a>: リスナーソケットへダミー接続を行い、accept()でブロックしている子プロセスを強制的に起床させる。</li>
+</ul>
+<h3>異常系・シグナル</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L1044" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_fatal_signal_setup.html&quot;}, '*');"><code>ap_fatal_signal_setup</code></a>: セグメンテーションフォールト等の致命的シグナルに対するハンドラを設定。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L386" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_process_child_status.html&quot;}, '*');"><code>ap_process_child_status</code></a>: 子プロセスの終了ステータスを解析し、ログ出力や異常終了判定を行う。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**回収フロー**: <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L184" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_reclaim_child_processes.html&quot;}, '*');"><code>ap_reclaim_child_processes</code></a> は <code>action_table</code> を参照し、<code>SIGTERM</code> から <code>SIGKILL</code> へのエスカレーションを時間経過とともに実行します。<a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__reclaim_one_pid.html&quot;}, '*');"><code>reclaim_one_pid</code></a> を介して <code>apr_proc_wait</code> でプロセス状態を監視します。</li>
+<li>**PODフロー**: 親プロセスが <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L504" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__pod_signal_internal.html&quot;}, '*');"><code>pod_signal_internal</code></a> でパイプに特定の文字を書き込み、子プロセスが <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L468" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_mpm_pod_check.html&quot;}, '*');"><code>ap_mpm_pod_check</code></a> でそのパイプを読み取ることで、イベントループを中断させます。</li>
+<li>**ダミー接続**: <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L625" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__dummy_connection.html&quot;}, '*');"><code>dummy_connection</code></a> は、PODだけでは起床できないケース（acceptブロック中）に対し、HTTPリクエストを模したデータをリスナーへ送信し、カーネルレベルでacceptを解除させます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr</code> (Apache Portable Runtime): プロセス、スレッド、ファイル、ソケット、メモリプール管理。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a> / <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: Apacheのコア構造体および設定管理。</li>
+<li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: 子プロセスの状態を保持する共有メモリ管理。</li>
+<li><code>unistd.h</code> / <code>pwd.h</code> / <code>grp.h</code>: Unixシステムコールおよびユーザー/グループ管理。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_allocator.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a>: MPM共通の補助関数（本ファイルと役割が近い）。</li>
+<li><a class="wiki-source-link" href="../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a>: プロセス状態の参照元。</li>
+<li><a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a>: <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L872" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_mpm_rewrite_args.html&quot;}, '*');"><code>ap_mpm_rewrite_args</code></a> 等の呼び出し元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L82" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_register_extra_mpm_process.html&quot;}, '*');"><code>ap_register_extra_mpm_process</code></a> で確保される <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__extra_process_t.html&quot;}, '*');"><code>extra_process_t</code></a> は <a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_malloc.html&quot;}, '*');"><code>ap_malloc</code></a> を使用しており、<a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L92" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_unregister_extra_mpm_process.html&quot;}, '*');"><code>ap_unregister_extra_mpm_process</code></a> で明示的に <code>free</code> されます。</li>
+<li>**制約**: <code>WIN32</code> 定義時は本ファイルの内容は無効化されます。</li>
+<li>**エッジケース**: <a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L625" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__dummy_connection.html&quot;}, '*');"><code>dummy_connection</code></a> はSSLリスナーに対してはTLS close_notifyを送信する等の配慮を行っていますが、プロトコル不一致によるログスパムを避けるため、可能な限り非SSLポートを選択するロジックが含まれています。</li>
+<li>**省略箇所**: 本ファイルはプロセス管理の「メカニズム」に特化しており、MPMごとの「ポリシー（いつ何人プロセスを起動するか）」は各MPM実装（<code>server/mpm/</code> 配下）に委ねられています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__mpm_unix_c__action_t.html" target="wiki-view"><code>action_t</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__extra_process_t.html" target="wiki-view"><code>extra_process_t</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_register_extra_mpm_process.html" target="wiki-view"><code>ap_register_extra_mpm_process</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_unregister_extra_mpm_process.html" target="wiki-view"><code>ap_unregister_extra_mpm_process</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__reclaim_one_pid.html" target="wiki-view"><code>reclaim_one_pid</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_reclaim_child_processes.html" target="wiki-view"><code>ap_reclaim_child_processes</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_relieve_child_processes.html" target="wiki-view"><code>ap_relieve_child_processes</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_mpm_safe_kill.html" target="wiki-view"><code>ap_mpm_safe_kill</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_process_child_status.html" target="wiki-view"><code>ap_process_child_status</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_mpm_pod_open.html" target="wiki-view"><code>ap_mpm_pod_open</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_mpm_pod_check.html" target="wiki-view"><code>ap_mpm_pod_check</code></a></li>
+<li><a href="../symbols/server__mpm_unix_c__ap_mpm_pod_close.html" target="wiki-view"><code>ap_mpm_pod_close</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

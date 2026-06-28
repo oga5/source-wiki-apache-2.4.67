@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_util_stapling.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_stapling.c.html&quot;}, '*');">modules/ssl/ssl_util_stapling.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> における **OCSP Stapling**（RFC 6066）の実装を提供します。SSL/TLS ハンドシェイク中に、サーバーが証明書の有効性確認結果（OCSP レスポンス）をクライアントへ直接提供することで、クライアント側の OCSP クエリを不要にし、プライバシーとパフォーマンスを向上させます。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> の一部として、OpenSSL の TLS 拡張機能（Certificate Status Request）を処理します。<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_init.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_init.c.html&quot;}, '*');"><code>ssl_engine_init.c</code></a> 等から初期化され、ハンドシェイク時にコールバックとして動作します。</p>
+<h2>責務</h2>
+<ul>
+<li>**OCSP レスポンスのキャッシュ管理**: <code>socache</code> を利用したレスポンスの保存と取得。</li>
+<li>**レスポンスの更新**: キャッシュ切れや無効なレスポンスに対する OCSP レスポンダーへの再問い合わせ。</li>
+<li>**同期制御**: 複数のプロセス/スレッド環境におけるキャッシュアクセスおよび更新処理の排他制御。</li>
+<li>**証明書情報の管理**: 証明書と OCSP レスポンダー URI の紐付け管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>キャッシュ・状態管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__certinfo.html&quot;}, '*');"><code>certinfo</code></a>: 証明書ハッシュ、OCSP <code>CERTID</code>、レスポンダー URI を保持する構造体。</li>
+<li><code>stapling_certinfo</code>: 証明書情報を保持するグローバルハッシュテーブル。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L266" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_cache_response.html&quot;}, '*');"><code>stapling_cache_response</code></a> / <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L324" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_get_cached_response.html&quot;}, '*');"><code>stapling_get_cached_response</code></a>: キャッシュへの読み書きを行うラッパー。</li>
+</ul>
+<h3>コールバック・フック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L804" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_cb.html&quot;}, '*');"><code>stapling_cb</code></a>: OpenSSL の <code>SSL_CTX_set_tlsext_status_cb</code> に登録されるメインのコールバック関数。</li>
+<li><code>ssl_run_init_stapling_status</code> / <code>ssl_run_get_stapling_status</code>: 他モジュールが OCSP ステータスを提供するためのフック。</li>
+</ul>
+<h3>同期制御</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L603" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_mutex_init.html&quot;}, '*');"><code>ssl_stapling_mutex_init</code></a>: 実行時に必要なグローバルミューテックスの初期化。</li>
+<li><code>stapling_refresh_mutex_on/off</code>: レスポンス更新時の競合を防ぐための排他制御。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L929" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__modssl_init_stapling.html&quot;}, '*');"><code>modssl_init_stapling</code></a> が呼ばれ、コールバック <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L804" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_cb.html&quot;}, '*');"><code>stapling_cb</code></a> を登録。 2. **ハンドシェイク時**: クライアントがステータス拡張を要求すると <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L804" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_cb.html&quot;}, '*');"><code>stapling_cb</code></a> が起動。 3. **キャッシュ検索**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L324" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_get_cached_response.html&quot;}, '*');"><code>stapling_get_cached_response</code></a> でキャッシュを検索。 4. **更新判断**: キャッシュがない、または期限切れの場合、<code>stapling_refresh_mutex</code> を取得し、<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L479" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_renew_response.html&quot;}, '*');"><code>stapling_renew_response</code></a> で OCSP レスポンダーへ HTTP リクエストを送信。 5. **レスポンス返却**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L374" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_set_response.html&quot;}, '*');"><code>stapling_set_response</code></a> を通じて OpenSSL に OCSP レスポンスを渡す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> 内部構造体定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: マルチプロセス管理用。</li>
+<li><code>apr_thread_mutex.h</code>: APR レベルの排他制御。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_ocsp.c.html&quot;}, '*');"><code>ssl_engine_ocsp.c</code></a>: OCSP リクエストの送信やレスポンスの解析など、低レベルな OCSP 通信ロジック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_scache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_scache.c.html&quot;}, '*');"><code>ssl_scache.c</code></a>: セッションキャッシュの抽象化レイヤー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__certinfo.html&quot;}, '*');"><code>certinfo</code></a> や <code>OCSP_CERTID</code> は APR プールで管理されます。<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L479" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_stapling_c__stapling_renew_response.html&quot;}, '*');"><code>stapling_renew_response</code></a> 内では一時的なサブプールを作成し、メモリリークを防いでいます。</li>
+<li>**排他制御**: <a class="wiki-source-link" href="../../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a> が設定されているキャッシュバックエンドを使用する場合、明示的なミューテックス操作が必須となります。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_util_stapling.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_util_stapling.c.html&quot;}, '*');"><code>MAX_STAPLING_DER</code></a>（10KB）を超える OCSP レスポンスは切り捨てられます。</li>
+<li>**省略箇所**: 本ファイルは OCSP プロトコルの詳細なパース（ASN.1 構造など）については OpenSSL API に依存しており、その内部実装は含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__certinfo.html" target="wiki-view"><code>certinfo</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_certid_free.html" target="wiki-view"><code>ssl_stapling_certid_free</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_certinfo_hash_init.html" target="wiki-view"><code>ssl_stapling_certinfo_hash_init</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_get_issuer.html" target="wiki-view"><code>stapling_get_issuer</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ssl_stapling_init_cert.html" target="wiki-view"><code>ssl_stapling_init_cert</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_get_certinfo.html" target="wiki-view"><code>stapling_get_certinfo</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_cache_response.html" target="wiki-view"><code>stapling_cache_response</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_get_cached_response.html" target="wiki-view"><code>stapling_get_cached_response</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_set_response.html" target="wiki-view"><code>stapling_set_response</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_check_response.html" target="wiki-view"><code>stapling_check_response</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__stapling_renew_response.html" target="wiki-view"><code>stapling_renew_response</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_util_stapling_c__ocsp_resp.html" target="wiki-view"><code>ocsp_resp</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

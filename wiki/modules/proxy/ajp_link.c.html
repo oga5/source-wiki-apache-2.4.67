@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/ajp_link.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp_link.c.html&quot;}, '*');">modules/proxy/ajp_link.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp_link.c.html&quot;}, '*');"><code>ajp_link.c</code></a> は、Apache HTTP Server の AJP (Apache JServ Protocol) プロキシモジュールにおいて、ネットワークソケットを介した低レベルなデータ送受信を担当するファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy_ajp</code> がバックエンドのアプリケーションサーバー（Tomcat 等）と通信する際の「物理層」に近い役割を果たします。上位層が構築した <a class="wiki-source-link" href="../../../source/modules/proxy/ajp.h.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_h__ajp_msg_t.html&quot;}, '*');"><code>ajp_msg_t</code></a> 構造体を、実際のネットワークバイトストリームへ変換・送出します。</p>
+<h2>責務</h2>
+<ul>
+<li>**メッセージ送信**: <a class="wiki-source-link" href="../../../source/modules/proxy/ajp.h.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_h__ajp_msg_t.html&quot;}, '*');"><code>ajp_msg_t</code></a> に格納されたデータをソケット経由で確実に送信する。</li>
+<li>**メッセージ受信**: AJP プロトコルのヘッダーとボディを分離して読み取り、完全なメッセージとして再構築する。</li>
+<li>**ソケット制御**: <code>apr_socket_recv</code> を用いたブロッキング読み取りと、エラーハンドリング（EOFやタイムアウトの判定）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L21" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ajp_ilink_send.html&quot;}, '*');"><code>ajp_ilink_send</code></a>: メッセージをソケットへ書き出す公開関数。送信完了までループ処理を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ajp_ilink_receive.html&quot;}, '*');"><code>ajp_ilink_receive</code></a>: ソケットからヘッダーを読み取り、サイズを検証した後にボディを読み取る一連の受信処理を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ilink_read.html&quot;}, '*');"><code>ilink_read</code></a>: 受信用の内部ヘルパー関数。指定されたバイト数が揃うまでソケットから読み取りを継続する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **送信時**: <code>ajp_msg_end()</code> でメッセージの長さを確定させた後、<a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L21" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ajp_ilink_send.html&quot;}, '*');"><code>ajp_ilink_send</code></a> がソケットに対して <code>apr_socket_send</code> を呼び出し、バッファが空になるまでループします。 2.  **受信時**:</p>
+<ul>
+<li>まず <a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ilink_read.html&quot;}, '*');"><code>ilink_read</code></a> で固定長のヘッダーを読み取ります。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_msg.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_msg_c__ajp_msg_check_header.html&quot;}, '*');"><code>ajp_msg_check_header</code></a> でヘッダーを検証し、続くボディの長さを特定します。</li>
+<li>特定された長さ分だけ再度 <a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ilink_read.html&quot;}, '*');"><code>ilink_read</code></a> を呼び出し、メッセージ全体を <a class="wiki-source-link" href="../../../source/modules/proxy/ajp.h.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_h__ajp_msg_t.html&quot;}, '*');"><code>ajp_msg_t</code></a> に格納します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp.h.html&quot;}, '*');"><code>ajp.h</code></a>: AJP プロトコルの定義、<a class="wiki-source-link" href="../../../source/modules/proxy/ajp.h.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_h__ajp_msg_t.html&quot;}, '*');"><code>ajp_msg_t</code></a> 構造体、およびメッセージ操作用ユーティリティ関数。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_msg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/ajp_msg.c.html&quot;}, '*');"><code>ajp_msg.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/proxy/ajp.h.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_h__ajp_msg_t.html&quot;}, '*');"><code>ajp_msg_t</code></a> 構造体の初期化やメモリ管理を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_ajp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_ajp.c.html&quot;}, '*');"><code>mod_proxy_ajp.c</code></a>: 本ファイルの関数を呼び出し、プロキシリクエストのライフサイクルを管理するメインモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「バイトストリームの送受信」に特化しており、AJP プロトコルの意味論（リクエスト/レスポンスの解釈）には関与しません。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/ajp_link.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__ajp_link_c__ilink_read.html&quot;}, '*');"><code>ilink_read</code></a> は <code>APR_STATUS_IS_EAGAIN</code> を適切に処理しており、ノンブロッキングソケット環境下でも読み取りが完了するまで待機する設計になっています。</li>
+<li>エラー発生時は <code>APLOGNO</code> を付与したログ出力が行われるため、デバッグ時にはこれらの番号を追跡することで、通信のどの段階で失敗したかを特定可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__ajp_link_c__ajp_ilink_send.html" target="wiki-view"><code>ajp_ilink_send</code></a></li>
+<li><a href="../../symbols/modules__proxy__ajp_link_c__ilink_read.html" target="wiki-view"><code>ilink_read</code></a></li>
+<li><a href="../../symbols/modules__proxy__ajp_link_c__ajp_ilink_receive.html" target="wiki-view"><code>ajp_ilink_receive</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

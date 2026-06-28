@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/database/mod_dbd.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.c.html&quot;}, '*');">modules/database/mod_dbd.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.c.html&quot;}, '*');"><code>mod_dbd.c</code></a> は、Apache HTTP Server におけるデータベース接続管理の基盤を提供するモジュールです。APR (Apache Portable Runtime) の <code>apr_dbd</code> フレームワークをラップし、接続プーリング、SQL 文の事前準備、およびリクエスト/コネクション単位のライフサイクル管理を実装します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の他のモジュール（<code>mod_authn_dbd</code> など）がデータベースへアクセスするための共通インターフェースを提供します。設定フェーズで定義されたデータベース接続設定を保持し、実行時にスレッドセーフな接続プール（<code>apr_reslist</code>）を介して接続を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>DBDriver</code> や <code>DBDParams</code> などのディレクティブを解析し、サーバーごとの設定（<a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__svr_cfg.html&quot;}, '*');"><code>svr_cfg</code></a>）を構築・マージする。</li>
+<li>**接続プーリング**: スレッド環境下では <code>apr_reslist</code> を使用し、非スレッド環境では単一の接続を管理する。</li>
+<li>**ライフサイクル管理**: 接続のオープン、クローズ、およびリクエスト/コネクション終了時の自動解放（プールへの返却）を管理する。</li>
+<li>**SQL 準備**: サーバー起動時に SQL 文をプリペアし、各接続にキャッシュする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__svr_cfg.html&quot;}, '*');"><code>svr_cfg</code></a>: サーバーごとの設定コンテナ。<a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.h.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_h__dbd_cfg_t.html&quot;}, '*');"><code>dbd_cfg_t</code></a>（設定値）と <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_group_t.html&quot;}, '*');"><code>dbd_group_t</code></a>（接続グループ）を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_group_t.html&quot;}, '*');"><code>dbd_group_t</code></a>: 接続プール（<code>apr_reslist</code>）または単一接続を管理するグループ構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_h__ap_dbd_t.html&quot;}, '*');"><code>ap_dbd_t</code></a>: データベース接続ハンドル。ドライバ、接続状態、プリペア済みステートメントのハッシュを保持。</li>
+</ul>
+<h3>公開 API (エクスポート関数)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L793" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_open.html&quot;}, '*');"><code>ap_dbd_open</code></a>: 接続を明示的に取得する。呼び出し側で <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L755" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_close.html&quot;}, '*');"><code>ap_dbd_close</code></a> が必須。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L873" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_acquire.html&quot;}, '*');"><code>ap_dbd_acquire</code></a>: リクエスト単位で接続を取得。自動的にリクエスト終了時に解放される。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L906" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_cacquire.html&quot;}, '*');"><code>ap_dbd_cacquire</code></a>: コネクション単位で接続を取得。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L313" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_prepare.html&quot;}, '*');"><code>ap_dbd_prepare</code></a>: SQL 文をプリペアする。</li>
+</ul>
+<h3>内部フック・ハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L278" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.c.html&quot;}, '*');"><code>dbd_cmds</code></a>: 設定ディレクティブの定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L341" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_post_config.html&quot;}, '*');"><code>dbd_post_config</code></a>: 設定の検証と接続グループの初期化。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L705" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_child_init.html&quot;}, '*');"><code>dbd_child_init</code></a>: 子プロセス生成時の接続プール初期化。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L278" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.c.html&quot;}, '*');"><code>dbd_cmds</code></a> がディレクティブを読み込み、<a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__create_dbd_config.html&quot;}, '*');"><code>create_dbd_config</code></a> で設定を初期化。<a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L341" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_post_config.html&quot;}, '*');"><code>dbd_post_config</code></a> で設定を統合し、共有可能な <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_group_t.html&quot;}, '*');"><code>dbd_group_t</code></a> を構築する。 2. **接続取得**: <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L873" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_acquire.html&quot;}, '*');"><code>ap_dbd_acquire</code></a> が呼ばれると、リクエストのプールに接続が既に存在するか確認。なければ <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L793" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_open.html&quot;}, '*');"><code>ap_dbd_open</code></a> を呼び出し、<a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L512" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_construct.html&quot;}, '*');"><code>dbd_construct</code></a> で新規接続を作成。 3. **接続構築**: <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L512" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_construct.html&quot;}, '*');"><code>dbd_construct</code></a> は <code>apr_dbd_open_ex</code> で接続を確立し、<a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L434" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_prepared_init.html&quot;}, '*');"><code>dbd_prepared_init</code></a> で SQL 文をプリペアし、<code>dbd_run_post_connect</code> で初期化 SQL を実行する。 4. **解放**: リクエスト終了時、<code>apr_pool_cleanup_register</code> により登録された <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L866" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__dbd_release.html&quot;}, '*');"><code>dbd_release</code></a> が呼ばれ、接続がプールへ返却される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_reslist.h</code>: 接続プーリング機能。</li>
+<li><code>apr_dbd.h</code>: データベース抽象化レイヤー。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache モジュールフレームワーク。</li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_tables.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.h.html&quot;}, '*');"><code>mod_dbd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/database/mod_dbd.h.html&quot;}, '*');"><code>mod_dbd.h</code></a>: 公開 API 定義。</li>
+<li><code>modules/database/mod_authn_dbd.c</code>: 本モジュールを利用する代表的なクライアントモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_h__ap_dbd_t.html&quot;}, '*');"><code>ap_dbd_t</code></a> は接続ごとに専用のサブプールを持ち、プリペア済みステートメントもそのサブプールで管理されます。これにより、接続終了時にステートメントも自動的にクリーンアップされます。</li>
+<li>**スレッドセーフ**: <code>APR_HAS_THREADS</code> が定義されている場合、<code>apr_reslist</code> を使用してスレッドセーフなプーリングが行われます。非スレッド環境では単純なポインタ管理となります。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L873" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_acquire.html&quot;}, '*');"><code>ap_dbd_acquire</code></a> はリクエストのライフサイクルに紐付くため、明示的な <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L755" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_close.html&quot;}, '*');"><code>ap_dbd_close</code></a> は不要です。逆に <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L793" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_open.html&quot;}, '*');"><code>ap_dbd_open</code></a> を使用した場合は、必ず <a class="wiki-source-link" href="../../../source/modules/database/mod_dbd.c.html#L755" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__database__mod_dbd_c__ap_dbd_close.html&quot;}, '*');"><code>ap_dbd_close</code></a> を呼び出す必要があります。</li>
+<li>**省略箇所**: ドライバ固有の挙動や、<code>apr_dbd</code> 内部の具体的な SQL 実行ロジックについては、<code>apr_dbd</code> ライブラリ側に依存しているため本ファイルでは詳細を扱っていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_group_t.html" target="wiki-view"><code>dbd_group_t</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__svr_cfg.html" target="wiki-view"><code>svr_cfg</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__cmd_parts.html" target="wiki-view"><code>cmd_parts</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__create_dbd_config.html" target="wiki-view"><code>create_dbd_config</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__merge_dbd_config.html" target="wiki-view"><code>merge_dbd_config</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__ap_dbd_sql_init.html" target="wiki-view"><code>ap_dbd_sql_init</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_param.html" target="wiki-view"><code>dbd_param</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_init_sql.html" target="wiki-view"><code>dbd_init_sql</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_query_t.html" target="wiki-view"><code>dbd_query_t</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_init_sql_init.html" target="wiki-view"><code>dbd_init_sql_init</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_check.html" target="wiki-view"><code>dbd_check</code></a></li>
+<li><a href="../../symbols/modules__database__mod_dbd_c__dbd_acquire_t.html" target="wiki-view"><code>dbd_acquire_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

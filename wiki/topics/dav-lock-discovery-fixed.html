@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/dav-lock-discovery-fixed.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lock_discovery_fixed</h1>
+<h2>概念</h2>
+<p><code>dav_lock_discovery_fixed</code> は、WebDAVの直接ロック（direct lock）情報をDBMデータベースへ永続化・復元する際に、固定長属性を保持するためのデータ構造（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a>）です。</p>
+<h2>なぜ重要か</h2>
+<p>WebDAVのロック情報をバイナリ形式で効率的にシリアライズ・デシリアライズするために、メモリ上の固定長データレイアウトを定義する役割を持ちます。この構造体により、DBMレコード内のバイナリ列における固定長ヘッダーとしてのオフセット計算や、データの保存・復元が容易になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__lock.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html&quot;}, '*');"><code>module:modules/dav/lock</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lock_discovery_fixed.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lock_discovery_fixed.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L115&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lock_discovery_fixed</code></a></li>
+<li>ファイルシステムバックエンドのロック処理で使用される構造体定義。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__lock__locks_c__dav_lock_discovery_fixed.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_lock_discovery_fixed.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html#L110&quot;}, '*');"><code>symbol:modules/dav/lock/locks.c#dav_lock_discovery_fixed</code></a></li>
+<li>汎用的なロック管理ロジックやDBMへの保存・読み込み処理で使用される構造体定義。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **ロック情報の保存**:</p>
+<ul>
+<li>ロック保存処理（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L459" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_save_lock_record.html&quot;}, '*');"><code>dav_generic_save_lock_record</code></a> など）において、メモリ上のロック構造体から <code>dav_lock_discovery_fixed</code> の各フィールド（<code>scope</code>, <code>type</code>, <code>depth</code>, <code>timeout</code>）へ値がコピーされます。</li>
+<li><code>dav_size_direct</code> マクロ等を用いてサイズが計算され、DBMデータベースへバイナリ形式で書き込まれます。</li>
+<p>2. **ロック情報の読み込み**:</p>
+<li>DBMからロック情報を読み込む際（<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html#L577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_generic_load_lock_record.html&quot;}, '*');"><code>dav_generic_load_lock_record</code></a> など）、バイナリデータから本構造体へキャストまたはコピーされ、有効期限やスコープ、深さが復元されます。</li>
+</ul>
+<p>※なお、WebDAVリクエストの受付からDBMへの書き込み・読み出しに至る具体的な関数呼び出しの完全なエンドツーエンドの制御フローは、提供されたコンテキストからは完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**サイズ同期**: <code>dav_size_direct</code> マクロによるサイズ計算（本構造体のサイズに1バイトを加えた値など）と、実際の構造体のサイズが常に同期している必要があります。</li>
+<li>**構造体の同一性**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方に同名の構造体が定義されており、これらの定義およびフィールド順序は一致していなければなりません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**バイナリ互換性とパディング**: プラットフォーム間での <code>time_t</code> や <code>int</code> のサイズ差異、またはコンパイラによる構造体のパディングにより、DBMに書き込まれるバイナリ列のオフセットやサイズが変化し、既存のDBMファイルとの互換性が失われる可能性があります。</li>
+<li>**重複定義の不整合**: 2つのファイルに個別に定義されているため、一方のみを変更すると、ファイルシステムバックエンドとコアロックロジックの間で整合性が崩れる原因になります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

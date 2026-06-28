@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/request-processing-lifecycle-and-hook-mechanism.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Request Processing Lifecycle and Hook Mechanism</h1>
+<h2>概念</h2>
+<p>**Request Processing Lifecycle and Hook Mechanism** は、Apache HTTP Server（httpd）がクライアントからの接続を受け入れてから、リクエストを処理し、レスポンスを返して接続を閉じるまでの一連のフェーズ（ライフサイクル）を管理する仕組みです。</p>
+<p>このライフサイクルは、**フック（Hook）メカニズム**によって高度にモジュール化されています。コアシステムや各モジュールは、特定の処理フェーズ（例：ヘッダーの解析、認証、アクセス制御、コンテンツ生成、ロギングなど）に対して自身の関数（ハンドラ）を登録（フック）し、協調してリクエストを処理します。</p>
+<h2>なぜ重要か</h2>
+<p>Apacheの極めて高い拡張性と柔軟性は、このフックメカニズムによって実現されています。 コアのコードを直接変更することなく、モジュールを追加するだけで、リクエスト処理の特定のタイミングにカスタムロジックを挿入できます。また、各フェーズが明確に分離されているため、認証、URLマッピング、コンテンツ生成などの関心事を独立して実装・メンテナンスすることが可能になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a>: HTTPプロトコル固有のリクエスト処理や、標準的なHTTPライフサイクルフェーズの実装を担当します。</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a>: フックの登録、管理、およびリクエスト処理全体のディスパッチや設定の適用など、コアとなる実行基盤を提供します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**: フックの宣言（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_DECLARE_HOOK</code></a>）や実装（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_ALL</code></a> / <a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L137" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_FIRST</code></a> など）を行うためのマクロ群を提供します。</li>
+<li>**<a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>include/http_request.h</code></a>**: リクエスト処理ライフサイクルに関連する主要な関数（<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html#L480" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_process_request.html&quot;}, '*');"><code>ap_process_request</code></a> など）や構造体のプロトタイプを定義します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a>**: HTTPリクエストの具体的な処理フロー（リクエストの受け入れからレスポンス生成、後処理まで）を実装します。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**: モジュールの初期化や、各モジュールが提供するフック関数の登録・ソート、および実行管理を行います。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>リクエスト処理の全体的な流れは以下の通りですが、**詳細な内部遷移やエラーハンドリングの全パスなど、完全なエンドツーエンドのフローは現時点では未確定（一部未解析）**です。</p>
+<p>1. **接続とリクエストの受信**: クライアントからの接続が確立され、リクエストヘッダーが読み込まれます。 2. **フックの実行（初期フェーズ）**: <a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> で管理されるフック機構を通じて、翻訳（URLマップ）、アクセス制御、認証、認可などのフェーズが順次呼び出されます。 3. **リクエストのディスパッチ**: <a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a> 内の処理（<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html#L480" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_process_request.html&quot;}, '*');"><code>ap_process_request</code></a> など）により、適切なコンテンツハンドラへリクエストが渡されます。 4. **レスポンス生成とクリーンアップ**: ハンドラがレスポンスを生成してクライアントに送信した後、ロギングフックが実行され、リクエストプールが解放されます。</p>
+<h2>重要な不変条件</h2>
+<p>フックメカニズムおよびリクエスト処理において維持されるべき不変条件は以下の通りですが、**すべての不変条件や詳細な制約は完全には判明していません**。</p>
+<ul>
+<li>**フックの実行順序**: フック登録時に指定される順序（<code>APR_HOOK_FIRST</code>, <code>APR_HOOK_MIDDLE</code>, <code>APR_HOOK_LAST</code> など）および依存関係（先行・後続モジュールの指定）は、<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> によるソート後も厳密に維持されなければなりません。</li>
+<li>**リクエストコンテキストの整合性**: リクエスト処理中に使用されるメモリプール（<code>r-&gt;pool</code>）は、リクエストの開始から完了（ロギング終了）まで有効であり、処理完了後に確実にクリーンアップされる必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**フックの戻り値の誤解**: </li>
+<p>フックには「すべての登録関数を実行するもの（<code>RUN_ALL</code>）」と「最初に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> またはエラーを返した時点で実行を終了するもの（<code>RUN_FIRST</code>）」があります。戻り値（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>, <a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a>, <code>HTTP_...</code> など）の選択を誤ると、後続のモジュールが意図せずスキップされたり、処理が異常終了したりします。</p>
+<li>**順序依存性の欠如**:</li>
+<p>他のモジュールが処理した結果（例：認証情報）に依存するフックを登録する際、適切な先行・後続関係（<code>predecessors</code> / <code>successors</code>）を指定しないと、実行順序が不定になり未定義動作を招く原因になります。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**: フックの登録・宣言マクロの仕組みを理解する。</li>
+<li>**<a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>include/http_request.h</code></a>**: リクエスト処理フェーズを構成するAPIの定義を確認する。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a>**: 実際のリクエスト処理ライフサイクルの実装フローを追う。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**: モジュール設定とフックのディスパッチ・ソートロジックを解析する。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

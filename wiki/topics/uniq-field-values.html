@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/uniq-field-values.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>uniq_field_values</h1>
+<h2>概念</h2>
+<p><code>uniq_field_values</code> は、HTTP ヘッダー（主に <code>Vary</code> ヘッダーなど）の値を解析し、カンマや空白で区切られた複数のトークンから重複を除去して、一意な値のリスト（配列）を構築するためのコールバック関数です。</p>
+<h2>なぜ重要か</h2>
+<p>HTTP プロトコルにおいて、<code>Vary</code> などのヘッダーは複数の値をカンマ区切りで保持することがあります。キャッシュ処理やフィルター処理において、これらのヘッダー値を重複なく正確に把握することは、不要な重複処理を避け、一貫したヘッダー処理を行うために重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__http__http_filters_c__uniq_field_values.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_filters_c__uniq_field_values.html&quot;, &quot;source&quot;: &quot;source/modules/http/http_filters.c.html#L857&quot;}, '*');"><code>symbol:modules/http/http_filters.c#uniq_field_values</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_c2_filter_c__uniq_field_values.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__uniq_field_values.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_c2_filter.c.html#L172&quot;}, '*');"><code>symbol:modules/http2/h2_c2_filter.c#uniq_field_values</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. 各モジュール（<a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a> および <a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a>）において、<code>apr_table_do</code> を介して <code>uniq_field_values</code> が呼び出されます。 2. コールバック関数には、格納先となる <code>apr_array_header_t</code> へのポインタ（引数 <code>d</code>）と、解析対象のヘッダー値（引数 <code>val</code>）が渡されます。 3. <code>val</code> の文字列がメモリプール上に複製され、カンマおよび空白を区切り文字としてトークンに分割されます。 4. 各トークンが既に配列内に存在するかどうかが <a class="wiki-source-link" href="../../source/server/util.c.html#L3542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cstr_casecmp.html&quot;}, '*');"><code>ap_cstr_casecmp</code></a> を用いて大文字小文字を区別せずにチェックされます。 5. 配列内に存在しないトークンのみが <code>apr_array_push</code> によって配列に追加されます。 6. <code>apr_table_do</code> の処理を継続させるため、関数は常に <code>1</code> を返します。</p>
+<p>なお、これらの一連の処理がどのような上位の HTTP リクエスト/レスポンスライフサイクルや、特定のフィルタチェーンの中でトリガーされるか、その完全なエンドツーエンドの流れの詳細は現時点では未解明です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>引数 <code>d</code> は、有効な <code>apr_array_header_t</code> 構造体へのポインタであり、適切に初期化されている必要があります。</li>
+<li>配列のメモリプール（<code>values-&gt;pool</code>）は、文字列の複製や配列の拡張のために有効な状態でなければなりません。</li>
+<li>戻り値は常に <code>1</code> であり、これにより <code>apr_table_do</code> によるテーブル走査が途中で中断されずに継続されます。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**線形探索によるパフォーマンスへの影響**: 重複チェックの際、既存の配列要素に対して <a class="wiki-source-link" href="../../source/server/util.c.html#L3542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_cstr_casecmp.html&quot;}, '*');"><code>ap_cstr_casecmp</code></a> を用いた線形探索を行っています。ヘッダー値に含まれるトークン数が非常に多い場合、探索コストが O(N^2) に比例して増加し、パフォーマンスに影響を与える可能性があります。</li>
+<li>**メモリ消費**: 各呼び出しにおいて <code>apr_pstrdup</code> を使用して文字列を複製するため、一時的なメモリ消費が発生します。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http/http_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_filters.c.html&quot;}, '*');"><code>modules/http/http_filters.c</code></a> (特に <code>uniq_field_values</code> の定義と <code>apr_table_do</code> による呼び出し箇所)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a> (特に <code>uniq_field_values</code> の定義と <code>apr_table_do</code> による呼び出し箇所)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

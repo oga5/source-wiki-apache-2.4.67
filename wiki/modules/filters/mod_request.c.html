@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_request.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_request.c.html&quot;}, '*');">modules/filters/mod_request.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_request.c.html&quot;}, '*');"><code>mod_request.c</code></a> は、HTTP リクエストボディを一時的にメモリ（<code>request_rec</code> 内）に保持し、後続のサブリクエストやフィルタで再利用可能にするための Apache HTTP Server モジュールです。主に <code>KeptBodySize</code> ディレクティブを通じて、ボディの保持サイズ制限と管理機能を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> サブシステムの一部として、入力フィルタチェーンに介入し、リクエストボディの「キャプチャ」と「再挿入」を担います。他のフィルタが処理を行う前にボディを確保する役割を持ちます。</p>
+<h2>責務</h2>
+<ul>
+<li>**ボディの保持管理**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__keep_body_filter.html&quot;}, '*');"><code>keep_body_filter</code></a> を通じて、設定されたサイズ制限内でリクエストボディを <code>r-&gt;kept_body</code> にコピーする。</li>
+<li>**サブリクエストへの再挿入**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');"><code>kept_body_filter</code></a> を通じて、保持されたボディをサブリクエストの入力ストリームとして提供する。</li>
+<li>**設定管理**: <code>KeptBodySize</code> ディレクティブの解析、ディレクトリ単位の設定保持、および設定のマージ。</li>
+<li>**フィルタのライフサイクル**: 入力フィルタの登録、挿入、および削除の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>フィルタ関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__keep_body_filter.html&quot;}, '*');"><code>keep_body_filter</code></a>: リクエストボディを読み込み、<code>r-&gt;kept_body</code> に保存する入力フィルタ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');"><code>kept_body_filter</code></a>: <code>r-&gt;kept_body</code> に保存されたデータをサブリクエストに提供する入力フィルタ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter_init.html&quot;}, '*');"><code>kept_body_filter_init</code></a>: サブリクエスト開始時に <code>Transfer-Encoding</code> を除去し <code>Content-Length</code> を設定する初期化関数。</li>
+</ul>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/mod_request.h.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_request_h__request_dir_conf.html&quot;}, '*');"><code>request_dir_conf</code></a>: ディレクトリごとの設定（<code>keep_body</code>: 保持サイズ制限）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L328" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__create_request_dir_config.html&quot;}, '*');"><code>create_request_dir_config</code></a> / <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L339" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__merge_request_dir_config.html&quot;}, '*');"><code>merge_request_dir_config</code></a>: 設定の生成と継承ロジック。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>bail_out_on_error</code>: エラー発生時にブリゲードをクリーンアップし、クライアントへエラーレスポンスを送信する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__ap_request_insert_filter.html&quot;}, '*');"><code>ap_request_insert_filter</code></a> / <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L315" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__ap_request_remove_filter.html&quot;}, '*');"><code>ap_request_remove_filter</code></a>: フィルタチェーンへの介入用フック。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **キャプチャ**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__keep_body_filter.html&quot;}, '*');"><code>keep_body_filter</code></a> がリクエストボディを <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> で取得し、<code>r-&gt;kept_body</code>（<code>apr_bucket_brigade</code>）にコピーします。制限を超えた場合、<code>bail_out_on_error</code> で中断します。 2. **再利用**: サブリクエストが開始されると、<a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter_init.html&quot;}, '*');"><code>kept_body_filter_init</code></a> がヘッダーを調整し、<a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');"><code>kept_body_filter</code></a> が <code>r-&gt;kept_body</code> からデータをパーティション分割して読み出し、後続のフィルタへ渡します。 3. **データ構造**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__keep_body_ctx_t.html&quot;}, '*');"><code>keep_body_ctx_t</code></a> は現在の保持状況（残りサイズ）を管理し、<a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_ctx_t.html&quot;}, '*');"><code>kept_body_ctx_t</code></a> は再挿入時のオフセットと残量を管理します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケットブリゲードによるデータ操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: <code>request_rec</code> 構造体およびサブリクエスト処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: エラーバケットの生成とプロトコル処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>mod_request.h</code></a>: 公開インターフェース（オプション関数定義）。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/mod_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_request.h.html&quot;}, '*');"><code>include/mod_request.h</code></a>: このモジュールの公開ヘッダー。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_filter.c.html&quot;}, '*');"><code>modules/filters/mod_filter.c</code></a>: フィルタチェーンの一般的な管理ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>r-&gt;kept_body</code> は <code>r-&gt;pool</code> に紐付いており、リクエストの終了とともに解放されます。</li>
+<li>**不変条件**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_request.c.html#L198" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_request_c__kept_body_filter.html&quot;}, '*');"><code>kept_body_filter</code></a> は、<code>r-&gt;kept_body</code> が存在する場合にのみ動作します。</li>
+<li>**エッジケース**: <code>Content-Length</code> が <code>KeptBodySize</code> を超える場合、即座に <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L525" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_REQUEST_ENTITY_TOO_LARGE</code></a> を返します。</li>
+<li>**省略箇所**: <code>apr_bucket_copy</code> の失敗時の詳細なエラーハンドリングは、バケットの性質上発生しにくいと想定されているため、最小限の記述に留まっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_request_c__bail_out_on_error.html" target="wiki-view"><code>bail_out_on_error</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__keep_body_ctx_t.html" target="wiki-view"><code>keep_body_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__keep_body_filter.html" target="wiki-view"><code>keep_body_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__kept_body_ctx_t.html" target="wiki-view"><code>kept_body_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__kept_body_filter_init.html" target="wiki-view"><code>kept_body_filter_init</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__kept_body_filter.html" target="wiki-view"><code>kept_body_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__request_is_filter_present.html" target="wiki-view"><code>request_is_filter_present</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__ap_request_insert_filter.html" target="wiki-view"><code>ap_request_insert_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__ap_request_remove_filter.html" target="wiki-view"><code>ap_request_remove_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__create_request_dir_config.html" target="wiki-view"><code>create_request_dir_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__merge_request_dir_config.html" target="wiki-view"><code>merge_request_dir_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_request_c__set_kept_body_size.html" target="wiki-view"><code>set_kept_body_size</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

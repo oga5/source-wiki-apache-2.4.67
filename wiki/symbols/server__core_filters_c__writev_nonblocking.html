@@ -1,0 +1,82 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__core_filters_c__writev_nonblocking.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/core_filters.c.html#L784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_filters_c__writev_nonblocking.html&quot;}, '*');">writev_nonblocking</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/core_filters.c:784</code></li>
+</ul>
+<h2>目的</h2>
+<p><code>apr_socket_sendv</code> を使用して、バケットブリゲード内のデータをソケットへ非ブロッキングで書き出します。書き込み完了後のバケット削除および部分書き込み時のバケット分割を管理します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t writev_nonblocking(apr_socket_t *s,
+                                       apr_bucket_brigade *bb,
+                                       core_output_filter_ctx_t *ctx,
+                                       apr_size_t bytes_to_write,
+                                       apr_size_t nvec,
+                                       conn_rec *c)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>s</code>: 書き込み対象のソケット。</li>
+<li><code>bb</code>: 書き込むデータを含むバケットブリゲード。</li>
+<li><code>ctx</code>: 出力フィルタのコンテキスト（<code>iovec</code> 配列を保持）。</li>
+<li><code>bytes_to_write</code>: 書き込み対象の総バイト数。</li>
+<li><code>nvec</code>: <code>iovec</code> 配列の要素数。</li>
+<li><code>c</code>: 接続情報構造体。</li>
+<li>**出力**:</li>
+<li>戻り値: <code>apr_status_t</code> 型のステータスコード（成功時は <code>APR_SUCCESS</code>）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>ctx-&gt;vec</code> には、<code>bb</code> 内のデータに対応する有効な <code>iovec</code> 配列が格納されている必要があります。</li>
+<li>書き込み処理中、<code>bb</code> 内のバケットは <code>apr_bucket_delete</code> または <code>apr_bucket_split</code> によって適切に管理されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>apr_socket_sendv</code> を呼び出し、ソケットへデータを送信します。 2. 送信されたバイト数に基づき、<code>bb</code> 内のバケットを走査します。</p>
+<ul>
+<li>長さ 0 のバケットは削除します。</li>
+<li>送信済みバイト数がバケット長を超える場合、バケットを削除して次のバケットへ進みます。</li>
+<li>部分的に送信された場合、<code>apr_bucket_split</code> を用いてバケットを分割し、残りのデータを保持します。</li>
+<p>3. <code>bytes_written &lt; bytes_to_write</code> である限り、上記処理を繰り返します。 4. <code>ap__logio_add_bytes_out</code> が定義されている場合、送信バイト数を記録します。 5. 最終的な送信バイト数を <code>ctx-&gt;bytes_written</code> に加算し、トレースログを出力して終了します。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/core_filters.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core_filters.c.html&quot;}, '*');"><code>server/core_filters.c</code></a> 内の各箇所（行 671, 693, 728, 767, 776 など）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_socket_sendv</code> (APR)</li>
+<li><code>apr_bucket_delete</code> (APR)</li>
+<li><code>apr_bucket_split</code> (APR)</li>
+<li><code>ap__logio_add_bytes_out</code> (外部モジュール連携用関数ポインタ)</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html#L492" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_cerror</code></a> (Apache HTTPD ログ関数)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_socket_t</code>: ソケット抽象化構造体。</li>
+<li><code>apr_bucket_brigade</code>: バケットのリスト構造。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html#L787" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_output_filter_ctx_t.html&quot;}, '*');"><code>core_output_filter_ctx_t</code></a>: 出力フィルタの永続状態を保持する構造体。</li>
+<li><code>conn_rec</code>: 接続ごとの状態を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_socket_sendv</code> が <code>APR_SUCCESS</code> 以外のステータスを返した場合、ループを中断しそのステータスを返します。</li>
+<li><code>bytes_written</code> が <code>bytes_to_write</code> に達しない場合、非ブロッキング動作として処理を終了します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>core_output_filter</code> の一部として、非ブロッキング I/O の再試行ロジックと密接に関連しています。</li>
+<li><code>ctx-&gt;vec</code> の操作は <a class="wiki-source-link" href="../../source/include/http_core.h.html#L787" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_output_filter_ctx_t.html&quot;}, '*');"><code>core_output_filter_ctx_t</code></a> の状態に依存するため、呼び出し側でのコンテキスト整合性に注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

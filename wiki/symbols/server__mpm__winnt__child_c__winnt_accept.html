@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__winnt__child_c__winnt_accept.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L350" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_accept.html&quot;}, '*');">winnt_accept</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/winnt/child.c:350</code></li>
+</ul>
+<h2>目的</h2>
+<p>Windows 版 Apache HTTP Server におけるリスナー・スレッドの本体。リスナーソケットでクライアント接続を待ち受け、確立された接続をワーカー・スレッドへ引き渡すための準備を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static unsigned int __stdcall winnt_accept(void *lr_)</code></pre>
+<ul>
+<li>引数 <code>lr_</code>: リスナー設定情報 (<code>ap_listen_rec *</code>)。</li>
+</ul>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>ap_listen_rec</code> 構造体（リスナーソケット情報）。</li>
+<li>**出力**: スレッド終了時に <code>1</code> を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>mpm_winnt</code> モジュールが初期化され、リスナーソケットが有効であること。</li>
+<li><code>AcceptFilter</code> 設定に基づき、<code>AcceptEx</code> または標準 <code>accept()</code> のいずれかを使用する。</li>
+<li><code>shutdown_in_progress</code> フラグが偽である間、ループを継続する。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L299" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__get_accept_filter.html&quot;}, '*');"><code>get_accept_filter</code></a> でフィルタ設定を確認し、<code>AcceptEx</code> 使用時は <code>WSAIoctl</code> で関数ポインタを取得する。 2. **接続待機ループ**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L162" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__mpm_get_completion_context.html&quot;}, '*');"><code>mpm_get_completion_context</code></a> を呼び出し、接続コンテキストを取得する。</li>
+<li>**<code>AcceptFilter</code> が <code>connect</code> の場合**: <code>AcceptEx</code> を発行し、<code>WaitForMultipleObjectsEx</code> で接続完了またはシャットダウンイベントを待機する。成功時は <code>SO_UPDATE_ACCEPT_CONTEXT</code> を設定し、<code>lpfnGetAcceptExSockaddrs</code> でアドレス情報を取得する。</li>
+<li>**<code>AcceptFilter</code> が <code>none</code> の場合**: <code>WSAEventSelect</code> で <code>FD_ACCEPT</code> を監視し、<code>accept()</code> を呼び出す。</li>
+<p>3. **エラー処理**: <code>AcceptEx</code> 失敗時に一定回数（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L348" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>MAX_ACCEPTEX_ERR_COUNT</code></a>）を超えると、自動的に <code>AcceptFilter none</code> へフォールバックする。 4. **終了**: <code>shutdown_in_progress</code> が真になるとループを脱出する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>server/mpm/winnt/child.c:913</code> (<code>_beginthreadex</code> によりスレッドとして起動)。</li>
+<li>**呼び出し先**: </li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L162" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__mpm_get_completion_context.html&quot;}, '*');"><code>mpm_get_completion_context</code></a></li>
+<li><code>lpfnAcceptEx</code> / <code>lpfnGetAcceptExSockaddrs</code> (動的取得)</li>
+<li><code>accept</code></li>
+<li><code>ap_log_error</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_listen_rec</code>: リスナーソケット情報。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a>: 接続状態と <code>OVERLAPPED</code> 構造体を保持するコンテキスト。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L282" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__accept_filter_e.html&quot;}, '*');"><code>accept_filter_e</code></a>: 接続受け入れフィルタの種別。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**リソース枯渇**: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L162" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__mpm_get_completion_context.html&quot;}, '*');"><code>mpm_get_completion_context</code></a> が取得できない場合、一時的に待機（<code>Sleep</code>）する。</li>
+<li>**接続エラー**: <code>WSAECONNRESET</code> や <code>WSAEINVAL</code> 等のソケットエラー発生時、ソケットをクローズし再試行またはフォールバックを行う。</li>
+<li>**シャットダウン**: <code>exit_event</code> や <code>max_requests_per_child_event</code> がシグナルされると、待機を中断して終了する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> の再利用ロジックにおいて、エラーパスでメモリリークが発生する可能性がある旨の指摘がソース内に存在する。</li>
+<li><code>AcceptEx</code> の失敗は VPN やファイアウォールソフトとの競合が原因となることが多いため、ログ出力とフォールバックの挙動は重要である。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

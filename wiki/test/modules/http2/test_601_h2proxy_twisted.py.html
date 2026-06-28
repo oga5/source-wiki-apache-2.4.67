@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/http2/test_601_h2proxy_twisted.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_601_h2proxy_twisted.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_601_h2proxy_twisted.py.html&quot;}, '*');">test/modules/http2/test_601_h2proxy_twisted.py</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_http2</code> における HTTP/2 プロキシ機能（<code>h2proxy</code>）の堅牢性を検証するテストスイートです。特に、バックエンドとの通信におけるアップロード処理、遅延、およびエラーハンドリングの挙動をテストします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> モジュールの一部として、プロキシ機能の境界条件をテストします。<a class="wiki-source-link" href="../../../../source/test/modules/http2/test_600_h2proxy.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_600_h2proxy.py.html&quot;}, '*');"><code>test_600_h2proxy.py</code></a> が基本的なプロキシ動作を扱うのに対し、本ファイルはより複雑なストリーム制御やエラーケースに焦点を当てています。</p>
+<h2>責務</h2>
+<ul>
+<li>HTTP/2 プロキシ経由でのファイルアップロードの正常性確認。</li>
+<li>バックエンド応答の遅延（<code>chunk_delay</code>）に対するプロキシの追従性テスト。</li>
+<li>バックエンド側での意図的なエラー発生時（<code>fail_after</code>）における、プロキシのストリーム終了処理の検証。</li>
+<li>大量リクエスト時の並列処理における安定性の確認。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>TestH2ProxyTwisted</code>: テストクラス。<code>H2TestEnv</code> を使用して環境を構築し、テストを実行します。</li>
+<li><code>test_h2_601_01_echo_uploads</code>: ファイルサイズを変えてアップロードとエコーバックを検証する基本テスト。</li>
+<li><code>test_h2_601_03_echo_fail_early</code> / <code>04_echo_fail_late</code>: バックエンドが途中で失敗した場合のプロキシの挙動（HTTP 502 または curl エラーコード 92/18）を検証。</li>
+<li><code>test_h2_601_05_echo_fail_many</code>: <code>curl --parallel</code> を使用した高負荷時のエラーハンドリングテスト。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **セットアップ**: <code>_class_scope</code> フィクスチャが <code>H2Conf</code> を用いて CGI を含むプロキシ設定を生成し、Apache を再起動します。 2. **実行**: 各テストメソッドは <code>env.curl_upload</code> または <code>env.run</code> を呼び出し、指定された URL に対してファイルを POST します。 3. **検証**:</p>
+<ul>
+<li>正常系: レスポンスステータスコードが 200 番台であることを確認。</li>
+<li>異常系: バックエンドが途中で切断するシナリオにおいて、curl が適切なエラーコード（92: HTTP/2 ストリームエラー、18: 部分転送エラー）を返すか、プロキシが 502 を返すかを検証します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>env.H2Conf</code>, <code>env.H2TestEnv</code>: テスト環境の設定および Apache の制御用クラス。</li>
+<li><code>os</code>, <code>json</code>, <code>logging</code>: 標準ライブラリ。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_600_h2proxy.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_600_h2proxy.py.html&quot;}, '*');"><code>test/modules/http2/test_600_h2proxy.py</code></a>: プロキシ機能の基本テスト。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/env.py.html&quot;}, '*');"><code>test/modules/http2/env.py</code></a>: テスト環境の基盤。<code>H2TestEnv</code> の実装詳細が含まれます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本テストの多くは <code>httpd 2.4.58</code> 以上を要求します。環境が古い場合はスキップされます。</li>
+<li><code>test_h2_601_05_echo_fail_many</code> は <code>curl v8.0.0</code> 以上を必要とします。</li>
+<li>エラーコード 92（<code>CURLE_HTTP2_STREAM</code>）は、HTTP/2 ストリームが異常終了した際に curl が返す一般的なコードです。プロキシテストにおいて、バックエンドの意図的な切断を正しく検知できているかの指標となります。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

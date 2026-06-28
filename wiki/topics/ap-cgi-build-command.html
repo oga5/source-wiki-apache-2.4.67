@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/ap-cgi-build-command.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_cgi_build_command</h1>
+<h2>概念</h2>
+<p><code>ap_cgi_build_command</code> は、Apache HTTP Server（httpd-2.4.67）において、プラットフォーム固有（NetWare および Windows）の環境でCGIスクリプトや実行ファイルを起動するために必要なコマンドライン文字列および引数配列（<code>argv</code>）を構築するためのオプショナル関数（Optional Function）です。</p>
+<h2>なぜ重要か</h2>
+<p>CGIの起動プロセスはオペレーティングシステムによって大きく異なります。例えば、NetWareではNLM（NetWare Loadable Module）の実行やアドレス空間の分離が必要であり、Windowsでは拡張子（<code>.exe</code>, <code>.bat</code> など）の判定、レジストリやシバン（<code>#!</code>）行からのインタープリタの特定、引数のエスケープ処理が必要となります。<code>ap_cgi_build_command</code> は、これらのプラットフォーム固有の複雑なコマンド構築ロジックをカプセル化し、<code>mod_cgi</code> などのジェネリックなCGI実行モジュールから統一されたインターフェースで呼び出せるようにするために重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__arch__netware.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__arch__netware.html&quot;, &quot;source&quot;: &quot;source/modules/arch/netware/libprews.c.html&quot;}, '*');"><code>module:modules/arch/netware</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__arch__win32.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__arch__win32.html&quot;, &quot;source&quot;: &quot;source/modules/arch/win32/mod_isapi.c.html&quot;}, '*');"><code>module:modules/arch/win32</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__arch__netware__mod_netware_c__ap_cgi_build_command.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__ap_cgi_build_command.html&quot;, &quot;source&quot;: &quot;source/modules/arch/netware/mod_netware.c.html#L97&quot;}, '*');"><code>symbol:modules/arch/netware/mod_netware.c#ap_cgi_build_command</code></a>: NetWare環境用の実装。拡張子に基づき <code>file_type_handlers</code> からNLMコマンドを検索・構築し、アドレス空間（<code>e_info-&gt;addrspace</code>）を設定します。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__arch__win32__mod_win32_c__ap_cgi_build_command.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__ap_cgi_build_command.html&quot;, &quot;source&quot;: &quot;source/modules/arch/win32/mod_win32.c.html#L369&quot;}, '*');"><code>symbol:modules/arch/win32/mod_win32.c#ap_cgi_build_command</code></a>: Windows環境用の実装。拡張子判定、レジストリ検索、シバン（<code>#!</code>）解析を行い、適切なインタープリタを特定してコマンドラインを構築します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> が <code>APR_RETRIEVE_OPTIONAL_FN</code> を介してプラットフォーム固有の <code>ap_cgi_build_command</code> を動的に取得し、呼び出します。 2. **プラットフォーム別の処理**:</p>
+<ul>
+<li>**NetWareの場合**:</li>
+<p>1. リクエスト設定から <a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a> を取得します。 2. <code>r-&gt;filename</code> の拡張子をキーに <code>file_type_handlers</code> からハンドラ（NLM）を検索します。 3. ハンドラが見つかれば <code>[ハンドラ] [ファイル名]</code> の形式でコマンドを生成し、<code>apr_tokenize_to_argv</code> で引数配列化します。</p>
+<li>**Windowsの場合**:</li>
+<p>1. ファイル拡張子（<code>.exe</code>, <code>.bat</code> 等）を確認し、標準実行形式か判定します。 2. 必要に応じてレジストリ（<code>ScriptInterpreterSource</code> 設定に基づく）またはファイル先頭のシバン（<code>#!</code>）行からインタープリタを特定します。 3. <a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> を用いて引数テンプレートを展開し、引数配列を構築します。環境変数をWindows向けに調整します。 3. **結果の返却**: 構築されたコマンドパス（<code>cmd</code>）と引数配列（<code>argv</code>）、および実行制御情報（<code>e_info</code>）を呼び出し元に返します。</p>
+</ul>
+<p>※なお、<code>mod_cgi</code> 側での具体的なプロセス起動処理や、リクエスト受信から本関数呼び出しに至る全体的なエンドツーエンドの制御フローの詳細は、提供されたコンテキストからは完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ確保は、引数 <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> として渡される <code>apr_pool_t</code> に依存して行われなければなりません。</li>
+<li>**NetWareにおける不変条件**: <a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__netware__mod_netware_c__netware_dir_config.html&quot;}, '*');"><code>netware_dir_config</code></a> がリクエストのディレクトリ設定から取得可能である必要があります。また、拡張子に対応するハンドラが <code>file_type_handlers</code> に登録されている必要があります（未登録の場合は <code>APR_EBADF</code> を返します）。</li>
+<li>**Windowsにおける不変条件**: インタープリタが特定できない、かつシバン行も見つからない場合は <code>APR_EBADF</code> を返します。また、<code>e_info-&gt;cmd_type</code> が <code>APR_SHELLCMD</code> でない場合、特定されたインタープリタは <code>APR_PROGRAM_PATH</code> に設定される必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**NetWare環境**: 拡張子に対応するコマンドが <code>file_type_handlers</code> に登録されていない場合、即座に <code>APR_EBADF</code> で失敗します。</li>
+<li>**Windows環境**:</li>
+<li>シバン（<code>#!</code>）解析において、UTF-8のBOM（<code>\xEF\xBB\xBF</code>）はスキップされますが、ファイル読み込み自体が失敗（<code>apr_file_open</code> 等の失敗）するとエラーとなります。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__prep_string.html&quot;}, '*');"><code>prep_string</code></a> による環境変数のWindowsローカルコードページへの変換は限定的な実装にとどまるため、文字コード関連の不整合が発生しやすい点に注意が必要です。</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html#L236" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__win32__mod_win32_c__split_argv.html&quot;}, '*');"><code>split_argv</code></a> 内の引数解析は複雑なエスケープ処理を伴うため、Windowsのコマンドライン引数ルールに起因するパースエラーやセキュリティ上の懸念に注意してください。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/arch/netware/mod_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/netware/mod_netware.c.html&quot;}, '*');"><code>modules/arch/netware/mod_netware.c</code></a> (NetWare版の実装詳細)</li>
+<li><a class="wiki-source-link" href="../../source/modules/arch/win32/mod_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/win32/mod_win32.c.html&quot;}, '*');"><code>modules/arch/win32/mod_win32.c</code></a> (Windows版の実装詳細、レジストリ・シバン解析ロジック)</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> (本関数を動的に取得して呼び出す側)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

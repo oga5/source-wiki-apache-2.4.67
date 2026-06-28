@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/lua/lua_apr.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.c.html&quot;}, '*');">modules/lua/lua_apr.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.c.html&quot;}, '*');"><code>lua_apr.c</code></a> は、Apache Portable Runtime (APR) のテーブル構造を Lua スクリプトから透過的に操作可能にするためのブリッジ層です。HTTP リクエストやレスポンスのヘッダー、環境変数などを Lua のテーブルとして扱うためのインターフェースを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> において、C 言語側のデータ構造（<code>apr_table_t</code>）と Lua VM 側のオブジェクトを接続する役割を担います。<a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.h.html&quot;}, '*');"><code>lua_apr.h</code></a> で定義されたインターフェースを実装し、Lua スクリプトが Apache の内部テーブルを安全かつ直感的に読み書きできるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**データバインディング**: <code>apr_table_t</code> をラップした <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_h__req_table_t.html&quot;}, '*');"><code>req_table_t</code></a> を Lua のユーザーデータとして公開する。</li>
+<li>**メタテーブル管理**: Lua 上で <code>Apr.Table</code> 型として振る舞うためのメタテーブル定義とメソッド登録。</li>
+<li>**入力バリデーション**: <code>set</code> 操作時に改行コードの混入を検知・置換し、HTTP ヘッダーインジェクション等のリスクを軽減する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L22" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_check_apr_table.html&quot;}, '*');"><code>ap_lua_check_apr_table</code></a>: Lua スタック上の値が <code>Apr.Table</code> であるか検証し、内部ポインタを取り出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_push_apr_table.html&quot;}, '*');"><code>ap_lua_push_apr_table</code></a>: <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_h__req_table_t.html&quot;}, '*');"><code>req_table_t</code></a> を Lua のユーザーデータとしてスタックにプッシュする。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L81" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.c.html&quot;}, '*');"><code>lua_table_methods</code></a>: Lua から呼び出される <code>get</code>/<code>set</code> メソッドの定義テーブル。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_init.html&quot;}, '*');"><code>ap_lua_init</code></a>: Lua VM 初期化時に <code>Apr.Table</code> メタテーブルを登録する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_init.html&quot;}, '*');"><code>ap_lua_init</code></a> が呼ばれ、Lua VM に <code>Apr.Table</code> メタテーブルが登録されます。ここで <code>__index</code> と <code>__newindex</code> が <code>get</code>/<code>set</code> メソッドにマッピングされます。 2. **アクセス**: Lua スクリプトからテーブル操作が行われると、<a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__lua_table_get.html&quot;}, '*');"><code>lua_table_get</code></a> または <a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L38" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__lua_table_set.html&quot;}, '*');"><code>lua_table_set</code></a> が起動します。 3. **変換**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L22" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_check_apr_table.html&quot;}, '*');"><code>ap_lua_check_apr_table</code></a> を介して Lua のユーザーデータから C の <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_h__req_table_t.html&quot;}, '*');"><code>req_table_t</code></a> 構造体へ変換されます。 4. **実行**: <code>apr_table_get</code> / <code>apr_table_set</code> を呼び出し、必要に応じて改行コードのサニタイズ処理を経て、実際の APR テーブルを操作します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/mod_lua.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.h.html&quot;}, '*');"><code>mod_lua.h</code></a>: モジュール共通のデータ構造およびロギング機能。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.h.html&quot;}, '*');"><code>lua_apr.h</code></a>: 公開インターフェース定義。</li>
+<li><code>lua.h</code> / <code>lualib.h</code> / <code>lauxlib.h</code>: Lua C API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_request.c.html&quot;}, '*');"><code>lua_request.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_h__req_table_t.html&quot;}, '*');"><code>req_table_t</code></a> の具体的な生成や、リクエストに関連するテーブルの管理を行っています。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>mod_lua.c</code></a>: モジュールのメインエントリーポイントであり、<a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_init.html&quot;}, '*');"><code>ap_lua_init</code></a> を呼び出すタイミングを制御します。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**改行コードの扱い**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L38" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__lua_table_set.html&quot;}, '*');"><code>lua_table_set</code></a> 内で <code>notes</code> 以外のテーブルに対して改行コードをスペースに置換するロジックがあります。これは HTTP ヘッダーの整合性を保つための重要な防御的実装です。</li>
+<li>**Lua バージョン互換性**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_apr_c__ap_lua_init.html&quot;}, '*');"><code>ap_lua_init</code></a> 内で <code>LUA_VERSION_NUM</code> を用いて Lua 5.1 と 5.2 以降の API 差異（<code>luaL_register</code> vs <code>luaL_newlib</code>）を吸収しています。</li>
+<li>**メタテーブル**: <code>Apr.Table</code> は Lua 側で <code>__index</code> と <code>__newindex</code> が設定されているため、スクリプトからは通常のテーブルのように <code>t[&quot;key&quot;] = &quot;val&quot;</code> といった構文でアクセス可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_apr_c__ap_lua_check_apr_table.html" target="wiki-view"><code>ap_lua_check_apr_table</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_apr_c__ap_lua_push_apr_table.html" target="wiki-view"><code>ap_lua_push_apr_table</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_apr_c__lua_table_set.html" target="wiki-view"><code>lua_table_set</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_apr_c__lua_table_get.html" target="wiki-view"><code>lua_table_get</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_apr_c__ap_lua_init.html" target="wiki-view"><code>ap_lua_init</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_mplx.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');">modules/http2/h2_mplx.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');"><code>h2_mplx.h</code></a> は、HTTP/2 セッションにおける「ストリーム多重化（Multiplexer）」のコア定義を提供します。クライアントとのメイン接続（c1）と、個々のリクエストを処理するセカンダリ接続（c2）の間で、データ、イベント、および処理リソースを仲介するハブの役割を果たします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> において、<code>h2_session</code> が HTTP/2 プロトコル層を管理するのに対し、<a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> はそのセッション内のリクエスト処理を非同期に管理します。<code>h2_workers</code> と連携し、スレッドプール上で実行されるリクエスト処理と、メイン接続の I/O を橋渡しします。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストのスケジューリング**: 優先度に基づいたストリーム処理の順序付け。</li>
+<li>**接続仲介**: c1（メイン）と c2（ワーカースレッド）間のデータフローの同期と管理。</li>
+<li>**ライフサイクル管理**: ストリームの生成から破棄、およびワーカースレッドの割り当て管理。</li>
+<li>**リソース制限**: 同時実行ストリーム数やメモリ使用量の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>: 多重化器のメイン構造体。ストリームの状態管理、ロック、キュー、ワーカースレッドへの参照を保持。</li>
+<li><code>h2_mplx_c1_*</code>: メイン接続（c1）から呼び出される API。ストリームの開始、ポーリング、シャットダウンを担当。</li>
+<li><code>h2_mplx_c2_*</code>: セカンダリ接続（c2）から呼び出される API。I/O 完了通知やストリーム取得を担当。</li>
+<li><code>h2_mplx_worker_*</code>: ワーカースレッドがリクエストを取得するために使用する API。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **入力**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.c.html#L750" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__h2_mplx_c1_process.html&quot;}, '*');"><code>h2_mplx_c1_process</code></a> により、新しいストリームが処理キューに追加されます。 2.  **実行**: <code>h2_mplx_worker_pop_c2</code> を通じてワーカースレッドがリクエストを取得し、c2 コンテキストで処理を開始します。 3.  **同期**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.c.html#L653" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__h2_mplx_c1_poll.html&quot;}, '*');"><code>h2_mplx_c1_poll</code></a> を使用して、c1 は c2 からの出力データやイベントを監視します。 4.  **終了**: 処理が完了したストリームは、<a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.c.html#L588" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__h2_mplx_c1_stream_cleanup.html&quot;}, '*');"><code>h2_mplx_c1_stream_cleanup</code></a> を経て破棄キュー（<code>spurge</code>）へ移動し、最終的にクリーンアップされます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_queue.h</code>: 内部キュー管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>h2_workers.h</code></a>: ワーカースレッド管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a>: HTTP/2 共通定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>h2_mplx.c</code></a>: 上記 API の実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>h2_stream.h</code></a>: 多重化される個々のストリームの定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2.h.html&quot;}, '*');"><code>h2_c2.h</code></a>: セカンダリ接続の処理詳細。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>h2_bucket_beam.h</code></a>: c1-c2 間のデータ転送（バケットの受け渡し）に使用される機構。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**命名規則**: 関数名のプレフィックス（<code>c1_</code>, <code>c2_</code>, <code>worker_</code>）は、その関数を呼び出すべきコンテキストを厳密に示しています。これらを混同するとデッドロックや競合状態を引き起こすため注意してください。</li>
+<li>**スレッド安全性**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> は内部で <code>apr_thread_mutex_t</code> を使用して保護されています。複雑な状態遷移を伴うため、ロックの取得範囲を最小限に抑える設計になっています。</li>
+<li>**デバッグ**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');"><code>H2_MPLX_MSG</code></a> マクロを使用すると、ログ出力時に <code>child_num</code> と <code>id</code> を含めた一貫性のあるログが生成可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_mplx_h__h2_c2_transit.html" target="wiki-view"><code>h2_c2_transit</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_h__h2_mplx.html" target="wiki-view"><code>h2_mplx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_mplx_h__h2_stream.html" target="wiki-view"><code>h2_stream</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

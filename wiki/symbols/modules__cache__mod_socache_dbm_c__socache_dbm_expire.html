@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__cache__mod_socache_dbm_c__socache_dbm_expire.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html#L443" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_dbm_c__socache_dbm_expire.html&quot;}, '*');">socache_dbm_expire</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/cache/mod_socache_dbm.c:443</code></li>
+</ul>
+<h2>目的</h2>
+<p>DBM ファイル内に保存されたキャッシュエントリを走査し、期限切れ（<code>expiry</code>）時刻を過ぎたエントリを削除してストレージを解放する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void socache_dbm_expire(ap_socache_instance_t *ctx, server_rec *s)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: キャッシュインスタンスのコンテキスト（データファイルパス、プール、期限切れ間隔を保持）。</li>
+<li><code>s</code>: ログ出力に使用するサーバーレコード。</li>
+<li>**出力**: なし（副作用として DBM ファイルからエントリを削除）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>ctx-&gt;last_expiry</code> と <code>ctx-&gt;expiry_interval</code> に基づき、前回の実行から一定時間が経過していない場合は即座に終了する。</li>
+<li>DBM ライブラリの制約を考慮し、スキャンと削除を分離する2パス方式を採用している。</li>
+<li>本関数はスレッドセーフではなく、呼び出し側での排他制御が前提となる。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **インターバルチェック**: 現在時刻が <code>last_expiry + expiry_interval</code> を超えていない場合は処理を中断。 2. **パス1（スキャン）**: DBM ファイルを読み取り専用（または RW）で開き、全キーを走査。値の先頭に格納された <code>apr_time_t</code> を現在時刻と比較し、期限切れのキーをメモリ上の <code>keylist</code> に収集する。 3. **パス2（削除）**: DBM ファイルを再度開き、<code>keylist</code> に格納されたキーを <code>apr_dbm_delete</code> で削除する。 4. **ループ**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html#L495" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_dbm.c.html&quot;}, '*');"><code>KEYMAX</code></a>（1024）を超えるエントリがある場合、全エントリが処理されるまで上記パスを繰り返す。 5. **ログ**: 処理前後のエントリ数と削除数をデバッグログに出力する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_dbm.c.html&quot;}, '*');"><code>modules/cache/mod_socache_dbm.c</code></a> 内の以下の箇所から参照されていることが確認されている:</li>
+<li>73行目（プロトタイプ宣言）</li>
+<li>194行目</li>
+<li>299行目</li>
+<li>322行目</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_dbm_*</code> 系関数（<code>apr_dbm_open</code>, <code>apr_dbm_firstkey</code>, <code>apr_dbm_fetch</code>, <code>apr_dbm_delete</code>, <code>apr_dbm_close</code> 等）</li>
+<li><code>apr_pool_clear</code>, <code>apr_palloc</code>, <code>apr_pmemdup</code>（メモリ管理）</li>
+<li><code>ap_log_error</code>（ログ出力）</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュのメタデータと設定を保持。</li>
+<li><code>apr_dbm_t</code>: DBM ファイルのハンドル。</li>
+<li><code>apr_datum_t</code>: DBM のキーおよび値を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**DBM オープン失敗**: <code>apr_dbm_open</code> または <code>apr_dbm_open2</code> が失敗した場合、エラーログを出力して処理を中断する。</li>
+<li>**メモリ不足**: <code>apr_palloc</code> が失敗した場合、処理を中断する。</li>
+<li>**データ破損**: 値のサイズが <code>sizeof(apr_time_t)</code> 以下の場合、安全のため期限切れとみなして削除する。</li>
+<li>**同時実行**: DBM ライブラリの制約により、スキャン中に他プロセスがファイルを変更した場合の挙動はライブラリの実装に依存する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a> を指定しているモジュールの一部であり、呼び出し側で適切なロックが確保されていることを確認すること。</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html#L495" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_dbm.c.html&quot;}, '*');"><code>KEYMAX</code></a> は 1024 に固定されている。大規模なキャッシュ環境で期限切れエントリが一度に大量発生する場合、この制限によるループ回数の増加がパフォーマンスに影響する可能性がある。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

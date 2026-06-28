@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/pyhttpd/certs.py.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/test/pyhttpd/certs.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/certs.py.html&quot;}, '*');">test/pyhttpd/certs.py</a></h1>
+<h2>概要</h2>
+<p>本モジュールは、HTTPサーバーのテスト環境で使用されるX.509証明書および秘密鍵の生成、管理、およびファイルシステムへの永続化を行うためのユーティリティ群を提供します。<code>cryptography</code> ライブラリをラップし、テスト用のCA（認証局）構築や、サーバー/クライアント証明書の発行を自動化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/pyhttpd</code> サブシステムにおいて、TLS通信テストに必要な暗号資産を供給する基盤層です。他のモジュール（<a class="wiki-source-link" href="../../../source/test/pyhttpd/conf.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/conf.py.html&quot;}, '*');"><code>conf.py</code></a> や <a class="wiki-source-link" href="../../../source/test/pyhttpd/nghttp.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/nghttp.py.html&quot;}, '*');"><code>nghttp.py</code></a> など）がTLS設定を生成する際に、このモジュールが生成した証明書ファイルパスを参照します。</p>
+<h2>責務</h2>
+<ul>
+<li>**証明書仕様の定義**: <code>CertificateSpec</code> による発行対象の属性（ドメイン、有効期限、鍵タイプ等）の管理。</li>
+<li>**暗号資産の生成**: <code>HttpdTestCA</code> を用いたルートCA、サーバー証明書、クライアント証明書の動的生成。</li>
+<li>**永続化と管理**: <code>CertStore</code> による証明書・秘密鍵のファイルシステムへの保存、および名前ベースの検索・ロード。</li>
+<li>**証明書チェーンの構築**: 発行者（Issuer）と被発行者の階層関係の保持。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>証明書仕様と管理</h3>
+<ul>
+<li><code>CertificateSpec</code>: 証明書発行の要件を記述するデータクラス。</li>
+<li><code>Credentials</code>: 証明書（<code>x509.Certificate</code>）と秘密鍵（<code>PrivateKey</code>）を保持するコンテナ。ファイルパス管理とPEM変換機能を持つ。</li>
+<li><code>CertStore</code>: 指定ディレクトリ内の証明書ファイルを管理するリポジトリ。<code>load_credentials</code> による復元や <code>save</code> による永続化を担当。</li>
+</ul>
+<h3>CA操作（ファクトリ）</h3>
+<ul>
+<li><code>HttpdTestCA.create_root</code>: テスト用ルートCAを初期化またはロードする。</li>
+<li><code>HttpdTestCA.create_credentials</code>: <code>CertificateSpec</code> に基づき、適切な種別（CA/Server/Client）の証明書を生成するディスパッチャ。</li>
+<li><code>_private_key</code>: RSAまたは楕円曲線（EC）鍵を生成する内部ヘルパー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>CertStore</code> がディレクトリを確保し、既存の証明書をロード可能にする。 2. **発行要求**: <code>Credentials.issue_cert</code> が <code>CertificateSpec</code> を受け取り、<code>CertStore</code> でキャッシュを確認。 3. **生成**: キャッシュがない場合、<code>HttpdTestCA</code> が <code>_make_csr</code> で証明書署名要求を作成し、<code>_add_xxx_usages</code> で拡張属性（SAN, KeyUsage等）を付与。 4. **署名**: <code>csr.sign</code> により、発行者の秘密鍵で署名を行い、<code>Credentials</code> オブジェクトを生成。 5. **永続化**: <code>CertStore.save</code> がPEM形式でファイルシステムに書き出し、パスを <code>Credentials</code> に記録。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>cryptography</code>: X.509証明書生成、鍵生成、署名処理の全般。</li>
+<li><code>os</code>, <code>re</code>, <code>datetime</code>: ファイル操作、鍵タイプ文字列のパース、有効期限計算。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/test/pyhttpd/conf.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/conf.py.html&quot;}, '*');"><code>test/pyhttpd/conf.py</code></a>: 本モジュールで生成された証明書パスをHTTPサーバー設定に組み込む。</li>
+<li><a class="wiki-source-link" href="../../../source/test/pyhttpd/nghttp.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/pyhttpd/nghttp.py.html&quot;}, '*');"><code>test/pyhttpd/nghttp.py</code></a>: TLS通信テストの実行時に、本モジュールで作成した証明書を使用する。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリと寿命**: <code>Credentials</code> オブジェクトは <code>CertStore</code> への参照を保持し、証明書生成時にメモリ上に鍵を保持します。テスト終了時にファイルシステム上のディレクトリを削除する設計を推奨します。</li>
+<li>**制約**: <code>_private_key</code> は RSA 65537 指数固定、ECは <code>SECP256R1</code> 等の主要な曲線に限定されています。</li>
+<li>**エラーパス**: <code>load_credentials</code> はファイルが存在しない場合に <code>None</code> を返します。呼び出し側で適切にハンドリングする必要があります。</li>
+<li>**省略された詳細**: 署名アルゴリズムは <code>SHA256</code> に固定されており、カスタマイズ性は意図的に排除されています。また、証明書の失効（CRL）機能は実装されていません。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

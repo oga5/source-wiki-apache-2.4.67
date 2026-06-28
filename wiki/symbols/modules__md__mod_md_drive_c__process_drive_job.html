@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__md__mod_md_drive_c__process_drive_job.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/md/mod_md_drive.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__process_drive_job.html&quot;}, '*');">process_drive_job</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/md/mod_md_drive.c:72</code></li>
+</ul>
+<h2>目的</h2>
+<p>特定のマネージドドメイン（MD）に対する証明書更新ジョブの判定および実行を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void process_drive_job(md_renew_ctx_t *dctx, md_job_t *job, apr_pool_t *ptemp)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>dctx</code>: 更新プロセスのコンテキスト（設定やレジストリ情報を含む）。</li>
+<li><code>job</code>: 実行対象のジョブ状態。</li>
+<li><code>ptemp</code>: 一時的なメモリ割り当て用プール。</li>
+<li>**出力**: なし（副作用としてジョブ状態の更新、証明書の更新処理、ログ出力を行う）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>job</code> は <code>md_job_load(job)</code> によりロード済みであること。</li>
+<li><code>dctx</code> および <code>job</code> が指すデータ構造は有効であること。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_core.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_core_c__md_get_by_name.html&quot;}, '*');"><code>md_get_by_name</code></a> により取得される <a class="wiki-source-link" href="../../source/modules/md/mod_md.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>md</code></a> は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L2342" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_DEBUG_ASSERT</code></a> により存在が保証される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **実行判定**: 現在時刻が <code>job-&gt;next_run</code> を過ぎていない場合、処理を中断する。 2. **状態確認**: ジョブが完了済みかつ通知済みであれば終了する。 3. **更新判定**: <code>md_will_renew_cert(md)</code> を呼び出し、期限切れ、OCSP 破棄、または ARI（ACME Renewal Information）に基づく更新の必要性を評価する。 4. **イベント処理**: <a class="wiki-source-link" href="../../source/modules/md/md_event.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_event_c__md_event_raise.html&quot;}, '*');"><code>md_event_raise</code></a> を呼び出し、外部ハンドラによる更新の拒否がないか確認する。 5. **更新実行**: <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L1202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew.html&quot;}, '*');"><code>md_reg_renew</code></a> を実行し、成功した場合は <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L695" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_notify.html&quot;}, '*');"><code>md_job_notify</code></a> で通知を行う。失敗した場合はエラーログを記録し、イベントハンドラへ通知する。 6. **期限警告**: 更新不要な場合でも、期限が迫っていれば <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L695" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_notify.html&quot;}, '*');"><code>md_job_notify</code></a> で警告を行う。 7. **永続化**: ジョブの状態が変更（dirty）されている場合、<a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_save.html&quot;}, '*');"><code>md_job_save</code></a> を呼び出し結果を保存する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/md/mod_md_drive.c:284</code>（<code>run_watchdog</code> 内のループから呼び出される）。</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L412" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_load.html&quot;}, '*');"><code>md_job_load</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_core.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_core_c__md_get_by_name.html&quot;}, '*');"><code>md_get_by_name</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_result.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_md_make.html&quot;}, '*');"><code>md_result_md_make</code></a>, <a class="wiki-source-link" href="../../source/modules/md/mod_md_drive.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_drive_c__md_will_renew_cert.html&quot;}, '*');"><code>md_will_renew_cert</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L686" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew_at.html&quot;}, '*');"><code>md_reg_renew_at</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L1417" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_has_revoked_certs.html&quot;}, '*');"><code>md_reg_has_revoked_certs</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L1245" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_ari_renew_at.html&quot;}, '*');"><code>md_reg_ari_renew_at</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_event.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_event_c__md_event_raise.html&quot;}, '*');"><code>md_event_raise</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L625" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_start_run.html&quot;}, '*');"><code>md_job_start_run</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L1202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew.html&quot;}, '*');"><code>md_reg_renew</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L672" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_end_run.html&quot;}, '*');"><code>md_job_end_run</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L689" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_retry_at.html&quot;}, '*');"><code>md_job_retry_at</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L425" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_save.html&quot;}, '*');"><code>md_job_save</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L695" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_notify.html&quot;}, '*');"><code>md_job_notify</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_status.c.html#L437" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_c__md_job_log_append.html&quot;}, '*');"><code>md_job_log_append</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_event.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_event_c__md_event_holler.html&quot;}, '*');"><code>md_event_holler</code></a>, <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L734" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_should_warn.html&quot;}, '*');"><code>md_reg_should_warn</code></a>。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>md_renew_ctx_t</code>: 更新プロセスの全体状態。</li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_status.h.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_status_h__md_job_t.html&quot;}, '*');"><code>md_job_t</code></a>: 個別ジョブの実行状態と履歴。</li>
+<li><code>md_t</code>: 管理対象ドメインの定義。</li>
+<li><code>md_result_t</code>: 処理結果およびエラー詳細。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**設定欠落**: <code>md-&gt;state == MD_S_MISSING_INFORMATION</code> の場合、致命的エラーとしてジョブを停止する。</li>
+<li>**更新拒否**: イベントハンドラが <code>APR_SUCCESS</code> 以外を返した場合、更新をスキップする。</li>
+<li>**ARI 判定**: CA からの推奨更新タイミング（ARI）が将来の日付である場合、<code>job-&gt;next_run</code> を更新して処理を終了する。</li>
+<li>**更新失敗**: <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L1202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew.html&quot;}, '*');"><code>md_reg_renew</code></a> が失敗した場合、エラー詳細をログに記録し、再試行のための状態を保持する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>mod_watchdog</code> のコンテキストで実行されるため、スレッドセーフな操作が求められる。</li>
+<li><code>STAGING</code> 領域への書き込みは <a class="wiki-source-link" href="../../source/modules/md/md_reg.c.html#L1202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_reg_c__md_reg_renew.html&quot;}, '*');"><code>md_reg_renew</code></a> 内で行われるため、本関数は更新のライフサイクル管理に集中している。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

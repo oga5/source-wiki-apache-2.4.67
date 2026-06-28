@@ -1,0 +1,95 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/listen.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/listen.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');">server/listen.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるネットワークリスナーの管理、ソケットのバインド、および設定を行うモジュールです。サーバー起動時のソケット作成から、設定ファイルで指定された <code>Listen</code> ディレクティブの処理、マルチコア環境でのリスナーバケットの複製までを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールのサブコンポーネントとして、MPM（Multi-Processing Module）が接続を受け入れるための「入り口」を準備します。<code>http_main.c</code> や各 MPM から呼び出され、OS レベルのソケット状態と Apache の内部的なリスナー構造体 (<code>ap_listen_rec</code>) を同期させます。</p>
+<h2>責務</h2>
+<ul>
+<li>**リスナー管理**: <code>Listen</code> ディレクティブによるリスナーの登録と、サーバー再起動時の古いリスナーのクリーンアップ。</li>
+<li>**ソケット設定**: <code>SO_REUSEADDR</code>, <code>SO_KEEPALIVE</code>, <code>TCP_NODELAY</code>, <code>SO_SNDBUF</code>, <code>SO_RCVBUF</code> などのソケットオプションの適用。</li>
+<li>**マルチコア最適化**: <code>SO_REUSEPORT</code> を利用したリスナーバケットの複製による負荷分散。</li>
+<li>**システム統合**: <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');"><code>systemd</code></a> ソケットアクティベーションのサポート。</li>
+<li>**フィルタ適用**: <code>AcceptFilter</code> の設定と適用。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リスナー管理</h3>
+<ul>
+<li><code>ap_listeners</code>: 現在アクティブなリスナーの連結リスト。</li>
+<li><code>ap_listen_rec</code>: リスナー情報を保持する構造体。ソケット、バインド先アドレス、プロトコル、次へのポインタを含む。</li>
+<li><code>ap_setup_listeners()</code>: 設定に基づき全リスナーを初期化・バインドするメイン関数。</li>
+<li><code>ap_duplicate_listeners()</code>: マルチコア環境用にリスナーを複製する。</li>
+</ul>
+<h3>設定・状態変数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L59" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>ap_listenbacklog</code></a>, <a class="wiki-source-link" href="../../source/server/listen.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>ap_listencbratio</code></a>: 接続待ち行列やコア比率の設定値。</li>
+<li><a class="wiki-source-link" href="../../source/server/listen.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/listen.c.html&quot;}, '*');"><code>ap_have_so_reuseport</code></a>: プラットフォームが <code>SO_REUSEPORT</code> をサポートしているかのフラグ。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><code>make_sock()</code>: ソケットの作成、オプション設定、バインド、リスンを行う低レベル関数。</li>
+<li><code>alloc_listener()</code>: 設定ファイルからリスナーを解析・生成する。</li>
+<li><code>ap_apply_accept_filter()</code>: OS 固有のアクセプトフィルタ（<code>defer_accept</code> 等）を適用する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <code>ap_set_listener()</code> が設定ファイルを読み込み、<code>alloc_listener()</code> を通じて <code>ap_listeners</code> リストを構築します。 2. **初期化フェーズ**: <code>ap_setup_listeners()</code> が呼ばれ、<code>open_listeners()</code> が各リスナーに対して <code>make_sock()</code> を実行します。 3. **複製フェーズ**: <code>ap_duplicate_listeners()</code> が呼ばれると、<code>ap_listen_buckets</code> にリスナーのコピーが作成され、マルチプロセス/スレッド間での負荷分散が準備されます。 4. **終了フェーズ**: <code>ap_close_listeners()</code> がプロセス終了時や再起動時にソケットをクローズします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_network_io.h</code>: APR ネットワーク抽象化層。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a>: リスナー構造体の定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: 設定コマンド処理用。</li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>: MPM 共通ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>stdlib.h</code></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: <code>AcceptFilter</code> の定義やコア設定の保持。</li>
+<li><a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');"><code>server/main.c</code></a>: サーバーのライフサイクル管理。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>include/ap_listen.h</code></a>: <code>ap_listen_rec</code> 構造体の詳細定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: リスナー構造体は <code>process-&gt;pool</code> に割り当てられ、サーバーのライフサイクル全体で生存します。</li>
+<li>**不変条件**: <code>ap_listeners</code> は常に <code>Listen</code> ディレクティブの順序を維持しようとしますが、IPv6/IPv4 のバインド順序調整のためにリストの並び替えが行われることがあります。</li>
+<li>**エッジケース**: <code>SO_REUSEPORT</code> の挙動は Linux と BSD で異なるため、コード内でプラットフォーム判定を行っています。</li>
+<li>**省略箇所**: <a class="wiki-source-link" href="../../source/modules/arch/unix/mod_systemd.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_systemd.c.html&quot;}, '*');"><code>systemd</code></a> 関連のコードは <code>HAVE_SYSTEMD</code> マクロで囲まれており、環境依存のロジックが多いため、詳細なシステムコールフローは省略しています。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../source/server/listen.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__listen_c__make_sock.html&quot;}, '*');"><code>make_sock</code></a> は APR 抽象化が不十分な箇所があり、OS 固有のソケットオプション設定が直接記述されている箇所があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__listen_c__make_sock.html" target="wiki-view"><code>make_sock</code></a></li>
+<li><a href="../symbols/server__listen_c__find_accf_name.html" target="wiki-view"><code>find_accf_name</code></a></li>
+<li><a href="../symbols/server__listen_c__ap_apply_accept_filter.html" target="wiki-view"><code>ap_apply_accept_filter</code></a></li>
+<li><a href="../symbols/server__listen_c__close_listeners_on_exec.html" target="wiki-view"><code>close_listeners_on_exec</code></a></li>
+<li><a href="../symbols/server__listen_c__alloc_systemd_listener.html" target="wiki-view"><code>alloc_systemd_listener</code></a></li>
+<li><a href="../symbols/server__listen_c__set_systemd_listener.html" target="wiki-view"><code>set_systemd_listener</code></a></li>
+<li><a href="../symbols/server__listen_c__match_address.html" target="wiki-view"><code>match_address</code></a></li>
+<li><a href="../symbols/server__listen_c__find_listeners.html" target="wiki-view"><code>find_listeners</code></a></li>
+<li><a href="../symbols/server__listen_c__alloc_listener.html" target="wiki-view"><code>alloc_listener</code></a></li>
+<li><a href="../symbols/server__listen_c__open_listeners.html" target="wiki-view"><code>open_listeners</code></a></li>
+<li><a href="../symbols/server__listen_c__ap_setup_listeners.html" target="wiki-view"><code>ap_setup_listeners</code></a></li>
+<li><a href="../symbols/server__listen_c__ap_duplicate_listeners.html" target="wiki-view"><code>ap_duplicate_listeners</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

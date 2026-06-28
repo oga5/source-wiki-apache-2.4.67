@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_bucket_beam_c__wait_not_empty.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L195" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__wait_not_empty.html&quot;}, '*');">wait_not_empty</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_bucket_beam.c:195</code></li>
+</ul>
+<h2>目的</h2>
+<p><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> 内のバッファが空である場合に、データが到着するか、ビームが終了状態になるまでスレッドを待機させる。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t wait_not_empty(h2_bucket_beam *beam, conn_rec *c, apr_read_type_e block)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>beam</code>: 対象の <a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> 構造体。</li>
+<li><code>c</code>: 接続コンテキスト <code>conn_rec</code>。</li>
+<li><code>block</code>: 読み取りモード（<code>APR_BLOCK_READ</code> か否か）。</li>
+<li>**出力**:</li>
+<li><code>APR_SUCCESS</code>: バッファにデータが存在する状態。</li>
+<li><code>APR_ECONNABORTED</code>: ビームが異常終了（<code>aborted</code>）している場合。</li>
+<li><code>APR_EOF</code>: ビームが正常終了（<code>closed</code>）している場合。</li>
+<li><code>APR_EAGAIN</code>: 非ブロッキング読み取りでデータが空の場合。</li>
+<li>その他: <code>apr_thread_cond_timedwait</code> または <code>apr_thread_cond_wait</code> の戻り値。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>呼び出し側は、<code>beam-&gt;lock</code> ミューテックスを保持している必要がある。</li>
+<li><code>beam</code> は初期化済みであること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>buffer_is_empty(beam)</code> が真である間、ループを継続する。 2. ビームの状態を確認し、<code>aborted</code> なら <code>APR_ECONNABORTED</code>、<code>closed</code> なら <code>APR_EOF</code> を返す。 3. <code>block</code> が <code>APR_BLOCK_READ</code> でない場合、<code>APR_EAGAIN</code> を返す。 4. ブロッキング読み取りの場合:</p>
+<ul>
+<li><code>beam-&gt;timeout &gt; 0</code> ならば <code>apr_thread_cond_timedwait</code> で待機。</li>
+<li>それ以外は <code>apr_thread_cond_wait</code> で無期限待機。</li>
+<p>5. 待機解除後、再度ループ条件を評価する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_bucket_beam.c:742</code>（<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_receive.html&quot;}, '*');"><code>h2_beam_receive</code></a> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L190" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__buffer_is_empty.html&quot;}, '*');"><code>buffer_is_empty</code></a></li>
+<li><code>apr_thread_cond_timedwait</code> / <code>apr_thread_cond_wait</code></li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>H2_BEAM_LOG</code></a> (マクロ)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>: 同期対象のバケット転送構造体。</li>
+<li><code>conn_rec</code>: Apache HTTP Server の接続コンテキスト。</li>
+<li><code>apr_read_type_e</code>: ブロッキング動作を決定する列挙型。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**タイムアウト**: <code>beam-&gt;timeout</code> が設定されている場合、待機時間が経過すると <code>apr_thread_cond_timedwait</code> の戻り値が <code>rv</code> に格納され、ループを抜ける可能性がある。</li>
+<li>**異常終了**: <code>beam-&gt;aborted</code> が設定されると、データ有無に関わらず即座に <code>APR_ECONNABORTED</code> を返す。</li>
+<li>**正常終了**: <code>beam-&gt;closed</code> が設定されると、バッファが空であれば <code>APR_EOF</code> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>beam-&gt;lock</code> を保持した状態で実行される前提であるため、デッドロックを避けるため呼び出し元でのロック管理に注意すること。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>H2_BEAM_LOG</code></a> マクロによるトレース出力が含まれており、デバッグ時には <a class="wiki-source-link" href="../../source/include/http_log.h.html#L52" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_TRACE2</code></a> レベルを確認すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

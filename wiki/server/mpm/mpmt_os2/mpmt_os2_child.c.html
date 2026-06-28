@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm/mpmt_os2/mpmt_os2_child.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');">server/mpm/mpmt_os2/mpmt_os2_child.c</a></h1>
+<h2>概要</h2>
+<p>OS/2 プラットフォームにおける Apache HTTP Server のマルチプロセス・マルチスレッド MPM（MPMT_OS2）の子プロセス実行環境を定義します。本ファイルは、子プロセスのライフサイクル管理、OS/2 ネイティブのキューを用いたスレッド間通信、および接続の受け入れループを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>mpmt_os2.c</code></a> が親プロセスの制御を行うのに対し、本ファイルは子プロセス生成後の実行コンテキストを完全に制御します。OS/2 特有の API（<code>Dos*</code> 系）を駆使し、プロセス内のスレッドプール管理とリクエスト処理のディスパッチを行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス初期化**: スコアボードへの接続、シグナルハンドラの登録、OS/2 キューの作成。</li>
+<li>**接続管理**: <code>apr_pollset</code> を用いたリスニングソケットの監視と、受け入れた接続のキューイング。</li>
+<li>**スレッドプール管理**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L416" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.html&quot;}, '*');"><code>server_maintenance</code></a> による動的なスレッド生成・破棄（<a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__add_worker.html&quot;}, '*');"><code>add_worker</code></a>）。</li>
+<li>**例外処理**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L311" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__thread_exception_handler.html&quot;}, '*');"><code>thread_exception_handler</code></a> によるワーカー内のクラッシュ捕捉とプロセス全体の健全性維持。</li>
+<li>**終了処理**: グレースフルシャットダウンおよび強制終了の制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロセス・スレッド管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L93" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__ap_mpm_child_main.html&quot;}, '*');"><code>ap_mpm_child_main</code></a>: 子プロセスのメインエントリポイント。</li>
+<li><code>worker_main</code>: 各ワーカーの実行ループ。接続を受け取り、<a class="wiki-source-link" href="../../../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> を呼び出す。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L416" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.html&quot;}, '*');"><code>server_maintenance</code></a>: アイドル状態を監視し、スレッド数を調整する管理スレッド。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__add_worker.html&quot;}, '*');"><code>add_worker</code></a>: 新規ワーカーを生成し、スコアボードを更新する。</li>
+</ul>
+<h3>OS/2 固有の同期・通信</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>shutdown_event</code></a>: 子プロセス終了時に全スレッドへ通知するためのイベントセマフォ。</li>
+<li><code>workq</code>: <code>DosCreateQueue</code> で作成される FIFO キュー。接続情報（<a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>WORKTYPE_CONN</code></a>）や終了命令（<a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>WORKTYPE_EXIT</code></a>）を伝達する。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L311" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__thread_exception_handler.html&quot;}, '*');"><code>thread_exception_handler</code></a>: OS/2 の例外登録レコード。ワーカーのクラッシュ時にプロセスを安全に終了させる。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L93" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__ap_mpm_child_main.html&quot;}, '*');"><code>ap_mpm_child_main</code></a> が起動し、共有メモリからスコアボードをマップし、OS/2 キューを作成します。 2. **接続受け入れ**: メインループで <code>apr_pollset</code> を使用して接続を待機。接続が発生すると <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a> を作成し、<code>DosWriteQueue</code> でキューに投入します。 3. **ワーカー処理**: <code>worker_main</code> が <code>DosReadQueue</code> で接続を取り出し、<code>ap_run_create_connection</code> を経由してリクエストを処理します。 4. **保守**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L416" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.html&quot;}, '*');"><code>server_maintenance</code></a> が定期的にアイドルスレッド数を確認し、不足していれば <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__add_worker.html&quot;}, '*');"><code>add_worker</code></a> を呼び出し、過剰であれば終了命令をキューに送ります。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>os2.h</code>: OS/2 ネイティブ API（<code>Dos*</code> 系）へのアクセス。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: プロセス間での状態共有。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>: MPM 共通のユーティリティ関数。</li>
+<li><code>apr_poll.h</code>: 非ブロッキング I/O のためのポーリング機能。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>mpm_default.h</code></li>
+<li><code>process.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>mpmt_os2.c</code></a>: 親プロセスによる子プロセスの生成と監視ロジック。</li>
+<li><code>mpm_default.h</code>: MPM 固有の定数定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> プールが子プロセスの生存期間を管理します。各接続は <code>pconn</code> プールで個別に管理され、処理終了後に破棄されます。</li>
+<li>**例外安全性**: OS/2 の <code>DosSetExceptionHandler</code> を使用してワーカーのクラッシュを捕捉していますが、重大なエラー時はプロセス全体を終了させる設計です。</li>
+<li>**制約**: <code>HARD_THREAD_LIMIT</code>（デフォルト 256）がスレッド数の上限です。OS/2 のキューはプロセスローカルな通信として使用されており、外部プロセスからは直接参照できません。</li>
+<li>**省略箇所**: 本ファイルは OS/2 特有の API に強く依存しており、POSIX 互換層の詳細は省略されています。また、<code>Dos*</code> API の詳細なエラーコード定義は OS/2 のシステムドキュメントを参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html" target="wiki-view"><code>worker_args_t</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__clean_child_exit.html" target="wiki-view"><code>clean_child_exit</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__ap_mpm_child_main.html" target="wiki-view"><code>ap_mpm_child_main</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__add_worker.html" target="wiki-view"><code>add_worker</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__thread_exception_handler.html" target="wiki-view"><code>thread_exception_handler</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_main.html" target="wiki-view"><code>worker_main</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.html" target="wiki-view"><code>server_maintenance</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__sig_term.html" target="wiki-view"><code>sig_term</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__sig_hup.html" target="wiki-view"><code>sig_hup</code></a></li>
+<li><a href="../../../symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__set_signals.html" target="wiki-view"><code>set_signals</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

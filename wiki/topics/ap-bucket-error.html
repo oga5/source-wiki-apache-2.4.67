@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/ap-bucket-error.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L1043" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_bucket_error.html&quot;}, '*');">ap_bucket_error</a></h1>
+<h2>概念</h2>
+<p><a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L1043" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_bucket_error.html&quot;}, '*');"><code>ap_bucket_error</code></a> は、Apache HTTP Serverのフィルタスタック（フィルタチェーン）内において、エラー状態（HTTPステータスコードやエラーメッセージなど）を伝播させるための特殊なメタデータバケット型です。</p>
+<h2>なぜ重要か</h2>
+<p>フィルタ処理中に問題が発生した際、このバケットを <code>apr_bucket_brigade</code> に挿入することで、後続の通常のフィルタ処理をバイパス（スキップ）し、最終的に適切なエラーレスポンスを生成する処理へエラー情報を安全かつ確実に伝達することができます。これにより、エラー発生時の適切なハンドリングとクライアントへのエラーレスポンス返却が可能になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/include__http_protocol_h__ap_bucket_error.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_bucket_error.html&quot;, &quot;source&quot;: &quot;source/include/http_protocol.h.html#L1043&quot;}, '*');"><code>symbol:include/http_protocol.h#ap_bucket_error</code></a> (構造体): エラー情報を保持するバケットのデータ構造（前方宣言）。</li>
+<li><a class="wiki-entity-link" href="../symbols/server__error_bucket_c__ap_bucket_error_create.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__error_bucket_c__ap_bucket_error_create.html&quot;, &quot;source&quot;: &quot;source/server/error_bucket.c.html#L55&quot;}, '*');"><code>symbol:server/error_bucket.c#ap_bucket_error_create</code></a> (関数): HTTPステータスコードとエラーメッセージを保持する新しいエラーバケットを生成・初期化するAPI。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **エラーの発生とバケット生成**: フィルタ処理中（例: <code>mod_ext_filter</code> や <code>http_filters</code> など）にエラーが発生すると、<a class="wiki-source-link" href="../../source/server/error_bucket.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__error_bucket_c__ap_bucket_error_create.html&quot;}, '*');"><code>ap_bucket_error_create</code></a> が呼び出されます。 2. **初期化と検証**: <a class="wiki-source-link" href="../../source/server/error_bucket.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__error_bucket_c__ap_bucket_error_create.html&quot;}, '*');"><code>ap_bucket_error_create</code></a> 内部で、指定されたHTTPステータスコードの妥当性が <a class="wiki-source-link" href="../../source/include/httpd.h.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_is_HTTP_VALID_RESPONSE</code></a> により検証されます。不正なコードの場合は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> (500) に自動修正され、<a class="wiki-source-link" href="../../source/server/error_bucket.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__error_bucket_c__ap_bucket_error_make.html&quot;}, '*');"><code>ap_bucket_error_make</code></a> を通じてバケットにエラー情報が格納されます。 3. **ブリゲードへの挿入と伝播**: 生成されたエラーバケットは <code>apr_bucket_brigade</code> に挿入され、フィルタチェーンを流れます。 4. **バイパスとレスポンス生成**: 後続のフィルタは、このエラーバケットを検知すると通常の処理をスキップし、最終的に <code>request_rec</code> などの関連データ構造と連携してクライアントへエラーレスポンスを返却します。</p>
+<p>*注意: フィルタチェーンの各フィルタが具体的にどのようにこのバケットを検知してバイパスを行うか、および最終的なエラーレスポンス生成処理の完全なエンドツーエンドの内部フローの詳細は、提供されたソース情報からは完全には明らかになっていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**有効なHTTPステータスコードの保証**: バケットに格納されるステータスコードは、常に有効なHTTPレスポンスコードでなければなりません。無効なコードが渡された場合は、内部的に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> に置換されます。</li>
+<li>**アロケータの要件**: バケット生成時に渡される <code>list</code> 引数は、有効な <code>apr_bucket_alloc_t</code> である必要があります。</li>
+<li>**コピー・分割の非サポート**: エラーバケットはメタデータバケットであり、コピーや分割（split）操作はサポートされていません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**不適切なフィルタハンドリング**: フィルタスタック内でこのエラーバケットが適切に認識・処理されない場合、エラー状態が正しく伝播されず、クライアントへ適切なエラーレスポンスが返されない可能性があります。</li>
+<li>**コピーや分割の試み**: 本バケットはコピーや分割がサポートされていないため、フィルタチェーン内でこれらの操作を行おうとすると予期しない動作を引き起こす原因になります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>include/http_protocol.h</code></a>: <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L1043" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_bucket_error.html&quot;}, '*');"><code>ap_bucket_error</code></a> の定義と前方宣言。</li>
+<li><a class="wiki-source-link" href="../../source/server/error_bucket.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/error_bucket.c.html&quot;}, '*');"><code>server/error_bucket.c</code></a>: <a class="wiki-source-link" href="../../source/server/error_bucket.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__error_bucket_c__ap_bucket_error_create.html&quot;}, '*');"><code>ap_bucket_error_create</code></a> の具体的な実装ロジックおよび <a class="wiki-source-link" href="../../source/server/error_bucket.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__error_bucket_c__ap_bucket_error_make.html&quot;}, '*');"><code>ap_bucket_error_make</code></a> などの関連処理。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

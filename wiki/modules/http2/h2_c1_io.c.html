@@ -1,0 +1,104 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_c1_io.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.c.html&quot;}, '*');">modules/http2/h2_c1_io.c</a></h1>
+<h2>概要</h2>
+<p>HTTP/2 セッションにおけるクライアント接続（C1）の入出力処理を担うモジュールです。Apache HTTP Server のフィルタチェーンと <code>nghttp2</code> ライブラリの間で、バッファリング、TLS 最適化、およびデータ転送の仲介を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>h2_session</code> の下位レイヤーとして機能し、接続ごとの入出力バッファ（<a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.h.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_h__h2_c1_io.html&quot;}, '*');"><code>h2_c1_io</code></a>）を管理します。特に TLS 接続時のパケットサイズ最適化や、効率的なデータ転送のためのスクラッチバッファリングを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**出力バッファリング**: TLS 接続時に MTU を考慮したチャンクサイズ（<a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.c.html&quot;}, '*');"><code>WRITE_SIZE_INITIAL</code></a> / <code>MAX</code>）でデータをまとめ、効率的な TLS レコード生成を支援する。</li>
+<li>**入力フィード**: <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を通じてクライアントからのデータを読み込み、<code>nghttp2_session_mem_recv</code> へ渡す。</li>
+<li>**フィルタ管理**: <code>apr_bucket_brigade</code> を使用して、接続フィルタチェーンへのデータ投入とフラッシュ制御を行う。</li>
+<li>**デバッグ支援**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L135" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.c.html&quot;}, '*');"><code>C1_IO_BB_LOG</code></a> マクロによる、バケットブリゲードの状態可視化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル・初期化</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_init.html&quot;}, '*');"><code>h2_c1_io_init</code></a>: セッションに関連付けられた IO 構造体の初期化。TLS の有無やウォームアップ設定を適用する。</li>
+</ul>
+<h3>データ操作・転送</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L361" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_add_data.html&quot;}, '*');"><code>h2_c1_io_add_data</code></a>: 生データをバッファに追加。バッファリングが有効な場合はスクラッチ領域へコピー。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_append.html&quot;}, '*');"><code>h2_c1_io_append</code></a>: <code>apr_bucket_brigade</code> を受け取り、メタデータや非バッファ対象バケットを適切に処理して出力キューへ追加。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L339" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_pass.html&quot;}, '*');"><code>h2_c1_io_pass</code></a>: バッファリングされたデータを接続フィルタへ書き出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L349" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_assure_flushed.html&quot;}, '*');"><code>h2_c1_io_assure_flushed</code></a>: 保留中のデータがある場合に強制フラッシュを行う。</li>
+</ul>
+<h3>入力処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L518" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_read.html&quot;}, '*');"><code>h2_c1_read</code></a>: クライアントからの入力を読み込み、<code>nghttp2</code> セッションへフィードするメインループ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **出力フロー**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_append.html&quot;}, '*');"><code>h2_c1_io_append</code></a> がブリゲードを受け取り、<a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L192" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__assure_scratch_space.html&quot;}, '*');"><code>assure_scratch_space</code></a> を経由してスクラッチバッファにデータを集約。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L260" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__pass_output.html&quot;}, '*');"><code>pass_output</code></a> が <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を呼び出し、フィルタチェーンへデータを流す。</li>
+<li>転送量に応じて <code>write_size</code> を動的に調整し、TLS のウォームアップ/クールダウンを制御する。</li>
+<p>2. **入力フロー**:</p>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L518" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_read.html&quot;}, '*');"><code>h2_c1_read</code></a> が <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L494" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__read_and_feed.html&quot;}, '*');"><code>read_and_feed</code></a> を呼び出し、<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> でデータを取得。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__c1_in_feed_brigade.html&quot;}, '*');"><code>c1_in_feed_brigade</code></a> がブリゲード内の各バケットを <code>nghttp2_session_mem_recv</code> に渡してプロトコル解析を進行させる。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_bucket_brigade</code>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L476" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>apr_bucket</code></a>: Apache のデータ転送単位。</li>
+<li><code>nghttp2</code>: HTTP/2 プロトコル処理ライブラリ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache 接続フィルタチェーンとのインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.h.html&quot;}, '*');"><code>h2_session.h</code></a>: セッション状態管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_strings.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_eos.h.html&quot;}, '*');"><code>h2_bucket_eos.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.h.html&quot;}, '*');"><code>h2_c1.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.h.html&quot;}, '*');"><code>h2_c1_io.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_config.h.html&quot;}, '*');"><code>h2_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.h.html&quot;}, '*');"><code>h2_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>h2_session.c</code></a>: 本モジュールの呼び出し元であり、セッションイベントのディスパッチを行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.h.html&quot;}, '*');"><code>h2_c1.h</code></a>: C1 接続の定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util.h</code></a>: ブリゲード操作のユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.h.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_h__h2_c1_io.html&quot;}, '*');"><code>h2_c1_io</code></a> が管理する <code>output</code> ブリゲードは、<code>h2_session</code> のライフサイクルに依存します。スクラッチバッファは <code>apr_bucket_alloc</code> を使用し、<a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__append_scratch.html&quot;}, '*');"><code>append_scratch</code></a> 時にヒープバケットとしてブリゲードへ所有権が移転します。</li>
+<li>**再帰呼び出しの防止**: <code>is_passing</code> フラグにより、<a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L260" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__pass_output.html&quot;}, '*');"><code>pass_output</code></a> 内での再帰的な呼び出しを検知し、エラーを返します。</li>
+<li>**TLS 最適化**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.c.html&quot;}, '*');"><code>WRITE_SIZE_INITIAL</code></a> (1300バイト) から開始し、<code>warmup_size</code> を超えると <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1_io.c.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.c.html&quot;}, '*');"><code>WRITE_SIZE_MAX</code></a> (16KB) に拡大するロジックが含まれています。</li>
+<li>**省略された詳細**: <code>nghttp2</code> の内部的なストリーム状態遷移については本ファイルでは扱わず、<a class="wiki-source-link" href="../../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>h2_session.c</code></a> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_bb_log.html" target="wiki-view"><code>h2_c1_io_bb_log</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_init.html" target="wiki-view"><code>h2_c1_io_init</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__append_scratch.html" target="wiki-view"><code>append_scratch</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__assure_scratch_space.html" target="wiki-view"><code>assure_scratch_space</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__read_to_scratch.html" target="wiki-view"><code>read_to_scratch</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__pass_output.html" target="wiki-view"><code>pass_output</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_needs_flush.html" target="wiki-view"><code>h2_c1_io_needs_flush</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_pending.html" target="wiki-view"><code>h2_c1_io_pending</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_pass.html" target="wiki-view"><code>h2_c1_io_pass</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_assure_flushed.html" target="wiki-view"><code>h2_c1_io_assure_flushed</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_add_data.html" target="wiki-view"><code>h2_c1_io_add_data</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_c1_io_c__h2_c1_io_append.html" target="wiki-view"><code>h2_c1_io_append</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_switch.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_switch.c.html&quot;}, '*');">modules/http2/h2_switch.c</a></h1>
+<h2>概要</h2>
+<p>HTTP/1.1 から HTTP/2 へのプロトコル切り替え（アップグレードおよび ALPN ネゴシエーション）を管理する Apache HTTP Server モジュールのエントリーポイントです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> の中核となる接続制御層です。Apache の <code>protocol</code> フックを実装し、HTTP/1.1 接続を HTTP/2 セッションへ昇格させるための判断と初期化を担当します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル提案**: ALPN や Upgrade ヘッダーに基づき、HTTP/2 が利用可能かを判定し、サーバーがサポートするプロトコルを提案する。</li>
+<li>**プロトコル切り替え**: 選択されたプロトコルに基づき、既存の HTTP/1.1 フィルターを解除し、HTTP/2 接続コンテキストを生成・起動する。</li>
+<li>**状態管理**: 現在の接続が HTTP/2 であるかを問い合わせるインターフェースの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html#L52" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__h2_protocol_propose.html&quot;}, '*');"><code>h2_protocol_propose</code></a>: サーバーがサポートするプロトコルを提案するフック関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html#L154" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__h2_protocol_switch.html&quot;}, '*');"><code>h2_protocol_switch</code></a>: 実際にプロトコルを切り替え、<code>h2_c1</code>（接続制御）を起動するフック関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html#L228" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__h2_switch_register_hooks.html&quot;}, '*');"><code>h2_switch_register_hooks</code></a>: Apache のフックシステムに上記関数を登録する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **提案フェーズ**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html#L52" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__h2_protocol_propose.html&quot;}, '*');"><code>h2_protocol_propose</code></a> が呼ばれ、SSL/TLS の有無や <code>HTTP2-Settings</code> ヘッダーの存在を確認し、条件を満たせば HTTP/2 を提案リストに追加する。 2. **切り替えフェーズ**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html#L154" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__h2_protocol_switch.html&quot;}, '*');"><code>h2_protocol_switch</code></a> が呼び出されると、接続コンテキスト (<code>h2_conn_ctx</code>) を作成する。 3. **フィルターの再構成**: 既存の HTTP/1.1 フィルター（<code>http_in</code> や <code>HTTP_HEADER</code> 等）を削除し、HTTP/2 用のスタックへ置き換える。 4. **セッション開始**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L92" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_c__h2_c1_setup.html&quot;}, '*');"><code>h2_c1_setup</code></a> および <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L121" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_c__h2_c1_run.html&quot;}, '*');"><code>h2_c1_run</code></a> を呼び出し、HTTP/2 セッションのメインループへ制御を移す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache コアのプロトコル処理インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.h.html&quot;}, '*');"><code>h2_c1.h</code></a>: HTTP/2 接続の初期化と実行を担当。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a>: 接続ごとの HTTP/2 コンテキスト管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.h.html&quot;}, '*');"><code>h2_protocol.h</code></a>: プロトコル識別子や互換性チェック。</li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_optional_hooks.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2.h.html&quot;}, '*');"><code>h2_c2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_config.h.html&quot;}, '*');"><code>h2_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_switch.h.html&quot;}, '*');"><code>h2_switch.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/mod_http2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.c.html&quot;}, '*');"><code>mod_http2.c</code></a>: モジュールのロードと全体的な設定管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>h2_session.c</code></a>: HTTP/2 セッションのライフサイクル管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>h2_c1.c</code></a>: HTTP/2 接続の具体的なセットアップと実行ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは「プロトコルの切り替え」という境界条件のみを扱います。HTTP/2 の詳細なフレーム処理やストリーム管理は <a class="wiki-source-link" href="../../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>h2_session.c</code></a> や <a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>h2_stream.c</code></a> に委譲されています。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_switch.c.html#L131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_switch_c__remove_output_filters_below.html&quot;}, '*');"><code>remove_output_filters_below</code></a> 等の関数は、HTTP/1.1 のフィルターチェーンを破壊して HTTP/2 に差し替えるという、Apache のフィルターシステムにおける非常に強力かつ繊細な操作を行っています。デバッグ時はフィルターの順序と型（<a class="wiki-source-link" href="../../../source/include/util_filter.h.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__ap_filter_type.html&quot;}, '*');"><code>ap_filter_type</code></a>）に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_switch_c__h2_switch_init.html" target="wiki-view"><code>h2_switch_init</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_switch_c__h2_protocol_propose.html" target="wiki-view"><code>h2_protocol_propose</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_switch_c__remove_output_filters_below.html" target="wiki-view"><code>remove_output_filters_below</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_switch_c__remove_input_filters_below.html" target="wiki-view"><code>remove_input_filters_below</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_switch_c__h2_protocol_switch.html" target="wiki-view"><code>h2_protocol_switch</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_switch_c__h2_protocol_get.html" target="wiki-view"><code>h2_protocol_get</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_switch_c__h2_switch_register_hooks.html" target="wiki-view"><code>h2_switch_register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

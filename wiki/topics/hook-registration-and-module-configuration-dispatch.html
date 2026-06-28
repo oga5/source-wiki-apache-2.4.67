@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/hook-registration-and-module-configuration-dispatch.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Hook Registration and Module Configuration Dispatch</h1>
+<h2>概念</h2>
+<p>**Hook Registration and Module Configuration Dispatch**（フック登録とモジュール設定ディスパッチ）は、Apache HTTP Server（httpd）の拡張性とモジュール化アーキテクチャを支える中核メカニズムです。</p>
+<ul>
+<li>**フック登録（Hook Registration）**: 各モジュールが、リクエスト処理の特定のフェーズ（翻訳、アクセス制御、コンテンツ生成など）やサーバーのライフサイクルイベントに対して、自身のハンドラ関数を登録する仕組みを提供します（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>）。</li>
+<li>**モジュール設定ディスパッチ（Module Configuration Dispatch）**: 設定ファイル（<code>httpd.conf</code>など）から読み込まれたディレクティブを解析し、対応するモジュール固有の設定構造体へマッピングおよび適用（ディスパッチ）します（<a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>, <a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>）。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p>Apache HTTP Serverは、コア機能自体も多くのモジュールの集合として実装されています。この仕組みが重要な理由は以下の通りです。</p>
+<p>1.  **疎結合性の維持**: コアシステムは各モジュールの具体的な内部実装を知る必要がなく、定義されたフックと設定インターフェースを介してのみ協調します。 2.  **動的な拡張性**: サードパーティモジュールは、コアコードを修正することなく、リクエスト処理の任意のフェーズに介入し、独自の設定ディレクティブを追加できます。 3.  **柔軟な設定管理**: ディレクトリ階層やバーチャルホストごとに異なるモジュール設定を安全にマージ・適用できます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a>: フック宣言やモジュール設定の基本構造体を定義するヘッダー群（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>）を提供します。</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a>: 設定ファイルのパース、モジュールの管理、および設定ディスパッチのコアロジック（<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>）を実装します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a> 構造体** (<a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>):</li>
+<p>モジュール自体を定義する中心的な構造体。設定作成・マージ関数へのポインタ、コマンドテーブル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a>）、およびフック登録関数（<code>register_hooks</code>）へのポインタを保持します。</p>
+<li>**<a class="wiki-source-link" href="../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a> 構造体** (<a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>):</li>
+<p>設定ディレクティブ（例: <code>AllowOverride</code> など）と、それを処理するモジュール内の関数、および適用可能なコンテキストをマッピングします。</p>
+<li>**フックマクロ群** (<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>):</li>
+<p><a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_DECLARE_HOOK</code></a> や <a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_ALL</code></a> などのマクロ。これらを使用して、型安全なフックポイントの宣言と実行を行います。</p>
+<li>**設定処理エンジン** (<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>):</li>
+<p>設定ファイルをパースし、対応する <a class="wiki-source-link" href="../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a> を検索してモジュールに設定をディスパッチする実体。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細な関数呼び出しシーケンスや、初期化からリクエスト処理に至る完全なエンドツーエンドの実行フローは完全には判明していませんが、一般的な流れは以下の通りです。</p>
+<p>1.  **モジュールのロードとフック登録**: サーバー起動時、各モジュールの <code>register_hooks</code> 関数が呼び出され、<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a> の仕組みを用いて、特定のフェーズに対するハンドラが登録されます。 2.  **設定ファイルのパースとディスパッチ**: <a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> が設定ファイルを読み込み、ディレクティブを検出すると、<a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a> で定義された <a class="wiki-source-link" href="../../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a> の <a class="wiki-source-link" href="../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a> を参照して、対応する設定ハンドラを呼び出し、モジュール固有の設定構造体に値を格納します。 3.  **設定のマージ**: リクエストのコンテキスト（ディレクトリやバーチャルホスト）に応じて、親コンテキストの設定と子コンテキストの設定がマージされます。 4.  **フックの実行**: リクエスト処理中、登録されたフックが定義された順序（先行、標準、後続など）に従って順次呼び出されます。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、スレッドセーフティやメモリプールのライフサイクルに関する厳密な不変条件は完全には特定されていません。ただし、以下の一般的な制約が存在します。</p>
+<ul>
+<li>**フック登録の静属性**: フックの登録はサーバーの初期化フェーズ（設定ファイルの読み込み時）に完了していなければならず、リクエスト処理中に動的にフックを追加・削除することはできません。</li>
+<li>**設定構造体の不変性**: 設定ファイルのパース完了後、生成されたモジュール設定構造体は読み取り専用として扱われ、リクエスト処理中に動的に変更されるべきではありません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**フックの実行順序（Precedence）の誤り**:</li>
+<p>フック登録時に <code>APR_HOOK_MIDDLE</code>, <code>APR_HOOK_FIRST</code>, <code>APR_HOOK_LAST</code> などの順序指定を誤ると、他モジュールとの依存関係が崩れ、予期しない動作やセグメンテーションフォールトを引き起こす可能性があります。</p>
+<li>**設定マージ処理（Merge Functions）の不整合**:</li>
+<p><code>merge_dir_config</code> や <code>merge_server_config</code> において、未初期化のポインタやデフォルト値の扱いを誤ると、上位ディレクトリの設定が下位ディレクトリに正しく継承されない、あるいは意図せず上書きされる問題が発生します。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>: フックの宣言、実装、および呼び出しマクロの詳細な仕様。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>: <a class="wiki-source-link" href="../../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a> 構造体、<a class="wiki-source-link" href="../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a> 構造体、および設定処理用APIの定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>: 設定ファイルのパース、ディレクティブのディスパッチ、およびモジュール管理の具体的な実装。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

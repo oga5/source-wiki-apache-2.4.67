@@ -1,0 +1,92 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/md_curl.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_curl.c.html&quot;}, '*');">modules/md/md_curl.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_curl.c.html&quot;}, '*');"><code>md_curl.c</code></a> は、<code>libcurl</code> を使用した HTTP クライアント機能の実装です。<code>md_http</code> モジュールのバックエンドとして機能し、ACME プロトコル等の通信に必要な同期・非同期リクエスト処理を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ネットワーク通信の抽象化レイヤーを担います。<a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a> で定義されたインターフェースを実装し、上位層（ACME ロジック等）が libcurl の詳細を意識せずに HTTP 通信を行えるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**HTTP 実装の提供**: <a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html#L253" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_h__md_http_impl_t.html&quot;}, '*');"><code>md_http_impl_t</code></a> 構造体を通じて、初期化、リクエスト実行、クリーンアップの各操作を <code>md_http</code> に提供。</li>
+<li>**libcurl 変換**: <a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_h__md_http_request_t.html&quot;}, '*');"><code>md_http_request_t</code></a>（内部データ構造）と <code>libcurl</code> のオプション、コールバック、ステータスコード間のマッピング。</li>
+<li>**リソース管理**: <code>apr_pool_t</code> を利用したメモリ管理と、<code>libcurl</code> ハンドルのライフサイクル管理（再利用または破棄）。</li>
+<li>**非同期多重化**: <code>curl_multi</code> インターフェースを用いた、複数のリクエストを並行処理するイベントループの制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>内部データ構造</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__md_curl_internals_t.html&quot;}, '*');"><code>md_curl_internals_t</code></a>: リクエストごとの libcurl ハンドル、ヘッダーリスト、レスポンスバッファを保持するコンテキスト。</li>
+</ul>
+<h3>コールバック関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__req_data_cb.html&quot;}, '*');"><code>req_data_cb</code></a>: <code>apr_bucket_brigade</code> からデータを読み取り、libcurl へ渡す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L106" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__resp_data_cb.html&quot;}, '*');"><code>resp_data_cb</code></a>: libcurl からのレスポンスデータを <code>apr_brigade</code> に書き込む。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__header_cb.html&quot;}, '*');"><code>header_cb</code></a>: HTTP レスポンスヘッダーを解析し、<code>apr_table_t</code> に格納する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L195" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__curl_debug_log.html&quot;}, '*');"><code>curl_debug_log</code></a>: libcurl の詳細な通信ログを <code>md_log</code> に出力する。</li>
+</ul>
+<h3>実装インターフェース</h3>
+<ul>
+<li><code>md_curl_get_impl()</code>: <code>md_http</code> モジュールにこの実装を登録するためのエントリポイント。</li>
+<li><code>md_curl_perform()</code>: 単一リクエストの同期実行。</li>
+<li><code>md_curl_multi_perform()</code>: 複数のリクエストを <code>curl_multi</code> で並行実行するメインループ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L660" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__md_curl_get_impl.html&quot;}, '*');"><code>md_curl_get_impl</code></a> が呼ばれ、<code>curl_global_init</code> が実行される。 2. **セットアップ**: <a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__internals_setup.html&quot;}, '*');"><code>internals_setup</code></a> が <a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_h__md_http_request_t.html&quot;}, '*');"><code>md_http_request_t</code></a> を libcurl の <code>easy_handle</code> に変換。<code>apr_pool_t</code> のライフサイクルに紐づく。 3. **実行**:</p>
+<ul>
+<li>単一の場合: <code>curl_easy_perform</code> を呼び出し、完了後にコールバックを起動。</li>
+<li>多重の場合: <code>curl_multi_perform</code> を使用。<code>nextreq</code> コールバックで順次リクエストを追加し、<code>curl_multi_wait</code> でイベントを待機。</li>
+<p>4. **終了**: <a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L380" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__fire_status.html&quot;}, '*');"><code>fire_status</code></a> によりレスポンス処理が完了し、<a class="wiki-source-link" href="../../../source/modules/md/md_http.c.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_c__md_http_req_destroy.html&quot;}, '*');"><code>md_http_req_destroy</code></a> でリソースが解放される。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>curl/curl.h</code>: libcurl API。</li>
+<li><code>apr_buckets.h</code>: HTTP ボディのストリーミング処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a>: HTTP 抽象化インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.h.html&quot;}, '*');"><code>md_util.h</code></a>: ユーティリティ関数。</li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_curl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_curl.h.html&quot;}, '*');"><code>md_curl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a>: 本モジュールが実装するインターフェースの定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a>: 本モジュールを利用して ACME サーバーと通信する上位モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_h__md_http_request_t.html&quot;}, '*');"><code>md_http_request_t</code></a> のプールに依存します。<code>internals</code> 構造体はリクエスト終了時に <a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L616" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__md_curl_req_cleanup.html&quot;}, '*');"><code>md_curl_req_cleanup</code></a> で適切に解放される必要があります。</li>
+<li>**スレッド安全性**: <code>libcurl</code> のハンドルはスレッドセーフではないため、リクエストごとのプール内で管理される設計です。</li>
+<li>**エッジケース**: <code>resp_limit</code> を超えるレスポンスボディは <a class="wiki-source-link" href="../../../source/modules/md/md_curl.c.html#L106" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_curl_c__resp_data_cb.html&quot;}, '*');"><code>resp_data_cb</code></a> で拒否され、エラーとして処理されます。</li>
+<li>**省略箇所**: <code>curl_multi</code> の詳細なエラーハンドリングや、特定の SSL オプション（<code>CURLSSLOPT_NO_REVOKE</code> 等）のプラットフォーム依存の挙動については、実装の深部を直接参照してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_curl_c__curl_status.html" target="wiki-view"><code>curl_status</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__md_curl_internals_t.html" target="wiki-view"><code>md_curl_internals_t</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__req_data_cb.html" target="wiki-view"><code>req_data_cb</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__resp_data_cb.html" target="wiki-view"><code>resp_data_cb</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__header_cb.html" target="wiki-view"><code>header_cb</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__curlify_hdrs_ctx.html" target="wiki-view"><code>curlify_hdrs_ctx</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__curlify_headers.html" target="wiki-view"><code>curlify_headers</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__timeout_msec.html" target="wiki-view"><code>timeout_msec</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__timeout_sec.html" target="wiki-view"><code>timeout_sec</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__curl_debug_log.html" target="wiki-view"><code>curl_debug_log</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__internals_setup.html" target="wiki-view"><code>internals_setup</code></a></li>
+<li><a href="../../symbols/modules__md__md_curl_c__update_status.html" target="wiki-view"><code>update_status</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

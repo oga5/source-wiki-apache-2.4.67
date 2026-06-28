@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/aaa/mod_authz_core.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');">modules/aaa/mod_authz_core.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>mod_authz_core.c</code></a> は、Apache HTTP Server の認可（Authorization）サブシステムの中心となるモジュールです。個別の認可ロジック（<code>mod_authz_user</code> 等）を統合し、<code>Require</code> ディレクティブによる複雑な論理構造（AND/OR/NOT）を管理します。</p>
+<h2>モジュール内での役割</h2>
+<p>認可プロバイダーの登録・管理および、リクエスト処理時の認可フックの実行を担当します。他の認可モジュールが提供する機能を、設定ファイル上の階層構造に従って実行する「オーケストレーター」として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>Require</code> や <code>&lt;RequireAll&gt;</code> などのディレクティブを解析し、ディレクトリごとの設定構造（<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authz_core_dir_conf.html&quot;}, '*');"><code>authz_core_dir_conf</code></a>）を構築・マージする。</li>
+<li>**プロバイダー管理**: 認可プロバイダーの登録、および <code>AuthzProviderAlias</code> によるプロバイダーのエイリアス化と再設定。</li>
+<li>**認可実行**: リクエスト処理時に、設定された論理ツリーを再帰的に評価し、最終的な認可結果（Granted/Denied/Neutral）を決定する。</li>
+<li>**コアプロバイダーの提供**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_env.c.html#L180" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_env.c.html&quot;}, '*');"><code>env</code></a>, <code>all</code>, <a class="wiki-source-link" href="../../../source/support/ab.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>method</code></a>, <code>expr</code> といった基本的な認可プロバイダーの実装。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authz_core_dir_conf.html&quot;}, '*');"><code>authz_core_dir_conf</code></a>: ディレクトリごとの認可設定を保持。論理演算子（<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L59" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authz_logic_op.html&quot;}, '*');"><code>authz_logic_op</code></a>）と認可セクションのツリーを持つ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authz_section_conf.html&quot;}, '*');"><code>authz_section_conf</code></a>: 認可の論理単位。プロバイダー、論理演算子、否定フラグ、子セクションへのポインタを保持。</li>
+<li><code>provider_alias_rec</code>: <code>AuthzProviderAlias</code> で定義されたエイリアスの設定を保持。</li>
+</ul>
+<h3>認可ロジック・実行</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L722" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__apply_authz_sections.html&quot;}, '*');"><code>apply_authz_sections</code></a>: 認可ツリーを再帰的に走査し、各プロバイダーの <code>check_authorization</code> を呼び出して結果を統合するコア関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L823" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authorize_user_core.html&quot;}, '*');"><code>authorize_user_core</code></a>: 認可フックのメインエントリーポイント。認可結果に基づき HTTP ステータスコード（200, 401, 403）を決定する。</li>
+</ul>
+<h3>プロバイダー定義</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_provider.html&quot;}, '*');"><code>authz_provider</code></a>: 認可プロバイダーのインターフェース構造体。<code>check_authorization</code> 関数ポインタを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L961" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>authz_env_provider</code></a>, <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L1004" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>authz_all_provider</code></a>, <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L1047" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>authz_method_provider</code></a>, <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L1131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_core.c.html&quot;}, '*');"><code>authz_expr_provider</code></a>: 本モジュールが提供する標準プロバイダー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **設定フェーズ**: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L391" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__add_authz_provider.html&quot;}, '*');"><code>add_authz_provider</code></a> や <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__add_authz_section.html&quot;}, '*');"><code>add_authz_section</code></a> が設定ファイルを読み込み、<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authz_section_conf.html&quot;}, '*');"><code>authz_section_conf</code></a> のツリーを構築する。 2. **検証フェーズ**: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authz_core_check_config.html&quot;}, '*');"><code>authz_core_check_config</code></a> が起動時に呼び出され、論理的に矛盾した設定（例: 否定のみのセクション）がないか検証する。 3. **リクエスト処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L919" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__authorize_user.html&quot;}, '*');"><code>authorize_user</code></a> フックがリクエストを受け取る。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L722" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__apply_authz_sections.html&quot;}, '*');"><code>apply_authz_sections</code></a> がツリーを再帰的に走査。</li>
+<li><code>section-&gt;provider-&gt;check_authorization</code> を呼び出し、結果を <code>AUTHZ_GRANTED</code> 等で受け取る。</li>
+<li><code>section-&gt;op</code>（AND/OR）に従って結果をマージし、最終的な <a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authz_status.html&quot;}, '*');"><code>authz_status</code></a> を算出する。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>: 認可プロバイダーの共通インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a>: <code>expr</code> プロバイダーで使用される式評価エンジン。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache の設定およびリクエスト処理基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><code>apr_md5.h</code></li>
+<li><code>apr_network_io.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>netinet/in.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_user.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_user.c.html&quot;}, '*');"><code>mod_authz_user.c</code></a>, <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_host.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authz_host.c.html&quot;}, '*');"><code>mod_authz_host.c</code></a>: 本モジュールが管理する認可プロバイダーを実装する他のモジュール。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>mod_authn_core.c</code></a>: 認証（Authentication）側のコアモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定構造体は <code>apr_pool_t</code> を使用して割り当てられ、リクエスト処理中のデータは <code>request_rec-&gt;pool</code> を使用します。</li>
+<li>**再帰的評価**: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authz_core.c.html#L722" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authz_core_c__apply_authz_sections.html&quot;}, '*');"><code>apply_authz_sections</code></a> は再帰関数です。深いネストを持つ設定はスタック消費に注意が必要です。</li>
+<li>**エラーパス**: <code>AUTHZ_DENIED_NO_USER</code> は、認証がまだ完了していない場合に認証プロセスへフォールバックさせるための重要なステータスです。</li>
+<li>**省略された詳細**: 本ファイルは認可の「枠組み」に特化しており、個別の認証方式（LDAP, DB等）の詳細は各サブモジュールに委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__provider_alias_rec.html" target="wiki-view"><code>provider_alias_rec</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__authz_logic_op.html" target="wiki-view"><code>authz_logic_op</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__authz_section_conf.html" target="wiki-view"><code>authz_section_conf</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__authz_core_dir_conf.html" target="wiki-view"><code>authz_core_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__authz_core_srv_conf.html" target="wiki-view"><code>authz_core_srv_conf</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__create_authz_core_dir_config.html" target="wiki-view"><code>create_authz_core_dir_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__merge_authz_core_dir_config.html" target="wiki-view"><code>merge_authz_core_dir_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__merge_authz_core_svr_config.html" target="wiki-view"><code>merge_authz_core_svr_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__create_authz_core_svr_config.html" target="wiki-view"><code>create_authz_core_svr_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__authz_alias_check_authorization.html" target="wiki-view"><code>authz_alias_check_authorization</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__authz_require_alias_section.html" target="wiki-view"><code>authz_require_alias_section</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authz_core_c__require_expr_info.html" target="wiki-view"><code>require_expr_info</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

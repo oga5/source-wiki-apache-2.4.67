@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_main.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>worker_main</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2_child.c:345</code></li>
+</ul>
+<h2>目的</h2>
+<p>OS/2 MPM の子プロセスにおいて、個別のワーカー（スレッド）として接続リクエストを処理し、リクエストの受け取りから接続の終了までを管理する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void worker_main(void *vpArg)</code></pre>
+<ul>
+<li><code>vpArg</code>: スレッドスロット番号（<code>int</code>）としてキャストして使用される。</li>
+</ul>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>vpArg</code>（スレッドスロット番号）。OS/2 キュー（<code>/queues/httpd/work.&lt;pid&gt;</code>）から読み出される <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a> 構造体（接続情報）。</li>
+<li>**出力**: なし（戻り値 <code>void</code>）。副作用としてスコアボードの更新および接続の処理を行う。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>DosSetExceptionHandler</code> により、スレッド内の例外を捕捉しプロセス全体のクラッシュを防ぐ。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> プールが生存していること。</li>
+<li>接続処理中、スコアボードのステータスは <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_READY</code></a> から <code>SERVER_BUSY</code> 相当の状態へ遷移し、処理完了後に <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_READY</code></a> へ戻る。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: 例外ハンドラを登録し、OS/2 キューを開く。 2. **ループ**: <code>DosReadQueue</code> を使用して、キューから接続情報（<code>worker_args</code>）が届くのを待機する。 3. **接続処理**:</p>
+<ul>
+<li><code>ap_run_create_connection</code> で接続オブジェクトを作成。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> でリクエストを処理。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a> で接続を閉じる。</li>
+<p>4. **終了**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>WORKTYPE_EXIT</code></a> メッセージを受信するか、キューの読み取りに失敗した時点でループを脱出し、スコアボードを <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_DEAD</code></a> に更新して終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a> 内の <code>_beginthread</code> により起動される。</li>
+<li>**呼び出し先**: <code>ap_run_create_connection</code>, <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a>, <a class="wiki-source-link" href="../../source/server/connection.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_lingering_close.html&quot;}, '*');"><code>ap_lingering_close</code></a>, <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L575" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_update_child_status_from_indexes.html&quot;}, '*');"><code>ap_update_child_status_from_indexes</code></a>, <code>DosReadQueue</code>, <code>DosOpenQueue</code> 等。</li>
+<li>**注記**: <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/netware/mpm_netware.c.html&quot;}, '*');"><code>server/mpm/netware/mpm_netware.c</code></a> や <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>server/mpm/winnt/child.c</code></a> にも同名の関数が存在するが、これらは別実装である。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__worker_args_t.html&quot;}, '*');"><code>worker_args_t</code></a>: キュー経由で渡される接続情報。</li>
+<li><code>EXCEPTIONREGISTRATIONRECORD</code>: OS/2 の例外処理用構造体。</li>
+<li><code>ap_sb_handle_t</code>: スコアボードハンドル。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**キューオープン失敗**: <code>DosOpenQueue</code> が失敗した場合、ログを出力し、該当スロットのスコアボードをクリアして終了する。</li>
+<li>**例外発生**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L311" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__thread_exception_handler.html&quot;}, '*');"><code>thread_exception_handler</code></a> が呼び出され、プロセス全体を巻き込む前にスレッドが安全に終了する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は OS/2 の <code>Dos*</code> API に強く依存している。</li>
+<li><code>pconn</code> プールは各接続処理のたびに作成・破棄され、メモリリークを防ぐ設計となっている。</li>
+<li><code>HARD_THREAD_LIMIT</code>（256）がスレッド数の上限として機能する。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

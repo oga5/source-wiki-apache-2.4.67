@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_pcre.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_pcre.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_pcre.c.html&quot;}, '*');">server/util_pcre.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server における正規表現処理の抽象化レイヤーです。PCRE (Perl Compatible Regular Expressions) ライブラリ（PCRE1 または PCRE2）をラップし、POSIX 互換のインターフェースを提供します。HTTPD 内部で正規表現をコンパイル、実行、管理するための標準的な API を定義しています。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール内の正規表現ユーティリティとして、設定解析やリクエスト処理におけるパターンマッチングの基盤を提供します。PCRE のバージョン差異（PCRE1/PCRE2）を吸収し、HTTPD の他のコンポーネントがライブラリの仕様変更を意識せずに正規表現を利用できるようにします。</p>
+<h2>責務</h2>
+<ul>
+<li>**正規表現のライフサイクル管理**: コンパイル (<a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regcomp.html&quot;}, '*');"><code>ap_regcomp</code></a>) から破棄 (<a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regfree.html&quot;}, '*');"><code>ap_regfree</code></a>) までの管理。</li>
+<li>**POSIX 互換ラッパー**: PCRE 特有の API を HTTPD の <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regex_t.html&quot;}, '*');"><code>ap_regex_t</code></a> 構造体へマッピング。</li>
+<li>**スレッドセーフなマッチング**: スレッドローカルストレージ (TLS) を活用したマッチング用バッファの再利用によるメモリ効率化。</li>
+<li>**エラーハンドリング**: PCRE のエラーコードを HTTPD 共通のエラー定義へ変換。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>コンパイル・管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regcomp.html&quot;}, '*');"><code>ap_regcomp</code></a>: 正規表現をコンパイルし、<a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regex_t.html&quot;}, '*');"><code>ap_regex_t</code></a> を初期化する。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regfree.html&quot;}, '*');"><code>ap_regfree</code></a>: コンパイル済みの正規表現リソースを解放する。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regcomp_set_default_cflags.html&quot;}, '*');"><code>ap_regcomp_set_default_cflags</code></a>: グローバルなデフォルトコンパイルフラグを設定する。</li>
+</ul>
+<h3>マッチング</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L395" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regexec.html&quot;}, '*');"><code>ap_regexec</code></a> / <a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L403" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regexec_len.html&quot;}, '*');"><code>ap_regexec_len</code></a>: 文字列に対して正規表現を適用する。<code>_len</code> 版はバイナリセーフなマッチングを行う。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L332" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__get_match_data.html&quot;}, '*');"><code>get_match_data</code></a>: マッチングに必要なワークスペース（PCRE2 の <code>match_data</code> や PCRE1 の <code>ovector</code>）を TLS から取得または確保する。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L93" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_pcre_version_string.html&quot;}, '*');"><code>ap_pcre_version_string</code></a>: 実行時にリンクされている PCRE ライブラリのバージョン情報を取得する。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regerror.html&quot;}, '*');"><code>ap_regerror</code></a>: エラーコードを人間が読める文字列に変換する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **コンパイル**: <a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regcomp.html&quot;}, '*');"><code>ap_regcomp</code></a> が呼び出されると、フラグを PCRE 形式に変換し、<code>pcre_compile2</code> (PCRE1) または <code>pcre2_compile</code> (PCRE2) を実行。結果を <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regex_t.html&quot;}, '*');"><code>ap_regex_t</code></a> に格納する。 2. **マッチング**: <a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L403" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regexec_len.html&quot;}, '*');"><code>ap_regexec_len</code></a> が呼び出される際、<a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L332" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__get_match_data.html&quot;}, '*');"><code>get_match_data</code></a> が TLS を確認。</p>
+<ul>
+<li>TLS に十分なサイズのバッファがあれば再利用し、なければ確保する。</li>
+<li>PCRE2 の場合は <code>pcre2_match</code>、PCRE1 の場合は <code>pcre_exec</code> を実行。</li>
+<p>3. **結果変換**: PCRE のマッチ結果（オフセット配列）を <code>pmatch</code> 構造体にコピーし、呼び出し元へ返す。 4. **解放**: <code>to_free</code> フラグが立っている場合（TLS を使用しない場合など）、<a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L304" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__free_match_data.html&quot;}, '*');"><code>free_match_data</code></a> でメモリを解放する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: HTTPD の基本型定義。</li>
+<li><code>apr_*.h</code>: APR (Apache Portable Runtime) のメモリプール、スレッド、文字列操作関数。</li>
+<li><code>pcre.h</code> / <code>pcre2.h</code>: 実際の正規表現エンジン。</li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_tables.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_want.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_regex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regex.h.html&quot;}, '*');"><code>include/ap_regex.h</code></a>: <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regex_t.html&quot;}, '*');"><code>ap_regex_t</code></a> や <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L115" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regmatch_t.html&quot;}, '*');"><code>ap_regmatch_t</code></a> などのデータ構造定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a>: HTTPD の汎用ユーティリティ関数群。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regcomp.html&quot;}, '*');"><code>ap_regcomp</code></a> で生成された <a class="wiki-source-link" href="../../source/include/ap_regex.h.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_regex_h__ap_regex_t.html&quot;}, '*');"><code>ap_regex_t</code></a> は、<a class="wiki-source-link" href="../../source/server/util_pcre.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regfree.html&quot;}, '*');"><code>ap_regfree</code></a> を呼び出すまでメモリを保持します。</li>
+<li>**TLS の最適化**: <a class="wiki-source-link" href="../../source/include/httpd.h.html#L2490" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_HAS_THREAD_LOCAL</code></a> が有効な場合、マッチング用バッファはスレッドごとにキャッシュされます。これにより、高負荷時の <code>malloc</code>/<code>free</code> のオーバーヘッドを大幅に削減しています。</li>
+<li>**PCRE2 への対応**: <code>#ifdef HAVE_PCRE2</code> により、PCRE1 と PCRE2 の両方をサポートしています。PCRE2 では <code>match_data</code> オブジェクトが必須となるため、PCRE1 よりもメモリ管理が厳密になっています。</li>
+<li>**制限事項**: 本ファイルは POSIX 互換のラッパーであるため、PCRE の高度な機能（再帰的パターンや複雑なコールアウトなど）を直接利用したい場合は、PCRE のネイティブ API を直接使用する必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_pcre_c__ap_pcre_version_string.html" target="wiki-view"><code>ap_pcre_version_string</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__ap_regerror.html" target="wiki-view"><code>ap_regerror</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__ap_regfree.html" target="wiki-view"><code>ap_regfree</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__ap_regcomp_get_default_cflags.html" target="wiki-view"><code>ap_regcomp_get_default_cflags</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__ap_regcomp_set_default_cflags.html" target="wiki-view"><code>ap_regcomp_set_default_cflags</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__ap_regcomp_default_cflag_by_name.html" target="wiki-view"><code>ap_regcomp_default_cflag_by_name</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__ap_regcomp.html" target="wiki-view"><code>ap_regcomp</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__match_data_pt.html" target="wiki-view"><code>match_data_pt</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__match_vector_pt.html" target="wiki-view"><code>match_vector_pt</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__alloc_match_data.html" target="wiki-view"><code>alloc_match_data</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__free_match_data.html" target="wiki-view"><code>free_match_data</code></a></li>
+<li><a href="../symbols/server__util_pcre_c__apreg_tls.html" target="wiki-view"><code>apreg_tls</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__proxy__mod_proxy_uwsgi_c__uwsgi_send_headers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_uwsgi.c.html#L148" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_uwsgi_c__uwsgi_send_headers.html&quot;}, '*');">uwsgi_send_headers</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/proxy/mod_proxy_uwsgi.c:148</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache の <code>subprocess_env</code> に格納された環境変数を uWSGI プロトコル仕様のバイナリ形式に変換し、バックエンドへ送信します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int uwsgi_send_headers(request_rec *r, proxy_conn_rec *conn)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: 現在のリクエスト情報（<code>subprocess_env</code> を含む）。</li>
+<li><code>conn</code>: バックエンドへの接続情報。</li>
+<li>**出力**:</li>
+<li>成功時: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_uwsgi.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_uwsgi_c__uwsgi_send.html&quot;}, '*');"><code>uwsgi_send</code></a> の戻り値（通常は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>）。</li>
+<li>失敗時: <a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a>（パケットサイズ超過時）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>r-&gt;subprocess_env</code> に必要な CGI 環境変数が設定されていること。</li>
+<li><code>conn</code> は有効な接続状態であること。</li>
+<li>送信されるヘッダーの総サイズ（<code>pktsize</code>）は <a class="wiki-source-link" href="../../source/modules/metadata/mod_unique_id.c.html#L200" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_unique_id.c.html&quot;}, '*');"><code>APR_UINT16_MAX</code></a> 以下であること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **環境変数の準備**: <a class="wiki-source-link" href="../../source/server/util_script.c.html#L174" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_add_common_vars.html&quot;}, '*');"><code>ap_add_common_vars</code></a> および <a class="wiki-source-link" href="../../source/server/util_script.c.html#L401" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_add_cgi_vars.html&quot;}, '*');"><code>ap_add_cgi_vars</code></a> を呼び出し、<code>Authorization</code> ヘッダーを <code>HTTP_AUTHORIZATION</code> として環境変数に追加します。 2. **パス調整**: <code>SCRIPT_NAME</code> と <code>PATH_INFO</code> が存在する場合、<code>SCRIPT_NAME</code> を適切に調整します。 3. **サイズ計算**: 全ての環境変数のキーと値の長さを合計し、uWSGI ヘッダーに必要なバッファサイズを算出します。 4. **バリデーション**: 合計サイズが <a class="wiki-source-link" href="../../source/modules/metadata/mod_unique_id.c.html#L200" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_unique_id.c.html&quot;}, '*');"><code>APR_UINT16_MAX</code></a> を超える場合はエラーを返します。 5. **シリアライズ**: メモリを確保し、各キーと値を <code>[2バイト長][データ]</code> の形式でバイナリバッファに書き込みます。 6. **ヘッダー構築**: バッファの先頭4バイトに uWSGI プロトコル固有のヘッダー（パケットサイズ等）を書き込みます。 7. **送信**: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_uwsgi.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_uwsgi_c__uwsgi_send.html&quot;}, '*');"><code>uwsgi_send</code></a> を呼び出し、構築したバッファをバックエンドへ送信します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_uwsgi.c:571</code>（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_uwsgi.c.html#L500" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_uwsgi_c__uwsgi_handler.html&quot;}, '*');"><code>uwsgi_handler</code></a> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><a class="wiki-source-link" href="../../source/server/util_script.c.html#L174" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_add_common_vars.html&quot;}, '*');"><code>ap_add_common_vars</code></a>, <a class="wiki-source-link" href="../../source/server/util_script.c.html#L401" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_add_cgi_vars.html&quot;}, '*');"><code>ap_add_cgi_vars</code></a></li>
+<li><code>apr_table_get</code>, <code>apr_table_set</code>, <code>apr_table_setn</code>, <code>apr_table_elts</code></li>
+<li><code>apr_palloc</code>, <code>apr_pstrndup</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_rerror</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_uwsgi.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_uwsgi_c__uwsgi_send.html&quot;}, '*');"><code>uwsgi_send</code></a></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>request_rec</code>: リクエスト処理のコンテキスト。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L269" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_conn_rec.html&quot;}, '*');"><code>proxy_conn_rec</code></a>: バックエンド接続の管理構造体。</li>
+<li><code>apr_table_entry_t</code>: 環境変数のキーと値を保持するテーブルエントリ。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**パケットサイズ超過**: <code>pktsize &gt; APR_UINT16_MAX</code> の場合、ログを出力して <a class="wiki-source-link" href="../../source/include/httpd.h.html#L539" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_INTERNAL_SERVER_ERROR</code></a> を返します。</li>
+<li>**メモリ不足**: <code>apr_palloc</code> が失敗した場合の挙動は APR のメモリ管理ポリシーに従います。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は uWSGI プロトコルのバイナリ仕様に直接依存しています。仕様変更時には、ヘッダーのシリアライズ部分（特にビット操作）を慎重に確認してください。</li>
+<li><code>SCRIPT_NAME</code> の調整ロジックは、Apache の環境変数と uWSGI 側の期待値の差異を埋めるためのものです。</li>
+<li>接続の再利用（Keep-Alive）は行われない設計であるため、本関数はリクエストごとに一度だけ実行されます。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

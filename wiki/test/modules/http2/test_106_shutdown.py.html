@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/http2/test_106_shutdown.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_106_shutdown.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_106_shutdown.py.html&quot;}, '*');">test/modules/http2/test_106_shutdown.py</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の <code>mod_http2</code> におけるシャットダウンおよび再起動時の挙動を検証するテストスイートです。特に、長時間実行されるリクエストの処理中におけるサーバーの再読み込み（Graceful Restart）や、プロセス制限下での接続終了処理の堅牢性を確認します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/http2</code> テストスイートの一部として、HTTP/2 プロトコル特有の接続管理とライフサイクルイベントを検証します。他のテストファイルが基本的なリクエストやプロキシ機能を扱うのに対し、本ファイルはサーバーの運用状態の変化が通信に与える影響をテストします。</p>
+<h2>責務</h2>
+<ul>
+<li>**Graceful Restart の検証**: リクエスト処理中に <code>apache_reload()</code> を実行し、接続が切断されずに完了するかを確認する。</li>
+<li>**プロセス制限下の挙動確認**: <code>MaxRequestsPerChild</code> 等の制限に達した際の <code>GOAWAY</code> フレーム処理や、接続終了時のクライアント側の挙動（curl の終了コード）を検証する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>TestShutdown</code>: テストクラス。<code>pytest</code> を使用してテストケースをグループ化。</li>
+<li><code>test_h2_106_01</code>: 長時間リクエスト中にサーバーをリロードし、レスポンスが正しく返るかを検証するテスト。</li>
+<li><code>test_h2_106_02</code>: <code>MaxRequestsPerChild</code> を低く設定し、プロセス終了に伴う接続の挙動を検証するテスト。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **<code>test_h2_106_01</code>**:</p>
+<ul>
+<li>別スレッドで <code>curl</code> を実行し、サーバー側で <code>wait2</code> を含む長時間リクエストを開始。</li>
+<li>メインスレッドで <code>time.sleep(0.5)</code> 後に <code>apache_reload()</code> を実行。</li>
+<li>スレッドの終了を待ち、<code>curl</code> の実行結果（<code>ExecResult</code>）を検証。</li>
+<p>2. **<code>test_h2_106_02</code>**:</p>
+<li><code>H2Conf</code> を用いて <code>ServerLimit</code> と <code>MaxRequestsPerChild</code> を制限した設定を適用。</li>
+<li>ループ内で複数回リクエストを送り、接続が切断された場合（curl エラーコード 16/55）と正常終了した場合の双方を許容しつつ、プロトコルが HTTP/2 であることを確認。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>pytest</code>: テストフレームワーク。</li>
+<li><code>threading.Thread</code>: 非同期リクエスト実行用。</li>
+<li><code>.env.H2Conf</code>, <code>.env.H2TestEnv</code>: テスト環境設定および Apache 操作用ユーティリティ。</li>
+<li><code>pyhttpd.result.ExecResult</code>: <code>curl</code> コマンドの実行結果を保持するデータクラス。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/env.py.html&quot;}, '*');"><code>test/modules/http2/env.py</code></a>: テスト環境の基盤。<code>apache_restart()</code> や <code>apache_reload()</code> の実装が含まれる。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/http2/test_105_timeout.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/http2/test_105_timeout.py.html&quot;}, '*');"><code>test/modules/http2/test_105_timeout.py</code></a>: タイムアウト関連のテスト。本ファイルと同様に接続の安定性を検証する。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li><code>test_h2_106_02</code> で発生する curl のエラーコード（16: HTTP/2 stream error, 55: Failed to send/recv）は、サーバーのプロセス終了に伴う正常な挙動として扱われています。</li>
+<li><code>apache_reload()</code> は Graceful Restart をトリガーします。このテストは、HTTP/2 のストリームが再起動後も適切に維持されるかを確認する重要な指標となります。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

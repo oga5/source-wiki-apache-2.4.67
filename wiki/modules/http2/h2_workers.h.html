@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_workers.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');">modules/http2/h2_workers.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>h2_workers.h</code></a> は、HTTP/2 モジュールにおける「セカンダリ接続」を並列実行するための専用スレッドプール管理機能を提供します。動的なスレッド生成・破棄をサポートし、負荷に応じたスケーラブルな接続処理を実現します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおいて、<a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>（多重化）と連携し、実際の接続処理を担うワーカー群を抽象化します。Apache HTTP Server の MPM（Multi-Processing Module）とは独立した、HTTP/2 セッション内での接続処理の並列化を担当します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッドプール管理**: 指定された最小・最大スレッド数に基づき、ワーカーのライフサイクルを制御する。</li>
+<li>**接続プロデューサーの抽象化**: <code>ap_conn_producer_t</code> を介して、接続ソース（プロデューサー）とワーカーを疎結合に接続する。</li>
+<li>**負荷適応**: アイドル状態のスレッドを一定時間後に終了させることで、リソース消費を最適化する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_workers</code>: ワーカープール全体を管理するメイン構造体。</li>
+<li><code>ap_conn_producer_t</code>: 接続（<code>conn_rec</code>）を提供するソースを定義する構造体。</li>
+<li><code>h2_workers_register()</code>: 新しい接続プロデューサーを登録する。</li>
+<li><code>h2_workers_activate()</code>: プロデューサーをアクティブ化し、ワーカーによる接続取得を許可する。</li>
+<li><code>h2_workers_join()</code>: プロデューサーの処理を停止し、完了を待機する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **登録**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.c.html#L568" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_workers_register.html&quot;}, '*');"><code>h2_workers_register</code></a> でプロデューサーを登録し、コールバック（<code>next</code>, <a class="wiki-source-link" href="../../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a>, <code>shutdown</code>）を紐付ける。 2. **活性化**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.c.html#L616" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_workers_activate.html&quot;}, '*');"><code>h2_workers_activate</code></a> を呼び出すと、プロデューサーがアクティブリストに移動し、アイドル中のワーカーが <code>next</code> コールバックをポーリングする。 3. **処理**: ワーカーは取得した <code>conn_rec</code> を処理し、完了後に <a class="wiki-source-link" href="../../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a> コールバックを呼び出す。 4. **終了**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.c.html#L594" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_workers_join.html&quot;}, '*');"><code>h2_workers_join</code></a> を呼び出すと、プロデューサーはアクティブリストから外れ、進行中の処理が完了するまで待機する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_thread_mutex.h</code>, <code>apr_thread_cond.h</code>: スレッド同期用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>: <code>conn_rec</code> の定義に使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a>: HTTP/2 モジュール共通定義。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>h2_workers.c</code></a>: 本ヘッダーで宣言された関数の実装およびスレッドのメインループ（<a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__slot_run.html&quot;}, '*');"><code>slot_run</code></a>）を含む。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');"><code>h2_mplx.h</code></a>: ワーカープールを利用してリクエストの多重化を行う上位層。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本機能は、HTTP/2 のストリーム処理を効率化するために設計されています。</li>
+<li><code>ap_conn_producer_t</code> のコールバック関数は、スレッドセーフである必要があります。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_workers.c.html#L427" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_workers_create.html&quot;}, '*');"><code>h2_workers_create</code></a> で指定する <code>idle_limit</code> は、リソースの節約とスレッド生成コストのバランスを決定する重要なパラメータです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_workers_h__h2_workers.html" target="wiki-view"><code>h2_workers</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_h__ap_conn_producer_t.html" target="wiki-view"><code>ap_conn_producer_t</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_h__ap_conn_producer_next.html" target="wiki-view"><code>ap_conn_producer_next</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_h__conn_rec.html" target="wiki-view"><code>conn_rec</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_workers_h__ap_conn_producer_shutdown.html" target="wiki-view"><code>ap_conn_producer_shutdown</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

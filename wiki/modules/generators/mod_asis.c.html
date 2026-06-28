@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/generators/mod_asis.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/generators/mod_asis.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_asis.c.html&quot;}, '*');">modules/generators/mod_asis.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_asis</code> は、Apache HTTP Server において「そのまま送信（Send-As-Is）」機能を提供するモジュールです。ファイルの内容を HTTP レスポンスヘッダーを含めてそのままクライアントに転送します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/generators</code> サブシステムの一部として、特定の MIME タイプ（<code>httpd/send-as-is</code>）を持つファイルに対するリクエスト処理を担当します。サーバーによるヘッダーの自動生成をバイパスし、ファイル内に記述されたヘッダーを優先させる特殊なハンドラを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**HTTP ヘッダーの解析**: ファイルの先頭部分を読み込み、<a class="wiki-source-link" href="../../../source/server/util_script.c.html#L778" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_ex</code></a> を用いてレスポンスヘッダーとして解釈する。</li>
+<li>**内部リダイレクトの処理**: ファイル内で <code>Location</code> ヘッダーが指定されている場合、内部リダイレクトをトリガーする。</li>
+<li>**コンテンツのストリーミング**: ヘッダー以降のファイル本体を、Apache のバケットブリゲード（Bucket Brigade）機構を使用してクライアントへ効率的に送信する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_asis.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_asis.c.html&quot;}, '*');"><code>ASIS_MAGIC_TYPE</code></a>: このモジュールが処理対象とする MIME タイプ（<code>httpd/send-as-is</code>）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_asis.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_asis_c__asis_handler.html&quot;}, '*');"><code>asis_handler</code></a>: リクエストを処理するメイン関数。ファイルを開き、ヘッダーを解析し、本体を送信する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_asis.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_asis.c.html&quot;}, '*');"><code>asis</code></a>: モジュールの定義構造体。<code>register_hooks</code> をフックとして登録する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **ハンドラ起動**: <a class="wiki-source-link" href="../../../source/modules/generators/mod_asis.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_asis_c__asis_handler.html&quot;}, '*');"><code>asis_handler</code></a> がリクエストを受け取り、ハンドラ名が <a class="wiki-source-link" href="../../../source/modules/generators/mod_asis.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_asis.c.html&quot;}, '*');"><code>ASIS_MAGIC_TYPE</code></a> と一致するか確認する。 2. **ファイルオープン**: 対象ファイルを読み込み専用で開く。 3. **ヘッダー解析**: <a class="wiki-source-link" href="../../../source/server/util_script.c.html#L778" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_ex</code></a> を呼び出し、ファイル先頭のヘッダーを解析して <code>r-&gt;headers_out</code> 等に反映させる。 4. **リダイレクト判定**: <code>Location</code> ヘッダーが存在する場合、<a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L800" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_internal_redirect_handler.html&quot;}, '*');"><code>ap_internal_redirect_handler</code></a> を呼び出し、処理をリダイレクト先に委譲する。 5. **本体送信**: ヘッダーを除いた残りのファイル内容を <code>apr_brigade_insert_file</code> でバケットブリゲードに追加し、<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で出力フィルターチェーンへ流し込む。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache のリクエスト処理およびプロトコル制御の基本。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a>: スクリプトヘッダー解析用関数群。</li>
+<li><code>apr_file_io.h</code> (間接的に <code>apr_strings.h</code> 等経由): ファイル操作用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a>: CGI スクリプトのヘッダー解析など、類似したヘッダー処理ロジックを持つ。</li>
+<li><a class="wiki-source-link" href="../../../source/server/protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/protocol.c.html&quot;}, '*');"><code>server/protocol.c</code></a>: Apache の標準的なレスポンス生成フロー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは、サーバーが自動生成するヘッダー（Date や Server など）を上書きしたい場合や、完全に制御されたレスポンスを返したい場合に利用されます。</li>
+<li>ファイルの先頭が空行で終わっていない場合、ヘッダー解析が正しく行われない可能性があるため、対象ファイルは適切な形式（ヘッダー群 + 空行 + ボディ）である必要があります。</li>
+<li>内部リダイレクトが発生した場合、元のリクエストメソッドに関わらず <code>GET</code> メソッドとして再処理される点に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__generators__mod_asis_c__asis_handler.html" target="wiki-view"><code>asis_handler</code></a></li>
+<li><a href="../../symbols/modules__generators__mod_asis_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

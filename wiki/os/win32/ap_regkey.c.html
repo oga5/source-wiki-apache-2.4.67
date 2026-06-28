@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>os/win32/ap_regkey.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/os/win32/ap_regkey.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/ap_regkey.c.html&quot;}, '*');">os/win32/ap_regkey.c</a></h1>
+<h2>概要</h2>
+<p>Windows レジストリ操作を抽象化し、APR（Apache Portable Runtime）スタイルのインターフェースを提供するモジュールです。Win32 API（<code>RegOpenKeyEx</code>, <code>RegQueryValueEx</code> 等）をラップし、メモリ管理を APR プールに統合することで、リソースリークを防ぎつつ安全なレジストリ操作を実現します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>os/win32</code> サブシステムの一部として、Windows 特有のレジストリ設定を読み書きする機能を提供します。<a class="wiki-source-link" href="../../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>ap_regkey.h</code></a> で定義された抽象データ型 <code>ap_regkey_t</code> を実装し、HTTP サーバーの設定や環境情報の取得・永続化をサポートします。</p>
+<h2>責務</h2>
+<ul>
+<li>**ライフサイクル管理**: レジストリキーのオープン・クローズを管理し、APR プールクリーンアップハンドラを通じて自動的にハンドルを解放する。</li>
+<li>**プラットフォーム抽象化**: Unicode（<code>W</code> 系 API）と ANSI（<code>A</code> 系 API）の双方をサポートし、実行時の OS 環境に応じて適切な API を選択する。</li>
+<li>**データ変換**: レジストリの型（<code>REG_SZ</code>, <code>REG_EXPAND_SZ</code>, <code>REG_MULTI_SZ</code>）と C 文字列/配列間の変換および環境変数展開を行う。</li>
+<li>**エラーハンドリング**: Win32 エラーコードを <code>apr_status_t</code> に変換し、一貫したエラー報告を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>struct ap_regkey_t</code>: レジストリキーのハンドル (<code>HKEY</code>) と、そのキーに関連付けられた <code>apr_pool_t</code> を保持するコンテナ。</li>
+</ul>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><code>ap_regkey_const()</code>: 定義済みのルートキー（<code>HKEY_LOCAL_MACHINE</code> 等）を <code>ap_regkey_t</code> 型として取得する。</li>
+<li><code>ap_regkey_open()</code>: レジストリキーを開く/作成し、プールにクリーンアップを登録する。</li>
+<li><code>ap_regkey_close()</code>: 明示的にキーを閉じ、プールからクリーンアップ登録を解除する。</li>
+</ul>
+<h3>値の操作</h3>
+<ul>
+<li><code>ap_regkey_value_get/set()</code>: 文字列値の読み書き（<code>REG_SZ</code> / <code>REG_EXPAND_SZ</code>）。</li>
+<li><code>ap_regkey_value_raw_get/set()</code>: 型を問わないバイナリデータの読み書き。</li>
+<li><code>ap_regkey_value_array_get/set()</code>: <code>REG_MULTI_SZ</code> 型の配列データの操作。</li>
+<li><code>ap_regkey_remove()</code>: レジストリキーの削除（非再帰的）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/os/win32/ap_regkey.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_open.html&quot;}, '*');"><code>ap_regkey_open</code></a> が呼び出されると、OS の <code>RegCreateKeyEx</code> または <code>RegOpenKeyEx</code> を実行し、成功時に <code>apr_pool_cleanup_register</code> を使用して <a class="wiki-source-link" href="../../../source/os/win32/ap_regkey.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__regkey_cleanup.html&quot;}, '*');"><code>regkey_cleanup</code></a> を登録します。 2. **データアクセス**: <code>get</code> 系関数は、まず <code>RegQueryValueEx</code> を呼び出して必要なバッファサイズを特定し、<code>apr_palloc</code> でメモリを確保してから実際のデータを取得します。 3. **環境変数展開**: <code>REG_EXPAND_SZ</code> 型の場合、<code>ExpandEnvironmentStrings</code> を呼び出して <code>%SystemRoot%</code> 等を解決します。 4. **終了**: プールの破棄時、または <a class="wiki-source-link" href="../../../source/os/win32/ap_regkey.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_close.html&quot;}, '*');"><code>ap_regkey_close</code></a> 呼び出し時に <a class="wiki-source-link" href="../../../source/os/win32/ap_regkey.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__regkey_cleanup.html&quot;}, '*');"><code>regkey_cleanup</code></a> が実行され、<code>RegCloseKey</code> でハンドルが解放されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>: APR 基本型定義。</li>
+<li><code>arch/win32/apr_arch_file_io.h</code> / <code>apr_arch_misc.h</code>: Win32 固有の OS 抽象化レイヤー。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>ap_regkey.h</code></a>: 公開インターフェース定義。</li>
+<li><code>arch/win32/apr_arch_misc.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>include/ap_regkey.h</code></a>: 本実装のヘッダーファイル。</li>
+<li><a class="wiki-source-link" href="../../../source/os/win32/util_win32.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/util_win32.c.html&quot;}, '*');"><code>os/win32/util_win32.c</code></a>: Win32 固有のユーティリティ関数群。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>ap_regkey_t</code> が保持するハンドルは、関連付けられた <code>apr_pool_t</code> の生存期間に依存します。プールが破棄されると自動的にクローズされます。</li>
+<li>**Unicode/ANSI**: <code>APR_HAS_UNICODE_FS</code> および <code>APR_HAS_ANSI_FS</code> マクロにより、コンパイル時にどちらの API を使用するかが決定されます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/os/win32/ap_regkey.c.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__win32__ap_regkey_c__ap_regkey_remove.html&quot;}, '*');"><code>ap_regkey_remove</code></a> は非再帰的です。サブキーが存在する場合、Windows の仕様に従い削除は失敗します。</li>
+<li>**省略箇所**: レジストリの列挙（<code>RegEnumKeyEx</code> 等）機能は本ファイルには含まれていません。これは主に設定の読み書きに特化した設計であるためです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_t.html" target="wiki-view"><code>ap_regkey_t</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_const.html" target="wiki-view"><code>ap_regkey_const</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__regkey_cleanup.html" target="wiki-view"><code>regkey_cleanup</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_open.html" target="wiki-view"><code>ap_regkey_open</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_close.html" target="wiki-view"><code>ap_regkey_close</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_remove.html" target="wiki-view"><code>ap_regkey_remove</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_value_get.html" target="wiki-view"><code>ap_regkey_value_get</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_value_set.html" target="wiki-view"><code>ap_regkey_value_set</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_value_raw_get.html" target="wiki-view"><code>ap_regkey_value_raw_get</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_value_raw_set.html" target="wiki-view"><code>ap_regkey_value_raw_set</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_value_array_get.html" target="wiki-view"><code>ap_regkey_value_array_get</code></a></li>
+<li><a href="../../symbols/os__win32__ap_regkey_c__ap_regkey_value_array_set.html" target="wiki-view"><code>ap_regkey_value_array_set</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

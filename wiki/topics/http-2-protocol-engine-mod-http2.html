@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/http-2-protocol-engine-mod-http2.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>HTTP/2 Protocol Engine (mod_http2)</h1>
+<h2>概念</h2>
+<p><code>mod_http2</code> は、Apache HTTP Server において HTTP/2 プロトコル通信を処理するエンジンです。HTTP/2 の特徴である単一の接続上での複数ストリームの多重化（マルチプレクシング）を実現するため、セッション管理（<code>h2_session</code>）、マルチプレクサ（<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>）、ストリーム制御（<code>h2_stream</code>）、およびスレッド間でデータを安全に転送するためのバケットビーム（<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>）などのコンポーネントが協調して動作します。</p>
+<h2>なぜ重要か</h2>
+<p>HTTP/2 は、従来の HTTP/1.1 と異なり、単一の TCP コネクション上で複数のリクエストとレスポンスを非同期に並行処理します。これを効率的かつ安全に実現するためには、接続を管理するメインスレッドと、各ストリームを処理するスレッドとの間で、メモリ管理やデータ転送を厳密に制御する必要があります。<code>mod_http2</code> は、バケットビームによる効率的なデータ転送や、メモリ不足（OOM）時の安全なプロセス終了などを提供し、高パフォーマンスで堅牢な HTTP/2 通信を支えています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>提供されたソースコードおよびシンボル情報に基づく主要なエンティティは以下の通りです。</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L913" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_create.html&quot;}, '*');"><code>h2_session_create</code></a>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a>):</li>
+<p>HTTP/2 セッションを生成・初期化します。セッションの確立時に呼び出され、関連する I/O やマルチプレクサ、ストリームなどの初期化を行います。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L211" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_prepare_processing.html&quot;}, '*');"><code>h2_stream_prepare_processing</code></a>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a>):</li>
+<p>ストリームの処理が開始される直前に呼び出され、入力データの受け渡しに必要な「入力ビーム」の構築が必要かどうかを判定して初期化を行います。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L300" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_create.html&quot;}, '*');"><code>h2_beam_create</code></a>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a>):</li>
+<p>コネクションとストリームスレッド間でデータを転送するためのカスタムバケットビーム（<a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>）を生成します。</p>
+<li>**<code>abort_on_oom</code>** (<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a>):</li>
+<p>メモリ割り当て失敗（OOM）が発生した際に、プロセスを安全かつ強制的に終了させるためのコールバック関数です。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報からは、詳細なエンドツーエンドの全体フローは完全には明らかになっていませんが、部分的なデータおよび処理の流れは以下の通りです。</p>
+<p>1. **セッションの生成**: 接続のセットアップ（<a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L92" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_c__h2_c1_setup.html&quot;}, '*');"><code>h2_c1_setup</code></a>）の過程で <a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L913" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_create.html&quot;}, '*');"><code>h2_session_create</code></a> が呼び出され、HTTP/2 セッションが生成されます。この中で、I/O の初期化（<a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_init.html&quot;}, '*');"><code>h2_c1_io_init</code></a>）やマルチプレクサの生成（<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L272" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__h2_mplx_c1_create.html&quot;}, '*');"><code>h2_mplx_c1_create</code></a>）などが行われます。 2. **ストリーム処理の準備**: マルチプレクサ（<a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>h2_mplx.c</code></a>）から <a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L211" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_prepare_processing.html&quot;}, '*');"><code>h2_stream_prepare_processing</code></a> が呼び出され、ストリームの処理開始直前に遅延初期化が実行されます。 3. **入力ビームのセットアップ**: ストリームの入力がまだ閉じられていない場合、<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L200" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__stream_setup_input.html&quot;}, '*');"><code>stream_setup_input</code></a> を経由して <a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html#L300" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_create.html&quot;}, '*');"><code>h2_beam_create</code></a> が呼び出され、データ転送用のバケットビームが構築されます。</p>
+<p>※ セッション確立からリクエスト受信、レスポンス送信、セッション切断に至る完全なエンドツーエンドのライフサイクルは、現時点では未解析です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**入力ビームの条件付き初期化**:</li>
+<p><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L211" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_prepare_processing.html&quot;}, '*');"><code>h2_stream_prepare_processing</code></a> において、ストリームの <code>input_closed</code> フラグが偽（入力がまだ閉じられていない）である場合のみ、<a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L200" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__stream_setup_input.html&quot;}, '*');"><code>stream_setup_input</code></a> を呼び出して入力ビームをセットアップします。すでに閉じられている場合はセットアップをスキップします。</p>
+<li>**OOM 時のプロセス終了**:</li>
+<p>メモリプール管理構造体（<code>apr_pool_t</code>）に <code>abort_on_oom</code> が登録されている場合、メモリ不足が発生すると <code>ap_abort_on_oom()</code> を介して確実にプロセスが終了され、不安定な状態でのメモリ操作を防止します。</p>
+</ul>
+<p>※ その他のセッション状態遷移や、マルチプレクサにおけるスレッド間の同期に関する不変条件は、現時点では未解析です。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**同名関数による競合**:</li>
+<p><code>abort_on_oom</code> は <code>apr_pool_abort_set</code> に登録して使用されますが、<a class="wiki-source-link" href="../../source/support/passwd_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>support/passwd_common.h</code></a> など他のソースファイルでも同名の関数が定義されている可能性があり、リンク時の重複定義やスコープの混同に注意する必要があります。</p>
+<li>**遅延初期化のタイミング**:</li>
+<p><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L211" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_prepare_processing.html&quot;}, '*');"><code>h2_stream_prepare_processing</code></a> はストリーム処理開始直前の特定のタイミングで呼び出される設計（遅延初期化）となっています。この呼び出しタイミングや <code>input_closed</code> フラグの状態管理を誤ると、必要な入力ビームが構築されず、データ転送が正常に行われない可能性があります。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>modules/http2/h2_session.c</code></a> (セッションの生成と管理)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>modules/http2/h2_stream.c</code></a> (ストリームのライフサイクルと準備処理)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>modules/http2/h2_bucket_beam.c</code></a> (バケットビームによるデータ転送)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>modules/http2/h2_mplx.c</code></a> (マルチプレクシングとメモリ管理)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

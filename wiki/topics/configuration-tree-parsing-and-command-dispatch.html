@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/configuration-tree-parsing-and-command-dispatch.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Configuration Tree Parsing and Command Dispatch</h1>
+<h2>概念</h2>
+<p><code>Configuration Tree Parsing and Command Dispatch</code> は、Apache HTTP Server の起動時に設定ファイルを解析してメモリ上に階層的なディレクティブツリー（設定ツリー）を構築し、各ディレクティブに対応するモジュールのハンドラー関数を呼び出して設定を適用する仕組みです。</p>
+<h2>なぜ重要か</h2>
+<p>Apache HTTP Server は高度にモジュール化されており、コア機能や各モジュールが独自の設定ディレクティブを持っています。起動時にテキストベースの設定ファイルを構造化されたメモリ表現に変換し、適切なモジュールへ設定コンテキストを正確に分配（ディスパッチ）することは、サーバーが正しく構成されて動作するために不可欠です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__util_cfgtree_h__ap_directive_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_cfgtree_h__ap_directive_t.html&quot;, &quot;source&quot;: &quot;source/include/util_cfgtree.h.html#L35&quot;}, '*');"><code>symbol:include/util_cfgtree.h#ap_directive_t</code></a>**: 設定ファイルをメモリ上で階層構造（設定ツリー）として表現するためのノード構造体です。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/include__http_config_h__command_rec.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;, &quot;source&quot;: &quot;source/include/http_config.h.html#L203&quot;}, '*');"><code>symbol:include/http_config.h#command_rec</code></a>**: 各モジュールが提供する設定ディレクティブの定義（ディレクティブ名、引数の要件、ハンドラー関数など）を保持する構造体です。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/include__http_config_h__cmd_parms.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__cmd_parms.html&quot;, &quot;source&quot;: &quot;source/include/http_config.h.html#L74&quot;}, '*');"><code>symbol:include/http_config.h#cmd_parms</code></a>**: 設定ディレクティブの解析時に、ハンドラー関数へ現在の解析状態や設定コンテキスト（プール情報、ファイル位置など）を提供するための構造体です。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **設定ツリーの構築**: 設定ファイルの解析中、新しいディレクティブが検出されるたびに <code>ap_directive_t</code> ノードが生成され、<code>ap_add_node()</code> によって階層的な設定ツリーが構築されます。 2. **ツリーの走査**: <a class="wiki-source-link" href="../../source/server/config.c.html#L1360" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_walk_config.html&quot;}, '*');"><code>ap_walk_config</code></a> などの設定解析エンジンが、構築された設定ツリー（<code>ap_directive_t</code>）を走査します。 3. **コマンドの検索**: 各ディレクティブに対して、<a class="wiki-source-link" href="../../source/server/config.c.html#L1053" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_find_command.html&quot;}, '*');"><code>ap_find_command</code></a> や <a class="wiki-source-link" href="../../source/server/config.c.html#L1066" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_find_command_in_modules.html&quot;}, '*');"><code>ap_find_command_in_modules</code></a> を介し、モジュールが登録している <a class="wiki-source-link" href="../../source/include/http_config.h.html#L203" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__command_rec.html&quot;}, '*');"><code>command_rec</code></a> から対応するディレクティブ定義を検索します。 4. **ハンドラーの呼び出し**: 一致するコマンドが見つかると、現在の解析状態や設定コンテキストを保持する <code>cmd_parms</code> 構造体が作成され、ハンドラー関数の第一引数として渡されます。 5. **設定の適用**: ハンドラー関数は <code>cmd_parms</code> を通じて設定値を取得し、モジュール固有の設定構造体（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a> など）に反映させます。</p>
+<p>※設定ファイルの読み込み開始から <a class="wiki-source-link" href="../../source/server/config.c.html#L1360" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_walk_config.html&quot;}, '*');"><code>ap_walk_config</code></a> が呼び出されるまでの完全な制御フローや、詳細なパース処理の全体像は、提供されたコンテキストからは完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**順序の保存**: 設定ファイルに記述されたディレクティブの順序は、<code>ap_directive_t</code> によるツリー構造内でも保持されます。</li>
+<li>**閉じタグの除外**: 閉じタグ（例: <code>&lt;/Directory&gt;</code>）は、ツリー内の独立したノードとしては保存されません。</li>
+<li>**プールの生存期間**: 設定データは主に <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a>（設定プール）に割り当てられます。解析中に使用される一時プール <code>temp_pool</code> は、リクエスト処理開始前に破棄されます。</li>
+<li>**コンテキストの一時性**: <code>cmd_parms</code> は設定解析のライフサイクルにおいて一時的なコンテキストを保持するため、ハンドラー外での保持や再利用は避ける必要があります。</li>
+<li>**ショートカットの不確実性**: <code>ap_directive_t</code> の <code>last</code> メンバはツリー末尾へのアクセスを高速化するためのショートカットですが、常に最新であるとは限りません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**未定義ディレクティブ**: 検索対象のディレクティブ名がどのモジュールにも存在しない場合、検索関数（<a class="wiki-source-link" href="../../source/server/config.c.html#L1053" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_find_command.html&quot;}, '*');"><code>ap_find_command</code></a> など）は <code>NULL</code> を返します。</li>
+<li>**範囲外アクセス**: <code>cmd_parms</code> 内のポインタやインデックスに対する範囲外アクセス保護は、デバッグビルド以外ではマクロ実装により省略される場合があります。</li>
+<li>**動的変更の制限**: <code>ap_directive_t</code> などの構造体はサーバー起動時の設定読み込みフェーズに特化しているため、実行時の動的な設定変更には別のメカニズムが関与する場合があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_cfgtree.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_cfgtree.h.html&quot;}, '*');"><code>include/util_cfgtree.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

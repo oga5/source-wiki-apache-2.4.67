@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_conn_ctx.h.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');">modules/http2/h2_conn_ctx.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a> は、Apache HTTP/2 モジュールにおいて、各接続（<code>conn_rec</code>）に付随する状態管理コンテキストを定義するヘッダーファイルです。HTTP/2 のセッション管理（C1）と、ストリーム処理のために生成されるサブ接続（C2）の両方で共通のメタデータ構造を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> は、クライアントとの直接接続（C1）と、内部的なストリーム処理用接続（C2）を区別して扱います。本ファイルは、これら異なる接続タイプに共通の「HTTP/2 関連のコンテキスト」を <code>conn_config</code> に格納・取得するためのインターフェースを提供し、モジュール全体の状態追跡を可能にします。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続コンテキストの定義**: <code>h2_conn_ctx_t</code> 構造体による、接続ごとの状態（セッション情報、ストリームID、タイムアウト、入出力パイプ等）の保持。</li>
+<li>**ライフサイクル管理**: 接続の初期化、セッションの割り当て、および接続終了時のデタッチ処理。</li>
+<li>**C1/C2 識別**: クライアント接続と内部処理用接続のメタデータを統合的に管理し、必要に応じて適切なリソース（<a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> や <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a>）を紐付ける。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>h2_conn_ctx_t</code>: 接続ごとの状態を保持するメイン構造体。</li>
+<li><code>h2_conn_ctx_get(c)</code>: <code>conn_rec</code> からコンテキストを取得するマクロ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_create_for_c1.html&quot;}, '*');"><code>h2_conn_ctx_create_for_c1</code></a>: クライアント接続（C1）用のコンテキスト生成関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html#L77" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_init_for_c2.html&quot;}, '*');"><code>h2_conn_ctx_init_for_c2</code></a>: ストリーム処理用接続（C2）用のコンテキスト初期化関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>H2_PIPE_IN</code></a> / <a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>H2_PIPE_OUT</code></a>: C2 接続におけるデータ通知パイプのインデックス。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 接続確立時に <a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_create_for_c1.html&quot;}, '*');"><code>h2_conn_ctx_create_for_c1</code></a> が呼ばれ、<code>ap_set_module_config</code> を通じて <code>conn_rec</code> にコンテキストがアタッチされます。 2. **C2 への展開**: ストリーム処理が開始されると、<a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html#L77" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_init_for_c2.html&quot;}, '*');"><code>h2_conn_ctx_init_for_c2</code></a> が呼ばれ、親接続（C1）の情報を引き継ぎつつ、<a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> や <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> がコンテキストに設定されます。 3. **状態更新**: 処理中、<a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_set_timeout.html&quot;}, '*');"><code>h2_conn_ctx_set_timeout</code></a> 等を通じて、入出力ビームやパイプのタイムアウト設定が同期的に更新されます。 4. **破棄**: 接続終了時に <a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_conn_ctx_c__h2_conn_ctx_detach.html&quot;}, '*');"><code>h2_conn_ctx_detach</code></a> が呼ばれ、コンテキストの参照が解除されます。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a>: モジュール共通の定義。</li>
+<li><code>apr_pools.h</code> / <code>apr_network_io.h</code>: メモリ管理およびソケット操作用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: Apache HTTP Server のコア構造体（<code>conn_rec</code>, <code>server_rec</code>）。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.c.html&quot;}, '*');"><code>h2_conn_ctx.c</code></a>: 本ヘッダーで宣言された関数の実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.h.html&quot;}, '*');"><code>h2_session.h</code></a>: C1 接続のセッション管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');"><code>h2_mplx.h</code></a>: C2 接続におけるストリーム多重化管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>h2_bucket_beam.h</code></a>: ストリーム間でのデータ転送メカニズム。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本構造体は C1（クライアント接続）と C2（内部処理用接続）の両方で再利用されるため、各フィールドが「C1 用」「C2 用」のどちらで利用されるかというコメントを注視してください。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx_get</code></a> マクロは、<code>ap_get_module_config</code> をラップしたものであり、HTTP/2 モジュールが有効な接続であれば常に有効なコンテキストが返ることを前提としています。</li>
+<li>C2 接続のライフサイクルは <a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> と密接に関連しているため、デバッグ時は <a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>h2_mplx.c</code></a> と併せて参照することをお勧めします。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_conn_ctx_h__h2_conn_ctx_t.html" target="wiki-view"><code>h2_conn_ctx_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

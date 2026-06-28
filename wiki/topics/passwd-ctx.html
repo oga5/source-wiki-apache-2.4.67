@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/passwd-ctx.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>passwd_ctx</h1>
+<h2>概念</h2>
+<p><code>passwd_ctx</code> は、Apache HTTP Server（httpd-2.4.67）において、パスワードのハッシュ生成、検証、または暗号化処理のコンテキスト（状態や設定情報）を管理するために使用される構造体です。</p>
+<p>ただし、この構造体は共通の単一定義ではなく、関与するモジュール（<code>modules/lua</code>、<code>modules/md</code>、<code>support</code>）ごとに異なる定義と役割を持って個別に実装されています。</p>
+<h2>なぜ重要か</h2>
+<p>パスワードのハッシュ化や暗号化処理（<code>htpasswd</code> や <code>htdbm</code> などのユーティリティ、Luaスクリプトからのパスワード操作、MDモジュールでの暗号化処理など）において、必要なパラメータ（メモリプール、入力パスワード、アルゴリズム、出力バッファ、エラー情報など）をカプセル化し、一貫したインターフェースで処理関数に引き渡す役割を果たすため重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__lua.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__lua.html&quot;, &quot;source&quot;: &quot;source/modules/lua/lua_apr.c.html&quot;}, '*');"><code>module:modules/lua</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/support.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/support.html&quot;, &quot;source&quot;: &quot;source/support/ab.c.html&quot;}, '*');"><code>module:support</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__lua__lua_passwd_h__passwd_ctx.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_h__passwd_ctx.html&quot;, &quot;source&quot;: &quot;source/modules/lua/lua_passwd.h.html#L66&quot;}, '*');"><code>symbol:modules/lua/lua_passwd.h#passwd_ctx</code></a>**: Luaモジュール用のパスワードハッシュ生成コンテキスト。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__md__md_crypt_c__passwd_ctx.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_crypt_c__passwd_ctx.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_crypt.c.html#L183&quot;}, '*');"><code>symbol:modules/md/md_crypt.c#passwd_ctx</code></a>**: MD（Managed Domains）モジュール用のパスフレーズ保持コンテキスト。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/support__passwd_common_h__passwd_ctx.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_h__passwd_ctx.html&quot;, &quot;source&quot;: &quot;source/support/passwd_common.h.html#L86&quot;}, '*');"><code>symbol:support/passwd_common.h#passwd_ctx</code></a>**: <code>htpasswd</code> や <code>htdbm</code> などのサポートツールで共有される、パスワード生成・検証用の共通コンテキスト。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>システム全体を横断する単一のエンドツーエンドフローは存在せず、各モジュール内で独立したフローが実行されます。</p>
+<h3>1. <code>support</code> モジュールにおける流れ</h3>
+<p>1. 呼び出し元（<a class="wiki-source-link" href="../../source/support/htpasswd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htpasswd.c.html&quot;}, '*');"><code>htpasswd.c</code></a> の <a class="wiki-source-link" href="../../source/support/htpasswd.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__htpasswd_c__mkrecord.html&quot;}, '*');"><code>mkrecord</code></a> や <a class="wiki-source-link" href="../../source/support/htdbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdbm.c.html&quot;}, '*');"><code>htdbm.c</code></a> など）が <code>passwd_ctx</code> を初期化し、メモリプールや入力ソース（<code>passwd_src</code>）を設定します。 2. <code>get_password()</code> を介して、指定されたソース（プロンプト、引数、標準入力など）からパスワードを取得し、<code>passwd</code> メンバに格納します。 3. <code>mkhash()</code> が <code>ctx</code> 内のアルゴリズム（<code>alg</code>）や計算コスト（<code>cost</code>）を参照してハッシュを計算し、<a class="wiki-source-link" href="../../source/modules/generators/mod_info.c.html#L85" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_info.c.html&quot;}, '*');"><code>out</code></a> に書き込みます。成功時は <code>0</code>、失敗時はエラーコードを返し、<code>errstr</code> にエラー詳細をセットします。</p>
+<h3>2. <code>modules/lua</code> モジュールにおける流れ</h3>
+<p>1. 呼び出し元（<a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.c.html&quot;}, '*');"><code>lua_passwd.c</code></a> の <a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__mk_password_hash.html&quot;}, '*');"><code>mk_password_hash</code></a> や <a class="wiki-source-link" href="../../source/modules/lua/lua_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_request.c.html&quot;}, '*');"><code>lua_request.c</code></a> など）が <code>passwd_ctx</code> を初期化し、メモリプール（<code>pool</code>）と入力パスワード（<code>passwd</code>）を設定します。 2. <code>mk_password_hash(passwd_ctx *ctx)</code> が呼び出され、<code>ctx-&gt;alg</code> に基づいて <code>apr_md5_encode</code>、<code>apr_sha1_base64</code>、またはシステム標準の <code>crypt()</code> 等へ処理が分岐します。 3. 生成されたハッシュ文字列が <code>ctx-&gt;out</code> に書き込まれます。</p>
+<h3>3. <code>modules/md</code> モジュールにおける流れ</h3>
+<p>1. 呼び出し元が <code>passwd_ctx</code> を初期化し、パスフレーズ（<code>pass_phrase</code>）とその長さ（<code>pass_len</code>）を設定します。 2. OpenSSL のコールバック関数やパスワード入力を必要とする暗号化ルーチンにおいて、認証情報を一括して保持するコンテナとして機能し、暗号化操作に引き渡されます。</p>
+<h2>重要な不変条件</h2>
+<p>それぞれの定義において、以下の不変条件を維持する必要があります。</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/support/passwd_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>support/passwd_common.h</code></a>**:</li>
+<li><code>pool</code> は <code>apr_pool_t</code> によって管理される有効なメモリプールでなければなりません。</li>
+<li>処理を実行する前に <code>errfile</code> が適切に初期化されている必要があります。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.h.html&quot;}, '*');"><code>modules/lua/lua_passwd.h</code></a>**:</li>
+<li><code>pool</code> はエラーメッセージ生成などのために有効な APR プールである必要があります。</li>
+<li>パスワードの長さは <a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.h.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.h.html&quot;}, '*');"><code>MAX_PASSWD_LEN</code></a>（256）を超えてはなりません。</li>
+<li>呼び出し元は、ハッシュ生成関数を呼び出す前に構造体を適切に初期化する必要があります。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>modules/md/md_crypt.c</code></a>**:</li>
+<li><code>pass_phrase</code> は有効な文字列を指している必要があります。</li>
+<li><code>pass_len</code> は <code>pass_phrase</code> の実際の長さを正確に反映している必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**名前の衝突と定義の不一致**: <code>passwd_ctx</code> という同名の構造体が3つの異なるファイルで個別に定義されています。これらは互換性がないため、ソースコードの変更やリファクタリング時に混同しないよう注意が必要です。</li>
+<li>**初期化不備によるクラッシュ**:</li>
+<li><code>support</code> ツール群において <code>errfile</code> が未初期化の状態で <code>putline</code> 等が呼び出されると、セグメンテーション違反が発生します。</li>
+<li><code>modules/md</code> において <code>pass_phrase</code> が <code>NULL</code> の場合や <code>pass_len</code> が負の値の場合、利用する関数側で未定義の動作を引き起こす可能性があります。</li>
+<li>**メモリ不足時の強制終了**: <code>support</code> モジュールでは <code>abort_on_oom()</code> が登録されている場合、メモリ確保失敗時にプロセスが即座に終了します。また、<code>pool</code> のライフサイクル管理は呼び出し元の責任です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.h.html&quot;}, '*');"><code>modules/lua/lua_passwd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_crypt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.c.html&quot;}, '*');"><code>modules/md/md_crypt.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/support/passwd_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>support/passwd_common.h</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/shared-object-cache-socache-and-slotmem-abstractions.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Shared Object Cache (socache) and Slotmem Abstractions</h1>
+<h2>概念</h2>
+<p><code>Shared Object Cache (socache)</code> と <code>Slotmem</code> は、Apache HTTP Server において共有メモリ領域やオブジェクトキャッシュを抽象化するための仕組みです。</p>
+<ul>
+<li>**Slotmem (<code>ap_slotmem_instance_t</code>)**: 共有メモリ領域を固定サイズのスロット単位で管理・操作するための不透明な（opaque）ハンドルを提供します。</li>
+<li>**Shared Object Cache (<code>ap_socache_instance_t</code>)**: SSLセッションや認証情報などの小規模オブジェクトをキャッシュするためのバックエンド（shmcb や dbm など）を抽象化する不透明なハンドルを提供します。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p>これらの抽象化により、具体的な共有メモリの確保方法やキャッシュの保存先（メモリ、ファイル、データベースなど）の実装詳細が隠蔽されます。利用側モジュール（<code>mod_proxy_balancer</code> や <code>mod_authn_socache</code> など）は、特定のバックエンド実装に依存することなく、統一されたプロバイダーAPIを介して安全かつ一貫した方法で共有リソースにアクセスできます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (インターフェース定義)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a> (キャッシュプロバイダー実装)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__slotmem.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__slotmem.html&quot;, &quot;source&quot;: &quot;source/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>module:modules/slotmem</code></a> (共有メモリプロバイダー実装)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__ap_slotmem_h__ap_slotmem_instance_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_instance_t.html&quot;, &quot;source&quot;: &quot;source/include/ap_slotmem.h.html#L75&quot;}, '*');"><code>symbol:include/ap_slotmem.h#ap_slotmem_instance_t</code></a>**: 共有メモリ領域を識別し、スロット操作の起点となる不透明な構造体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/include__ap_socache_h__ap_socache_instance_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_instance_t.html&quot;, &quot;source&quot;: &quot;source/include/ap_socache.h.html#L49&quot;}, '*');"><code>symbol:include/ap_socache.h#ap_socache_instance_t</code></a>**: 各キャッシュプロバイダーが個別のキャッシュインスタンスの状態（メモリ領域やファイルハンドルなど）を保持するための不透明な構造体。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたコンテキストから確認できる操作の流れは以下の通りです。</p>
+<h3>Slotmem の利用フロー</h3>
+<p>1. **インスタンスの取得**: 利用側モジュールが <a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> の <code>create</code> または <code>attach</code> を呼び出し、<code>ap_slotmem_instance_t</code> のポインタを取得します。 2. **データの操作**: 取得したインスタンスを引数として、<code>dptr</code>（直接参照）、<code>get</code>/<code>put</code>（データ転送）、<code>num_slots</code>（スロット数取得）、<code>doall</code>（反復処理）などのAPIを呼び出します。</p>
+<h3>Socache の利用フロー</h3>
+<p>1. **インスタンスの生成**: 利用側モジュールが <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> の <code>create</code> を呼び出し、<code>ap_socache_instance_t</code> のポインタを生成します。 2. **初期化**: キャッシュ操作を行う前に、<code>init</code> メソッドを呼び出してインスタンスを初期化します。 3. **キャッシュ操作**: 初期化完了後、<code>store</code> や <code>retrieve</code> などのメソッドにインスタンスを渡してオブジェクトの格納や取得を行います。</p>
+<p>※詳細なプロセス間同期のライフサイクル全体や、具体的なエラーハンドリングの伝播フローは、提供されたコンテキストからは完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**不透明性 (Opaqueness)**: <code>ap_slotmem_instance_t</code> および <code>ap_socache_instance_t</code> は不透明な型として定義されています。利用側は構造体のメンバに直接アクセスしてはならず、必ずプロバイダーAPI（関数ポインタ群）を経由して操作しなければなりません。</li>
+<li>**初期化の強制**:</li>
+<li><code>ap_slotmem_instance_t</code> は、<code>create</code> または <code>attach</code> が正常に成功した後にのみ、他のAPI関数に渡すことができます。</li>
+<li><code>ap_socache_instance_t</code> は、<code>create</code> で生成された後、<code>init</code> メソッドが正常に実行されるまで、<code>store</code> や <code>retrieve</code> などのキャッシュ操作に使用することはできません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**未初期化インスタンスの参照**: インスタンスが初期化される前、あるいは <code>create</code>/<code>attach</code> が失敗して無効な状態のままAPIに渡した場合、挙動はプロバイダーの実装に依存します（一般的には <code>APR_EGENERAL</code> などのエラーコードが返されるか、未定義の動作を引き起こす可能性があります）。</li>
+<li>**互換性の破壊**: 構造体の内部定義は各プロバイダー（<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a> や <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>mod_socache_shmcb.c</code></a> など）に委ねられているため、実装固有の内部構造に依存したコードを記述すると、プロバイダー変更時に動作が破綻します。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a> (Slotmem API 定義)</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> (Socache API 定義)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a> (SHMCB キャッシュプロバイダーの実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_shm.c</code></a> (共有メモリを用いた Slotmem プロバイダーの実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

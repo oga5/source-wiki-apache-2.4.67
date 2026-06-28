@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/balancers/mod_lbmethod_byrequests.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_byrequests.c.html&quot;}, '*');">modules/proxy/balancers/mod_lbmethod_byrequests.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_proxy</code> におけるロードバランシング手法の一つ、「リクエスト数ベース（<a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_byrequests.c.html&quot;}, '*');">byrequests</a>）」の実装です。各ワーカーに設定された <code>lbfactor</code>（重み）に基づき、リクエストを動的に分配します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のロードバランサー機能に対し、<a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.h.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_balancer_method.html&quot;}, '*');"><code>proxy_balancer_method</code></a> プロバイダーとして機能を提供します。リクエストの振り分け先を決定するアルゴリズムをカプセル化し、他のバランサーモジュールと並列してプラグイン可能なアーキテクチャを構成します。</p>
+<h2>責務</h2>
+<ul>
+<li>**負荷分散アルゴリズムの提供**: <code>lbfactor</code> を基準とした「最も緊急に処理が必要なワーカー」の選出。</li>
+<li>**状態管理**: 各ワーカーの <code>lbstatus</code>（累積負荷状況）の更新と、必要に応じたリセット。</li>
+<li>**プロバイダー登録**: <a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.h.html#L1445" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>PROXY_LBMETHOD</code></a> インターフェースを通じて、バランサーが利用可能なメソッドとして自身を登録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L119" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_byrequests.c.html&quot;}, '*');"><code>byrequests</code></a>: このモジュールが提供する <a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.h.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_balancer_method.html&quot;}, '*');"><code>proxy_balancer_method</code></a> 構造体。アルゴリズムの各フック（find, reset 等）を定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__find_best_byrequests.html&quot;}, '*');"><code>find_best_byrequests</code></a>: リクエストごとに呼び出されるメインの選出関数。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__is_best_byrequests.html&quot;}, '*');"><code>is_best_byrequests</code></a>: 各ワーカーの <code>lbstatus</code> を更新し、比較を行うためのコールバック関数。</li>
+<li><code>ap_proxy_balancer_get_best_worker_fn</code>: <code>mod_proxy</code> から提供される、ワーカー走査のためのオプション関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>post_config</code> フックで <code>mod_proxy</code> から <a class="wiki-source-link" href="../../../../source/modules/proxy/proxy_util.c.html#L1375" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__proxy_balancer_get_best_worker.html&quot;}, '*');"><code>proxy_balancer_get_best_worker</code></a> 関数を取得します。 2. **選出**: <a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__find_best_byrequests.html&quot;}, '*');"><code>find_best_byrequests</code></a> が呼ばれると、<a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_byrequests.c.html#L28" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__is_best_byrequests.html&quot;}, '*');"><code>is_best_byrequests</code></a> を用いて全ワーカーを走査します。</p>
+<ul>
+<li>各ワーカーの <code>lbstatus</code> に <code>lbfactor</code> を加算します。</li>
+<li><code>lbstatus</code> が最大であるワーカーを「次回の処理対象」として選出します。</li>
+<p>3. **更新**: 選出されたワーカーの <code>lbstatus</code> から、全ワーカーの <code>lbfactor</code> 合計値を減算し、バランスを維持します。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシ機能の基本構造体（<a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a>, <code>proxy_balancer</code> 等）の定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>ap_hooks.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: Apache のフック機構および MPM 関連の定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: 共有メモリ上のワーカー状態管理。</li>
+<li><code>apr_version.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.c.html&quot;}, '*');"><code>mod_proxy.c</code></a>: ロードバランサーの基盤となるメインモジュール。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_bybusyness.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_bybusyness.c.html&quot;}, '*');"><code>mod_lbmethod_bybusyness.c</code></a> / <a class="wiki-source-link" href="../../../../source/modules/proxy/balancers/mod_lbmethod_bytraffic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/balancers/mod_lbmethod_bytraffic.c.html&quot;}, '*');"><code>mod_lbmethod_bytraffic.c</code></a>: 他のロードバランシング手法の実装例。これらと比較することで、アルゴリズムの差異を理解できます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**アルゴリズムの特性**: この手法は「重み付きラウンドロビン」に近い挙動をします。<code>lbfactor</code> が大きいほど頻繁に選出されます。</li>
+<li>**スレッドセーフ**: <code>reset</code> 関数などは呼び出し元でミューテックス保護されている前提で実装されています。</li>
+<li>**デバッグ**: <code>lbstatus</code> は共有メモリ上に保持されるため、ワーカーの再起動や設定変更時に値がどのように変化するかを追跡する際は、<a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__scoreboard.html&quot;}, '*');"><code>scoreboard</code></a> の状態に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__is_best_byrequests.html" target="wiki-view"><code>is_best_byrequests</code></a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__find_best_byrequests.html" target="wiki-view"><code>find_best_byrequests</code></a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__reset.html" target="wiki-view"><code>reset</code></a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__age.html" target="wiki-view"><code>age</code></a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__lbmethod_byrequests_post_config.html" target="wiki-view"><code>lbmethod_byrequests_post_config</code></a></li>
+<li><a href="../../../symbols/modules__proxy__balancers__mod_lbmethod_byrequests_c__register_hook.html" target="wiki-view"><code>register_hook</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

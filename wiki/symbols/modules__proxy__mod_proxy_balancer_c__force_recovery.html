@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__proxy__mod_proxy_balancer_c__force_recovery.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_balancer.c.html#L426" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__force_recovery.html&quot;}, '*');">force_recovery</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/proxy/mod_proxy_balancer.c:426</code></li>
+</ul>
+<h2>目的</h2>
+<p>ロードバランサ内の全ワーカーがエラー状態にある場合に、設定に応じて強制的に復旧処理を行い、ワーカーを再利用可能な状態へ戻す。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void force_recovery(proxy_balancer *balancer, server_rec *s)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>balancer</code>: 対象となる <code>proxy_balancer</code> 構造体へのポインタ。</li>
+<li><code>s</code>: 現在のサーバー設定を表す <code>server_rec</code> 構造体へのポインタ。</li>
+<li>**出力**: なし（副作用として共有メモリ上のワーカー状態を更新）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>balancer-&gt;workers</code> が有効なワーカーリストを保持していること。</li>
+<li><code>balancer-&gt;s-&gt;forcerecovery</code> が真の場合、すべてのワーカーに対して強制復旧が試行される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. まず、エラー状態（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>PROXY_WORKER_IN_ERROR</code></a>）ではないワーカーが存在するかを確認する。 2. エラー状態のワーカーに対しては、<code>ap_proxy_retry_worker_fn</code> を呼び出し、個別の復旧を試みる。 3. 復旧を試みた結果、いずれかのワーカーが正常状態に戻れば処理を終了する。 4. 全ワーカーが依然としてエラー状態であり、かつ <code>balancer-&gt;s-&gt;forcerecovery</code> が有効な場合：</p>
+<ul>
+<li>すべてのワーカーの <code>retries</code> カウンタをインクリメントする。</li>
+<li>すべてのワーカーから <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>PROXY_WORKER_IN_ERROR</code></a> フラグを除去し、強制的に復旧させる。</li>
+<li>復旧処理の実行をデバッグログに出力する。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/proxy/mod_proxy_balancer.c:507</code>（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_balancer.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html&quot;}, '*');"><code>proxy_balancer_pre_request</code></a> 内から呼び出される）。</li>
+<li>**呼び出し先**: </li>
+<li><code>ap_proxy_retry_worker_fn</code>: ワーカーの個別復旧を試みる関数。</li>
+<li><code>ap_log_error</code>: 復旧実行時のログ出力。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>proxy_balancer</code>: バランサの設定とワーカーリストを保持。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a>: 個々のバックエンドワーカーの状態（<code>status</code>, <code>retries</code> 等）を保持。</li>
+<li><code>server_rec</code>: サーバーのコンテキスト情報。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>ワーカーリストが空の場合、ループは実行されず何も行われない。</li>
+<li><code>forcerecovery</code> が無効な場合、すべてのワーカーがエラー状態であっても強制復旧は行われない。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_balancer.c.html#L473" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_balancer_c__proxy_balancer_pre_request.html&quot;}, '*');"><code>proxy_balancer_pre_request</code></a> の一部として、リクエスト処理の過程で呼び出される。</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>PROXY_WORKER_IN_ERROR</code></a> フラグの操作は共有メモリ（<a class="wiki-source-link" href="../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a>）を介して行われるため、マルチプロセス環境での整合性に注意すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

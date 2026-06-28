@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/passwd_common.h.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/passwd_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');">support/passwd_common.h</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/support/passwd_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>support/passwd_common.h</code></a> は、Apache HTTP Server のパスワード管理ユーティリティ（<code>htpasswd</code>, <code>htdbm</code> 等）で共通して利用されるデータ構造、定数、およびユーティリティ関数の宣言を提供します。パスワードのハッシュ化、入力取得、エラーハンドリングのインターフェースを標準化し、各ツール間での一貫性を確保します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュール内のパスワード関連ツールにおける「共有ライブラリ的役割」を担います。個別のツールが直接実装すべきパスワード処理ロジックを抽象化し、<a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>passwd_common.c</code></a> と対になって実装を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**定数定義**: サポートするハッシュアルゴリズム（MD5, SHA, BCRYPT等）およびエラーコードの定義。</li>
+<li>**コンテキスト管理**: <code>passwd_ctx</code> 構造体を通じた、パスワード生成に必要な設定（アルゴリズム、コスト、入力元）の保持。</li>
+<li>**共通ユーティリティ**: メモリ不足時のハンドリング、ファイル書き込み、パスワード入力取得の抽象化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>struct passwd_ctx</code>: パスワード生成プロセス全体の状態を保持するコンテキスト。メモリプール、入力元（<code>passwd_src</code>）、アルゴリズム設定、エラーメッセージを管理します。</li>
+</ul>
+<h3>アルゴリズム定数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/passwd_common.h.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>ALG_PLAIN</code></a>, <code>ALG_CRYPT</code>, <code>ALG_APMD5</code>, <code>ALG_APSHA</code>, <code>ALG_BCRYPT</code>, <a class="wiki-source-link" href="../../source/support/passwd_common.h.html#L42" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>ALG_CRYPT_SHA256</code></a>, <a class="wiki-source-link" href="../../source/support/passwd_common.h.html#L43" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.h.html&quot;}, '*');"><code>ALG_CRYPT_SHA512</code></a>: サポートされるハッシュアルゴリズムの識別子。</li>
+</ul>
+<h3>エラーコード</h3>
+<ul>
+<li><code>ERR_*</code>: <code>ERR_FILEPERM</code>, <code>ERR_SYNTAX</code>, <code>ERR_PWMISMATCH</code> 等、パスワード処理中に発生しうる共通エラーの列挙。</li>
+</ul>
+<h3>ユーティリティ関数</h3>
+<ul>
+<li><code>abort_on_oom()</code>: メモリ確保失敗時の強制終了ハンドラ。</li>
+<li><code>putline()</code>: ファイルへの書き込みとエラー時の終了処理をラップ。</li>
+<li><code>get_password()</code>: <code>passwd_ctx</code> に基づき、標準入力やプロンプトからパスワードを取得。</li>
+<li><code>mkhash()</code>: 指定されたアルゴリズムでパスワードハッシュを生成。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: ツール起動時に <code>errfile</code> を <code>apr_file_open_stderr()</code> で初期化する必要があります。 2. **コンテキスト設定**: <code>passwd_ctx</code> を初期化し、<code>parse_common_options()</code> でアルゴリズムやコストを設定します。 3. **入力取得**: <code>get_password()</code> が呼び出され、<code>passwd_src</code> に応じてユーザー入力を <code>ctx-&gt;passwd</code> に格納します。 4. **ハッシュ生成**: <code>mkhash()</code> が <code>ctx</code> 内の情報を元にハッシュを計算し、<code>ctx-&gt;out</code> に結果を格納します。 5. **エラー処理**: 各関数は成功時に <code>0</code> を返し、失敗時には <code>ERR_*</code> コードを返すと同時に <code>ctx-&gt;errstr</code> に詳細をセットします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_lib.h</code>, <code>apr_strings.h</code>: APR (Apache Portable Runtime) の基本機能。</li>
+<li><code>apr_file_io.h</code>: ファイル操作および標準入出力の抽象化。</li>
+<li><code>apr_version.h</code>, <code>apu_version.h</code>: バージョン依存の機能切り替え（特にBCRYPTのサポート判定）。</li>
+<li><code>ap_config_auto.h</code></li>
+<li><code>apr_errno.h</code></li>
+<li><code>apr_general.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a>: 上記ヘッダーで宣言された関数の実装。</li>
+<li><a class="wiki-source-link" href="../../source/support/htpasswd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htpasswd.c.html&quot;}, '*');"><code>support/htpasswd.c</code></a>: 本ヘッダーを利用する主要なクライアントツール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>passwd_ctx</code> 内のメモリは <code>apr_pool_t</code> に依存します。<code>abort_on_oom</code> が登録されているため、メモリ不足時はプロセスが即座に終了します。</li>
+<li>**プラットフォーム依存**: <code>CRYPT_ALGO_SUPPORTED</code> 等のフラグにより、OSごとの機能差分を吸収しています。</li>
+<li>**省略された詳細**: <a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_c__mkhash.html&quot;}, '*');"><code>mkhash</code></a> の内部的なハッシュ計算ロジック（<code>apr_md5</code> や <code>crypt</code> の呼び出し）は <a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>passwd_common.c</code></a> に隠蔽されており、本ヘッダーではインターフェースのみが定義されています。</li>
+<li>**注意**: <code>errfile</code> はグローバル変数として定義されていますが、使用前に必ず初期化が必要です。初期化を忘れると <code>putline</code> 等でセグメンテーション違反が発生します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__passwd_common_h__passwd_ctx.html" target="wiki-view"><code>passwd_ctx</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

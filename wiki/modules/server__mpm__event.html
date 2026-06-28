@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/server__mpm__event.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/event</h1>
+<h2>システム内での役割</h2>
+<p>Apache HTTP Server における Event MPM（Multi-Processing Module）の実装です。リスナー専用スレッドと非同期 I/O（epoll/kqueue）を組み合わせることで、Keep-Alive 接続がスレッドを占有し続ける問題を解決し、高並列な接続処理を実現します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス・スレッド管理**: 子プロセスの生成・監視およびワーカースレッドのライフサイクル制御。</li>
+<li>**接続状態管理**: 接続を「処理中」「書き込み完了待ち」「Keep-Alive 待ち」等の状態に分離し、効率的に再利用。</li>
+<li>**非同期 I/O 統合**: <code>apr_pollset</code> を活用したイベント駆動型の接続ディスパッチ。</li>
+<li>**リソース調整**: 設定値に基づいた動的な接続受け入れ制御と負荷分散。</li>
+</ul>
+<h2>このモジュールのファイル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>: MPM の中核となるロジックとスレッド管理の実装。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/mpm_default.h.html&quot;}, '*');"><code>server/mpm/event/mpm_default.h</code></a>: プロセス・スレッド数のデフォルト値など、MPM 動作の基準となる定数定義。</li>
+</ul>
+<h2>主要なデータ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L215" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_conn_state_t.html&quot;}, '*');"><code>event_conn_state_t</code></a>: 接続ごとの状態、タイムアウト、ソケット情報を保持。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L260" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__timeout_queue.html&quot;}, '*');"><code>timeout_queue</code></a>: 接続の期限管理を行うリングバッファ。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L200" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_srv_cfg.html&quot;}, '*');"><code>event_srv_cfg</code></a>: MPM のサーバー設定情報。</li>
+<li><code>event_pollset</code>: 非同期 I/O 監視のための <code>apr_pollset</code> インスタンス。</li>
+</ul>
+<h2>主なフロー</h2>
+<p>1. **リスナー**: <code>listener_thread</code> が <code>apr_pollset_poll</code> でソケットを監視。 2. **受け入れ**: 新規接続を <code>worker_queue</code> 経由でワーカーへ渡す。 3. **処理**: <code>worker_thread</code> が <code>process_socket</code> を実行。処理後、状態に応じて <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L260" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__timeout_queue.html&quot;}, '*');"><code>timeout_queue</code></a> へ登録し監視を再開。 4. **タイムアウト**: リスナーが定期的に <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L1624" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__process_timeout_queue.html&quot;}, '*');"><code>process_timeout_queue</code></a> を呼び出し、期限切れ接続をクローズまたは再処理。</p>
+<h2>外部依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr_poll</code>, <code>apr_thread_proc</code>, <code>apr_queue</code>, <code>apr_ring</code> 等のプラットフォーム抽象化層。</li>
+<li>**Apache Core**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>, <a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a> 等のサーバー基本構造。</li>
+</ul>
+<h2>内部構成</h2>
+<p>ディレクトリ境界に基づいたモジュール構成であり、現時点で独立した子モジュールは存在しません。</p>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../../source/server/mpm/event/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/mpm_default.h.html&quot;}, '*');"><code>server/mpm/event/mpm_default.h</code></a>: MPM の動作パラメータの理解。 2. <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>: プロセス管理および接続状態遷移ロジックの解析。</p>
+<h2>未解決の問い</h2>
+<ul>
+<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

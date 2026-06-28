@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L327" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_c__spawn_child.html&quot;}, '*');">spawn_child</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2.c:327</code></li>
+</ul>
+<h2>目的</h2>
+<p>OS/2 環境において、指定されたスロット番号に対応する新しい子プロセスを生成し、スコアボードを更新する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void spawn_child(int slot)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>slot</code> (int) - 子プロセスを割り当てるスコアボード上のインデックス。</li>
+<li>**出力**: なし（副作用としてプロセス生成とスコアボード更新を行う）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a> が初期化されていること。</li>
+<li><code>ap_my_generation</code> が現在の世代を正しく保持していること。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L82" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>ap_max_daemons_limit</code></a> が現在の最大プロセス数制限を保持していること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. 指定された <code>slot</code> のスコアボードエントリに現在の世代 (<code>ap_my_generation</code>) を記録する。 2. <code>DosGetInfoBlocks</code> を使用して現在のプロセス情報を取得し、<code>DosQueryModuleName</code> で実行ファイル名を取得する。 3. <code>DosExecPgm</code> を呼び出し、現在のプロセスと同じプログラムを非同期で実行（<code>EXEC_ASYNCRESULT</code>）する。 4. <code>DosExecPgm</code> が失敗した場合は、<code>ap_log_error</code> を使用してエラーログを出力する。 5. 生成されたプロセスのスロット番号が現在の <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L82" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>ap_max_daemons_limit</code></a> を超える場合、同変数を更新する。 6. <code>proc_rc.codeTerminate</code> から取得したプロセスIDを、スコアボードの該当スロットに保存する。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2.c</code></a> 内の <code>master_main</code>（行287）から呼び出される。</li>
+<li>**呼び出し先**: OS/2 ネイティブ API (<code>DosGetInfoBlocks</code>, <code>DosQueryModuleName</code>, <code>DosExecPgm</code>) および Apache ロギング API (<code>ap_log_error</code>)。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a>: プロセス間共有メモリ上のスコアボード構造体。</li>
+<li><code>PPIB</code>, <code>PTIB</code>, <code>RESULTCODES</code>: OS/2 API で使用されるプロセス情報および実行結果格納構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>DosExecPgm</code> の実行に失敗した場合、エラーコードがログ出力されるが、プロセス生成自体は中断される。</li>
+<li><code>slot</code> が <code>HARD_SERVER_LIMIT</code>（10）を超えて指定された場合の挙動は、本関数内では明示的にガードされていない。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は OS/2 の <code>DosExecPgm</code> に強く依存している。</li>
+<li>プロセス生成時の引数として <code>ppib-&gt;pib_pchcmd</code> を使用しており、親プロセスのコマンドライン引数を継承する設計となっている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

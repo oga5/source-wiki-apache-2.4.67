@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/multi-processing-modules-mpm-and-process-lifecycle.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Multi-Processing Modules (MPM) and Process Lifecycle</h1>
+<h2>概念</h2>
+<p><code>Multi-Processing Modules (MPM)</code> は、Apache HTTPD がネットワークポートをバインドし、クライアントからのリクエストを受け付け、それを処理する子プロセスやスレッドのライフサイクルを管理するためのコアアーキテクチャです。HTTPD は、実行環境や要求されるパフォーマンス特性に応じて、異なる並行処理モデル（マルチプロセス、マルチスレッド、非同期イベント駆動など）を MPM を通じて切り替えることができます。</p>
+<h2>なぜ重要か</h2>
+<p>Web サーバーの並行処理能力、メモリ使用量、および安定性は、選択された MPM とそのプロセスライフサイクル管理に直接依存します。例えば、スレッドセーフでないサードパーティ製モジュールを安全に実行するためには <code>prefork</code> が必要であり、大量のキープアライブ接続を効率的に処理するためには <code>event</code> が不可欠です。これらプロセスの適切な生成、維持、およびクリーンなシャットダウンを制御することは、サーバーの信頼性を担保する上で極めて重要です。</p>
+<h2>関与するモジュール</h2>
+<p>本トピックには、以下のモジュールが関与しています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm.html&quot;}, '*');"><code>module:server/mpm</code></a> (MPM の共通基盤)</li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a> (非同期イベント駆動モデルの実装)</li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a> (ノンスレッド、マルチプロセスモデルの実装)</li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a> (マルチプロセス・マルチスレッドのハイブリッドモデルの実装)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>プロセスライフサイクルと MPM の制御に関わる主要なソースコードおよびヘッダーは以下の通りです。</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>include/ap_mpm.h</code></a>**: MPM の共通インターフェース、クエリ関数（<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L421" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_mpm_query.html&quot;}, '*');"><code>ap_mpm_query</code></a> など）、および各種状態定数を定義します。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>**: リクエスト処理をリスナースレッドとワーカースレッドに分離し、非同期 I/O を用いてプロセスを管理する <code>event</code> MPM のコア実装。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a>**: 1つの子プロセスが1つの接続を処理する、スレッドを使用しない <code>prefork</code> MPM のコア実装。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>**: 複数の子プロセスがそれぞれ複数のワーカースレッドを持つ、ハイブリッド型の <code>worker</code> MPM のコア実装。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **初期化と起動**: 親プロセスが起動し、設定ファイルを読み込んだ後、<a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a> で定義されたインターフェースを介して、選択された MPM（<code>event</code>, <code>prefork</code>, <code>worker</code> のいずれか）が初期化されます。 2. **プロセスの生成**: 各 MPM は、設定された初期プロセス数に基づき、子プロセスをフォーク（Fork）します。 3. **リクエストの受付と処理**:</p>
+<ul>
+<li><code>prefork</code> では、各プロセスが直接接続を受け付けます。</li>
+<li><code>worker</code> および <code>event</code> では、プロセス内のスレッド（またはリスナースレッド）が接続を受け付け、ワーカースレッドに処理を割り当てます。</li>
+<p>4. **プロセスの維持と回収**: 親プロセスは、稼働中のアイドルプロセス/スレッド数を監視し、負荷に応じて動的に子プロセスを生成または終了させます。 5. **クリーンなシャットダウン/再起動**: シグナル（<code>TERM</code>, <code>HUP</code>, <code>USR1</code> など）を受信すると、MPM はアクティブな接続の処理完了を待ってから、子プロセスを安全に終了させます。</p>
+</ul>
+<p>*注意: シグナルハンドリングの厳密な伝播経路や、スコアボード（Scoreboard）を介した親・子プロセス間の詳細な同期フローなど、具体的なコードレベルのインタラクションは、提供されたコンテキストからは完全には特定されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**設定値の遵守**: 各 MPM は、設定された最小/最大アイドルスレッド数（<code>MinSpareThreads</code>/<code>MaxSpareThreads</code>）またはプロセス数（<code>MinSpareServers</code>/<code>MaxSpareServers</code>）の範囲内にアクティブなリソースを維持するように動作しなければなりません。</li>
+<li>**プロセスの隔離**: <code>prefork</code> においては、1つのリクエスト処理のクラッシュが他の接続に影響を与えないよう、プロセス境界による完全な隔離が保証されます。</li>
+</ul>
+<p>*注意: スレッドセーフティ、ロックの獲得順序、または親プロセスと子プロセス間の共有メモリ（スコアボード）の更新に関する厳密な不変条件は、提供されたコンテキストからは完全には特定されていません。*</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**スレッドセーフでないモジュールとマルチスレッド MPM の混用**: <code>worker</code> や <code>event</code> などのマルチスレッド環境で、スレッドセーフでないライブラリやモジュールを使用すると、メモリ汚染や予期せぬクラッシュを引き起こす原因になります。</li>
+<li>**リソースの枯渇**: 最大プロセス数（<code>MaxRequestWorkers</code> など）の設定が不適切であると、システムメモリの枯渇（スラッシング）を招くか、あるいは逆にサーバーの処理能力を十分に引き出せなくなります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>include/ap_mpm.h</code></a>**: MPM が提供する共通 API やクエリ機能の定義を確認する。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a>**: 最もシンプルなシングルスレッド・マルチプロセスモデルの実装を理解する。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>**: スレッドとプロセスのハイブリッド管理モデルの実装を理解する。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>**: キープアライブ接続を効率的に処理するための、高度な非同期イベント駆動モデルの実装を理解する。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

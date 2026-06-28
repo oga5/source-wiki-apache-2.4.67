@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/multi-processing-modules-mpm-and-process-thread-management.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Multi-Processing Modules (MPM) and Process/Thread Management</h1>
+<h2>概念</h2>
+<p>**Multi-Processing Modules (MPM)** は、Apache HTTPD においてネットワークポートのバインド、クライアントからの接続の受付、およびそれらのリクエストを処理するプロセスやスレッドの管理を担当するコアメカニズムです。HTTPD は、異なるマルチプロセッシングモデル（<code>prefork</code>、<code>worker</code>、<code>event</code> など）を個別のモジュールとして実装しており、実行環境や要求されるパフォーマンス特性に応じて切り替えることができます。</p>
+<h2>なぜ重要か</h2>
+<p>Web サーバーの並行処理性能、リソース消費、および安定性は、プロセスやスレッドのライフサイクル管理に直接依存します。 例えば、<code>event</code> MPM では、アイドル状態のサーバープロセス数を適切に維持するためのメンテナンス処理（<code>perform_idle_server_maintenance</code>）や、プロセス・スレッド数の上限を制御する設定（<code>set_server_limit</code>、<code>set_thread_limit</code>）を通じて、システムの安定稼働とリソースの最適化を両立させています。</p>
+<h2>関与するモジュール</h2>
+<p>本トピックには以下のモジュールが関与しています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm.html&quot;}, '*');"><code>module:server/mpm</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__prefork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__prefork.html&quot;, &quot;source&quot;: &quot;source/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/prefork</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>プロセスおよびスレッド管理において、以下のエンティティが中心的な役割を果たします（以下は主に <code>event</code> MPM における実装例です）。</p>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__child_main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__child_main.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L2619&quot;}, '*');"><code>symbol:server/mpm/event/event.c#child_main</code></a>**</li>
+<p>子プロセスのメイン処理を担当する関数。<code>make_child</code> などから呼び出され、内部でワーカースレッドの生成（<code>ap_thread_create</code>）やシグナル処理のセットアップを行い、プロセスの実行ライフサイクルを管理します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__clean_child_exit.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__clean_child_exit.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L767&quot;}, '*');"><code>symbol:server/mpm/event/event.c#clean_child_exit</code></a>**</li>
+<p>子プロセスが安全に終了するためのクリーンアップ処理を行います。リソースの解放や、プロセス停止の記録（<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L710" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_note_child_stopped.html&quot;}, '*');"><code>event_note_child_stopped</code></a>）を呼び出します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__perform_idle_server_maintenance.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__perform_idle_server_maintenance.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L2906&quot;}, '*');"><code>symbol:server/mpm/event/event.c#perform_idle_server_maintenance</code></a>**</li>
+<p>サーバーの稼働状況（アイドル状態のプロセス/スレッド数）を監視し、必要に応じて新しい子プロセスを生成（<code>make_child</code>）したり、不要なプロセスに終了シグナルを送信したりして、適切な稼働数を維持します。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__set_server_limit.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__set_server_limit.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L4082&quot;}, '*');"><code>symbol:server/mpm/event/event.c#set_server_limit</code></a>**</li>
+<p>設定ファイルから起動可能な最大プロセス数（<code>ServerLimit</code>）を解析し、設定するためのコマンドハンドラです。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__set_thread_limit.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__set_thread_limit.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L4093&quot;}, '*');"><code>symbol:server/mpm/event/event.c#set_thread_limit</code></a>**</li>
+<p>設定ファイルからプロセスあたりの最大スレッド数（<code>ThreadLimit</code>）を解析し、設定するためのコマンドハンドラです。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、親プロセスから子プロセスへの完全なディスパッチ、リクエスト処理スレッドへの接続の引き渡し、およびシャットダウン時における全スレッドの同期など、詳細なエンドツーエンドのフローの全容は完全には解析されていません。</p>
+<p>提供されたシンボルから確認できる断片的な流れは以下の通りです。</p>
+<p>1. **初期設定**: サーバー起動時に <code>set_server_limit</code> や <code>set_thread_limit</code> が呼び出され、プロセスおよびスレッドの上限値が設定されます。 2. **プロセスの維持管理**: メインループ（<code>server_main_loop</code> など）から <code>perform_idle_server_maintenance</code> が定期的に呼び出され、負荷状況に応じて <code>make_child</code> を介して子プロセスが動的に生成されます。 3. **子プロセスの実行**: 生成された子プロセスは <code>child_main</code> を実行し、内部でワーカースレッドを生成してリクエストの受付準備を整えます。 4. **プロセスの終了**: 子プロセスが終了する際、<code>clean_child_exit</code> が呼び出され、安全にリソースを解放して終了します。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、プロセスやスレッドの管理における詳細な不変条件（例：稼働中のスレッド数とスコアボードの同期、シグナルハンドラとスレッドセーフティの関係など）は完全には解析されていません。</p>
+<p>ただし、<code>set_server_limit</code> や <code>set_thread_limit</code> によって設定されるシステムの上限値は、実行中に動的に変更できない静的な境界条件として機能していることが推測されます。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では、具体的なコードレベルでの落とし穴（デッドロック、メモリリーク、シグナル競合など）の詳細は完全には解析されていません。</p>
+<p>しかし、<code>clean_child_exit</code> が適切に呼び出されない場合、子プロセスがリソースを保持したままゾンビ化したり、リスナーが適切に閉じられないなどの問題が発生する可能性があります。また、<code>ServerLimit</code> や <code>ThreadLimit</code> の設定値がシステムの物理リソースに対して不適切であると、リソースの枯渇や予期しないプロセス生成の制限につながる可能性があります。</p>
+<h2>次に読む場所</h2>
+<p>各 MPM の具体的なプロセス・スレッド管理モデルの実装を理解するために、以下のソースファイルを参照してください。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>include/ap_mpm.h</code></a> (MPM 共通インターフェースの定義)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> (イベント駆動型モデルの実装)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> (マルチプロセス型モデルの実装)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> (ハイブリッド型マルチプロセス・マルチスレッドモデルの実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

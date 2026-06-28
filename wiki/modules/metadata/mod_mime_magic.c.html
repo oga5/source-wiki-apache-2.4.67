@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/metadata/mod_mime_magic.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_mime_magic.c.html&quot;}, '*');">modules/metadata/mod_mime_magic.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_mime_magic</code> は、ファイルの内容（マジックナンバー）を解析して MIME タイプを判定する Apache HTTP Server モジュールです。UNIX の <code>file</code> コマンドのロジックをベースにしており、設定ファイルで定義されたパターンマッチングに基づき、ファイル先頭のバイト列からコンテンツタイプとエンコーディングを推論します。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の <code>type_checker</code> フックとして動作します。通常は <code>mod_mime</code>（拡張子ベースの判定）が先に実行され、そこで判定できなかった場合にフォールバックとして機能するよう設計されています。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>MimeMagicFile</code> ディレクティブによるマジック定義ファイルの読み込みと解析。</li>
+<li>**ファイル解析**: ファイル先頭のバイト列に対するマジックナンバー照合。</li>
+<li>**結果の集約**: 解析結果（MIME タイプ等）を一時的なリスト（RSL: Result String List）に保持し、最終的に <code>request_rec</code> へ反映。</li>
+<li>**特殊処理**: 圧縮ファイル（gzip 等）の展開、tar アーカイブの識別、およびドキュメント管理システム用のリビジョンサフィックス処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・データ構造</h3>
+<ul>
+<li><code>struct magic</code>: マジックナンバーのルールを保持する単方向連結リスト。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L455" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_server_config_rec.html&quot;}, '*');"><code>magic_server_config_rec</code></a>: サーバー単位の設定（マジックファイルパス、ルールリスト）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L462" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_req_rec.html&quot;}, '*');"><code>magic_req_rec</code></a>: リクエスト単位の解析結果保持用構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L445" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_rsl.html&quot;}, '*');"><code>magic_rsl</code></a>: 解析結果の断片を保持する連結リスト。</li>
+</ul>
+<h3>主要な処理関数</h3>
+<ul>
+<li><code>apprentice()</code>: マジックファイルをパースし、<code>struct magic</code> リストを構築。</li>
+<li><code>magic_process()</code>: ファイルを開き、先頭バイトを読み込んで解析を開始。</li>
+<li><code>match()</code>: マジックリストを走査し、ルールに合致するか判定。</li>
+<li><code>mget()</code> / <code>mcheck()</code>: 特定のルールに対するバイト抽出と条件比較。</li>
+<li><code>ascmagic()</code>: テキストファイルや特定のファイル形式（tar 等）のヒューリスティック判定。</li>
+<li><code>zmagic()</code>: 圧縮ファイルの識別と展開処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L2359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_init.html&quot;}, '*');"><code>magic_init</code></a> が <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L913" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__apprentice.html&quot;}, '*');"><code>apprentice</code></a> を呼び出し、設定ファイルをメモリ上の <code>struct magic</code> リストに変換。 2. **リクエスト処理**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L2411" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_find_ct.html&quot;}, '*');"><code>magic_find_ct</code></a> がフックされ、<a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L821" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_process.html&quot;}, '*');"><code>magic_process</code></a> を起動。 3. **解析**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L1435" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__fsmagic.html&quot;}, '*');"><code>fsmagic</code></a> でファイルタイプ（ディレクトリ、シンボリックリンク等）をチェック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L878" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__tryit.html&quot;}, '*');"><code>tryit</code></a> を経由して <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L2081" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__zmagic.html&quot;}, '*');"><code>zmagic</code></a>（圧縮）、<a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L1495" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__softmagic.html&quot;}, '*');"><code>softmagic</code></a>（マジックルール）、<a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L1971" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__ascmagic.html&quot;}, '*');"><code>ascmagic</code></a>（テキスト/tar）の順に試行。</li>
+<p>4. **結果反映**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__magic_rsl_to_request.html&quot;}, '*');"><code>magic_rsl_to_request</code></a> が RSL リストを走査し、<a class="wiki-source-link" href="../../../source/modules/http/http_protocol.c.html#L1103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_protocol_c__ap_set_content_type_ex.html&quot;}, '*');"><code>ap_set_content_type_ex</code></a> を通じて <code>request_rec</code> に MIME タイプをセット。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr</code> (メモリプール、ファイル I/O、プロセス管理)</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a> (Apache API)</li>
+<li><code>unistd.h</code>, <code>utime.h</code> (システムコール)</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http/mod_mime.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/mod_mime.c.html&quot;}, '*');"><code>mod_mime.c</code></a>: 拡張子ベースの MIME 判定を行う標準モジュール。本モジュールはこれの補完として動作する。</li>
+<li><code>file(1)</code> コマンド: 本モジュールのロジックの起源。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのメモリ割り当ては Apache の <code>apr_pool_t</code> を使用しており、リクエスト終了時に自動解放されます。</li>
+<li>**スレッド安全性**: 元の <code>file</code> コマンドから移植される際、グローバル変数を排除し、設定構造体経由でデータにアクセスするように変更されていますが、スレッド環境での完全な検証は不十分であるとの注記があります。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L122" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_mime_magic.c.html&quot;}, '*');"><code>HOWMANY</code></a>（4096バイト）までの読み込みを行うため、大量のファイルアクセスが発生する環境では I/O 負荷に注意が必要です。</li>
+<li>**未実装・浅い部分**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L2296" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__revision_suffix.html&quot;}, '*');"><code>revision_suffix</code></a> 関数は特定のイントラネット環境に依存した実装であり、汎用的な機能ではありません。また、<a class="wiki-source-link" href="../../../source/modules/metadata/mod_mime_magic.c.html#L1822" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_mime_magic_c__mcheck.html&quot;}, '*');"><code>mcheck</code></a> 内の <code>BOINK</code> ログなど、デバッグ用の古いコードが残存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__magic.html" target="wiki-view"><code>magic</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__header.html" target="wiki-view"><code>header</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__names.html" target="wiki-view"><code>names</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__magic_rsl.html" target="wiki-view"><code>magic_rsl</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__magic_server_config_rec.html" target="wiki-view"><code>magic_server_config_rec</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__magic_req_rec.html" target="wiki-view"><code>magic_req_rec</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__create_magic_server_config.html" target="wiki-view"><code>create_magic_server_config</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__merge_magic_server_config.html" target="wiki-view"><code>merge_magic_server_config</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__rsl_states.html" target="wiki-view"><code>rsl_states</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__apr_size_t.html" target="wiki-view"><code>apr_size_t</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__uncompress_parms.html" target="wiki-view"><code>uncompress_parms</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_mime_magic_c__magic_init.html" target="wiki-view"><code>magic_init</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

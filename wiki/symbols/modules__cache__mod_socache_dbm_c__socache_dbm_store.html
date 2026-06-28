@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__cache__mod_socache_dbm_c__socache_dbm_store.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html#L211" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_dbm_c__socache_dbm_store.html&quot;}, '*');">socache_dbm_store</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/cache/mod_socache_dbm.c:211</code></li>
+</ul>
+<h2>目的</h2>
+<p>キャッシュデータを DBM ファイル形式で永続化ストレージに書き込みます。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t socache_dbm_store(ap_socache_instance_t *ctx,
+                               server_rec *s, const unsigned char *id,
+                               unsigned int idlen, apr_time_t expiry,
+                               unsigned char *ucaData,
+                               unsigned int nData, apr_pool_t *pool)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>ctx</code>: キャッシュインスタンスのコンテキスト。</li>
+<li><code>s</code>: サーバーレコード。</li>
+<li><code>id</code>: キャッシュキー。</li>
+<li><code>idlen</code>: キーの長さ。</li>
+<li><code>expiry</code>: 有効期限（<code>apr_time_t</code>）。</li>
+<li><code>ucaData</code>: 保存するデータ本体。</li>
+<li><code>nData</code>: データ本体の長さ。</li>
+<li><code>pool</code>: メモリプール。</li>
+<li>**出力**:</li>
+<li>成功時は <code>APR_SUCCESS</code> を返します。失敗時は <code>apr_status_t</code> 型のエラーコードを返します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>idlen + nData</code> が約 1KB（950バイト）を超えてはなりません。</li>
+<li><code>ctx-&gt;pool</code> は、本関数内で <code>apr_pool_clear</code> によりクリアされます。</li>
+<li>DBM ファイルへの書き込みには <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_dbm.c.html&quot;}, '*');"><code>DBM_FILE_MODE</code></a> で指定された権限が適用されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **サイズ検証**: キーとデータの合計サイズが制限値（<code>PAIRMAX</code> または 950バイト）を超えていないか確認し、超過時は <code>APR_ENOSPC</code> を返します。 2. **データ構築**: <code>apr_time_t</code>（期限）を値の先頭に配置し、その後に <code>ucaData</code> を連結したバッファを作成します。 3. **DBM オープン**: <code>ctx-&gt;data_file</code> を <code>APR_DBM_RWCREATE</code> モードで開きます（APR のバージョンにより <code>apr_dbm_open2</code> または <code>apr_dbm_open</code> を使用）。 4. **書き込み**: <code>apr_dbm_store</code> を使用してキーと値を保存します。 5. **クリーンアップ**: DBM ファイルを閉じ、一時バッファを解放します。 6. **期限切れ処理**: <code>socache_dbm_expire(ctx, s)</code> を呼び出し、キャッシュ全体の期限切れエントリの整理を試みます。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/cache/mod_socache_dbm.c:746</code> に参照の記述があります。</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_dbm.c.html#L443" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_dbm_c__socache_dbm_expire.html&quot;}, '*');"><code>socache_dbm_expire</code></a> を呼び出します。また、APR DBM ライブラリ関数（<code>apr_dbm_open</code> 等）を呼び出します。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_socache_instance_t</code>: キャッシュのコンテキスト（ファイルパス等を保持）。</li>
+<li><code>apr_dbm_t</code>: DBM ファイルのハンドル。</li>
+<li><code>apr_datum_t</code>: DBM のキーおよび値を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**サイズ超過**: 合計サイズが制限を超えると <code>APR_ENOSPC</code> を返します。</li>
+<li>**ファイルオープン失敗**: DBM ファイルが開けない場合、エラーログを出力し、その時点でのエラーコードを返します。</li>
+<li>**書き込み失敗**: <code>apr_dbm_store</code> が失敗した場合、ファイルを閉じてエラーコードを返します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はスレッドセーフではありません。呼び出し側で適切な排他制御が行われていることを前提としています。</li>
+<li>DBM ファイルの特性上、大きなデータの保存には適していません。</li>
+<li>APR バージョンによって DBM ドライバのロード方法が分岐するため、修正時は条件コンパイルブロックに注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/md_log.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.c.html&quot;}, '*');">modules/md/md_log.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.c.html&quot;}, '*');"><code>md_log.c</code></a> は、<code>mod_md</code> モジュール全体で使用される抽象化されたログ出力インターフェースを提供します。Apache HTTP Server の標準的なログ機能に依存しつつ、モジュール固有のログレベル管理や出力先制御を柔軟に行うためのラッパー層です。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> は ACME プロトコルを扱う複雑なモジュールであり、多くのサブコンポーネントからログ出力が発生します。本ファイルは、各コンポーネントが直接 Apache の <a class="wiki-source-link" href="../../../source/include/http_log.h.html#L406" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_perror</code></a> 等を呼び出すのではなく、<code>md_log_*</code> インターフェースを介すことで、ログの出力制御（フィルタリングや出力先の差し替え）を一元管理する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>ログレベルの名称管理とマッピング。</li>
+<li>実行時のログ出力可否判定（<a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_is_level.html&quot;}, '*');"><code>md_log_is_level</code></a>）。</li>
+<li>ログ出力関数の抽象化（<a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L68" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_perror.html&quot;}, '*');"><code>md_log_perror</code></a>）。</li>
+<li>外部からログ出力ロジックを注入するためのコールバック設定（<a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_set.html&quot;}, '*');"><code>md_log_set</code></a>）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>md_log_set()</code>: ログ出力のバックエンド（コールバック関数）を登録します。テストや環境に応じたログ出力の差し替えを可能にします。</li>
+<li><code>md_log_is_level()</code>: 指定されたログレベルが現在有効かどうかを判定します。不要な文字列構築処理を避けるために使用されます。</li>
+<li><code>md_log_perror()</code>: 実際にログを出力するメイン関数です。可変長引数を受け取り、登録されたコールバックへ転送します。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.c.html&quot;}, '*');"><code>level_names</code></a>: ログレベルの列挙型に対応する文字列配列です。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: モジュール起動時に <a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_set.html&quot;}, '*');"><code>md_log_set</code></a> が呼び出され、ログ出力用のコールバック関数とコンテキスト（<code>log_baton</code>）が静的変数に保持されます。 2. **判定**: 各コンポーネントは <a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_is_level.html&quot;}, '*');"><code>md_log_is_level</code></a> を呼び出し、現在の設定でログ出力が必要かを確認します。 3. **出力**: 出力が必要な場合、<a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L68" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_perror.html&quot;}, '*');"><code>md_log_perror</code></a> が呼び出されます。この関数は <code>va_list</code> を介して引数を展開し、登録済みの <code>log_printv</code> コールバックへ処理を委譲します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_lib.h</code>, <code>apr_strings.h</code>, <code>apr_buckets.h</code>: APR (Apache Portable Runtime) の文字列操作およびメモリ管理機能。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a>: 本ファイルのヘッダーであり、ログレベルの定義と関数プロトタイプを提供。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.c.html&quot;}, '*');"><code>mod_md.c</code></a>: モジュール全体の初期化プロセスにおいて、<a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_set.html&quot;}, '*');"><code>md_log_set</code></a> を呼び出し、Apache のログシステムと <code>md_log</code> を結びつける役割を果たします。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本モジュールは「ログ出力の抽象化」に特化しており、実際のログ出力先（ファイル、コンソール、syslog 等）の決定は、<a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L53" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_log_c__md_log_set.html&quot;}, '*');"><code>md_log_set</code></a> で渡されるコールバックの実装に依存します。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html#L23" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.c.html&quot;}, '*');"><code>LOG_BUFFER_LEN</code></a> は定義されていますが、現在の実装では直接使用されていません。将来的なバッファリングやフォーマット処理の拡張用と考えられます。</li>
+<li>ログレベルの判定には <code>apr_pool_t</code> が渡されますが、これはコールバック側でメモリ管理やコンテキスト判定を行うために利用されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_log_c__md_log_level_name.html" target="wiki-view"><code>md_log_level_name</code></a></li>
+<li><a href="../../symbols/modules__md__md_log_c__md_log_set.html" target="wiki-view"><code>md_log_set</code></a></li>
+<li><a href="../../symbols/modules__md__md_log_c__md_log_is_level.html" target="wiki-view"><code>md_log_is_level</code></a></li>
+<li><a href="../../symbols/modules__md__md_log_c__md_log_perror.html" target="wiki-view"><code>md_log_perror</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

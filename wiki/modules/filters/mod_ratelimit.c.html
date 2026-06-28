@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_ratelimit.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ratelimit.c.html&quot;}, '*');">modules/filters/mod_ratelimit.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_ratelimit</code> は、Apache HTTP Server の出力フィルタとして機能し、レスポンスの転送速度を制限するモジュールです。環境変数 <code>rate-limit</code> を通じて動的に帯域制限を適用し、必要に応じて <code>rate-initial-burst</code> によるバースト転送を許可します。</p>
+<h2>モジュール内での役割</h2>
+<p>本モジュールは <code>AP_FTYPE_CONNECTION - 1</code> レベルで動作する出力フィルタです。他のフィルタ（<code>mod_deflate</code> 等）よりも後段で動作し、最終的なネットワークへのデータ送出速度を制御します。</p>
+<h2>責務</h2>
+<ul>
+<li>**帯域制限の適用**: 指定された速度（KB/s）に基づき、データをチャンク単位で分割して送信する。</li>
+<li>**バースト制御**: 初期転送時に指定されたバースト量を許可し、その後制限速度へ移行する。</li>
+<li>**状態管理**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__rl_ctx_t.html&quot;}, '*');"><code>rl_ctx_t</code></a> を用いて、制限モード（<code>RATE_LIMIT</code>）と全速モード（<code>RATE_FULLSPEED</code>）の状態を保持する。</li>
+<li>**特殊バケットの提供**: <code>RL_START</code> / <code>RL_END</code> バケットを定義し、ストリーム内の特定区間のみを全速で送信する制御を可能にする。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>状態管理とコンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__rl_ctx_t.html&quot;}, '*');"><code>rl_ctx_t</code></a>: フィルタのコンテキスト。速度、バースト量、現在の状態、および処理待ちのブリゲード（<code>tmpbb</code>, <code>holdingbb</code>）を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L27" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__rl_state_e.html&quot;}, '*');"><code>rl_state_e</code></a>: フィルタの動作モード（<code>RATE_LIMIT</code> または <code>RATE_FULLSPEED</code>）。</li>
+</ul>
+<h3>フィルタ処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L59" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__rate_limit_filter.html&quot;}, '*');"><code>rate_limit_filter</code></a>: メインのフィルタ関数。環境変数の読み込み、コンテキストの初期化、およびブリゲードの分割・送信を行う。</li>
+</ul>
+<h3>カスタムバケット（制御用）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L313" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ratelimit.c.html&quot;}, '*');"><code>ap_rl_bucket_type_start</code></a> / <a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L303" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ratelimit.c.html&quot;}, '*');"><code>ap_rl_bucket_type_end</code></a>: 転送速度制御の切り替えポイントを示すメタデータバケット。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L285" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__ap_rl_start_create.html&quot;}, '*');"><code>ap_rl_start_create</code></a> / <a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L269" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__ap_rl_end_create.html&quot;}, '*');"><code>ap_rl_end_create</code></a>: 上記バケットを生成する公開関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: 初回呼び出し時に <a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_ratelimit_c__rl_ctx_t.html&quot;}, '*');"><code>rl_ctx_t</code></a> を生成し、環境変数から制限値を取得。無効な設定の場合はフィルタを解除。 2. **ブリゲード処理**:</p>
+<ul>
+<li><code>RATE_FULLSPEED</code> モード: <code>RL_END</code> バケットが見つかるまでデータをそのまま通過させる。</li>
+<li><code>RATE_LIMIT</code> モード: <code>RL_START</code> バケットが見つかるまでデータをチャンク単位（<code>chunk_size</code>）に分割し、<code>apr_sleep</code> を挟みながら <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で送信する。</li>
+<p>3. **データ保持**: 処理しきれなかったデータは <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L632" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_save_brigade.html&quot;}, '*');"><code>ap_save_brigade</code></a> を用いて <code>holdingbb</code> に保存され、次回の呼び出しに持ち越される。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: Apache コア機能。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: フィルタチェーン操作用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ratelimit.h.html&quot;}, '*');"><code>mod_ratelimit.h</code></a>: 公開バケット型定義および生成関数の宣言。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ratelimit.h.html&quot;}, '*');"><code>modules/filters/mod_ratelimit.h</code></a>: 公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>util_filter.c</code></a>: フィルタチェーンの仕組み。</li>
+<li><code>apr_buckets.h</code>: ブリゲードおよびバケット操作の基盤。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: コンテキストおよびブリゲードは <code>f-&gt;r-&gt;pool</code> に紐付いており、リクエスト終了時に自動的に解放されます。</li>
+<li>**制限事項**: <code>mod_ratelimit</code> はサブリクエストに対しては自動的にフィルタを解除し、制限を適用しません。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_ratelimit.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_ratelimit.c.html&quot;}, '*');"><code>RATE_INTERVAL_MS</code></a> (200ms) ごとに <code>apr_sleep</code> を呼び出すため、高負荷時にはスレッドのブロッキングが発生する可能性があります。</li>
+<li>**未実装**: <code>TODO</code> にある通り、現在はモジュールのロード順序に依存する可能性があるため、将来的に Optional Functions への移行が検討されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__rl_state_e.html" target="wiki-view"><code>rl_state_e</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__rl_ctx_t.html" target="wiki-view"><code>rl_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__brigade_dump.html" target="wiki-view"><code>brigade_dump</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__rate_limit_filter.html" target="wiki-view"><code>rate_limit_filter</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__rl_bucket_read.html" target="wiki-view"><code>rl_bucket_read</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__ap_rl_end_create.html" target="wiki-view"><code>ap_rl_end_create</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__ap_rl_start_create.html" target="wiki-view"><code>ap_rl_start_create</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_ratelimit_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

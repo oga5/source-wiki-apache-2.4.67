@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_mutex.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_mutex.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_mutex.c.html&quot;}, '*');">server/util_mutex.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server におけるミューテックス（排他制御）設定の管理および生成を抽象化するライブラリです。各モジュールが独自のミューテックスを登録し、管理者が <code>Mutex</code> ディレクティブを通じてメカニズム（<code>flock</code>, <code>pthread</code> 等）やディレクトリを一元的に制御できるようにします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、<code>http_config.c</code> 等で処理される設定ディレクティブと、実際にミューテックスを使用する各モジュール（MPM やプロキシ等）の橋渡しを行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>Mutex</code> ディレクティブによるグローバルな設定の解析と保持。</li>
+<li>**登録と解決**: 各モジュールによるミューテックス型の登録と、実行時の設定解決（継承とデフォルト値の適用）。</li>
+<li>**インスタンス生成**: <code>apr_global_mutex_t</code> および <code>apr_proc_mutex_t</code> の生成と、OS 権限設定の適用。</li>
+<li>**デバッグ支援**: 現在のミューテックス設定のダンプ機能。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理・登録</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__mutex_cfg_t.html&quot;}, '*');"><code>mutex_cfg_t</code></a>: ミューテックスのメカニズム、ディレクトリ、オプションを保持する内部構造体。</li>
+<li><code>ap_mutex_register()</code>: モジュールが自身のミューテックス型を登録するための API。</li>
+<li><code>ap_set_mutex()</code>: <code>Mutex</code> ディレクティブのハンドラ。設定をハッシュテーブルに反映。</li>
+<li><code>ap_mutex_init()</code>: 内部ハッシュテーブル <code>mxcfg_by_type</code> の初期化。</li>
+</ul>
+<h3>インスタンス生成</h3>
+<ul>
+<li><code>ap_global_mutex_create()</code>: グローバルミューテックスの生成と権限設定。</li>
+<li><code>ap_proc_mutex_create()</code>: プロセス間ミューテックスの生成と権限設定。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>ap_parse_mutex()</code>: 文字列形式のミューテックス設定を <code>apr_lockmech_e</code> に変換。</li>
+<li><code>mxcfg_lookup()</code>: 登録済み設定、デフォルト設定、グローバル設定を優先順位に従って解決。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__ap_mutex_init.html&quot;}, '*');"><code>ap_mutex_init</code></a> が呼ばれ、<code>mxcfg_by_type</code> ハッシュが作成される。 2. **登録**: 各モジュールが <a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L254" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__ap_mutex_register.html&quot;}, '*');"><code>ap_mutex_register</code></a> で型を登録。 3. **設定**: <a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L164" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__ap_set_mutex.html&quot;}, '*');"><code>ap_set_mutex</code></a> が設定ファイルを読み込み、ハッシュ内の <a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__mutex_cfg_t.html&quot;}, '*');"><code>mutex_cfg_t</code></a> を更新。 4. **生成**: モジュールが <code>ap_xxx_mutex_create</code> を呼び出すと、<a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L319" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__mxcfg_lookup.html&quot;}, '*');"><code>mxcfg_lookup</code></a> が現在のコンテキストに最適な設定を決定し、<a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L292" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__get_mutex_filename.html&quot;}, '*');"><code>get_mutex_filename</code></a> でパスを生成して APR のミューテックス生成関数を呼び出す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_hash.h</code>: ミューテックス設定の管理。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: 設定ディレクティブの処理。</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a>: <a class="wiki-source-link" href="../../source/os/unix/os.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/os.h.html&quot;}, '*');"><code>AP_NEED_SET_MUTEX_PERMS</code></a> が定義されている場合の権限設定。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>include/util_mutex.h</code></a>: 公開 API 定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: <code>Mutex</code> ディレクティブの定義元。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a>: MPM におけるミューテックス利用の主要な利用者。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>mxcfg_by_type</code> は <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a> プールで管理され、設定のライフサイクルはサーバーの起動期間と一致します。</li>
+<li>**優先順位**: <a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L319" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__mxcfg_lookup.html&quot;}, '*');"><code>mxcfg_lookup</code></a> 内のロジックにより、特定のミューテックス設定 &gt; デフォルト設定 &gt; 登録時のデフォルト値 の順で解決されます。</li>
+<li>**ファイルベースの制約**: <code>flock</code> や <code>fcntl</code> を使用する場合、<a class="wiki-source-link" href="../../source/server/util_mutex.c.html#L292" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_mutex_c__get_mutex_filename.html&quot;}, '*');"><code>get_mutex_filename</code></a> がパスを生成します。<code>omit_pid</code> が指定されていない場合、ファイル名に PID が付与され、プロセスごとの競合を避ける設計になっています。</li>
+<li>**省略箇所**: 本ファイルはミューテックスの「設定と生成」に特化しており、実際のロック取得・解放のロジックは APR (<code>apr_proc_mutex_lock</code> 等) に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_mutex_c__ap_parse_mutex.html" target="wiki-view"><code>ap_parse_mutex</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__mutex_cfg_t.html" target="wiki-view"><code>mutex_cfg_t</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__ap_mutex_init.html" target="wiki-view"><code>ap_mutex_init</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__ap_set_mutex.html" target="wiki-view"><code>ap_set_mutex</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__ap_mutex_register.html" target="wiki-view"><code>ap_mutex_register</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__mutex_needs_file.html" target="wiki-view"><code>mutex_needs_file</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__get_mutex_filename.html" target="wiki-view"><code>get_mutex_filename</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__mxcfg_lookup.html" target="wiki-view"><code>mxcfg_lookup</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__log_bad_create_options.html" target="wiki-view"><code>log_bad_create_options</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__log_unknown_type.html" target="wiki-view"><code>log_unknown_type</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__log_create_failure.html" target="wiki-view"><code>log_create_failure</code></a></li>
+<li><a href="../symbols/server__util_mutex_c__ap_dump_mutexes.html" target="wiki-view"><code>ap_dump_mutexes</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

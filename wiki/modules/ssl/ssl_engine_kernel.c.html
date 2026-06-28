@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ssl/ssl_engine_kernel.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_kernel.c.html&quot;}, '*');">modules/ssl/ssl_engine_kernel.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_kernel.c.html&quot;}, '*');"><code>ssl_engine_kernel.c</code></a> は、Apache HTTP Server の SSL/TLS 処理における「カーネル」として機能する中核ファイルです。リクエスト処理の各フェーズ（ReadReq, Access, Auth, Fixup）における SSL 固有のロジック、再ネゴシエーションの制御、および OpenSSL とのコールバック連携を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> サブシステムにおいて、HTTP リクエストのライフサイクルと SSL 状態を橋渡しする役割を持ちます。<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_io.c.html&quot;}, '*');"><code>ssl_engine_io.c</code></a> が低レベルな I/O フィルタを扱うのに対し、本ファイルはポリシー適用や認証、環境変数の設定といった上位のビジネスロジックを処理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストフックの処理**: <code>ReadReq</code> から <code>Fixup</code> まで、各フェーズで必要な SSL 状態の検証と環境設定を行う。</li>
+<li>**再ネゴシエーション制御**: ディレクトリ単位の SSL 設定変更に伴う再ネゴシエーションの強制、およびそれに伴うリクエストボディのバッファリング。</li>
+<li>**OpenSSL コールバック**: 証明書検証、セッションキャッシュ、SNI、ALPN、SRP、TLS チケット等の OpenSSL イベントに対するハンドラを提供。</li>
+<li>**ポリシー適用**: SNI ポリシーのチェックや、SSL 必須設定の強制。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエストフック（公開 API）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L132" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_ReadReq.html&quot;}, '*');"><code>ssl_hook_ReadReq</code></a>: リクエスト開始時の SSL 接続確認と SNI ポリシーチェック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1047" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access.html&quot;}, '*');"><code>ssl_hook_Access</code></a>: アクセス制御フェーズ。再ネゴシエーションの要否判断と実行。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_UserCheck.html&quot;}, '*');"><code>ssl_hook_UserCheck</code></a>: クライアント証明書を用いた <code>FakeBasicAuth</code> の処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1350" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Fixup.html&quot;}, '*');"><code>ssl_hook_Fixup</code></a>: CGI/SSI 環境変数への SSL 情報の注入。</li>
+</ul>
+<h3>OpenSSL コールバック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1566" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_callback_SSLVerify.html&quot;}, '*');"><code>ssl_callback_SSLVerify</code></a>: 証明書検証プロセス。OCSP チェックや CRL 検証を含む。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1901" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_callback_NewSessionCacheEntry.html&quot;}, '*');"><code>ssl_callback_NewSessionCacheEntry</code></a> / <code>GetSessionCacheEntry</code>: セッションキャッシュの永続化と取得。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L2263" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_callback_ServerNameIndication.html&quot;}, '*');"><code>ssl_callback_ServerNameIndication</code></a>: SNI 拡張によるバーチャルホストの動的切り替え。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L2527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_callback_alpn_select.html&quot;}, '*');"><code>ssl_callback_alpn_select</code></a>: ALPN によるプロトコルネゴシエーション。</li>
+</ul>
+<h3>内部ヘルパー</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__fill_reneg_buffer.html&quot;}, '*');"><code>fill_reneg_buffer</code></a>: 再ネゴシエーション時にリクエストボディを一時退避する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_check_vhost_sni_policy.html&quot;}, '*');"><code>ssl_check_vhost_sni_policy</code></a>: SNI による vhost 切り替えの妥当性を検証する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **リクエスト処理**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1047" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access.html&quot;}, '*');"><code>ssl_hook_Access</code></a> が呼び出されると、現在の SSL 設定とディレクトリ設定を比較し、再ネゴシエーションが必要か判断します。 2. **再ネゴシエーション**: 必要であれば <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__fill_reneg_buffer.html&quot;}, '*');"><code>fill_reneg_buffer</code></a> でボディをバッファし、<code>SSL_renegotiate</code> を実行します。 3. **コールバック**: OpenSSL が検証や SNI 処理を行う際、<code>SSL_get_app_data</code> を通じて Apache の <code>conn_rec</code> や <code>request_rec</code> を取得し、コンテキストに応じたポリシーを適用します。 4. **環境設定**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1350" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Fixup.html&quot;}, '*');"><code>ssl_hook_Fixup</code></a> が <code>subprocess_env</code> に SSL 関連のメタデータを書き込み、後続の CGI 等で利用可能にします。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>ssl_private.h</code></a>: モジュール内部のデータ構造（<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLConnRec.html&quot;}, '*');"><code>SSLConnRec</code></a>, <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLSrvConfigRec.html&quot;}, '*');"><code>SSLSrvConfigRec</code></a> 等）の定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/mod_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/mod_ssl.h.html&quot;}, '*');"><code>mod_ssl.h</code></a>: 公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_md5.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_md5.h.html&quot;}, '*');"><code>util_md5.h</code></a>: セッション ID コンテキストの生成に使用。</li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: プロセス状態の更新に使用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_io.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_io.c.html&quot;}, '*');"><code>ssl_engine_io.c</code></a>: SSL フィルタの入出力処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_config.c.html&quot;}, '*');"><code>ssl_engine_config.c</code></a>: 設定構造体の管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ssl/ssl_scache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_scache.c.html&quot;}, '*');"><code>ssl_scache.c</code></a>: セッションキャッシュのバックエンド実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を介したメモリ管理が徹底されています。コールバック内で一時的に生成されるオブジェクト（証明書チェーン等）の解放には注意が必要です。</li>
+<li>**再ネゴシエーションの複雑性**: TLS 1.3 では再ネゴシエーションが廃止され、Post-Handshake Authentication に置き換わっています。本ファイルでは <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L361" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access_classic.html&quot;}, '*');"><code>ssl_hook_Access_classic</code></a> と <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L913" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access_modern.html&quot;}, '*');"><code>ssl_hook_Access_modern</code></a> にロジックが分離されています。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/ssl/ssl_engine_kernel.c.html#L1047" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access.html&quot;}, '*');"><code>ssl_hook_Access</code></a> はサブリクエストやスレーブ接続において、再ネゴシエーションを禁止するガードロジックが含まれています。これは並行リクエストとの競合を防ぐための重要な不変条件です。</li>
+<li>**省略**: SRP や ALPN 等の特定の拡張機能は、ビルド時の定義（<a class="wiki-source-link" href="../../../source/modules/ssl/ssl_private.h.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_private.h.html&quot;}, '*');"><code>HAVE_SRP</code></a> 等）によって有効・無効が切り替わるため、すべてのコードパスが常に実行されるわけではありません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__has_buffered_data.html" target="wiki-view"><code>has_buffered_data</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__fill_reneg_buffer.html" target="wiki-view"><code>fill_reneg_buffer</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_check_vhost_sni_policy.html" target="wiki-view"><code>ssl_check_vhost_sni_policy</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_ReadReq.html" target="wiki-view"><code>ssl_hook_ReadReq</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_configure_env.html" target="wiki-view"><code>ssl_configure_env</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_check_post_client_verify.html" target="wiki-view"><code>ssl_check_post_client_verify</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access_classic.html" target="wiki-view"><code>ssl_hook_Access_classic</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access_modern.html" target="wiki-view"><code>ssl_hook_Access_modern</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Access.html" target="wiki-view"><code>ssl_hook_Access</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_UserCheck.html" target="wiki-view"><code>ssl_hook_UserCheck</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Auth.html" target="wiki-view"><code>ssl_hook_Auth</code></a></li>
+<li><a href="../../symbols/modules__ssl__ssl_engine_kernel_c__ssl_hook_Fixup.html" target="wiki-view"><code>ssl_hook_Fixup</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

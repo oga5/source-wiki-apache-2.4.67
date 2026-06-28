@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/server-main-loop.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server_main_loop</h1>
+<h2>概念</h2>
+<p><code>server_main_loop</code> は、Apache HTTP Server (httpd-2.4.67) のマルチプロセッシングモジュール (MPM) である <code>event</code> および <code>worker</code> において、親プロセスが子プロセスのライフサイクルを監視・管理し、サーバーの実行状態を維持するためのメインループ処理を担当する内部関数です。</p>
+<h2>なぜ重要か</h2>
+<p>この関数は、サーバーの安定稼働と適切なリソース管理を維持するために極めて重要です。起動すべき残りの子プロセス数（<code>remaining_children_to_start</code>）を引数として受け取り、子プロセスの生成、終了したプロセスの検知と回収、スコアボードの更新、および負荷に応じたプロセス数の維持管理（メンテナンス）を一元的に制御します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__server_main_loop.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__server_main_loop.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L3131&quot;}, '*');"><code>symbol:server/mpm/event/event.c#server_main_loop</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__server_main_loop.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__server_main_loop.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L1607&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#server_main_loop</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では詳細なソースコードの解析が完了していないため、完全なエンドツーエンドの実行フローは確定していません。しかし、呼び出し関係から以下の大まかな流れが推測されます。</p>
+<p>1. **メインループの開始**: <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L3259" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_run.html&quot;}, '*');"><code>event_run</code></a> または <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L1748" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__worker_run.html&quot;}, '*');"><code>worker_run</code></a> から <code>server_main_loop</code> が呼び出されます。 2. **子プロセスの監視と待機**: <a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_wait_or_timeout.html&quot;}, '*');"><code>ap_wait_or_timeout</code></a> を呼び出して、子プロセスの状態変化（終了など）を待機、またはタイムアウトが発生するまでブロックします。 3. **ステータス処理**:</p>
+<ul>
+<li>子プロセスが終了した場合、<a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L409" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_find_child_by_pid.html&quot;}, '*');"><code>ap_find_child_by_pid</code></a> や <a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L718" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__scoreboard_c__ap_get_scoreboard_process.html&quot;}, '*');"><code>ap_get_scoreboard_process</code></a> を用いて対象のプロセス情報を取得し、<a class="wiki-source-link" href="../../source/server/mpm_unix.c.html#L386" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_unix_c__ap_process_child_status.html&quot;}, '*');"><code>ap_process_child_status</code></a> で終了ステータスを処理します。</li>
+<li><code>event</code> MPMでは <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L710" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_note_child_stopped.html&quot;}, '*');"><code>event_note_child_stopped</code></a>、<code>worker</code> MPMでは <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L390" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__worker_note_child_killed.html&quot;}, '*');"><code>worker_note_child_killed</code></a> などの個別関数を呼び出し、終了したプロセスの後処理を行います。</li>
+<p>4. **プロセスの維持管理**: <code>perform_idle_server_maintenance</code> を呼び出し、アイドル状態のプロセス数が設定値に適合するよう、必要に応じて <code>make_child</code> を介して新たな子プロセスを生成します。</p>
+</ul>
+<h2>重要な不変条件</h2>
+<p>現時点では詳細なソースコードの解析が行われていないため、ループ実行中やプロセス管理における厳密な不変条件は判明していません。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では具体的な失敗モードや境界条件の解析が行われていないため、開発・運用における「よくある落とし穴」は特定されていません。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>（<code>server_main_loop</code> の具体的な実装と <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L3259" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__event_run.html&quot;}, '*');"><code>event_run</code></a> からの呼び出し文脈）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>（<code>server_main_loop</code> の具体的な実装と <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L1748" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__worker_run.html&quot;}, '*');"><code>worker_run</code></a> からの呼び出し文脈）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

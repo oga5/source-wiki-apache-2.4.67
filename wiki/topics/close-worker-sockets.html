@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/close-worker-sockets.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_worker_sockets</h1>
+<h2>概念</h2>
+<p><code>close_worker_sockets</code> は、Apache HTTP Serverのマルチプロセッシングモジュール（MPM）である <code>worker</code> および <code>event</code> において、ワーカープロセスが保持しているアクティブなソケットを強制的にクローズし、リソースを解放するための内部関数です。</p>
+<h2>なぜ重要か</h2>
+<p>プロセスの強制終了時やシャットダウン時に、未処理の接続やオープンなままのソケットを確実にクローズすることで、ソケットリソースのリークを防ぎ、OSのリソースを迅速に解放するために重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__close_worker_sockets.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__close_worker_sockets.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L569&quot;}, '*');"><code>symbol:server/mpm/event/event.c#close_worker_sockets</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__close_worker_sockets.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__close_worker_sockets.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L262&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#close_worker_sockets</code></a></li>
+<li><code>worker_sockets</code>: 各ワーカーが使用するソケットを格納する配列。</li>
+<li><code>threads_per_child</code>: 子プロセスあたりのスレッド数（ループの終了条件）。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. 強制終了処理（<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> や <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> の強制終了時）や、スレッドへのシグナル送信（<code>signal_threads</code> や <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L544" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__close_socket_nonblocking_.html&quot;}, '*');"><code>close_socket_nonblocking_</code></a> など）が発生します。 2. <code>close_worker_sockets</code> が呼び出されます。 3. <code>0</code> から <code>threads_per_child - 1</code> までのインデックスでループを実行します。 4. 各インデックス <code>i</code> について、<code>worker_sockets[i]</code> が有効（非NULL）であるかを確認します。 5. 有効な場合、<code>apr_socket_close()</code> を呼び出してソケットを閉じます。 6. クローズ後、<code>worker_sockets[i]</code> を <code>NULL</code> に設定して参照をクリアします。</p>
+<p>※なお、<code>event</code> MPMにおける詳細なエンドツーエンドの呼び出しフローや、<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L544" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__close_socket_nonblocking_.html&quot;}, '*');"><code>close_socket_nonblocking_</code></a> との具体的な連携の全容は、現時点の解析情報では完全には明らかになっていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li><code>threads_per_child</code> が正しく初期化されていること。</li>
+<li><code>worker_sockets</code> 配列が各ワーカーのソケット状態を保持していること。</li>
+<li>ソケットクローズ後は、二重解放や不正な参照を防ぐために <code>worker_sockets[i]</code> が必ず <code>NULL</code> に設定されること。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li><code>apr_socket_close</code> 自体が失敗した場合のエラーハンドリングは本関数内では行われません。</li>
+<li><code>worker_sockets</code> が初期化されていない場合や、既に閉じられたソケットに対しては、<code>NULL</code> チェックにより安全にスキップされますが、初期化フローとの整合性が崩れると予期せぬ挙動を招く可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> （特に <code>close_worker_sockets</code> の実装と強制終了処理）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> （特に <code>close_worker_sockets</code> の呼び出し元である <code>signal_threads</code> や <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L544" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__close_socket_nonblocking_.html&quot;}, '*');"><code>close_socket_nonblocking_</code></a>）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/conn-rec.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>conn_rec</h1>
+<h2>概念</h2>
+<p><code>conn_rec</code> は、Apache HTTP Server においてクライアントとサーバー間の個別の接続（Connection）状態を保持するための中心的なデータ構造（<a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a> / <code>typedef</code>）です。</p>
+<h2>なぜ重要か</h2>
+<p><code>conn_rec</code> は、接続ごとの状態（IPアドレス、ソケット、フィルタチェーン、Keep-Alive 状態など）を管理し、接続の確立から終了までのライフサイクルを通じてコンテキストを維持するために不可欠です。HTTP/2 モジュール（<code>mod_http2</code>）においては、ワーカーが処理する個別の接続状態を表現し、ストリーム処理やフィルタ処理を実行する際にも使用されます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/include__httpd_h__conn_rec.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__httpd_h__conn_rec.html&quot;, &quot;source&quot;: &quot;source/include/httpd.h.html#L820&quot;}, '*');"><code>symbol:include/httpd.h#conn_rec</code></a>: コアで定義される、接続状態を保持する中心的な構造体。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_workers_h__conn_rec.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_h__conn_rec.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_workers.h.html#L87&quot;}, '*');"><code>symbol:modules/http2/h2_workers.h#conn_rec</code></a>: HTTP/2 のワーカー処理において、処理対象の接続コンテキストとして参照される型。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報に基づく、接続処理の基本的な流れは以下の通りです。</p>
+<p>1. **接続の確立と管理**: <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> 等のコア関数を通じて、接続の確立から終了までの処理フローで <code>conn_rec</code> が受け渡されます。 2. **HTTP/2 ワーカーによる取得**: <code>h2_workers</code> のワーカーが <code>next</code> コールバックを介して <code>conn_rec</code> を取得します。 3. **処理の実行**: ワーカーは取得した <code>conn_rec</code> に対して、HTTP/2 のストリーム処理やフィルタ処理を実行します。 4. **完了と解放**: 処理終了後、<a class="wiki-source-link" href="../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a> コールバック（<code>ap_conn_producer_done</code> など）が呼び出され、接続の解放や後処理が行われます。</p>
+<p>※ 接続の完全な生成から破棄に至る全ステップや、内部フィルタチェーンの具体的な遷移など、詳細なエンドツーエンドのフローは提供された情報からは完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**メモリ管理**: <code>conn_rec</code> 内の多くのフィールドは、Apache Portable Runtime (APR) のプール管理下にあり、接続のライフサイクルを通じて維持されます。</li>
+<li>**スレッド安全性**: 複数のスレッドから同一の <code>conn_rec</code> を操作することは禁止されており、HTTP/2 モジュール内では <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> による排他制御が前提となります。</li>
+<li>**ライフサイクルの整合性**: <code>h2_workers</code> の文脈において、ワーカーが取得した <code>conn_rec</code> は、処理が完了するまで有効である必要があります。</li>
+</ul>
+<p>※ その他の詳細な不変条件や、コアと各モジュール間における厳密な状態遷移の制約は、提供された情報からは完全には判明していません。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**バイナリ互換性 (MMN)**: <code>conn_rec</code> は非常に広範なデータ構造です。構造体を変更すると、<a class="wiki-source-link" href="../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a> で定義されるモジュールマジックナンバー（MMN）の更新を伴う場合があります。モジュール開発時は、必要なフィールドのみにアクセスし、不必要な変更を避けてください。</li>
+<li>**HTTP/2 モジュール内での変更禁止**: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>modules/http2/h2_workers.h</code></a> における <code>conn_rec</code> はコア定義への参照です。HTTP/2 モジュール側で構造体自体を変更してはならず、コア側の API 変更に注意する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a>: コアにおける <code>conn_rec</code> の定義。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.h.html&quot;}, '*');"><code>modules/http2/h2_workers.h</code></a>: HTTP/2 ワーカーにおける <code>conn_rec</code> の利用方法。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>include/http_connection.h</code></a>: 接続管理に関連するコア API。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__mappers__mod_speling_c__check_speling.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L197" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__check_speling.html&quot;}, '*');">check_speling</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/mappers/mod_speling.c:197</code></li>
+</ul>
+<h2>目的</h2>
+<p>リクエストされた URL がサーバー上に存在しない場合に、ファイルシステムを走査してスペルミスや大文字小文字の不一致を補完し、リダイレクトまたは候補の提示を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int check_speling(request_rec *r)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>request_rec *r</code> （現在の HTTP リクエスト情報）</li>
+<li>**出力**: <code>int</code> （Apache のステータスコード。成功時は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L505" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_MOVED_PERMANENTLY</code></a> または <a class="wiki-source-link" href="../../source/include/httpd.h.html#L504" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_MULTIPLE_CHOICES</code></a>、処理対象外やエラー時は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a> を返す）</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>CheckSpelling</code> ディレクティブによりモジュールが有効化されていること。</li>
+<li>リクエストメソッドが <code>GET</code> であること。</li>
+<li>リクエストされたパスがファイルシステム上に存在しないこと（<code>r-&gt;finfo.filetype == APR_NOFILE</code>）。</li>
+<li>サブリクエストではなく、プロキシリクエストでもないこと。</li>
+<li>リクエスト URI が <code>/</code> ではないこと。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **パス分解**: リクエストされた <code>r-&gt;filename</code> をディレクトリパスとファイル名に分割する。 2. **ディレクトリ走査**: 親ディレクトリを <code>apr_dir_open</code> で開き、全ファイルを読み込む。 3. **類似度判定**: 各ファイル名に対し以下の順で判定を行う。</p>
+<ul>
+<li>大文字小文字の不一致 (<code>strcasecmp</code>)。</li>
+<li><code>spdist()</code> による編集距離判定（<code>cfg-&gt;check_case_only</code> が無効な場合）。</li>
+<li><code>cfg-&gt;check_basename_match</code> が有効な場合、拡張子を除いたベース名での比較。</li>
+<p>4. **レスポンス決定**:</p>
+<li>候補が 1 つかつ確実性が高い場合、<code>301 Moved Permanently</code> を返し、<code>Location</code> ヘッダで修正先へリダイレクトする。</li>
+<li>候補が複数ある場合、<code>300 Multiple Choices</code> を返し、<code>r-&gt;notes</code> に候補リストを格納して HTML 形式の選択肢を生成する。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: Apache の <code>fixups</code> フック（<code>register_hooks</code> にて <code>ap_hook_fixups</code> に登録）。</li>
+<li>**呼び出し先**: <code>spdist()</code>（類似度計算）、<code>apr_dir_open</code>/<code>apr_dir_read</code>（ファイル探索）、<code>qsort</code>（候補のソート）、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L1849" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_escape_uri</code></a>/<a class="wiki-source-link" href="../../source/include/httpd.h.html#L1873" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_escape_html</code></a>（出力のサニタイズ）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spconfig.html&quot;}, '*');"><code>spconfig</code></a>: モジュールの設定保持。</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L139" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__misspelled_file.html&quot;}, '*');"><code>misspelled_file</code></a>: 候補ファイル名と品質（<a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L118" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__sp_reason.html&quot;}, '*');"><code>sp_reason</code></a>）を保持する構造体。</li>
+<li><code>apr_array_header_t</code>: 候補リストの格納に使用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**ディレクトリ走査失敗**: <code>apr_dir_open</code> が失敗した場合は <a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a> を返す。</li>
+<li>**無限ループ回避**: 修正後の URL がリクエスト元と一致する場合（壊れたシンボリックリンク等）、リダイレクトせずに <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> を返して終了する。</li>
+<li>**パフォーマンス**: ディレクトリ内のファイル数に比例して走査コストが増大する。</li>
+<li>**曖昧性**: 候補が複数ある場合は <code>300 Multiple Choices</code> となり、自動リダイレクトは行われない。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>r-&gt;pool</code> を使用してメモリ管理を行っているため、明示的な解放は不要。</li>
+<li><a class="wiki-source-link" href="../../source/modules/mappers/mod_speling.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_speling_c__spdist.html&quot;}, '*');"><code>spdist</code></a> は「1文字の誤り」までを許容する設計となっている。</li>
+<li><code>mod_negotiation</code> と同様の <code>notes</code> テーブル利用パターンを採用しているため、修正時は関連性に注意すること。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

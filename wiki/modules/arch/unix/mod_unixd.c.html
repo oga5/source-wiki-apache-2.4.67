@@ -1,0 +1,100 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/arch/unix/mod_unixd.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');">modules/arch/unix/mod_unixd.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.c.html&quot;}, '*');"><code>mod_unixd.c</code></a> は、Apache HTTP Server が Unix 系 OS 上で動作する際に必要な、特権管理およびプロセス環境設定を行うコアモジュールです。主に、サーバー起動後の特権降格（<a class="wiki-source-link" href="../../../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a> から指定ユーザーへの切り替え）、<code>chroot</code> 環境の構築、および suEXEC の有効性検証を担当します。</p>
+<h2>モジュール内での役割</h2>
+<p>Unix 系 MPM（Multi-Processing Module）の共通基盤として機能します。サーバーの起動フェーズで設定を読み込み、プロセス生成時に安全な実行環境を整えるためのフックを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**特権管理**: <code>setuid</code>/<code>setgid</code> および <a class="wiki-source-link" href="../../../../source/server/mpm_common.c.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__initgroups.html&quot;}, '*');"><code>initgroups</code></a> を用いたプロセス実行ユーザーの切り替え。</li>
+<li>**環境分離**: <code>chroot</code> によるプロセス実行ディレクトリの制限。</li>
+<li>**設定管理**: <code>User</code>, <code>Group</code>, <code>ChrootDir</code>, <code>Suexec</code> ディレクティブの解析と検証。</li>
+<li>**初期化と検証**: サーバー起動時の suEXEC バイナリの存在確認と権限チェック。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定管理（ディレクティブハンドラ）</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L206" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_set_user.html&quot;}, '*');"><code>unixd_set_user</code></a>: <code>User</code> ディレクティブを処理し、ユーザー名を ID に変換。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_set_group.html&quot;}, '*');"><code>unixd_set_group</code></a>: <code>Group</code> ディレクティブを処理し、グループ名を ID に変換。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L249" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_set_chroot_dir.html&quot;}, '*');"><code>unixd_set_chroot_dir</code></a>: <code>ChrootDir</code> ディレクティブの検証と設定。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L265" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_set_suexec.html&quot;}, '*');"><code>unixd_set_suexec</code></a>: <code>Suexec</code> フラグの有効化と制約チェック。</li>
+</ul>
+<h3>特権・環境制御</h3>
+<ul>
+<li><code>ap_unixd_setup_child</code>: 子プロセス生成時に呼び出される公開関数。特権降格と <code>chroot</code> を実行。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__set_group_privs.html&quot;}, '*');"><code>set_group_privs</code></a>: グループ ID の設定と <a class="wiki-source-link" href="../../../../source/server/mpm_common.c.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__initgroups.html&quot;}, '*');"><code>initgroups</code></a> による補助グループの初期化。</li>
+<li><code>unixd_drop_privileges</code>: サーバー全体の特権降格プロセスを管理する内部フック。</li>
+</ul>
+<h3>ライフサイクル・フック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L294" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_pre_config.html&quot;}, '*');"><code>unixd_pre_config</code></a>: 起動時のデフォルト値設定と suEXEC の環境チェック。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L402" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_hooks.html&quot;}, '*');"><code>unixd_hooks</code></a>: モジュールのフック登録（<code>pre_config</code>, <code>test_config</code>, <code>drop_privileges</code>）。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L294" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__unixd_pre_config.html&quot;}, '*');"><code>unixd_pre_config</code></a> が <code>APR_HOOK_FIRST</code> で実行され、<a class="wiki-source-link" href="../../../../source/os/unix/unixd.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>ap_unixd_config</code></a> 構造体をデフォルト値で初期化し、suEXEC バイナリのパーミッションを検証します。 2. **設定**: <code>unixd_cmds</code> で定義されたディレクティブが解析され、<a class="wiki-source-link" href="../../../../source/os/unix/unixd.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>ap_unixd_config</code></a> が更新されます。 3. **実行時**: 子プロセス生成時、<code>ap_unixd_setup_child</code> が呼び出されます。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__set_group_privs.html&quot;}, '*');"><code>set_group_privs</code></a> でグループ権限を確定。</li>
+<li><code>chroot</code> が設定されていれば実行。</li>
+<li><code>setuid</code> でユーザー権限を降格。</li>
+<li>Linux 環境では <code>prctl</code> を使用してコアダンプの可否を設定。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a>: 共有設定構造体 <a class="wiki-source-link" href="../../../../source/os/unix/unixd.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>ap_unixd_config</code></a> の定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: Apache モジュール基盤。</li>
+<li><code>pwd.h</code>, <code>grp.h</code>, <code>unistd.h</code>: Unix システムコール（ユーザー/グループ管理）。</li>
+<li><code>sys/prctl.h</code>: Linux 特有のプロセス制御。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.h.html&quot;}, '*');"><code>mod_unixd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><code>os.h</code></li>
+<li><code>strings.h</code></li>
+<li><code>sys/resource.h</code></li>
+<li><code>sys/sem.h</code></li>
+<li><code>sys/stat.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/arch/unix/mod_unixd.h.html&quot;}, '*');"><code>modules/arch/unix/mod_unixd.h</code></a>: <code>ap_unixd_setup_child</code> の宣言を含む公開ヘッダー。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a>: MPM 共通のプロセス管理ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../../source/os/unix/unixd.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>ap_unixd_config</code></a> は静的またはグローバルな領域で管理されており、モジュールのライフサイクル全体で生存します。</li>
+<li>**制約**: <code>chroot</code> や <code>setuid</code> は <a class="wiki-source-link" href="../../../../source/support/htcacheclean.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">root</a> 権限で実行されている場合にのみ成功します。失敗時は <a class="wiki-source-link" href="../../../../source/include/http_log.h.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>APLOG_ALERT</code></a> でログ出力されます。</li>
+<li>**未実装・浅い部分**: <code>OS2</code> や <code>_OSD_POSIX</code> などのレガシー環境向けの分岐が含まれていますが、現代的な Linux/Unix 環境では標準的なパスのみが実行されます。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../../../source/modules/arch/unix/mod_unixd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__arch__unix__mod_unixd_c__set_group_privs.html&quot;}, '*');"><code>set_group_privs</code></a> 内で <code>getpwuid</code> を使用してユーザー名を取得するロジックは、設定で <code>#uid</code> 形式が指定された場合の互換性維持のために存在します。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_config_t.html" target="wiki-view"><code>unixd_config_t</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__set_group_privs.html" target="wiki-view"><code>set_group_privs</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_set_user.html" target="wiki-view"><code>unixd_set_user</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_set_group.html" target="wiki-view"><code>unixd_set_group</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_set_chroot_dir.html" target="wiki-view"><code>unixd_set_chroot_dir</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_set_suexec.html" target="wiki-view"><code>unixd_set_suexec</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_pre_config.html" target="wiki-view"><code>unixd_pre_config</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_dump_config.html" target="wiki-view"><code>unixd_dump_config</code></a></li>
+<li><a href="../../../symbols/modules__arch__unix__mod_unixd_c__unixd_hooks.html" target="wiki-view"><code>unixd_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

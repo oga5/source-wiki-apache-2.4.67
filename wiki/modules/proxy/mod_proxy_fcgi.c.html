@@ -1,0 +1,80 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy_fcgi.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');">modules/proxy/mod_proxy_fcgi.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> は、Apache HTTP Server のプロキシサブシステムにおいて、FastCGI プロトコルを介したバックエンド通信を担当するモジュールです。HTTP リクエストを FastCGI レコードに変換し、バックエンドとの間で環境変数の受け渡し、リクエストボディの転送、およびレスポンスヘッダの解析を行います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> のスキームハンドラとして動作します。<code>mod_proxy</code> が提供するコネクション管理やワーカ管理のインフラを利用し、FastCGI 特有のプロトコルスタック（<a class="wiki-source-link" href="../../../source/include/util_fcgi.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_fcgi.h.html&quot;}, '*');"><code>util_fcgi.h</code></a>）を適用してバックエンドとの通信を完結させます。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストの正規化**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__proxy_fcgi_canon.html&quot;}, '*');"><code>proxy_fcgi_canon</code></a> を通じて、<code>fcgi://</code> URL の解析とパスの正規化を行う。</li>
+<li>**環境変数の制御**: <code>ProxyFCGISetEnvIf</code> ディレクティブにより、リクエストに応じた環境変数の動的な書き換え（<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__fix_cgivars.html&quot;}, '*');"><code>fix_cgivars</code></a>）をサポートする。</li>
+<li>**FastCGI プロトコル処理**: <code>BEGIN_REQUEST</code> の送信、<code>PARAMS</code> レコードによる環境変数のシリアライズ、<code>STDIN</code> によるボディ転送、およびレスポンスのストリーム解析を行う。</li>
+<li>**レスポンスのフィルタリング**: バックエンドからのレスポンスヘッダを解析し、Apache のフィルタチェーンへ適切に引き渡す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_dirconf_t.html&quot;}, '*');"><code>fcgi_dirconf_t</code></a>: ディレクトリ単位の設定。バックエンドタイプ（FPM/Generic）や環境変数の修正ルールを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_req_config_t.html&quot;}, '*');"><code>fcgi_req_config_t</code></a>: リクエスト単位の設定。<code>PATH_INFO</code> の計算に使用されるパス情報を保持。</li>
+</ul>
+<h3>プロトコルハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L1108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__proxy_fcgi_handler.html&quot;}, '*');"><code>proxy_fcgi_handler</code></a>: <code>mod_proxy</code> から呼び出されるメインのエントリポイント。接続の確立とリクエスト処理の開始を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L1023" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_do_request.html&quot;}, '*');"><code>fcgi_do_request</code></a>: FastCGI の各フェーズ（<a class="wiki-source-link" href="../../../source/server/util_expr_scan.c.html#L143" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_expr_scan.c.html&quot;}, '*');">BEGIN</a>, PARAMS, DISPATCH）を順次実行する制御関数。</li>
+</ul>
+<h3>ユーティリティ・ヘルパー</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L243" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__send_data.html&quot;}, '*');"><code>send_data</code></a> / <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__get_data.html&quot;}, '*');"><code>get_data</code></a>: <code>apr_socket</code> をラップし、ワーカの統計情報を更新する送受信関数。</li>
+<li><code>handle_headers</code>: バックエンドからのレスポンスストリームから HTTP ヘッダの終端を検出するステートマシン。</li>
+<li><code>dispatch</code>: <code>poll</code> を使用してバックエンドとの双方向通信（STDIN 送信と STDOUT/STDERR 受信）を非同期的に処理する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L1108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__proxy_fcgi_handler.html&quot;}, '*');"><code>proxy_fcgi_handler</code></a> が接続を確保し、<a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L4831" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_prefetch_input.html&quot;}, '*');"><code>ap_proxy_prefetch_input</code></a> でリクエストボディをバッファリングする。 2. **リクエスト送信**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L1023" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_do_request.html&quot;}, '*');"><code>fcgi_do_request</code></a> が <code>send_begin_request</code> でセッションを開始し、<code>send_environment</code> で環境変数を <code>PARAMS</code> レコードとして送信する。 3. **双方向通信**: <code>dispatch</code> 関数が <code>apr_poll</code> を使用してループし、クライアントからの入力を <code>STDIN</code> としてバックエンドへ送りつつ、バックエンドからの <code>STDOUT</code> を解析する。 4. **ヘッダ解析**: <code>handle_headers</code> が <code>STDOUT</code> ストリームからヘッダの終わりを検出し、<a class="wiki-source-link" href="../../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> で Apache のレスポンスヘッダを構築する。 5. **終了**: <a class="wiki-source-link" href="../../../source/include/util_fcgi.h.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_fcgi.h.html&quot;}, '*');"><code>AP_FCGI_END_REQUEST</code></a> を受信するか、エラー発生時に接続を解放する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシサブシステムの基盤 API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_fcgi.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_fcgi.h.html&quot;}, '*');"><code>util_fcgi.h</code></a>: FastCGI プロトコルヘッダの構築・解析用ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a>: CGI 関連の環境変数処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a>: <code>ProxyFCGISetEnvIf</code> で使用される式評価エンジン。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>modules/proxy/proxy_util.c</code></a>: コネクション管理やワーカの統計管理など、プロキシ共通機能。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_http.c</code></a>: HTTP プロキシの挙動との比較対象。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L1023" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_do_request.html&quot;}, '*');"><code>fcgi_do_request</code></a> 内では <code>temp_pool</code> を使用して、リクエスト処理中の大量のメモリ割り当てを効率的に解放しています。</li>
+<li>**パフォーマンス**: <code>dispatch</code> 関数は <code>poll</code> を使用して効率的な I/O を行いますが、ヘッダ解析まではバッファリングが発生します。</li>
+<li>**制約**: 本モジュールは FastCGI の多重化（Multiplexing）をサポートしておらず、1 コネクションにつき 1 リクエスト（<code>request_id = 1</code> 固定）を前提としています。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_fcgi.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__get_data.html&quot;}, '*');"><code>get_data</code></a> などの I/O 処理は、将来的な完全非同期 I/O への移行を見据えた設計になっていますが、現時点ではブロッキング I/O が混在しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__sei_entry.html" target="wiki-view"><code>sei_entry</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_req_config_t.html" target="wiki-view"><code>fcgi_req_config_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_backend_t.html" target="wiki-view"><code>fcgi_backend_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__fcgi_dirconf_t.html" target="wiki-view"><code>fcgi_dirconf_t</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__proxy_fcgi_canon.html" target="wiki-view"><code>proxy_fcgi_canon</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__fix_cgivars.html" target="wiki-view"><code>fix_cgivars</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__send_data.html" target="wiki-view"><code>send_data</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__get_data.html" target="wiki-view"><code>get_data</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__get_data_full.html" target="wiki-view"><code>get_data_full</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__send_begin_request.html" target="wiki-view"><code>send_begin_request</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__send_environment.html" target="wiki-view"><code>send_environment</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html" target="wiki-view"><code>handle_headers</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

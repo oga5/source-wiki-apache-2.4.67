@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/dav/fs/lock.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');">modules/dav/fs/lock.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server の DAV モジュールにおけるファイルシステムベースのロック管理機能を実装しています。<code>DAVLockDB</code> ディレクティブで指定された DBM データベースを利用し、リソースに対する直接ロックおよび間接ロック（継承ロック）の永続化、取得、更新、削除を担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_dav</code> のロックプロバイダインターフェース（<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_hooks_locks.html&quot;}, '*');"><code>dav_hooks_locks</code></a>）を実装するバックエンドです。<a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>repos.c</code></a> が提供するリソース抽象化層と連携し、ファイルシステム上のリソースに対する WebDAV ロック状態を管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ロックデータベースの管理**: DBM を用いたロック情報の読み書き、および遅延オープンによる効率的なリソース管理。</li>
+<li>**ロックのシリアライズ**: <code>dav_lock_discovery</code>（直接ロック）および <code>dav_lock_indirect</code>（間接ロック）構造体のバイナリ形式への変換と保存。</li>
+<li>**ロックnullリソースの管理**: 存在しないリソースに対するロック（lock-null）を追跡するための補助ファイル（<code>.locknull</code>）の操作。</li>
+<li>**ロックのライフサイクル管理**: 有効期限切れロックの自動クリーンアップと、トークンベースのロック照合。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ロックデータベース構造</h3>
+<ul>
+<li><code>dav_lockdb_combined</code>: <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> とプライベート情報（DBM ハンドル、パス）を統合した構造体。</li>
+<li><code>dav_hooks_locks_fs</code>: <code>mod_dav</code> に登録されるロックフックのメインエントリポイント。</li>
+</ul>
+<h3>ロックデータ構造</h3>
+<ul>
+<li><code>dav_lock_discovery</code>: 直接ロックの情報を保持。有効期限、スコープ、所有者情報を含む。</li>
+<li><code>dav_lock_indirect</code>: 親コレクションから継承されたロックの参照。</li>
+<li><code>dav_locktoken</code>: UUID をラップしたロック識別子。</li>
+</ul>
+<h3>主要な操作関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L414" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_save_lock_record.html&quot;}, '*');"><code>dav_fs_save_lock_record</code></a> / <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_load_lock_record.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a>: DBM へのロックリストの永続化と復元。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_resolve.html&quot;}, '*');"><code>dav_fs_resolve</code></a>: 間接ロックを辿り、対応する直接ロックを解決する。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_remove_locknull_member.html&quot;}, '*');"><code>dav_fs_remove_locknull_member</code></a>: ロックnull状態の解消時に補助ファイルを更新する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L333" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_open_lockdb.html&quot;}, '*');"><code>dav_fs_open_lockdb</code></a> が呼ばれ、<a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> 構造体が初期化されます。実際の DBM オープンは <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L300" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_really_open_lockdb.html&quot;}, '*');"><code>dav_fs_really_open_lockdb</code></a> により、最初のアクセス時に遅延実行されます。 2. **データ読み込み**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_load_lock_record.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a> がキー（ファイルパス）に基づき DBM からデータをフェッチし、メモリ上のリンクドリスト（<code>dav_lock_discovery</code> / <code>dav_lock_indirect</code>）を構築します。この際、期限切れロックは自動的に除外されます。 3. **データ保存**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L414" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_save_lock_record.html&quot;}, '*');"><code>dav_fs_save_lock_record</code></a> がリンクドリストをシリアライズし、DBM に書き戻します。 4. **間接ロック解決**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_resolve.html&quot;}, '*');"><code>dav_fs_resolve</code></a> は間接ロックのキーを辿り、再帰的に <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L521" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_load_lock_record.html&quot;}, '*');"><code>dav_fs_load_lock_record</code></a> を呼び出して元の直接ロックを特定します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>mod_dav.h</code></a>: DAV プロバイダインターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.h.html&quot;}, '*');"><code>repos.h</code></a>: ファイルシステムリソースの抽象化。</li>
+<li><code>apr_dbm.h</code> (間接的): DBM 操作用。</li>
+<li><code>apr_uuid.h</code>: ロックトークンの生成・解析用。</li>
+<li><code>apr.h</code></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>: リソースのパス解決やプール管理など、本ファイルが依存する基盤機能を提供。</li>
+<li><a class="wiki-source-link" href="../../../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a>: DBM 操作のラッパー。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての動的メモリ割り当ては <code>request_rec</code> に紐付くプール（<code>r-&gt;pool</code>）で行われます。明示的な <code>free</code> は不要ですが、長時間のプロセスでは注意が必要です。</li>
+<li>**ロックnull**: 存在しないファイルに対するロックは、ディレクトリ内の <code>.locknull</code> ファイルに記録されます。このファイルは <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L745" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_load_locknull_list.html&quot;}, '*');"><code>dav_fs_load_locknull_list</code></a> 等で管理されます。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../../source/modules/dav/main/mod_dav.h.html#L1577" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>DAV_GETLOCKS_COMPLETE</code></a> は未実装です。また、ロックデータベースの破損チェックは最小限であり、DBM の整合性は外部要因に依存します。</li>
+<li>**設計上の注意**: <a class="wiki-source-link" href="../../../../source/modules/dav/fs/lock.c.html#L414" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_save_lock_record.html&quot;}, '*');"><code>dav_fs_save_lock_record</code></a> は、ロックデータベースが読み取り専用で開かれている場合にエラーを返す設計になっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_locktoken.html" target="wiki-view"><code>dav_locktoken</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lock_discovery_fixed.html" target="wiki-view"><code>dav_lock_discovery_fixed</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lock_discovery.html" target="wiki-view"><code>dav_lock_discovery</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lock_indirect.html" target="wiki-view"><code>dav_lock_indirect</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lockdb_private.html" target="wiki-view"><code>dav_lockdb_private</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lockdb_combined.html" target="wiki-view"><code>dav_lockdb_combined</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lock_private.html" target="wiki-view"><code>dav_lock_private</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_lock_combined.html" target="wiki-view"><code>dav_lock_combined</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_fs_alloc_lock.html" target="wiki-view"><code>dav_fs_alloc_lock</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_fs_parse_locktoken.html" target="wiki-view"><code>dav_fs_parse_locktoken</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_fs_format_locktoken.html" target="wiki-view"><code>dav_fs_format_locktoken</code></a></li>
+<li><a href="../../../symbols/modules__dav__fs__lock_c__dav_fs_compare_locktoken.html" target="wiki-view"><code>dav_fs_compare_locktoken</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

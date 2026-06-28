@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/mappers/mod_dir.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_dir.c.html&quot;}, '*');">modules/mappers/mod_dir.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_dir.c.html&quot;}, '*');"><code>mod_dir.c</code></a> は、Apache HTTP Server におけるディレクトリリクエストの処理を担うモジュールです。主に「ディレクトリインデックス（<code>DirectoryIndex</code>）の解決」と「末尾スラッシュなしのディレクトリに対するリダイレクト処理」を制御します。また、ファイルが存在しない場合に備えた <code>FallbackResource</code> の処理も提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/mappers</code> サブシステムの一部として、リクエストのパスがディレクトリを指している場合に、適切なコンテンツ（インデックスファイル）を特定し、内部リダイレクトを行う役割を持ちます。<code>fixups</code> フックの最後（<code>APR_HOOK_LAST</code>）で動作し、他のモジュールがリクエストを処理しなかった場合のフォールバックとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>DirectoryIndex</code>, <code>DirectorySlash</code>, <code>DirectoryCheckHandler</code>, <code>FallbackResource</code> などのディレクティブを解析し、ディレクトリごとの設定構造体 <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__dir_config_rec.html&quot;}, '*');"><code>dir_config_rec</code></a> を構築・マージする。</li>
+<li>**ディレクトリリダイレクト**: 末尾に <code>/</code> がないディレクトリリクエストに対し、<code>DirectorySlash</code> 設定に基づいて正規化（リダイレクト）を行う。</li>
+<li>**インデックス解決**: 設定されたインデックスファイルリストを順次探索し、最初に見つかった有効なファイルを内部リダイレクトで提供する。</li>
+<li>**フォールバック処理**: ファイルが存在しない場合に <code>FallbackResource</code> で指定されたリソースへ転送する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__dir_config_rec.html&quot;}, '*');"><code>dir_config_rec</code></a>: ディレクトリごとの設定を保持。<code>index_names</code>（インデックスリスト）、<code>do_slash</code>（スラッシュ補完フラグ）、<code>dflt</code>（フォールバック先）などを含む。</li>
+</ul>
+<h3>設定コマンドハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__add_index.html&quot;}, '*');"><code>add_index</code></a>: <code>DirectoryIndex</code> を解析し、配列に格納する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L84" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__configure_slash.html&quot;}, '*');"><code>configure_slash</code></a> / <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L91" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__configure_checkhandler.html&quot;}, '*');"><code>configure_checkhandler</code></a>: フラグ設定を更新。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__configure_redirect.html&quot;}, '*');"><code>configure_redirect</code></a>: <code>DirectoryIndexRedirect</code> のステータスコード（3xx）を検証・設定。</li>
+</ul>
+<h3>フックとメインロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L391" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__dir_fixups.html&quot;}, '*');"><code>dir_fixups</code></a>: エントリポイント。ファイルタイプに基づき <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L224" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dir.html&quot;}, '*');"><code>fixup_dir</code></a> または <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dflt.html&quot;}, '*');"><code>fixup_dflt</code></a> へ振り分ける。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L224" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dir.html&quot;}, '*');"><code>fixup_dir</code></a>: ディレクトリリクエストのメイン処理。スラッシュ補完とインデックス探索を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dflt.html&quot;}, '*');"><code>fixup_dflt</code></a>: <code>FallbackResource</code> の処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック起動**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L391" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__dir_fixups.html&quot;}, '*');"><code>dir_fixups</code></a> がリクエストの <code>finfo</code> を確認。 2. **ディレクトリ判定**: <code>APR_DIR</code> であれば <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L224" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dir.html&quot;}, '*');"><code>fixup_dir</code></a> を呼び出し、末尾スラッシュの確認と <code>DirectoryIndex</code> の探索を行う。 3. **サブリクエスト**: <a class="wiki-source-link" href="../../../source/server/request.c.html#L2297" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_sub_req_lookup_uri.html&quot;}, '*');"><code>ap_sub_req_lookup_uri</code></a> を使用して、インデックス候補が実際に存在するか（<code>APR_REG</code> か）を確認する。 4. **リダイレクト/転送**:</p>
+<ul>
+<li>条件を満たすインデックスが見つかれば <a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L692" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_internal_fast_redirect.html&quot;}, '*');"><code>ap_internal_fast_redirect</code></a> で処理を完了。</li>
+<li><code>DirectoryIndexRedirect</code> が有効な場合は、クライアントへ 3xx レスポンスを返す。</li>
+<p>5. **フォールバック**: <code>APR_NOFILE</code> の場合、<a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dflt.html&quot;}, '*');"><code>fixup_dflt</code></a> が <code>FallbackResource</code> を確認し、同様にサブリクエスト経由で転送を試みる。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache のコアリクエスト処理および設定フレームワーク。</li>
+<li><code>apr_strings.h</code>, <code>apr_lib.h</code>: 文字列操作およびメモリ管理（APR）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/mappers/mod_rewrite.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/mappers/mod_rewrite.h.html&quot;}, '*');"><code>mod_rewrite.h</code></a>: リライトモジュールとの連携用定数。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/generators/mod_autoindex.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_autoindex.c.html&quot;}, '*');"><code>mod_autoindex.c</code></a>: <code>mod_dir</code> がインデックスを見つけられなかった場合に、ディレクトリ一覧を表示する役割を担うことが多い。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>http_request.c</code></a>: <a class="wiki-source-link" href="../../../source/server/request.c.html#L2297" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_sub_req_lookup_uri.html&quot;}, '*');"><code>ap_sub_req_lookup_uri</code></a> や <a class="wiki-source-link" href="../../../source/modules/http/http_request.c.html#L692" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http__http_request_c__ap_internal_fast_redirect.html&quot;}, '*');"><code>ap_internal_fast_redirect</code></a> の実装元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__dir_config_rec.html&quot;}, '*');"><code>dir_config_rec</code></a> は Apache の設定プール（<code>pool</code>）上で管理されます。<code>fixup</code> 内で生成されるサブリクエストは、<a class="wiki-source-link" href="../../../source/server/request.c.html#L2547" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_destroy_sub_req.html&quot;}, '*');"><code>ap_destroy_sub_req</code></a> を呼び出すことで適切にクリーンアップされます。</li>
+<li>**不変条件**: <a class="wiki-source-link" href="../../../source/modules/mappers/mod_dir.c.html#L224" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__mappers__mod_dir_c__fixup_dir.html&quot;}, '*');"><code>fixup_dir</code></a> は <code>path_info</code> が存在する場合、ディレクトリインデックス処理をスキップします。</li>
+<li>**注意点**: <code>FallbackResource</code> を使用する場合、指定先が存在しないと無限ループに陥る可能性があるため、設定には注意が必要です。</li>
+<li>**省略箇所**: 本ページでは、<code>apr_array_header_t</code> の詳細な操作や、<a class="wiki-source-link" href="../../../source/server/util.c.html#L833" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_getword_conf.html&quot;}, '*');"><code>ap_getword_conf</code></a> による引数解析の細部については、標準的な Apache モジュール開発の範疇であるため省略しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__moddir_cfg.html" target="wiki-view"><code>moddir_cfg</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__dir_config_rec.html" target="wiki-view"><code>dir_config_rec</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__add_index.html" target="wiki-view"><code>add_index</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__configure_slash.html" target="wiki-view"><code>configure_slash</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__configure_checkhandler.html" target="wiki-view"><code>configure_checkhandler</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__configure_redirect.html" target="wiki-view"><code>configure_redirect</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__create_dir_config.html" target="wiki-view"><code>create_dir_config</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__merge_dir_configs.html" target="wiki-view"><code>merge_dir_configs</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__fixup_dflt.html" target="wiki-view"><code>fixup_dflt</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__fixup_dir.html" target="wiki-view"><code>fixup_dir</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__dir_fixups.html" target="wiki-view"><code>dir_fixups</code></a></li>
+<li><a href="../../symbols/modules__mappers__mod_dir_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

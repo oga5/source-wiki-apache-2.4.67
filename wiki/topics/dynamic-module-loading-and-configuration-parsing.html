@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/dynamic-module-loading-and-configuration-parsing.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Dynamic Module Loading and Configuration Parsing</h1>
+<h2>概念</h2>
+<p>Apache HTTP Server は、起動時または再起動時に設定ファイルを解析し、必要に応じて共有オブジェクト（DSO）からモジュールを動的にロードします。 設定ファイルの内容は、メモリ上に階層的な設定ツリー（<code>ap_directive_t</code>）として構築されます。また、<code>LoadModule</code> ディレクティブが検出されると、<code>mod_so</code> モジュールを介して動的に共有オブジェクトがプロセス空間にロードされ、Apache のモジュール構造体として統合されます。</p>
+<h2>なぜ重要か</h2>
+<p>この仕組みにより、Apache はコア機能を最小限に抑えつつ、必要に応じて機能を動的に拡張できます。また、設定ファイルをパースして構造化されたツリーにすることで、各モジュールが自身のディレクティブを効率的に処理し、サーバー設定（<code>create_server_config</code> などで生成される設定ベクトル）を適用することが可能になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (設定ツリーのデータ構造定義)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__core.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__core.html&quot;, &quot;source&quot;: &quot;source/modules/core/mod_macro.c.html&quot;}, '*');"><code>module:modules/core</code></a> (動的モジュールロードを担う <a class="wiki-source-link" href="../../source/modules/core/mod_so.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_so.c.html&quot;}, '*');"><code>mod_so.c</code></a> を含む)</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> (サーバー設定の生成や設定解析のコアロジックを含む)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__util_cfgtree_h__ap_directive_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_cfgtree_h__ap_directive_t.html&quot;, &quot;source&quot;: &quot;source/include/util_cfgtree.h.html#L35&quot;}, '*');"><code>symbol:include/util_cfgtree.h#ap_directive_t</code></a>**: 設定ファイルをメモリ上に階層構造（設定ツリー）として表現するためのノード構造体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__core__mod_so_c__load_module.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_so_c__load_module.html&quot;, &quot;source&quot;: &quot;source/modules/core/mod_so.c.html#L182&quot;}, '*');"><code>symbol:modules/core/mod_so.c#load_module</code></a>**: <code>LoadModule</code> ディレクティブのハンドラとして機能し、DSO を動的にロードして Apache のグローバルモジュールリストに統合する関数。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/server__config_c__create_server_config.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__create_server_config.html&quot;, &quot;source&quot;: &quot;source/server/config.c.html#L311&quot;}, '*');"><code>symbol:server/config.c#create_server_config</code></a>**: サーバー設定ベクトル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a>）を生成する静的関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **設定ファイルの解析とツリー構築**: サーバー起動時、設定ファイルが読み込まれ、各ディレクティブが <code>ap_directive_t</code> ノードとして設定ツリーに挿入されます。 2. **動的モジュールのロード**: 設定解析中に <code>LoadModule</code> ディレクティブが検出されると、<a class="wiki-source-link" href="../../source/modules/core/mod_so.c.html#L182" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_so_c__load_module.html&quot;}, '*');"><code>load_module</code></a> が呼び出されます。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_so.c.html#L182" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_so_c__load_module.html&quot;}, '*');"><code>load_module</code></a> は、指定された共有オブジェクト（DSO）をプロセス空間にロードし、シンボル（<a class="wiki-source-link" href="../../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a> 構造体）を解決します。</li>
+<li>ロードされたモジュールはグローバルモジュールリストに追加され、<a class="wiki-source-link" href="../../source/server/config.c.html#L2367" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_single_module_configure.html&quot;}, '*');"><code>ap_single_module_configure</code></a> によって初期化されます。</li>
+<p>3. **サーバー設定の生成**: サーバー設定の初期化フェーズ（<a class="wiki-source-link" href="../../source/server/config.c.html#L2217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__init_server_config.html&quot;}, '*');"><code>init_server_config</code></a>）において、<code>create_server_config</code> が呼び出され、各モジュールの設定を保持するための設定ベクトルが生成されます。</p>
+</ul>
+<p>*注意: 設定ツリーの構築から各モジュールへの設定適用の詳細なエンドツーエンドの完全な制御フロー、および <code>create_server_config</code> の内部アルゴリズムの詳細は、提供された情報からは完全には明らかになっていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**モジュールの重複防止**: ロード対象のモジュールは、既にロードされているモジュールや静的リンクされたモジュールと重複してはなりません（<a class="wiki-source-link" href="../../source/modules/core/mod_so.c.html#L182" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_so_c__load_module.html&quot;}, '*');"><code>load_module</code></a> 内でチェックされます）。</li>
+<li>**モジュールの有効性**: ロードされた DSO は、<a class="wiki-source-link" href="../../source/include/ap_mmn.h.html#L617" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>MODULE_MAGIC_COOKIE</code></a> を保持する有効な Apache モジュール構造体でなければなりません。</li>
+<li>**設定ツリーの順序性**: <code>ap_directive_t</code> は設定ファイルに記述された順序を保持します。ただし、閉じタグ（<code>&lt;/Directory&gt;</code> など）はツリーのノードとしては保存されません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**シンボル解決の失敗**: <code>LoadModule</code> で指定されたモジュール名に対応するシンボルが DSO 内に存在しない場合、ロードは失敗します。</li>
+<li>**バージョン不整合**: DSO の <a class="wiki-source-link" href="../../source/docs/conf/magic.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/docs/conf/magic.html&quot;}, '*');"><code>magic</code></a> 番号がサーバーの <a class="wiki-source-link" href="../../source/include/ap_mmn.h.html#L617" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>MODULE_MAGIC_COOKIE</code></a> と一致しない場合、互換性エラーとしてロードが拒否されます。</li>
+<li>**動的設定変更の制限**: <code>ap_directive_t</code> による設定ツリーは主にサーバー起動時の設定読み込みフェーズに特化しており、実行時の動的な設定変更には別のメカニズムが関与する場合があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_cfgtree.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_cfgtree.h.html&quot;}, '*');"><code>include/util_cfgtree.h</code></a> (設定ツリー構造体 <code>ap_directive_t</code> の定義)</li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_so.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_so.c.html&quot;}, '*');"><code>modules/core/mod_so.c</code></a> (動的モジュールロード <a class="wiki-source-link" href="../../source/modules/core/mod_so.c.html#L182" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_so_c__load_module.html&quot;}, '*');"><code>load_module</code></a> の実装)</li>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> (サーバー設定生成 <code>create_server_config</code> の実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/debugging/mod_bucketeer.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/debugging/mod_bucketeer.c.html&quot;}, '*');">modules/debugging/mod_bucketeer.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_bucketeer</code> は、Apache HTTP Server の出力フィルタとして動作するデバッグ用モジュールです。データストリーム内の特定の制御文字を検出し、バケット（Bucket）の分割やフラッシュ、送信を強制的に実行することで、バケット処理の挙動をテスト・検証するために使用されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/debugging</code> ディレクトリに属し、フィルタチェーンの挙動を意図的に操作する「インジェクション・ツール」としての役割を担います。主に開発者がバケットの断片化やストリーム制御をシミュレートする際に利用します。</p>
+<h2>責務</h2>
+<ul>
+<li>**バケットの分割**: 設定されたデリミタ（<code>^B</code>, <code>^P</code>, <code>^F</code>）をデータ内で検出し、バケットを再構成する。</li>
+<li>**ストリーム制御**: 制御文字に応じて、バケットのフラッシュや下流フィルタへのブリゲード送信をトリガーする。</li>
+<li>**コンテンツフィルタリング**: <code>text/</code> で始まるコンテンツタイプのみを対象とし、それ以外は透過的に処理する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_bucketeer_c__bucketeer_out_filter.html&quot;}, '*');"><code>bucketeer_out_filter</code></a>: モジュールの核となる出力フィルタ関数。バケットの走査と分割ロジックを実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_bucketeer_c__bucketeer_filter_config_t.html&quot;}, '*');"><code>bucketeer_filter_config_t</code></a>: デリミタ設定を保持する構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_bucketeer_c__bucketeer_ctx_t.html&quot;}, '*');"><code>bucketeer_ctx_t</code></a>: フィルタ実行中の状態（ブリゲード）を保持するコンテキスト。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_bucketeer_c__create_bucketeer_server_config.html&quot;}, '*');"><code>create_bucketeer_server_config</code></a> でデフォルトのデリミタ（<code>0x02</code>, <code>0x10</code>, <code>0x06</code>）を定義。 2. **フィルタ起動**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_bucketeer_c__bucketeer_out_filter.html&quot;}, '*');"><code>bucketeer_out_filter</code></a> が呼び出されると、対象が <code>text/</code> か判定し、非対象ならフィルタを解除してパススルーする。 3. **バケット走査**: ブリゲード内の各バケットを読み込み、データ内にデリミタが存在するか確認する。 4. **分割と処理**:</p>
+<ul>
+<li><code>bucketdelimiter</code>: バケットを分割し、新しいバケットを作成。</li>
+<li><code>flushdelimiter</code>: フラッシュバケットを挿入。</li>
+<li><code>passdelimiter</code>: 現在のブリゲードを下流へ送信（<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a>）。</li>
+<p>5. **終了**: EOS（End of Stream）バケットを検知すると、残りのブリゲードを送信して終了する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: Apache フィルタフレームワークの基本。</li>
+<li><code>apr_buckets.h</code>: バケットおよびブリゲード操作の API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: リクエストおよびプロトコル制御。</li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/debugging/mod_dumpio.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/debugging/mod_dumpio.c.html&quot;}, '*');"><code>modules/debugging/mod_dumpio.c</code></a>: 同ディレクトリに存在し、I/O データのダンプを行うデバッグモジュール。併せて参照することで、フィルタチェーンの可視化と操作の両面を理解できます。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**副作用**: 本モジュールは <code>Content-Length</code> ヘッダーを削除します。バケットの分割・再構成によりデータ長が変化するため、この挙動は必須です。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../../source/modules/debugging/mod_bucketeer.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__debugging__mod_bucketeer_c__bucketeer_out_filter.html&quot;}, '*');"><code>bucketeer_out_filter</code></a> 内の <code>XXX</code> コメントにある通り、現在の実装では残りのデータ処理に改善の余地があります。実運用環境ではなく、あくまでデバッグ環境での使用を前提としてください。</li>
+<li>**デリミタ**: デフォルトのデリミタは ASCII 制御文字です。バイナリデータを扱う場合は、意図しない分割が発生する可能性があるため注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__bucketeer_filter_config_t.html" target="wiki-view"><code>bucketeer_filter_config_t</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__create_bucketeer_server_config.html" target="wiki-view"><code>create_bucketeer_server_config</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__bucketeer_ctx_t.html" target="wiki-view"><code>bucketeer_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__bucketeer_out_filter.html" target="wiki-view"><code>bucketeer_out_filter</code></a></li>
+<li><a href="../../symbols/modules__debugging__mod_bucketeer_c__register_hooks.html" target="wiki-view"><code>register_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

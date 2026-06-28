@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__slotmem__mod_slotmem_shm_c__ap_slotmem_instance_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_slotmem_instance_t</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/slotmem/mod_slotmem_shm.c:44</code></li>
+</ul>
+<h2>目的</h2>
+<p>共有メモリベースの固定長スロット管理インスタンスを保持する管理構造体です。メモリセグメントのメタデータ、利用状況フラグ、およびデータ領域へのポインタを統合し、プロセス間でのスロット操作を可能にします。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct ap_slotmem_instance_t {
+    char                 *name;       /* ファイルベースのSHMパス/名前 */
+    char                 *pname;      /* 永続化ファイルパス/名前 */
+    int                  fbased;      /* ファイルベースか否か */
+    void                 *shm;        /* メモリセグメントへのポインタ (apr_shm_t *) */
+    void                 *base;       /* データセットの開始位置 */
+    apr_pool_t           *gpool;      /* セグメントごとのプール（世代交代でクリア） */
+    char                 *inuse;      /* 利用状況フラグテーブル */
+    unsigned int         *num_free;   /* このインスタンスの空きスロット数 */
+    void                 *persist;    /* 永続化データセットの開始位置 */
+    const sharedslotdesc_t *desc;     /* スロットごとの記述子 */
+    struct ap_slotmem_instance_t  *next; /* 次の割り当て済みセグメントの位置 */
+};</code></pre>
+<h2>入力と出力</h2>
+<p>本構造体は、<code>mod_slotmem_shm</code> の各関数（<code>slotmem_create</code>, <code>slotmem_attach</code>, <code>slotmem_get</code>, <code>slotmem_put</code> 等）において、操作対象のインスタンスを特定するためのコンテキストとして入力されます。</p>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>gpool</code> はインスタンスの生存期間を管理し、プロセス終了時のクリーンアップに使用されます。</li>
+<li>共有メモリは <code>[desc] [num_free] [data_slots] [inuse_array]</code> の順でレイアウトされることが前提です。</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>AP_SLOTMEM_OFFSET</code></a> 等の定数により、メモリ内の各フィールドのアライメントが厳密に管理されています。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li>**インスタンス管理**: <code>next</code> ポインタにより、複数の共有メモリセグメントを連結して管理します。</li>
+<li>**データアクセス**: <code>base</code> を基準点とし、スロットIDからオフセット計算を行うことで、特定のデータ領域への <code>memcpy</code> を実行します。</li>
+<li>**ライフサイクル**: <code>gpool</code> を通じて、サーバーの再起動やMPMの世代交代に伴うメモリの解放・再確保を制御します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a> 内のプロバイダー関数群（<code>slotmem_create</code>, <code>slotmem_attach</code>, <code>slotmem_get</code>, <code>slotmem_put</code> 等）が本構造体を操作します。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、直接関数を呼び出すことはありません。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html&quot;}, '*');"><code>sharedslotdesc_t</code></a>: スロットの構成情報（サイズ、個数、型）を保持します。</li>
+<li><code>apr_shm_t</code>: <code>shm</code> フィールドが指す共有メモリセグメントの基盤構造体です。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**整合性エラー**: <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html&quot;}, '*');"><code>restore_slotmem</code></a> 実行時、MD5チェックサムが一致しない場合はデータが破損しているとみなされます。</li>
+<li>**メモリ不足**: <code>apr_shm_create</code> が失敗した場合、インスタンスの初期化が中断されます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a> と <a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>ap_slotmem.h</code></a> の両方で定義されています。変更時は両方の整合性に注意してください。</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L285" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__is_child_process.html&quot;}, '*');"><code>is_child_process</code></a> フラグ（WIN32環境等）との相互作用により、プロセス継承時のメモリ再アタッチ挙動が変化するため、プラットフォーム固有の挙動に留意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

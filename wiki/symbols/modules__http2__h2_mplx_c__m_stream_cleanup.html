@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_mplx_c__m_stream_cleanup.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L149" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__m_stream_cleanup.html&quot;}, '*');">m_stream_cleanup</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_mplx.c:149</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 ストリームの終了処理を行い、関連するリソースの解放および状態遷移（破棄待ちまたは保持）を管理します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void m_stream_cleanup(h2_mplx *m, h2_stream *stream)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>m</code>: ストリームが所属する <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> インスタンス。</li>
+<li><code>stream</code>: クリーンアップ対象の <code>h2_stream</code> オブジェクト。</li>
+<li>**出力**: なし（副作用としてストリームの状態遷移とメモリ管理を実行）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>stream-&gt;state</code> が <code>H2_SS_CLEANUP</code> である必要があります（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2332" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>ap_assert</code></a> により検証）。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> のミューテックスによる排他制御下で呼び出されることが想定されています。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **イベント購読解除**: ストリームに関連付けられた <code>c2</code> 接続（<code>h2_conn_ctx_t</code>）が存在する場合、<a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L356" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__beam_out.html&quot;}, '*');"><code>beam_out</code></a> および <code>beam_in</code> のコールバックをすべて <code>NULL</code> に設定し、イベント通知を停止します。 2. **レジストリからの削除**: <a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L615" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_cleanup.html&quot;}, '*');"><code>h2_stream_cleanup</code></a> を呼び出し、<code>m-&gt;streams</code>（ハッシュ）および <code>m-&gt;q</code>（キュー）から当該ストリームを削除します。 3. **状態に応じた後処理**:</p>
+<ul>
+<li><code>c2</code> 接続が既に終了している場合: <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__add_for_purge.html&quot;}, '*');"><code>add_for_purge</code></a> を呼び出し、ストリームを破棄待ちリストへ移動します。</li>
+<li><code>c2</code> 接続が実行中の場合: <a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L157" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_abort.html&quot;}, '*');"><code>h2_c2_abort</code></a> で接続を強制終了し、ストリームを <code>m-&gt;shold</code>（保持リスト）へ移動します。</li>
+<li><code>c2</code> 接続が一度も開始されていない場合: <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__add_for_purge.html&quot;}, '*');"><code>add_for_purge</code></a> を呼び出し、即座に破棄待ちリストへ移動します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/http2/h2_mplx.c:504</code></li>
+<li><code>modules/http2/h2_mplx.c:595</code></li>
+<li><code>modules/http2/h2_mplx.c:1189</code></li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_conn_ctx.h.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx_get</code></a>, <code>h2_beam_on_*</code> (イベント解除)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_stream.c.html#L615" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_cleanup.html&quot;}, '*');"><code>h2_stream_cleanup</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L273" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_ihash_remove.html&quot;}, '*');"><code>h2_ihash_remove</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L380" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_iq_remove.html&quot;}, '*');"><code>h2_iq_remove</code></a> (レジストリ操作)</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__stream_is_running.html&quot;}, '*');"><code>stream_is_running</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__add_for_purge.html&quot;}, '*');"><code>add_for_purge</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L157" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_abort.html&quot;}, '*');"><code>h2_c2_abort</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_util.c.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_util_c__h2_ihash_add.html&quot;}, '*');"><code>h2_ihash_add</code></a> (状態管理)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>: 多重化器のメイン構造体。</li>
+<li><code>h2_stream</code>: ストリームのメタデータと状態を保持。</li>
+<li><code>h2_conn_ctx_t</code>: <code>c2</code> 接続のコンテキスト（<code>beam_in</code>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L356" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__beam_out.html&quot;}, '*');"><code>beam_out</code></a> を含む）。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>stream-&gt;state</code> が <code>H2_SS_CLEANUP</code> でない場合、アサーション失敗によりプロセスが停止します。</li>
+<li><code>c2_ctx</code> が <code>NULL</code> の場合（ストリームがワーカーに割り当てられる前にクリーンアップされた場合）、安全にスキップして破棄処理へ進みます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> のライフサイクル管理の末端を担います。<code>spurge</code>（破棄待ち）と <code>shold</code>（保持）の使い分けは、ワーカーの終了待ち状態に依存するため、状態遷移の変更時には <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.c.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_c__stream_is_running.html&quot;}, '*');"><code>stream_is_running</code></a> の判定ロジックと整合性を確認してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

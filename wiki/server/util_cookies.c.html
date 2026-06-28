@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_cookies.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_cookies.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_cookies.c.html&quot;}, '*');">server/util_cookies.c</a></h1>
+<h2>概要</h2>
+<p>HTTP クッキー（RFC 2109 および RFC 2965）の生成、削除、および解析を行うためのユーティリティ関数群を提供します。Apache HTTP Server のリクエスト処理において、クッキーの読み書きを抽象化し、一貫したヘッダー操作を可能にします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、HTTP プロトコルレベルでのクッキー管理を担います。主に <code>mod_cookie</code> などのモジュールや、クッキーベースの認証・セッション管理を行うコンポーネントから利用される下位レイヤーのライブラリです。</p>
+<h2>責務</h2>
+<ul>
+<li>**クッキーの生成と書き込み**: <code>Set-Cookie</code> および <code>Set-Cookie2</code> ヘッダーを生成し、指定されたテーブルに追加します。</li>
+<li>**クッキーの削除**: <code>Max-Age=0</code> を設定することで、クライアント側でのクッキー破棄を促すヘッダーを生成します。</li>
+<li>**クッキーの読み取りと抽出**: <code>Cookie</code> および <code>Cookie2</code> ヘッダーから特定のクッキー値を抽出し、必要に応じてヘッダーから削除（秘匿）します。</li>
+<li>**バリデーション**: クッキー名に不正な文字（<code>=</code>, <code>;</code>, <code>&amp;</code>）が含まれていないかを確認します。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L40" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_write.html&quot;}, '*');"><code>ap_cookie_write</code></a> / <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L82" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_write2.html&quot;}, '*');"><code>ap_cookie_write2</code></a>: RFC 2109/2965 準拠のクッキーをヘッダーテーブルに追加します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L120" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_remove.html&quot;}, '*');"><code>ap_cookie_remove</code></a> / <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L148" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_remove2.html&quot;}, '*');"><code>ap_cookie_remove2</code></a>: クッキーを無効化するヘッダーを生成します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L245" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_read.html&quot;}, '*');"><code>ap_cookie_read</code></a>: リクエストヘッダーから特定のクッキー値を検索・抽出します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_check_string.html&quot;}, '*');"><code>ap_cookie_check_string</code></a>: クッキー名が仕様上安全か検証します。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **書き込み/削除**: 可変長引数（<code>...</code>）で渡された <code>apr_table_t</code> のリストを <code>va_list</code> で走査し、各テーブルに対して <code>apr_table_addn</code> を用いてクッキー文字列を挿入します。 2.  **読み取り**: <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L245" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_read.html&quot;}, '*');"><code>ap_cookie_read</code></a> が <code>apr_table_do</code> を介して <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__extract_cookie_line.html&quot;}, '*');"><code>extract_cookie_line</code></a> コールバックを呼び出します。 3.  **抽出処理**: <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L177" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__extract_cookie_line.html&quot;}, '*');"><code>extract_cookie_line</code></a> は <code>apr_strtok</code> を使用してヘッダー文字列をトークン化し、対象のクッキーを特定します。重複がある場合はフラグを立て、不要なクッキーをフィルタリングした新しいテーブルを構築します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_cookies.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_cookies.h.html&quot;}, '*');"><code>util_cookies.h</code></a>: 公開インターフェース定義。</li>
+<li><code>apr_lib.h</code>, <code>apr_strings.h</code>: 文字列操作およびメモリ管理（<code>apr_pool_t</code>）。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: Apache の設定、コア機能、およびログ出力機能。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_cookies.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_cookies.h.html&quot;}, '*');"><code>include/util_cookies.h</code></a>: 本ファイルのヘッダーファイル。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a>: Apache の汎用ユーティリティ関数群。</li>
+<li><code>modules/session/</code>: クッキーを利用したセッション管理モジュールの実装例。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての文字列操作は <code>request_rec</code> のプール（<code>r-&gt;pool</code>）を使用しているため、明示的な解放は不要です。</li>
+<li>**重複クッキー**: <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L245" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_read.html&quot;}, '*');"><code>ap_cookie_read</code></a> はクッキーの重複を検出すると <code>APR_EGENERAL</code> を返します。これはセキュリティ上の曖昧さを避けるための設計です。</li>
+<li>**ヘッダーの書き換え**: <a class="wiki-source-link" href="../../source/server/util_cookies.c.html#L245" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_cookies_c__ap_cookie_read.html&quot;}, '*');"><code>ap_cookie_read</code></a> で <code>remove</code> 引数を真にすると、元のヘッダーからクッキーが削除され、バックエンドに渡る情報が制御されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_cookies_c__ap_cookie_write.html" target="wiki-view"><code>ap_cookie_write</code></a></li>
+<li><a href="../symbols/server__util_cookies_c__ap_cookie_write2.html" target="wiki-view"><code>ap_cookie_write2</code></a></li>
+<li><a href="../symbols/server__util_cookies_c__ap_cookie_remove.html" target="wiki-view"><code>ap_cookie_remove</code></a></li>
+<li><a href="../symbols/server__util_cookies_c__ap_cookie_remove2.html" target="wiki-view"><code>ap_cookie_remove2</code></a></li>
+<li><a href="../symbols/server__util_cookies_c__extract_cookie_line.html" target="wiki-view"><code>extract_cookie_line</code></a></li>
+<li><a href="../symbols/server__util_cookies_c__ap_cookie_read.html" target="wiki-view"><code>ap_cookie_read</code></a></li>
+<li><a href="../symbols/server__util_cookies_c__ap_cookie_check_string.html" target="wiki-view"><code>ap_cookie_check_string</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

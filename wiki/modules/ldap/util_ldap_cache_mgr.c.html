@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/ldap/util_ldap_cache_mgr.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ldap/util_ldap_cache_mgr.c.html&quot;}, '*');">modules/ldap/util_ldap_cache_mgr.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ldap/util_ldap_cache_mgr.c.html&quot;}, '*');"><code>util_ldap_cache_mgr.c</code></a> は、Apache HTTP Server の LDAP モジュールにおけるキャッシュ管理の基盤層です。共有メモリ（SHM）またはヒープメモリを利用した汎用的なハッシュテーブルの実装と、LDAP 固有のキャッシュ操作（検索、比較、DN 比較）のライフサイクル管理を提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ldap/util_ldap_cache.c.html&quot;}, '*');"><code>util_ldap_cache.c</code></a> が高レベルな LDAP キャッシュロジックを扱うのに対し、本ファイルはメモリ管理、ハッシュ計算、キャッシュのパージ（掃除）、および統計情報の可視化といった「インフラストラクチャ」の役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_rmm</code>（共有メモリ）または標準の <code>malloc/calloc</code> を抽象化したアロケータの提供。</li>
+<li>**キャッシュ構造の管理**: キャッシュの作成、破棄、およびエントリの挿入・削除・検索。</li>
+<li>**キャッシュの健全性維持**: キャッシュが満杯になった際のパージ処理（TTL 期限切れエントリの削除）。</li>
+<li>**統計と可視化**: キャッシュのヒット率やチェーン長などの統計計算と、HTML 形式でのダンプ出力。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>メモリ管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L98" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_alloc.html&quot;}, '*');"><code>util_ald_alloc</code></a>, <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_free.html&quot;}, '*');"><code>util_ald_free</code></a>, <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_strdup.html&quot;}, '*');"><code>util_ald_strdup</code></a>: キャッシュ専用のアロケータ。共有メモリ利用時は <code>apr_rmm</code> を介し、それ以外は標準ライブラリを使用する。</li>
+</ul>
+<h3>キャッシュライフサイクル</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_create_cache.html&quot;}, '*');"><code>util_ald_create_cache</code></a>: キャッシュ構造体の初期化とハッシュテーブルの割り当て。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L416" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_destroy_cache.html&quot;}, '*');"><code>util_ald_destroy_cache</code></a>: キャッシュ内の全エントリを解放し、構造体自体を破棄。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L281" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_create_caches.html&quot;}, '*');"><code>util_ald_create_caches</code></a>: URL ごとの検索・比較・DN 比較キャッシュをセットで生成。</li>
+</ul>
+<h3>キャッシュ操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L438" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_fetch.html&quot;}, '*');"><code>util_ald_cache_fetch</code></a>: ハッシュテーブルからエントリを検索。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L467" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_insert.html&quot;}, '*');"><code>util_ald_cache_insert</code></a>: キャッシュへの挿入。満杯時は <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_purge.html&quot;}, '*');"><code>util_ald_cache_purge</code></a> を呼び出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_remove.html&quot;}, '*');"><code>util_ald_cache_remove</code></a>: 特定エントリの削除。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_hash_string.html&quot;}, '*');"><code>util_ald_hash_string</code></a>: 可変長引数を受け取る文字列ハッシュ計算関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_purge.html&quot;}, '*');"><code>util_ald_cache_purge</code></a>: キャッシュのパージ処理。<code>marktime</code> を基準に古いエントリを削除。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **挿入フロー**: <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L467" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_insert.html&quot;}, '*');"><code>util_ald_cache_insert</code></a> が呼ばれると、まず <code>numentries</code> を確認。上限に達していれば <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_purge.html&quot;}, '*');"><code>util_ald_cache_purge</code></a> を実行。その後、<code>copyfunc</code> でペイロードを複製し、ハッシュ値を計算してリストの先頭に挿入する。 2. **パージフロー**: <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_purge.html&quot;}, '*');"><code>util_ald_cache_purge</code></a> は全バケットを走査し、<code>add_time</code> が <code>marktime</code> より古いノードを順次解放する。 3. **メモリレイアウト**: <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache.h.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_h__util_ald_cache_t.html&quot;}, '*');"><code>util_ald_cache_t</code></a> はハッシュテーブル（<code>nodes</code>）を保持し、各ノードは <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache.h.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_h__util_cache_node_t.html&quot;}, '*');"><code>util_cache_node_t</code></a> として連結リストを形成する。共有メモリ使用時は、これらすべてが <code>apr_rmm</code> 管理下のオフセットとして配置される。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: Apache コア機能。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_ldap.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ldap.h.html&quot;}, '*');"><code>util_ldap.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ldap/util_ldap_cache.h.html&quot;}, '*');"><code>util_ldap_cache.h</code></a>: LDAP モジュールのデータ構造定義。</li>
+<li><code>apr_strings.h</code>: 文字列操作および <code>apr_rmm</code> 関連。</li>
+<li><code>stdlib.h</code></li>
+<li><code>string.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ldap/util_ldap_cache.c.html&quot;}, '*');"><code>util_ldap_cache.c</code></a>: 本ファイルで定義された管理関数を利用して、具体的な LDAP キャッシュロジックを実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ldap/util_ldap.c.html&quot;}, '*');"><code>util_ldap.c</code></a>: モジュールのメインエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: キャッシュに挿入されるデータは、<code>copyfunc</code> によってキャッシュ専用メモリ領域に複製されます。呼び出し元は元のデータを解放して構いません。</li>
+<li>**共有メモリの制約**: <code>APR_HAS_SHARED_MEMORY</code> が有効な場合、すべてのデータは <code>apr_rmm</code> を通じて割り当てられる必要があります。ポインタの直接代入は共有メモリ境界を越える可能性があるため厳禁です。</li>
+<li>**パージの挙動**: パージは O(n) の単純な走査です。キャッシュサイズが非常に大きい場合、パージ実行時のレイテンシに注意が必要です。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../source/modules/ldap/util_ldap_cache_mgr.c.html#L467" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_insert.html&quot;}, '*');"><code>util_ald_cache_insert</code></a> 内のコメントにある通り、現在のキャッシュ管理はサイズ制限に達した際の挙動がやや強引（強制パージ）であり、将来的なリファクタリングの余地が残されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_free.html" target="wiki-view"><code>util_ald_free</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_alloc.html" target="wiki-view"><code>util_ald_alloc</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_strdup.html" target="wiki-view"><code>util_ald_strdup</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_sgl_dup.html" target="wiki-view"><code>util_ald_sgl_dup</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_sgl_free.html" target="wiki-view"><code>util_ald_sgl_free</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_hash_string.html" target="wiki-view"><code>util_ald_hash_string</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_purge.html" target="wiki-view"><code>util_ald_cache_purge</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_create_caches.html" target="wiki-view"><code>util_ald_create_caches</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_create_cache.html" target="wiki-view"><code>util_ald_create_cache</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_destroy_cache.html" target="wiki-view"><code>util_ald_destroy_cache</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_fetch.html" target="wiki-view"><code>util_ald_cache_fetch</code></a></li>
+<li><a href="../../symbols/modules__ldap__util_ldap_cache_mgr_c__util_ald_cache_insert.html" target="wiki-view"><code>util_ald_cache_insert</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

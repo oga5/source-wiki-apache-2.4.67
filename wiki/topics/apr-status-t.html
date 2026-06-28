@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/apr-status-t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>apr_status_t</h1>
+<h2>概念</h2>
+<p><code>apr_status_t</code> は、Apache Portable Runtime (APR) における操作結果やエラーコードを表現するための標準的な整数型（通常は <code>int</code>）です。Apache HTTP Server の各モジュールにおいて、関数の実行成否や特定の状態を呼び出し元に伝達するための共通のインターフェースとして機能します。</p>
+<h2>なぜ重要か</h2>
+<p>複数の独立したモジュール（<code>mod_proxy_http2</code> や <code>mod_md</code> など）が、共通のエラーハンドリングおよび状態管理の仕組みとして <code>apr_status_t</code> に依存しているためです。この型が返す値（<code>APR_SUCCESS</code>、<code>APR_EAGAIN</code>、<code>APR_EOF</code> など）は、イベントループの制御フローの決定や、HTTP 通信の成否判定において極めて重要な役割を果たします。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__md.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__md.html&quot;, &quot;source&quot;: &quot;source/modules/md/md.h.html&quot;}, '*');"><code>module:modules/md</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_proxy_session_h__apr_status_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_h__apr_status_t.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_proxy_session.h.html#L70&quot;}, '*');"><code>symbol:modules/http2/h2_proxy_session.h#apr_status_t</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__md__md_http_h__apr_status_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_h__apr_status_t.html&quot;, &quot;source&quot;: &quot;source/modules/md/md_http.h.html#L35&quot;}, '*');"><code>symbol:modules/md/md_http.h#apr_status_t</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>各モジュールにおける具体的なエンドツーエンドのフロー全体は、提供されたソースコードの抜粋からは完全には明らかになっていません。しかし、部分的な流れとして以下が確認されています。</p>
+<p>1. **HTTP/2 プロキシ処理 (<code>mod_proxy_http2</code>)**: <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html#L1561" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_process.html&quot;}, '*');"><code>h2_proxy_session_process</code></a> などの関数が <code>apr_status_t</code> を戻り値として返し、イベントループの継続・終了を制御します。また、<code>h2_proxy_request_done</code> コールバック関数の引数としても渡されます。 2. **HTTP 送受信処理 (<code>mod_md</code>)**: <a class="wiki-source-link" href="../../source/modules/md/md_http.c.html#L266" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_http_c__md_http_perform.html&quot;}, '*');"><code>md_http_perform</code></a> などの関数が処理結果として <code>apr_status_t</code> を返し、コールバック関数 <code>md_http_status_cb</code> の引数としてステータスが伝達されます。</p>
+<h2>重要な不変条件</h2>
+<p>不変条件の全容は未だ完全には明らかになっていませんが、以下の基本原則が定義されています。</p>
+<ul>
+<li>**成功の定義**: <code>APR_SUCCESS</code>（通常は <code>0</code>）は、操作が正常に完了したことを示します。</li>
+<li>**異常/状態の定義**: <code>0</code> 以外の値は、エラーまたは特定の非同期状態（再試行が必要な <code>APR_EAGAIN</code>、接続終了を示す <code>APR_EOF</code> など）を示します。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**モジュール固有の定義ではない**: <code>apr_status_t</code> は APR のコア定義であり、<code>mod_proxy_http2</code> や <code>mod_md</code> 固有の型ではありません。そのため、独自のエラーコードを定義・返却することは避け、APR のエラーコード体系に厳密に従う必要があります。</li>
+<li>**イベントループへの影響**: <a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.c.html#L1561" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_process.html&quot;}, '*');"><code>h2_proxy_session_process</code></a> などの戻り値として本型を扱う際、エラーコードの判定を誤ると、イベントループが意図せず終了したり、無限ループに陥ったりする危険性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_proxy_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.h.html&quot;}, '*');"><code>modules/http2/h2_proxy_session.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>modules/md/md_http.h</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

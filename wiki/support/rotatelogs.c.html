@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>support/rotatelogs.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');">support/rotatelogs.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>rotatelogs.c</code></a> は、Apache HTTP Server のログファイルを時間間隔またはファイルサイズに基づいて自動的にローテーションするためのスタンドアロンユーティリティです。標準入力から受け取ったログデータを指定されたファイルに書き込み、条件を満たした際にファイルを切り替えます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>support</code> モジュール内のログ管理ツールとして、HTTPD の <code>TransferLog</code> ディレクティブからパイプ経由で呼び出されることを想定しています。APR (Apache Portable Runtime) を全面的に利用し、プラットフォーム非依存のファイル操作とプロセス管理を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: コマンドライン引数からローテーション条件（時間、サイズ、UTCオフセット等）を解析・保持する。</li>
+<li>**ログローテーション**: </li>
+<li>時間ベース（<code>strftime</code> 形式または固定間隔）およびサイズベースの判定。</li>
+<li>ファイルのオープン、クローズ、および必要に応じたディレクトリの再帰的作成。</li>
+<li>**後処理**: ローテーション後のハードリンク作成や、外部プログラム（<code>postrotate_prog</code>）の実行。</li>
+<li>**エラーハンドリング**: 書き込み失敗時のログ切り詰めとエラーメッセージの挿入。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定と状態</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__rotate_config_t.html&quot;}, '*');"><code>rotate_config_t</code></a>: 実行時の設定（ローテーション閾値、パス、フラグ等）を保持。</li>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__rotate_status_t.html&quot;}, '*');"><code>rotate_status_t</code></a>: 現在のログファイルハンドル、プール、ローテーション理由、ファイル番号などの実行状態を保持。</li>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>ROTATE_REASONS</code></a>: ローテーション発生理由の列挙。</li>
+</ul>
+<h3>主要関数</h3>
+<ul>
+<li><code>doRotate()</code>: 新しいログファイルを開き、古いファイルを閉じるメインロジック。</li>
+<li><code>checkRotate()</code>: 現在のログファイルがローテーション条件を満たしているか判定。</li>
+<li><code>post_rotate()</code>: ローテーション後にハードリンク作成や外部プログラムの起動を行う。</li>
+<li><code>get_now()</code>: ローテーション判定用の現在時刻（タイムゾーン調整済み）を取得。</li>
+<li><code>truncate_and_write_error()</code>: 書き込みエラー発生時にファイルを切り詰め、エラー情報を記録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>main</code> で <code>apr_getopt</code> を使用して引数を解析し、<a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>config</code></a> 構造体に格納。 2. **メインループ**:</p>
+<ul>
+<li><code>apr_file_read</code> で標準入力からデータを読み込む。</li>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__checkRotate.html&quot;}, '*');"><code>checkRotate</code></a> でローテーションが必要か判定。</li>
+<li>必要であれば <a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L378" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__doRotate.html&quot;}, '*');"><code>doRotate</code></a> を呼び出し、ファイルハンドルを更新。</li>
+<li><code>apr_file_write_full</code> で現在のログファイルに書き込み。</li>
+<p>3. **終了**: 標準入力が EOF に達するとループを抜けて終了。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code> 系: ファイルI/O (<code>apr_file_io.h</code>)、時刻 (<code>apr_time.h</code>)、プロセス管理 (<code>apr_thread_proc.h</code>)、メモリプール (<code>apr_pools.h</code>)。</li>
+<li><code>stdlib.h</code>: <code>atoi</code> 等の標準関数。</li>
+<li><code>apr_errno.h</code></li>
+<li><code>apr_file_info.h</code></li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_poll.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/logresolve.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/logresolve.c.html&quot;}, '*');"><code>support/logresolve.c</code></a>: ログ関連のユーティリティとして並列的な位置付け。</li>
+<li><code>httpd</code> 本体: <code>TransferLog</code> ディレクティブの実装において、本ツールをパイプ経由で起動する仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: APR プール (<code>apr_pool_t</code>) を使用しており、ログファイルごとの動的なメモリ割り当ては <code>newlog.pool</code> で管理され、ローテーション時に適切に破棄されます。</li>
+<li>**レイアウト**: <a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__rotate_status.html&quot;}, '*');"><code>rotate_status</code></a> 内の <a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L88" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__logfile.html&quot;}, '*');"><code>logfile</code></a> 構造体が現在のファイルハンドルを保持し、<a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L378" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__doRotate.html&quot;}, '*');"><code>doRotate</code></a> 内で <code>status-&gt;current</code> が入れ替わります。</li>
+<li>**エッジケース**: </li>
+<li><code>-n</code> オプション（ファイル番号によるローテーション）と <code>strftime</code> 形式のファイル名は併用不可。</li>
+<li>書き込みエラー時は、既存のログを切り詰めてエラーメッセージを書き込むため、ログの欠損が発生します。</li>
+<li>**制限事項**: <code>APR_FILES_AS_SOCKETS</code> が定義されていない環境では、ポーリング機能が制限され、単純な読み込みループとなります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/support__rotatelogs_c__rotate_config_t.html" target="wiki-view"><code>rotate_config_t</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__rotate_config.html" target="wiki-view"><code>rotate_config</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__rotate_status_t.html" target="wiki-view"><code>rotate_status_t</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__adjusted_time_t.html" target="wiki-view"><code>adjusted_time_t</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__logfile.html" target="wiki-view"><code>logfile</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__rotate_status.html" target="wiki-view"><code>rotate_status</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__usage.html" target="wiki-view"><code>usage</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__get_now.html" target="wiki-view"><code>get_now</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__close_logfile.html" target="wiki-view"><code>close_logfile</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__post_rotate.html" target="wiki-view"><code>post_rotate</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__truncate_and_write_error.html" target="wiki-view"><code>truncate_and_write_error</code></a></li>
+<li><a href="../symbols/support__rotatelogs_c__get_time_or_size.html" target="wiki-view"><code>get_time_or_size</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

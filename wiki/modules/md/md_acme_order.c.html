@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/md_acme_order.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_order.c.html&quot;}, '*');">modules/md/md_acme_order.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、ACME プロトコルにおける「Order（注文）」オブジェクトのライフサイクル管理と、ACMEv2 サーバーとの通信フローを定義します。ACME Order は証明書発行プロセスの中核であり、ドメイン認証（Authz）の集約、チャレンジの開始、および証明書発行の準備状態を追跡します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、ACME サーバーとの対話層を担当します。<a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_authz.c.html&quot;}, '*');"><code>md_acme_authz.c</code></a> が個別のドメイン認証を扱うのに対し、本ファイルはそれらを束ねる Order 全体の状態遷移を管理し、<a class="wiki-source-link" href="../../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a> を介した永続化を行います。</p>
+<h2>責務</h2>
+<ul>
+<li>**ライフサイクル管理**: Order オブジェクトの生成、JSON 形式へのシリアライズ/デシリアライズ、およびディスクへの保存・削除。</li>
+<li>**状態追跡**: ACME サーバーから取得した Order のステータス（pending, ready, valid 等）の管理。</li>
+<li>**ACMEv2 通信**: <code>newOrder</code> リクエストの送信、Order の更新取得、およびステータス遷移のポーリング。</li>
+<li>**チャレンジ調整**: 複数のドメイン認証に対するチャレンジの開始と、完了までの監視。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.h.html#L22" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_h__md_acme_order_t.html&quot;}, '*');"><code>md_acme_order_t</code></a>: Order の状態を保持するメイン構造体。URL、ステータス、認証 URL リスト、チャレンジセットアップトークンを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L261" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__order_ctx_t.html&quot;}, '*');"><code>order_ctx_t</code></a>: ACME リクエスト実行時のコンテキスト。リクエストの引数や結果を保持する一時的な構造体。</li>
+</ul>
+<h3>ライフサイクル・変換</h3>
+<ul>
+<li><code>md_acme_order_create()</code>: 新規 Order オブジェクトのメモリ確保と初期化。</li>
+<li><code>md_acme_order_to_json()</code> / <code>md_acme_order_from_json()</code>: JSON 永続化のための変換関数。</li>
+<li><code>md_acme_order_load()</code> / <code>md_acme_order_save()</code>: <code>md_store</code> を介したディスク I/O。</li>
+</ul>
+<h3>ACMEv2 操作</h3>
+<ul>
+<li><code>md_acme_order_register()</code>: サーバーに対して新規 Order を作成（POST）。</li>
+<li><code>md_acme_order_update()</code>: サーバーから最新の Order 情報を取得（GET）。</li>
+<li><code>md_acme_order_await_ready()</code> / <code>md_acme_order_await_valid()</code>: 特定の状態になるまでポーリングを行う待機関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **登録**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L330" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__md_acme_order_register.html&quot;}, '*');"><code>md_acme_order_register</code></a> が <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L261" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__order_ctx_t.html&quot;}, '*');"><code>order_ctx_t</code></a> を作成し、<a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html#L435" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_c__md_acme_POST.html&quot;}, '*');"><code>md_acme_POST</code></a> を呼び出す。<a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L288" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__on_init_order_register.html&quot;}, '*');"><code>on_init_order_register</code></a> で JSON ペイロードを構築し、<a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L303" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__on_order_upd.html&quot;}, '*');"><code>on_order_upd</code></a> でサーバーからの応答を解析して <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.h.html#L22" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_h__md_acme_order_t.html&quot;}, '*');"><code>md_acme_order_t</code></a> を更新する。 2. **監視**: <a class="wiki-source-link" href="../../../source/modules/md/md_util.c.html#L1040" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_util_c__md_util_try.html&quot;}, '*');"><code>md_util_try</code></a> を利用したポーリングループ（<a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__await_ready.html&quot;}, '*');"><code>await_ready</code></a> 等）により、サーバー側のステータスが <code>valid</code> になるまで <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__md_acme_order_update.html&quot;}, '*');"><code>md_acme_order_update</code></a> を繰り返す。 3. **チャレンジ**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L445" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__md_acme_order_start_challenges.html&quot;}, '*');"><code>md_acme_order_start_challenges</code></a> が各認証 URL を巡回し、<a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.c.html#L82" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_authz_c__md_acme_authz_retrieve.html&quot;}, '*');"><code>md_acme_authz_retrieve</code></a> で状態を確認。<code>pending</code> であれば <a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.c.html#L604" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_authz_c__md_acme_authz_respond.html&quot;}, '*');"><code>md_acme_authz_respond</code></a> を呼び出し、結果を <code>order-&gt;challenge_setups</code> に保存して永続化する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR**: メモリプール (<code>apr_pool_t</code>)、配列 (<code>apr_array_header_t</code>)、ファイル I/O。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_store.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.h.html&quot;}, '*');">md_store.h</a>**: JSON 形式での永続化ストレージアクセス。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.h.html&quot;}, '*');">md_acme.h</a>**: ACME プロトコルの基本通信プリミティブ。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_authz.h.html&quot;}, '*');">md_acme_authz.h</a>**: 個別ドメインの認証処理。</li>
+<li>**<a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');">md_json.h</a>**: ACME サーバーとの通信用 JSON 操作。</li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_file_info.h</code></li>
+<li><code>apr_file_io.h</code></li>
+<li><code>apr_fnmatch.h</code></li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_tables.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.h.html&quot;}, '*');"><code>md_acme.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_authz.h.html&quot;}, '*');"><code>md_acme_authz.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_order.h.html&quot;}, '*');"><code>md_acme_order.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.h.html&quot;}, '*');"><code>md_crypt.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');"><code>md_json.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_jws.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_jws.h.html&quot;}, '*');"><code>md_jws.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_result.h.html&quot;}, '*');"><code>md_result.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.h.html&quot;}, '*');"><code>md_store.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.h.html&quot;}, '*');"><code>md_util.h</code></a></li>
+<li><code>stdio.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme_authz.c.html&quot;}, '*');"><code>md_acme_authz.c</code></a>: 各ドメインのチャレンジ詳細処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.c.html&quot;}, '*');"><code>md_store.c</code></a>: 永続化レイヤーの基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_acmev2_drive.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acmev2_drive.c.html&quot;}, '*');"><code>md_acmev2_drive.c</code></a>: 本モジュールを利用して証明書発行を駆動する上位層。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての関数は <code>apr_pool_t</code> を受け取り、オブジェクトの生存期間はプールに依存します。</li>
+<li>**永続化**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__md_acme_order_save.html&quot;}, '*');"><code>md_acme_order_save</code></a> は <a class="wiki-source-link" href="../../../source/modules/md/md_util.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_util_c__md_util_pool_vdo.html&quot;}, '*');"><code>md_util_pool_vdo</code></a> を介して実行され、一時的なプールと永続的なプールを分離して安全に書き込みを行います。</li>
+<li>**エラーパス**: <code>md_result_t</code> を通じてエラー詳細が伝播されます。特に <code>await_</code> 系関数は、タイムアウトやサーバー側のエラーを <code>APR_EAGAIN</code> や <code>APR_EINVAL</code> として返します。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/md/md_acme_order.c.html#L252" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_order_c__md_acme_order_purge.html&quot;}, '*');"><code>md_acme_order_purge</code></a> は、Order 削除時に紐付いているチャレンジのクリーンアップ（<a class="wiki-source-link" href="../../../source/modules/md/md_acme_authz.c.html#L694" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_acme_authz_c__md_acme_authz_teardown.html&quot;}, '*');"><code>md_acme_authz_teardown</code></a>）を自動的に実行する設計になっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_acme_order_c__md_acme_order_create.html" target="wiki-view"><code>md_acme_order_create</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__order_st_from_str.html" target="wiki-view"><code>order_st_from_str</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__order_st_to_str.html" target="wiki-view"><code>order_st_to_str</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__md_acme_order_to_json.html" target="wiki-view"><code>md_acme_order_to_json</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__order_update_from_json.html" target="wiki-view"><code>order_update_from_json</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__md_acme_order_from_json.html" target="wiki-view"><code>md_acme_order_from_json</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__md_acme_order_add.html" target="wiki-view"><code>md_acme_order_add</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__md_acme_order_remove.html" target="wiki-view"><code>md_acme_order_remove</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__add_setup_token.html" target="wiki-view"><code>add_setup_token</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__md_acme_order_load.html" target="wiki-view"><code>md_acme_order_load</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__p_save.html" target="wiki-view"><code>p_save</code></a></li>
+<li><a href="../../symbols/modules__md__md_acme_order_c__order_ctx_t.html" target="wiki-view"><code>order_ctx_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm_common_c__mpm_gen_info_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L138" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__mpm_gen_info_t.html&quot;}, '*');">mpm_gen_info_t</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>server/mpm_common.c:138</code></li>
+</ul>
+<h2>目的</h2>
+<p>マルチプロセッシングモジュール（MPM）において、プロセス世代（Generation）ごとの状態を追跡・管理するために使用されるデータ構造です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct mpm_gen_info_t {
+    APR_RING_ENTRY(mpm_gen_info_t) link;
+    int gen;          /* 世代番号 */
+    int active;       /* アクティブなプロセス数 */
+    int done;         /* 世代終了フラグ */
+} mpm_gen_info_t;</code></pre>
+<h2>入力と出力</h2>
+<p>本構造体は関数ではなくデータ型です。<a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a> 内のプロセス管理ロジックにおいて、世代情報の保持およびリスト操作の単位として利用されます。</p>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>APR_RING</code> 構造体の一部として管理されます。</li>
+<li><code>active</code> は現在稼働中のプロセス数を表し、<a class="wiki-source-link" href="../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a> は世代が終了処理に入ったかどうかを示します。</li>
+<li>サーバーの生存期間中、<code>s-&gt;process-&gt;pool</code> に割り当てられ保持されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li><code>ap_core_child_status()</code> 等のプロセス監視ロジックにおいて、特定の世代のプロセスが終了した際に <code>active</code> カウンタを更新します。</li>
+<li><code>active</code> が 0 になった際、<code>end_gen()</code> 関数が呼び出され、世代終了フックの発火とリストからの除外が行われます。</li>
+<li><code>APR_RING</code> を用いて、アクティブな世代と未使用の世代をそれぞれリストとして管理します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a> 内のプロセス管理関数群（<a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L477" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_core_child_status.html&quot;}, '*');"><code>ap_core_child_status</code></a> 等）が、世代情報の参照や更新のために本構造体を利用します。</li>
+<li>**呼び出し先**: <code>APR_RING</code> マクロ群（<code>APR_RING_INSERT_HEAD</code>, <code>APR_RING_INIT</code>, <code>APR_RING_SENTINEL</code> など）が、リスト操作のために本構造体の <code>link</code> メンバを操作します。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>APR_RING</code>: 本構造体をリストとして連結するために使用される APR のリングデータ構造。</li>
+<li><code>mpm_gen_info_head_t</code>: <code>APR_RING_HEAD</code> によって定義される、本構造体のリストの先頭を保持する型。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>世代管理リストが空の状態で <code>APR_RING_SENTINEL</code> を参照した場合の挙動は、APR のリング実装に依存します。</li>
+<li>プロセス数が正しく追跡されない場合、<a class="wiki-source-link" href="../../source/support/ab.c.html#L359" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>done</code></a> フラグが適切にセットされず、世代終了フックが発火しない可能性があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a> 内のプロセスライフサイクル管理の核となります。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L147" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>gen_head_init</code></a> 変数による初期化判定など、古い設計の名残が含まれているため、変更を加える際は既存のリスト操作ロジックとの整合性に注意してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

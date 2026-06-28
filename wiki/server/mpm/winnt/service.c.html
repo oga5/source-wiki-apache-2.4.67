@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm/winnt/service.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');">server/mpm/winnt/service.c</a></h1>
+<h2>概要</h2>
+<p>Windows環境におけるApache HTTP Serverの「サービス」としてのライフサイクル管理を担うモジュールです。Windowsサービスコントロールマネージャ（SCM）との通信、サービスのインストール/アンインストール、およびコンソール実行時のシグナルハンドリングを抽象化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mpm_winnt</code> モジュールの一部として、サーバープロセスがWindowsサービスとして実行される際の制御層を提供します。<a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>mpm_winnt.c</code></a> がメインのプロセス管理を行うのに対し、本ファイルはOS固有のサービスAPI（SCM）とのインターフェースに特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**サービス制御**: SCMからの開始、停止、再起動、状態照会のハンドリング。</li>
+<li>**インストール管理**: レジストリへの設定保存、サービス登録、サービス説明文の更新。</li>
+<li>**コンソール統合**: サービスとして実行されていない場合（コンソールモード）のシグナル（Ctrl+C等）の捕捉と終了処理。</li>
+<li>**環境抽象化**: Unicode/ANSIの切り替え、およびサービス引数のマージ処理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>サービスコンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__nt_service_ctx_t.html&quot;}, '*');"><code>nt_service_ctx_t</code></a>: サービスの状態（<code>SERVICE_STATUS</code>）やスレッドハンドルを保持するグローバル構造体。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>globdat</code></a>: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__nt_service_ctx_t.html&quot;}, '*');"><code>nt_service_ctx_t</code></a> 型の静的インスタンス。</li>
+</ul>
+<h3>SCM インターフェース</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L511" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__service_nt_dispatch_thread.html&quot;}, '*');"><code>service_nt_dispatch_thread</code></a>: SCMからの要求を待ち受けるディスパッチスレッドのメイン関数。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L452" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__service_nt_main_fn.html&quot;}, '*');"><code>service_nt_main_fn</code></a> / <code>_w</code>: サービス本体のメインエントリポイント。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L341" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__service_nt_ctrl.html&quot;}, '*');"><code>service_nt_ctrl</code></a>: SCMからの制御コード（停止・再起動）を処理するコールバック。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L223" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__ReportStatusToSCMgr.html&quot;}, '*');"><code>ReportStatusToSCMgr</code></a>: SCMに対して現在のサービス状態を通知するヘルパー。</li>
+</ul>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L684" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_service_to_start.html&quot;}, '*');"><code>mpm_service_to_start</code></a>: サービス開始時の初期化（スレッド生成、イベント作成）。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L744" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_service_install.html&quot;}, '*');"><code>mpm_service_install</code></a> / <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L946" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_service_uninstall.html&quot;}, '*');"><code>mpm_service_uninstall</code></a>: サービスの登録・削除処理。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L1035" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_service_start.html&quot;}, '*');"><code>mpm_service_start</code></a> / <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L1147" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_signal_service.html&quot;}, '*');"><code>mpm_signal_service</code></a>: 外部からのサービス操作（開始・停止・再起動）の実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **起動**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L684" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_service_to_start.html&quot;}, '*');"><code>mpm_service_to_start</code></a> が呼ばれ、<a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L511" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__service_nt_dispatch_thread.html&quot;}, '*');"><code>service_nt_dispatch_thread</code></a> が起動します。 2.  **ディスパッチ**: <code>StartServiceCtrlDispatcher</code> が呼び出され、SCMからのイベントを <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L341" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__service_nt_ctrl.html&quot;}, '*');"><code>service_nt_ctrl</code></a> が受信します。 3.  **状態遷移**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L223" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__ReportStatusToSCMgr.html&quot;}, '*');"><code>ReportStatusToSCMgr</code></a> を通じて、<code>SERVICE_START_PENDING</code> から <code>SERVICE_RUNNING</code> へ遷移します。 4.  **終了**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L665" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__service_stopped.html&quot;}, '*');"><code>service_stopped</code></a> が <code>atexit</code> で登録されており、プロセス終了時にサービス状態を <code>SERVICE_STOPPED</code> に更新します。 5.  **引数マージ**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__mpm_merge_service_args.html&quot;}, '*');"><code>mpm_merge_service_args</code></a> がレジストリから <code>ConfigArgs</code> を読み込み、コマンドライン引数と結合します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>windows.h</code> (間接的): <code>winuser.h</code> を含み、SCM API (<a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__OpenSCManager.html&quot;}, '*');"><code>OpenSCManager</code></a>, <code>RegisterServiceCtrlHandlerEx</code> 等) を使用。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.h.html&quot;}, '*');"><code>mpm_winnt.h</code></a>: 共通のMPM定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_regkey.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regkey.h.html&quot;}, '*');"><code>ap_regkey.h</code></a>: Windowsレジストリ操作用。</li>
+<li><code>apr.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>arch/win32/apr_arch_misc.h</code></li>
+<li><code>arch/win32/apr_arch_utf8.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>time.h</code></li>
+<li><code>wchar.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>server/mpm/winnt/mpm_winnt.c</code></a>: サービスとして起動された後のメインループとプロセス管理。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/nt_eventlog.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>server/mpm/winnt/nt_eventlog.c</code></a>: サービス実行時のイベントログ出力。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>mpm_new_argv</code> 等の引数リストは <code>malloc</code> で確保され、サービス起動時に再構築されます。メモリリークを防ぐため、これらのポインタの所有権とライフサイクルには注意が必要です。</li>
+<li>**Unicode対応**: <code>APR_HAS_UNICODE_FS</code> 定義に基づき、Wide版（<code>_w</code>）とANSI版のAPIが条件コンパイルされています。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>ap_real_exit_code</code></a> フラグが有効な場合、エラー時にコンソールを保持する挙動をとります。サービスとして実行する場合はこのフラグを適切に制御する必要があります。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../../source/os/win32/os.h.html#L112" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/win32/os.h.html&quot;}, '*');"><code>ChangeServiceConfig2</code></a> の利用はWin2000以降を前提としており、それ以前のOSでの動作保証は限定的です。また、レジストリ操作は <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a> プールに依存しているため、初期化順序に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__nt_service_ctx_t.html" target="wiki-view"><code>nt_service_ctx_t</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__DWORD.html" target="wiki-view"><code>DWORD</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__OpenSCManager.html" target="wiki-view"><code>OpenSCManager</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__hold_console_open_on_error.html" target="wiki-view"><code>hold_console_open_on_error</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__console_control_handler.html" target="wiki-view"><code>console_control_handler</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__stop_console_handler.html" target="wiki-view"><code>stop_console_handler</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__mpm_start_console_handler.html" target="wiki-view"><code>mpm_start_console_handler</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__mpm_start_child_console_handler.html" target="wiki-view"><code>mpm_start_child_console_handler</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__ReportStatusToSCMgr.html" target="wiki-view"><code>ReportStatusToSCMgr</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__set_service_description.html" target="wiki-view"><code>set_service_description</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__service_nt_ctrl.html" target="wiki-view"><code>service_nt_ctrl</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__service_c__service_nt_main_fn_w.html" target="wiki-view"><code>service_nt_main_fn_w</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

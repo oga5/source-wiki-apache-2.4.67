@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__ssl__ssl_engine_ocsp_c__verify_ocsp_status.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L129" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__verify_ocsp_status.html&quot;}, '*');">verify_ocsp_status</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/ssl/ssl_engine_ocsp.c:129</code></li>
+</ul>
+<h2>目的</h2>
+<p>証明書の失効状態を外部の OCSP レスポンダに問い合わせ、その結果（Good, Revoked, Unknown）を検証して OpenSSL の検証コンテキストへ反映させる。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static int verify_ocsp_status(X509 *cert, X509_STORE_CTX *ctx, conn_rec *c,
+                              SSLSrvConfigRec *sc, server_rec *s,
+                              apr_pool_t *pool)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>cert</code>: 検証対象の <a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_pphrase.c.html#L899" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_pphrase_c__X509.html&quot;}, '*');"><code>X509</code></a> 証明書。</li>
+<li><code>ctx</code>: OpenSSL の <code>X509_STORE_CTX</code> 検証コンテキスト。</li>
+<li><code>c</code>: 現在の接続情報 (<code>conn_rec</code>)。</li>
+<li><code>sc</code>: SSL サーバー設定 (<a class="wiki-source-link" href="../../source/modules/ssl/ssl_private.h.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLSrvConfigRec.html&quot;}, '*');"><code>SSLSrvConfigRec</code></a>)。</li>
+<li><code>s</code>: サーバー情報 (<code>server_rec</code>)。</li>
+<li><code>pool</code>: メモリ管理用 <code>apr_pool_t</code>。</li>
+<li>**出力**:</li>
+<li><code>int</code>: 検証結果ステータス（<code>V_OCSP_CERTSTATUS_GOOD</code>, <code>V_OCSP_CERTSTATUS_REVOKED</code>, <code>V_OCSP_CERTSTATUS_UNKNOWN</code>）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>OPENSSL_NO_OCSP</code> が定義されていない環境で動作する。</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__determine_responder_uri.html&quot;}, '*');"><code>determine_responder_uri</code></a> が有効な URI を返さない場合、設定（<code>SSL_OCSPCHECK_NO_OCSP_FOR_CERT_OK</code>）に応じて <code>GOOD</code> または <code>UNKNOWN</code> を返す。</li>
+<li>通信は同期的に行われ、<code>sc-&gt;server-&gt;ocsp_responder_timeout</code> で指定されたタイムアウト時間が適用される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **URI 取得**: <a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__determine_responder_uri.html&quot;}, '*');"><code>determine_responder_uri</code></a> を呼び出し、接続先を特定する。 2. **リクエスト生成**: <a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__create_request.html&quot;}, '*');"><code>create_request</code></a> を使用して <code>OCSP_REQUEST</code> を構築する。 3. **通信**: <a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__modssl_dispatch_ocsp_request.html&quot;}, '*');"><code>modssl_dispatch_ocsp_request</code></a> を介してレスポンダと通信し、<code>OCSP_RESPONSE</code> を取得する。 4. **検証**:</p>
+<ul>
+<li>レスポンスのステータスが成功か確認。</li>
+<li><code>OCSP_check_nonce</code> で Nonce の整合性を確認（設定が有効な場合）。</li>
+<li><code>OCSP_basic_verify</code> でレスポンダの署名を検証（<code>ocsp_noverify</code> が無効な場合）。</li>
+<li><code>OCSP_resp_find_status</code> で証明書のステータスを取得。</li>
+<li><code>OCSP_check_validity</code> でレスポンスの有効期限を確認。</li>
+<p>5. **クリーンアップ**: 使用した <code>OCSP</code> 関連オブジェクトを解放し、結果を返す。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/ssl/ssl_engine_ocsp.c.html&quot;}, '*');"><code>modules/ssl/ssl_engine_ocsp.c</code></a> 内の <a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L262" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__modssl_verify_ocsp.html&quot;}, '*');"><code>modssl_verify_ocsp</code></a>（直接の呼び出しを確認）。</li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L54" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__determine_responder_uri.html&quot;}, '*');"><code>determine_responder_uri</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_ocsp.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_ocsp_c__create_request.html&quot;}, '*');"><code>create_request</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_util_ocsp.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_util_ocsp_c__modssl_dispatch_ocsp_request.html&quot;}, '*');"><code>modssl_dispatch_ocsp_request</code></a></li>
+<li>OpenSSL OCSP API (<code>OCSP_response_status</code>, <code>OCSP_response_get1_basic</code>, <code>OCSP_check_nonce</code>, <code>OCSP_basic_verify</code>, <code>OCSP_resp_find_status</code>, <code>OCSP_check_validity</code>)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_engine_pphrase.c.html#L899" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_engine_pphrase_c__X509.html&quot;}, '*');"><code>X509</code></a>, <code>X509_STORE_CTX</code>: OpenSSL 証明書および検証コンテキスト。</li>
+<li><code>OCSP_REQUEST</code>, <code>OCSP_RESPONSE</code>, <code>OCSP_BASICRESP</code>: OCSP プロトコル用データ構造。</li>
+<li><a class="wiki-source-link" href="../../source/modules/ssl/ssl_private.h.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__ssl__ssl_private_h__SSLSrvConfigRec.html&quot;}, '*');"><code>SSLSrvConfigRec</code></a>: <a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> のサーバー設定。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**通信失敗**: レスポンダへの接続不可やタイムアウト時は <code>V_OCSP_CERTSTATUS_UNKNOWN</code> を返す。</li>
+<li>**検証失敗**: 署名検証エラー、Nonce 不一致、有効期限切れの場合は <code>V_OCSP_CERTSTATUS_UNKNOWN</code> を返す。</li>
+<li>**設定依存**: <code>ocsp_noverify</code> が有効な場合、署名検証をスキップする。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は同期処理であるため、ネットワーク遅延がリクエスト処理時間に直結する点に注意すること。</li>
+<li><code>certID</code> は <code>request</code> が解放される際に自動的に解放されるため、個別の解放は不要である。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

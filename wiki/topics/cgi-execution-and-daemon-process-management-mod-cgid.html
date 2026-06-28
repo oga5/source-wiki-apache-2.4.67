@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/cgi-execution-and-daemon-process-management-mod-cgid.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>CGI Execution and Daemon Process Management (mod_cgid)</h1>
+<h2>概念</h2>
+<p><code>mod_cgid</code> は、マルチスレッド型のマルチプロセッシングモジュール（MPM）環境において、CGIスクリプトを安全かつ効率的に実行するための仕組みです。</p>
+<p>通常の <code>mod_cgi</code> はWebサーバプロセスから直接CGIプロセスを <code>fork()</code> しますが、マルチスレッド環境では <code>fork()</code> のオーバーヘッドやスレッド安全性の問題が発生します。<code>mod_cgid</code> は、CGIの起動処理を専門に行う外部のシングルスレッドデーモンプロセス（cgid daemon）を常駐させ、WebサーバプロセスからはUNIXドメインソケットを介してこのデーモンにCGIの起動を依頼するアーキテクチャを採用しています。</p>
+<h2>なぜ重要か</h2>
+<p>マルチスレッドMPM（WorkerやEventなど）において、親プロセスが大量のスレッドを保持している状態で <code>fork()</code> を実行すると、メモリ空間のコピー（Copy-on-Writeの管理コスト）やスレッド状態の不整合など、パフォーマンスと安定性の両面で深刻な問題が生じます。</p>
+<p><code>mod_cgid</code> を使用してCGI実行用の軽量な専用デーモンを分離することで、以下のメリットが得られます。</p>
+<ul>
+<li>**パフォーマンスの向上**: 巨大なWebサーバプロセスからの <code>fork()</code> を回避し、軽量なデーモンから高速に <code>fork()</code> を実行します。</li>
+<li>**堅牢性の向上**: シグナルハンドリングやファイル記述子の管理がスレッド間で競合するリスクを排除します。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__generators.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__generators.html&quot;, &quot;source&quot;: &quot;source/modules/generators/cgi_common.h.html&quot;}, '*');"><code>module:modules/generators</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a>**: </li>
+<p>CGI実行要求を受け取るデーモンプロセスの管理、およびWebサーバプロセスとデーモン間のUNIXドメインソケット通信を実装するメインモジュール。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a>**: </li>
+<p>主にシングルスレッド/マルチプロセスMPM（Preforkなど）向けに、Webサーバプロセスから直接CGIを <code>fork()</code> して実行するモジュール。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a>**: </li>
+<p><code>mod_cgi</code> と <code>mod_cgid</code> の両方で共有される、CGI環境変数の構築や共通のデータ構造を定義するヘッダーファイル。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>Webサーバプロセスと <code>cgid</code> デーモン間の詳細な通信プロトコルや、エラー発生時の正確なロールバック処理の全容は**完全には検証されていません**。現時点で想定される一般的な流れは以下の通りです。</p>
+<p>1. **リクエストの受信**: クライアントからのCGIリクエストをWebサーバのワーカースレッドが受信します。 2. **デーモンへの要求送信**: <code>mod_cgid</code> ハンドラが起動し、設定されたUNIXドメインソケットを介して、CGIの実行に必要な情報（環境変数、コマンドライン引数、ディレクトリ情報など）を <code>cgid</code> デーモンに送信します。 3. **CGIプロセスの起動**: <code>cgid</code> デーモンが要求を受信し、<code>fork()</code> および <code>exec()</code> を実行して対象のCGIスクリプトを起動します。 4. **入出力の仲介**: CGIプロセスの標準入力、標準出力、標準エラー出力が、ソケットを介してWebサーバのワーカースレッドと接続され、クライアントとの間でデータが中継されます。</p>
+<h2>重要な不変条件</h2>
+<p>デーモンとWebサーバプロセス間におけるソケット記述子のライフサイクル管理や、セキュリティ境界（実行権限の遷移など）に関する厳密な不変条件は**まだ十分に検証されていません**。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**<code>ScriptSock</code> の設定不備**: </li>
+<p><code>cgid</code> デーモンとの通信に使用するUNIXドメインソケットファイル（<code>ScriptSock</code>）の配置ディレクトリに適切な書き込み権限がない場合、デーモンが起動しない、あるいはWebサーバプロセスがデーモンと通信できずにCGI実行が失敗します。</p>
+<li>**MPMとの不整合**: </li>
+<p>マルチスレッドMPMを使用しているにもかかわらず、誤って <code>mod_cgi</code> を有効化し <code>mod_cgid</code> を無効化している場合、プロセスフォークのオーバーヘッドによりサーバ全体のパフォーマンスが著しく低下する可能性があります。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a> (デーモンの起動とソケット通信処理の実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a> (共通のCGI環境変数処理)</li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a> (直接フォーク方式とのアーキテクチャ比較)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

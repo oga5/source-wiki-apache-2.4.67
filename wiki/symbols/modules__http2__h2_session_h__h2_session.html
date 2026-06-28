@@ -1,0 +1,107 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_session_h__h2_session.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>h2_session</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/http2/h2_session.h:66</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 セッションのライフサイクル、状態管理、およびストリームの多重化を制御するためのメイン構造体です。クライアントとの単一の TCP 接続（<code>conn_rec</code>）を抽象化し、プロトコル層としての役割を担います。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>typedef struct h2_session {
+    int child_num;
+    apr_uint32_t id;
+    conn_rec *c1;
+    request_rec *r;
+    server_rec *s;
+    apr_pool_t *pool;
+    struct h2_mplx *mplx;
+    struct h2_workers *workers;
+    struct h2_c1_io_in_ctx_t *cin;
+    h2_c1_io io;
+    unsigned int padding_max;
+    int padding_always;
+    struct nghttp2_session *ngh2;
+    h2_session_state state;
+    h2_session_props local;
+    h2_session_props remote;
+    unsigned int reprioritize : 1;
+    unsigned int flush : 1;
+    apr_interval_time_t wait_us;
+    struct h2_push_diary *push_diary;
+    struct h2_stream_monitor *monitor;
+    unsigned int open_streams;
+    unsigned int streams_done;
+    unsigned int responses_submitted;
+    unsigned int streams_reset;
+    unsigned int pushes_promised;
+    unsigned int pushes_submitted;
+    unsigned int pushes_reset;
+    unsigned int max_stream_errors;
+    unsigned int stream_errors;
+    apr_size_t frames_received;
+    apr_size_t frames_sent;
+    apr_size_t max_stream_count;
+    apr_size_t max_stream_mem;
+    apr_size_t max_data_frame_len;
+    apr_size_t idle_frames;
+    apr_interval_time_t idle_delay;
+    apr_bucket_brigade *bbtmp;
+    char status[64];
+    int last_status_code;
+    const char *last_status_msg;
+    int input_flushed;
+    struct h2_iqueue *out_c1_blocked;
+    struct h2_iqueue *ready_to_process;
+    h2_hd_scratch hd_scratch;
+} h2_session;</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>conn_rec</code>（メイン接続）を介して受信した HTTP/2 フレーム。<code>nghttp2</code> ライブラリによって解析されます。</li>
+<li>**出力**: <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> を経由してワーカースレッドへリクエストを振り分け、レスポンスを <code>c1</code>（クライアント接続）へ送出します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>ngh2</code> フィールドは内部的な <code>nghttp2</code> セッション状態を保持しており、Apache 側の状態（<a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L121" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_session_state.html&quot;}, '*');"><code>h2_session_state</code></a>）と同期している必要があります。</li>
+<li><code>pool</code> はセッションの生存期間中有効なメモリプールとして使用されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L913" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_create.html&quot;}, '*');"><code>h2_session_create</code></a> により生成され、接続に関連付けられます。 2. **イベント処理**: <a class="wiki-source-link" href="../../source/modules/http2/h2_session.c.html#L1838" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_c__h2_session_process.html&quot;}, '*');"><code>h2_session_process</code></a> がメインループとして機能し、<code>nghttp2</code> を介してフレームを読み込み、イベントをディスパッチします。 3. **多重化**: 受信したリクエストは <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a> を通じてワーカースレッドへ送られ、レスポンスは <a class="wiki-source-link" href="../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> 等を介してメイン接続へ戻されます。 4. **状態管理**: <a class="wiki-source-link" href="../../source/modules/http2/h2_session.h.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_session_h__h2_session_event_t.html&quot;}, '*');"><code>h2_session_event_t</code></a> を用いたイベント駆動で状態遷移を行います。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>modules/http2/h2_c1.c</code></a> および <a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1_io.c.html&quot;}, '*');"><code>modules/http2/h2_c1_io.c</code></a> 内の関数（<a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L141" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_io_init.html&quot;}, '*');"><code>h2_c1_io_init</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_c1_io.c.html#L518" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c1_io_c__h2_c1_read.html&quot;}, '*');"><code>h2_c1_read</code></a> 等）から参照されています。</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>, <code>h2_workers</code>, <a class="wiki-source-link" href="../../source/modules/http2/h2_push.h.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_push_h__h2_push_diary.html&quot;}, '*');"><code>h2_push_diary</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_stream.h.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_h__h2_stream_monitor.html&quot;}, '*');"><code>h2_stream_monitor</code></a> 等のサブコンポーネントを保持し、これらを利用して処理を行います。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>: ストリーム多重化器。</li>
+<li><code>h2_workers</code>: リクエスト処理用ワーカースレッド管理。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L121" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_session_state.html&quot;}, '*');"><code>h2_session_state</code></a>: セッション状態の列挙型。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2.h.html#L130" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_h__h2_session_props.html&quot;}, '*');"><code>h2_session_props</code></a>: ローカルおよびリモートのセッションプロパティ。</li>
+<li><code>nghttp2_session</code>: プロトコル解析用ライブラリの構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>max_stream_errors</code> を超えるストリームエラーが発生した場合、セッションの異常終了が想定されます。</li>
+<li><code>out_c1_blocked</code> や <code>ready_to_process</code> キューの状態により、I/O 待ちや処理の遅延が発生する可能性があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>h2_session</code> は非常に巨大な構造体です。特定のストリームに関する情報は <a class="wiki-source-link" href="../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>h2_stream.h</code></a> を参照してください。</li>
+<li><code>nghttp2</code> の状態と Apache 側の状態の同期が重要です。</li>
+<li>デバッグ時には <a class="wiki-source-link" href="../../source/modules/http2/h2_session.h.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.h.html&quot;}, '*');"><code>H2_SSSN_LOG</code></a> マクロを活用してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

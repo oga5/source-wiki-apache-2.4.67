@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__protocol_c__ap_get_mime_headers_core.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/protocol.c.html#L1089" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__protocol_c__ap_get_mime_headers_core.html&quot;}, '*');">ap_get_mime_headers_core</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/protocol.c:1089</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP リクエストの MIME ヘッダーを読み取り、解析し、<code>request_rec</code> 構造体の <code>headers_in</code> テーブルへ格納する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>void ap_get_mime_headers_core(request_rec *r, apr_bucket_brigade *bb)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>r</code>: リクエスト情報を保持する <code>request_rec</code> 構造体。</li>
+<li><code>bb</code>: 入力データを供給する <code>apr_bucket_brigade</code>。</li>
+<li>**出力**:</li>
+<li>なし（<code>r-&gt;headers_in</code> を更新し、エラー発生時は <code>r-&gt;status</code> を設定する）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>r-&gt;server</code> の設定（<code>limit_req_fieldsize</code> 等）に基づき、ヘッダーサイズや個数の制限が適用される。</li>
+<li><code>http_conformance</code> 設定により、RFC 7230 準拠の厳格な解析またはレガシーな解析が選択される。</li>
+<li>処理終了後、<code>headers_in</code> は <code>apr_table_compress</code> により重複フィールドがマージされる。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>ap_rgetline</code> を用いてヘッダー行を順次読み取る。 2. 行頭が空白（タブまたはスペース）で始まる場合、前の行の継続（obs-fold）とみなし、バッファを拡張して連結する。 3. 通常のヘッダー行の場合、<code>:</code> を区切り文字としてフィールド名と値に分離する。 4. 厳格モードでは <a class="wiki-source-link" href="../../source/server/util.c.html#L1664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_scan_http_token.html&quot;}, '*');"><code>ap_scan_http_token</code></a> 等で構文を検証し、非厳格モードではレガシーな解析を行う。 5. 解析したヘッダーを <code>r-&gt;headers_in</code> に追加する。 6. 空行（ヘッダー終了）を検出するまでループし、最後に重複ヘッダーの圧縮とサイズ制限の再チェックを行う。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>server/protocol.c:1352</code></li>
+<li><code>server/protocol.c:1478</code></li>
+<li>**呼び出し先**:</li>
+<li><code>ap_rgetline</code> (ヘッダー行の取得)</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html#L1664" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_scan_http_token.html&quot;}, '*');"><code>ap_scan_http_token</code></a> / <a class="wiki-source-link" href="../../source/server/util.c.html#L1654" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_scan_http_field_content.html&quot;}, '*');"><code>ap_scan_http_field_content</code></a> (厳格モード時の構文解析)</li>
+<li><code>apr_table_addn</code> / <code>apr_table_compress</code> (ヘッダーテーブル操作)</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html#L448" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_rerror</code></a> (エラーログ出力)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>request_rec</code>: リクエスト状態とヘッダーテーブル (<code>headers_in</code>) を保持。</li>
+<li><code>apr_bucket_brigade</code>: 入力ストリームのバッファ。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html#L694" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_server_config.html&quot;}, '*');"><code>core_server_config</code></a>: HTTP 準拠設定や制限値の保持。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**サイズ超過**: <code>APR_ENOSPC</code> または <code>limit_req_fieldsize</code> 超過時に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L512" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_BAD_REQUEST</code></a> を設定。</li>
+<li>**ヘッダー数超過**: <code>limit_req_fields</code> を超えた場合に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L512" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_BAD_REQUEST</code></a> を設定。</li>
+<li>**構文エラー**: 不正な文字や <code>:</code> の欠落、空のフィールド名などが検出された場合に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L512" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_BAD_REQUEST</code></a> を設定。</li>
+<li>**タイムアウト**: <code>APR_STATUS_IS_TIMEUP</code> 時に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L520" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_REQUEST_TIME_OUT</code></a> を設定。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は RFC 7230 への準拠を重視している。修正を行う際は、<code>strict</code> モードとレガシーモードの両方の挙動に注意すること。</li>
+<li>メモリ割り当てには <code>r-&gt;pool</code> を使用しており、リクエスト終了時に自動解放される。</li>
+<li>obs-fold（行の折り返し）の処理は、メモリ効率を考慮して二乗ベースのバッファ拡張を行っている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

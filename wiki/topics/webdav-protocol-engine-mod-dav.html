@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/webdav-protocol-engine-mod-dav.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>WebDAV Protocol Engine (mod_dav)</h1>
+<h2>概念</h2>
+<p><code>WebDAV Protocol Engine (mod_dav)</code> は、Apache HTTP ServerにおいてWebDAV（Web-based Distributed Authoring and Versioning）プロトコルを実装するためのコアエンジンです。クライアントからのWebDAVリクエストを処理し、リソースの作成、削除、移動、コピー、プロパティ管理、および排他・共有ロックなどの機能を提供します。</p>
+<h2>なぜ重要か</h2>
+<p>WebDAVプロトコルを導入することで、通常のHTTPサーバーを共同編集可能なファイル共有ストレージとして拡張できます。<code>mod_dav</code> は、プロトコル解釈を行うメインエンジンと、実際のリソースを操作するバックエンド（ファイルシステムなど）を分離するアーキテクチャを採用しており、柔軟なストレージバックエンドの統合を可能にします。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav.html&quot;}, '*');"><code>module:modules/dav</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a>**: WebDAVプロトコルのメイン処理エンジン。リクエストのハンドリング、ディスパッチ、および共通のプロトコルロジックを実装します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a>**: WebDAVプロパティ（PROPFIND、PROPPATCHなど）の取得、設定、および管理を担当します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>**: ローカルファイルシステムをWebDAVリポジトリとして扱うための、ファイルシステムバックエンドの実装です。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>**: ファイルシステムベースのリソースに対するロック（LOCK、UNLOCK）の管理と永続化を担当します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>クライアントからWebDAVリクエスト（例: <code>PROPFIND</code> や <code>LOCK</code>）が送信された際の大まかな流れは以下の通りですが、**詳細なエンドツーエンドの制御フローや内部APIの呼び出し順序は完全には判明していません。**</p>
+<p>1. <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a> がリクエストを受け取り、メソッドに応じたハンドラを呼び出します。 2. プロパティ操作を伴う場合は <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a> が、ロック操作を伴う場合は <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> などのロックプロバイダが処理を行います。 3. 最終的なファイルシステムへのアクセスやリソース操作は、<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a> などのリポジトリプロバイダを介して実行されます。</p>
+<h2>重要な不変条件</h2>
+<p>**具体的なコードレベルでの不変条件（インバリアント）の詳細は、現時点では完全には判明していません。** 一般的には、以下の整合性が維持される必要があります。</p>
+<ul>
+<li>ロックされたリソースに対する、有効なロックトークンを持たない書き込み・削除操作の禁止。</li>
+<li>プロパティデータベース（<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>props.c</code></a>）と、対応するファイルシステム上のリソース（<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>repos.c</code></a>）との間でのメタデータの同期。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>**具体的な実装上の落とし穴や既知のバグの詳細は、現時点では完全には判明していません。** 想定される一般的な課題は以下の通りです。</p>
+<ul>
+<li>ロックのクリーンアップ漏れや、ロックデータベースの不整合によるリソースのデッドロック状態（<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>lock.c</code></a> 関連）。</li>
+<li>ファイルシステム上のファイルを直接操作した際に、WebDAVプロパティデータベースとの同期が崩れる問題（<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>props.c</code></a> 関連）。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a> — メインエンジンのエントリポイントとリクエスト処理ロジック</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/props.c.html&quot;}, '*');"><code>modules/dav/main/props.c</code></a> — プロパティ管理の実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a> — ファイルシステムリポジトリプロバイダの実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> — ファイルシステムロックプロバイダの実装</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

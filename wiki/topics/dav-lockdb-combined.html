@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/dav-lockdb-combined.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_lockdb_combined</h1>
+<h2>概念</h2>
+<p><code>dav_lockdb_combined</code> は、Apache HTTP Server（httpd-2.4.67）の WebDAV 実装において、公開インターフェースである <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> と、バックエンド固有のプライベートな管理情報を保持する <code>dav_lockdb_private</code> を統合するための構造体です。</p>
+<p>これにより、公開用の抽象インターフェースと、DBM ハンドルやデータベースパスなどの内部実装詳細を一元的に管理・参照することができます。</p>
+<h2>なぜ重要か</h2>
+<p>この構造体は、<code>mod_dav</code> のプロバイダーインターフェースと、ファイルシステム固有のロックデータベース実装を橋渡しする役割を担っています。</p>
+<p>公開インターフェース（<code>pub</code>）と内部実装（<code>priv</code>）を単一のメモリブロックとして統合することで、外部の <code>mod_dav</code> からは抽象化されたロックデータベースとして見せつつ、内部のロック操作時には具体的なプライベート情報にアクセスできる、クリーンなカプセル化を実現しています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__lock.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html&quot;}, '*');"><code>module:modules/dav/lock</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lockdb_combined.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lockdb_combined.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L189&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lockdb_combined</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__dav__lock__locks_c__dav_lockdb_combined.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__lock__locks_c__dav_lockdb_combined.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html#L185&quot;}, '*');"><code>symbol:modules/dav/lock/locks.c#dav_lockdb_combined</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>詳細なエンドツーエンドの呼び出しフロー全体は完全には明らかになっていませんが、提供された情報に基づく部分的な流れは以下の通りです。</p>
+<p>1. <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html#L333" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_fs_open_lockdb.html&quot;}, '*');"><code>dav_fs_open_lockdb</code></a> などの関数内で、リクエストの生存期間中に <code>request_rec</code> のプールから <code>dav_lockdb_combined</code> 構造体がインスタンス化（メモリ割り当て）されます。 2. <code>mod_dav</code> からの呼び出し時には、公開メンバである <code>pub</code>（<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a>）が参照されます。 3. 内部的なロック操作（<code>dav_generic_*</code> 系の関数など）の実行時には、プライベートメンバである <code>priv</code>（<code>dav_lockdb_private</code>）が参照され、DBM ハンドルやリクエストコンテキストなどの具体的なリソースが操作されます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**インターフェース互換性**: <code>pub</code> フィールドは、<code>mod_dav</code> が期待する公開ロックデータベースインターフェース（<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> 型）と完全に互換している必要があります。</li>
+<li>**プライベート情報の保持**: <code>priv</code> フィールドは、DBM ハンドルやデータベースパス、リクエストコンテキストなどのファイルシステム固有の管理情報を正しく保持していなければなりません。</li>
+<li>**メモリ配置の整合性**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> へのポインタを <code>dav_lockdb_combined</code> にキャストしてアクセスするため、メモリレイアウトの整合性が維持されている必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**未初期化アクセス**: 内部の <code>priv</code> メンバ（DBM ハンドルなど）が適切に初期化されていない状態でアクセスされた場合、DBM 操作時に未定義の動作を引き起こす可能性があります。</li>
+<li>**メモリ割り当て失敗**: <code>request_rec</code> プールからのメモリ割り当てが失敗した場合、構造体自体が初期化されません。</li>
+<li>**キャストの不整合**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html#L1338" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_lockdb.html&quot;}, '*');"><code>dav_lockdb</code></a> ポインタから <code>dav_lockdb_combined</code> へのキャストを行う際、メモリレイアウトが一致していないと未定義の動作を招きます。</li>
+<li>**複数ファイル間の同期**: <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> と <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> の両方で定義・参照されているため、構造体のメンバを変更する際は両モジュールおよび <code>mod_dav</code> 側の定義との整合性に注意する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

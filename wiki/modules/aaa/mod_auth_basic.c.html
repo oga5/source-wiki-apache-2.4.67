@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/aaa/mod_auth_basic.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_basic.c.html&quot;}, '*');">modules/aaa/mod_auth_basic.c</a></h1>
+<h2>概要</h2>
+<p>HTTP Basic 認証を実装する Apache HTTP Server モジュールです。クライアントから送信された <code>Authorization</code> ヘッダーをデコードし、設定された認証プロバイダーを通じてユーザーの検証を行います。また、バックエンドへの転送用に認証情報を偽装（Fake）する機能も提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_authn_core</code> 等の認証基盤と連携し、HTTP プロトコルレベルでの Basic 認証フローを担当します。認証の成否判定を <code>mod_authn</code> 系のプロバイダーに委譲する「認証の仲介役」として機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリ単位の認証設定（プロバイダーリスト、権限委譲フラグ、偽装設定）の保持とマージ。</li>
+<li>**認証実行**: <code>Authorization</code> ヘッダーの解析、Base64 デコード、およびプロバイダーへの照会。</li>
+<li>**認証失敗時の通知**: <code>WWW-Authenticate</code> ヘッダーの生成。</li>
+<li>**認証情報の偽装**: <code>AuthBasicFake</code> ディレクティブに基づく、リクエストヘッダーの動的な書き換え。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L36" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__auth_basic_config_rec.html&quot;}, '*');"><code>auth_basic_config_rec</code></a>: ディレクトリごとの設定を保持。プロバイダーリスト、権限委譲フラグ、偽装用式（<code>ap_expr</code>）を管理。</li>
+</ul>
+<h3>設定ハンドラ（ディレクティブ）</h3>
+<ul>
+<li><code>add_authn_provider</code>: <code>AuthBasicProvider</code> を処理し、プロバイダーを検索・キャッシュ。</li>
+<li><code>set_authoritative</code>: <code>AuthBasicAuthoritative</code> を設定。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L142" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__add_basic_fake.html&quot;}, '*');"><code>add_basic_fake</code></a>: <code>AuthBasicFake</code> を解析し、式をコンパイル。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L183" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__set_use_digest_algorithm.html&quot;}, '*');"><code>set_use_digest_algorithm</code></a>: <code>AuthBasicUseDigestAlgorithm</code> を設定。</li>
+</ul>
+<h3>認証フック・ロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html&quot;}, '*');"><code>authenticate_basic_user</code></a>: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_form.c.html#L758" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_form_c__check_authn.html&quot;}, '*');"><code>check_authn</code></a> フックのメイン関数。認証フローの核心。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L436" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_fake.html&quot;}, '*');"><code>authenticate_basic_fake</code></a>: <code>fixups</code> フックで実行され、認証ヘッダーを上書き。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L230" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__note_basic_auth_failure.html&quot;}, '*');"><code>note_basic_auth_failure</code></a>: <code>WWW-Authenticate</code> ヘッダーをレスポンスに追加。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **認証開始**: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html&quot;}, '*');"><code>authenticate_basic_user</code></a> がリクエストをフックし、<code>Authorization</code> ヘッダーを <a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L248" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__get_basic_auth.html&quot;}, '*');"><code>get_basic_auth</code></a> で取得・デコード。 2. **プロバイダー照会**: 設定された <a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L95" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider_list.html&quot;}, '*');"><code>authn_provider_list</code></a> を順次走査。プロバイダーが未設定の場合はデフォルトプロバイダーを使用。 3. **検証**: <code>check_password</code> または <code>get_realm_hash</code>（Digest アルゴリズム指定時）を呼び出し、結果を判定。 4. **権限委譲**: <code>authoritative</code> がオフの場合、認証失敗時に <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a> を返し、後続の認証モジュールに処理を委ねる。 5. **偽装**: <a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html#L436" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_fake.html&quot;}, '*');"><code>authenticate_basic_fake</code></a> が <code>ap_expr</code> を評価し、成功すれば <code>Authorization</code> ヘッダーを再構築して後続の処理へ渡す。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>: 認証プロバイダーのインターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_expr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_expr.h.html&quot;}, '*');"><code>ap_expr.h</code></a>: 偽装認証情報の動的生成に使用。</li>
+<li><code>apr_base64.h</code>: Basic 認証のデコード/エンコード。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache モジュール基盤およびリクエスト処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_md5.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_md5.h.html&quot;}, '*');"><code>util_md5.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>mod_authn_core.c</code></a>: 認証プロバイダーの登録と管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_digest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_digest.c.html&quot;}, '*');"><code>mod_auth_digest.c</code></a>: 認証スキームの別実装（比較対象）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのメモリ割り当ては <code>request_rec</code> のプール（<code>r-&gt;pool</code>）または設定プール（<code>cmd-&gt;pool</code>）で行われます。明示的な解放は不要です。</li>
+<li>**不変条件**: <code>authoritative</code> が <code>1</code> の場合、認証失敗は即座に <a class="wiki-source-link" href="../../../source/include/httpd.h.html#L513" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_UNAUTHORIZED</code></a> を返します。</li>
+<li>**エッジケース**: <code>AuthBasicFake</code> が空の式を評価した場合、認証ヘッダーは削除され、認証はスキップされます。</li>
+<li>**省略箇所**: 本ファイルは認証の「仲介」に特化しており、実際のパスワード照合ロジック（DB照会やファイル読み込み）は <code>mod_authn_xxx</code> モジュール側に隠蔽されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__auth_basic_config_rec.html" target="wiki-view"><code>auth_basic_config_rec</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__create_auth_basic_dir_config.html" target="wiki-view"><code>create_auth_basic_dir_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__merge_auth_basic_dir_config.html" target="wiki-view"><code>merge_auth_basic_dir_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__add_authn_provider.html" target="wiki-view"><code>add_authn_provider</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__set_authoritative.html" target="wiki-view"><code>set_authoritative</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__add_basic_fake.html" target="wiki-view"><code>add_basic_fake</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__set_use_digest_algorithm.html" target="wiki-view"><code>set_use_digest_algorithm</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__note_basic_auth_failure.html" target="wiki-view"><code>note_basic_auth_failure</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__hook_note_basic_auth_failure.html" target="wiki-view"><code>hook_note_basic_auth_failure</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__get_basic_auth.html" target="wiki-view"><code>get_basic_auth</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_user.html" target="wiki-view"><code>authenticate_basic_user</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_auth_basic_c__authenticate_basic_fake.html" target="wiki-view"><code>authenticate_basic_fake</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

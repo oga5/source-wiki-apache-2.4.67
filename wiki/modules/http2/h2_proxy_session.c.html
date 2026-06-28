@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_proxy_session.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');">modules/http2/h2_proxy_session.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a> は、Apache HTTP Server がバックエンドサーバーに対して HTTP/2 プロキシとして振る舞う際のセッション管理を担います。<code>nghttp2</code> ライブラリをラップし、バックエンドとの接続状態、ストリームの多重化、およびプロキシ特有のヘッダー変換やフロー制御を管理する中心的なファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy_http2</code> の中核であり、<a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.h.html&quot;}, '*');"><code>h2_proxy_session.h</code></a> で定義されたセッション構造体と、<code>nghttp2</code> のコールバックを仲介します。フロントエンド（クライアント）からのリクエストをバックエンドへ転送し、バックエンドからのレスポンスをフロントエンドへ戻すためのブリッジとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**セッションライフサイクル管理**: 接続の初期化、PING による生存確認、GOAWAY による正常終了、エラー時の強制終了。</li>
+<li>**ストリーム管理**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_stream.html&quot;}, '*');"><code>h2_proxy_stream</code></a> を用いたリクエスト/レスポンスの追跡、ヘッダーの変換（<code>Via</code> ヘッダーや <code>Location</code> 等の書き換え）。</li>
+<li>**I/O 制御**: <code>nghttp2</code> と Apache のバケットブリゲード間のデータ転送、非同期的なストリームのサスペンド/レジューム制御。</li>
+<li>**イベント駆動状態遷移**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.h.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_h__h2_proxys_state.html&quot;}, '*');"><code>h2_proxys_state</code></a> に基づく有限オートマトンによるセッション状態の遷移管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>セッション管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L732" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_setup.html&quot;}, '*');"><code>h2_proxy_session_setup</code></a>: セッションの初期化と <code>nghttp2</code> コールバックの設定。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1561" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_process.html&quot;}, '*');"><code>h2_proxy_session_process</code></a>: メインループ。I/O の読み書きと状態遷移を駆動。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1495" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__dispatch_event.html&quot;}, '*');"><code>dispatch_event</code></a>: セッションイベント（<code>H2_PROXYS_EV_*</code>）に基づき状態を遷移させる。</li>
+</ul>
+<h3>ストリーム操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_stream.html&quot;}, '*');"><code>h2_proxy_stream</code></a>: ストリームごとの状態、入出力ブリゲード、リクエスト情報を保持する内部構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L936" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__submit_stream.html&quot;}, '*');"><code>submit_stream</code></a>: リクエストをバックエンドへ送信する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L522" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__stream_response_data.html&quot;}, '*');"><code>stream_response_data</code></a>: バックエンドからの <a class="wiki-source-link" href="../../../source/support/htcacheclean.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');">DATA</a> フレームを受信し、フロントエンドへ転送するコールバック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L613" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__stream_request_data.html&quot;}, '*');"><code>stream_request_data</code></a>: フロントエンドからのデータを読み取り、バックエンドへ送信するコールバック。</li>
+</ul>
+<h3>PING 制御</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L122" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__enter_ping_state.html&quot;}, '*');"><code>enter_ping_state</code></a>: 接続の健全性確認（PING）状態への遷移とタイムアウト設定。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L165" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__ping_ev_frame_received.html&quot;}, '*');"><code>ping_ev_frame_received</code></a>: PING フレーム受信時の状態更新。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L732" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_setup.html&quot;}, '*');"><code>h2_proxy_session_setup</code></a> で <code>nghttp2</code> セッションを作成し、コールバックを登録。 2. **処理ループ**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1561" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_process.html&quot;}, '*');"><code>h2_proxy_session_process</code></a> が呼ばれるたびに、<a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__send_loop.html&quot;}, '*');"><code>send_loop</code></a> で送信待ちのフレームを処理し、<a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1042" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_read.html&quot;}, '*');"><code>h2_proxy_session_read</code></a> でバックエンドからの入力を読み込む。 3. **データ転送**:</p>
+<ul>
+<li>リクエスト時: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L613" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__stream_request_data.html&quot;}, '*');"><code>stream_request_data</code></a> が <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を通じてフロントエンドからデータを読み取り、<code>nghttp2</code> に渡す。</li>
+<li>レスポンス時: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L522" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__stream_response_data.html&quot;}, '*');"><code>stream_response_data</code></a> が <code>nghttp2</code> からのデータを <a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> でフロントエンドへ流す。</li>
+<p>4. **状態遷移**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1495" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__dispatch_event.html&quot;}, '*');"><code>dispatch_event</code></a> がイベントを受け取り、<code>transit</code> 関数で <code>session-&gt;state</code> を更新する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>nghttp2/nghttp2.h</code>: HTTP/2 プロトコル処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシ機能の基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.h.html&quot;}, '*');"><code>h2_proxy_util.h</code></a>: ヘッダー変換やユーティリティ関数。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache のリクエスト処理基盤。</li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.h.html&quot;}, '*');"><code>h2_proxy_session.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/mod_http2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.h.html&quot;}, '*');"><code>mod_http2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><code>stddef.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.h.html&quot;}, '*');"><code>h2_proxy_session.h</code></a>: セッション構造体定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a>: ヘッダー変換ロジックやブリゲード操作の補助。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/mod_proxy_http2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_proxy_http2.c.html&quot;}, '*');"><code>mod_proxy_http2.c</code></a>: このセッションを呼び出すプロキシモジュールのエントリポイント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: セッションおよびストリームは <code>apr_pool_t</code> で管理されており、セッション終了時に <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L186" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__proxy_session_pre_close.html&quot;}, '*');"><code>proxy_session_pre_close</code></a> が呼ばれ、リソースが解放されます。</li>
+<li>**非同期性**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1131" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__check_suspended.html&quot;}, '*');"><code>check_suspended</code></a> 関数は、バックエンドからの応答待ち（100-continue や PING）でサスペンドされたストリームを管理します。</li>
+<li>**注意点**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1561" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__h2_proxy_session_process.html&quot;}, '*');"><code>h2_proxy_session_process</code></a> は非ブロッキングで設計されていますが、<code>WAIT</code> 状態ではタイムアウト付きのブロッキング読み込みが発生する場合があります。</li>
+<li>**省略箇所**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L1751" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__win_update_ctx.html&quot;}, '*');"><code>win_update_ctx</code></a> 構造体以降のコードは、ウィンドウ更新処理の一部であり、本ファイル内では断片的な定義に留まっています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__h2_proxy_stream.html" target="wiki-view"><code>h2_proxy_stream</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__set_ping_timeout.html" target="wiki-view"><code>set_ping_timeout</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__unset_ping_timeout.html" target="wiki-view"><code>unset_ping_timeout</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__enter_ping_state.html" target="wiki-view"><code>enter_ping_state</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ping_new_session.html" target="wiki-view"><code>ping_new_session</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ping_reuse_session.html" target="wiki-view"><code>ping_reuse_session</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ping_ev_frame_received.html" target="wiki-view"><code>ping_ev_frame_received</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__proxy_session_pre_close.html" target="wiki-view"><code>proxy_session_pre_close</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ap_proxy_header_reverse_map_fn.html" target="wiki-view"><code>ap_proxy_header_reverse_map_fn</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__ev_init.html" target="wiki-view"><code>ev_init</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__cleanup_iter_ctx.html" target="wiki-view"><code>cleanup_iter_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_session_c__win_update_ctx.html" target="wiki-view"><code>win_update_ctx</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

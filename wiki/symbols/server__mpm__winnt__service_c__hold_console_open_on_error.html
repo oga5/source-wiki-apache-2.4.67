@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__winnt__service_c__hold_console_open_on_error.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L111" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__hold_console_open_on_error.html&quot;}, '*');">hold_console_open_on_error</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/winnt/service.c:111</code></li>
+</ul>
+<h2>目的</h2>
+<p>エラー発生時にコンソールウィンドウを即座に閉じず、ユーザーがエラーメッセージを確認し、キー入力またはマウス操作によって明示的に終了できるようにする。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>void hold_console_open_on_error(void)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>入力: なし（グローバル変数 <a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>ap_real_exit_code</code></a> を参照）</li>
+<li>出力: なし（副作用としてコンソールへのメッセージ出力と入力待機を行う）</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>グローバル変数 <a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>ap_real_exit_code</code></a> が真であること。</li>
+<li>標準入力および標準エラー出力が有効なハンドルとして取得可能であること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>ap_real_exit_code</code></a> を確認し、偽であれば即座に終了する。 2. 標準入力および標準エラー出力のハンドルを取得する。 3. コンソールに「エラーを確認し、ESCキーを押して終了せよ」という旨のメッセージを出力する。 4. コンソールの入力モードをマウス入力および特定フラグ付きの状態に設定する。 5. ループ内で以下のいずれかが発生するまで待機する：</p>
+<ul>
+<li>ESCキー（ASCII 27）の押下。</li>
+<li>マウスのダブルクリック。</li>
+<p>6. ループ中、30秒のカウントダウンを標準エラー出力に表示し続ける。 7. 30秒経過、または待機中にエラーが発生した場合は終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>呼び出し元: <code>server/mpm/winnt/mpm_winnt.c:1113</code> にて <code>atexit()</code> を介して登録されている。</li>
+<li>呼び出し先: Windows API (<code>GetStdHandle</code>, <code>WriteConsole</code>, <code>GetConsoleScreenBufferInfo</code>, <code>SetConsoleMode</code>, <code>PeekConsoleInput</code>, <code>ReadConsoleInput</code>, <code>SetConsoleCursorPosition</code>, <code>WaitForSingleObject</code>)。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>HANDLE</code>: コンソールハンドル。</li>
+<li><code>CONSOLE_SCREEN_BUFFER_INFO</code>: コンソール画面バッファ情報。</li>
+<li><code>INPUT_RECORD</code>: コンソール入力イベント。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>ap_real_exit_code</code></a> が偽の場合、何も行わずに戻る。</li>
+<li>コンソールハンドルが <code>INVALID_HANDLE_VALUE</code> の場合、何も行わずに戻る。</li>
+<li><code>WriteConsole</code> や <code>GetConsoleScreenBufferInfo</code> 等のWindows APIが失敗した場合、その時点で処理を中断して戻る。</li>
+<li>30秒経過すると、ユーザー入力がなくてもループを抜けて終了する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>atexit</code> で登録されるため、プロセス終了時のクリーンアップ処理として実行されます。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>ap_real_exit_code</code></a> フラグの制御により、サービス実行時とコンソール実行時で挙動を切り替えています。</li>
+<li>30秒のタイムアウト処理は <code>time(NULL)</code> と <code>WaitForSingleObject</code> を組み合わせて実装されています。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

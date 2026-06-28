@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_bucket_beam.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');">modules/http2/h2_bucket_beam.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html#L30" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_bucket_beam.html&quot;}, '*');"><code>h2_bucket_beam</code></a> は、HTTP/2 通信においてスレッド間で <a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L476" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>apr_bucket</code></a> を安全かつ効率的に転送するための同期メカニズムです。異なるスレッド（主に送信側と受信側）間でバケットを移動させる際、可能な限りコピーを避け、メモリ使用量を制限しながらストリームデータを橋渡しします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/http2</code> サブシステムにおいて、<a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_mplx_h__h2_mplx.html&quot;}, '*');"><code>h2_mplx</code></a>（多重化）や <code>h2_stream</code> がデータをやり取りする際の「パイプ」として機能します。APR のバケットブリゲードをスレッドセーフに拡張したもので、スレッド間のメモリ所有権の移転を管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**スレッド間同期**: ミューテックスと条件変数を用いて、送信側と受信側のスレッドを調停する。</li>
+<li>**バケット転送**: 送信側から受信側へバケットを移動させ、必要に応じてヒープへの変換や <code>setaside</code> を行う。</li>
+<li>**リソース管理**: バッファサイズ制限の適用、ファイルハンドルの適切なクリーンアップ、および消費済みバケットのパージ。</li>
+<li>**イベント通知**: 送信/受信/空状態などの変化をコールバック経由で通知する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクルと管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L300" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_create.html&quot;}, '*');"><code>h2_beam_create</code></a>: ビームの初期化とミューテックス/条件変数の生成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L290" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_destroy.html&quot;}, '*');"><code>h2_beam_destroy</code></a>: プールクリーンアップを介したビームの破棄。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L260" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__beam_shutdown.html&quot;}, '*');"><code>beam_shutdown</code></a>: 送信/受信状態の強制終了とリソース解放。</li>
+</ul>
+<h3>送受信操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L530" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_send.html&quot;}, '*');"><code>h2_beam_send</code></a>: 送信側スレッドがバケットをビームに追加する。バッファ上限に達した場合は待機する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_receive.html&quot;}, '*');"><code>h2_beam_receive</code></a>: 受信側スレッドがビームからバケットを取り出し、ターゲットのブリゲードへ変換・挿入する。</li>
+</ul>
+<h3>状態管理とアクセサ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L376" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_abort.html&quot;}, '*');"><code>h2_beam_abort</code></a> / <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L402" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_close.html&quot;}, '*');"><code>h2_beam_close</code></a>: ビームの異常終了または正常終了を通知。</li>
+<li><code>h2_beam_buffer_size_set/get</code>: バッファ制限の動的制御。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L818" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_get_buffered.html&quot;}, '*');"><code>h2_beam_get_buffered</code></a>: 現在バッファされているデータ量の取得。</li>
+</ul>
+<h3>コールバック登録</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L758" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_on_consumed.html&quot;}, '*');"><code>h2_beam_on_consumed</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L767" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_on_received.html&quot;}, '*');"><code>h2_beam_on_received</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L785" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_on_send.html&quot;}, '*');"><code>h2_beam_on_send</code></a>: 各種イベント発生時のフック関数を登録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **送信**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L530" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_send.html&quot;}, '*');"><code>h2_beam_send</code></a> が呼ばれると、<code>append_bucket</code> がバケットを評価します。ファイルや MMAP バケットは <code>setaside</code> され、それ以外はヒープに変換されます。その後、<code>buckets_to_send</code> リストに繋がれます。 2. **受信**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L596" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__h2_beam_receive.html&quot;}, '*');"><code>h2_beam_receive</code></a> は <code>buckets_to_send</code> からバケットを取り出し、受信側のプールに合わせてクローンまたは変換を行い、ターゲットのブリゲードへ挿入します。 3. **同期**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L195" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__wait_not_empty.html&quot;}, '*');"><code>wait_not_empty</code></a> および <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__wait_not_full.html&quot;}, '*');"><code>wait_not_full</code></a> が、条件変数を用いてスレッドをブロック/ウェイクアップします。 4. **消費報告**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L113" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__report_consumption.html&quot;}, '*');"><code>report_consumption</code></a> が受信側での処理完了を送信側に通知し、送信側は <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_c__purge_consumed_buckets.html&quot;}, '*');"><code>purge_consumed_buckets</code></a> で不要になったバケットを削除します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_buckets.h</code>: バケット操作の基盤。</li>
+<li><code>apr_thread_mutex.h</code>, <code>apr_thread_cond.h</code>: スレッド間同期。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a>: HTTP/2 接続コンテキストとの連携。</li>
+<li><code>apr_atomic.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_time.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>h2_bucket_beam.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.h.html&quot;}, '*');"><code>h2_headers.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>h2_bucket_beam.h</code></a>: 公開インターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.c.html&quot;}, '*');"><code>h2_mplx.c</code></a>: ビームが多重化処理の中でどのように利用されるかの実例。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.c.html&quot;}, '*');"><code>h2_util.c</code></a>: バケットブリゲードのデバッグ出力やユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: ビームはバケットの所有権を一時的に保持します。<code>setaside</code> を多用するため、バケットがどのプールに属しているかの追跡が重要です。</li>
+<li>**ファイルハンドル**: ファイルバケットの転送は、<code>copy_files</code> フラグや参照カウントに依存します。ファイルハンドルが意図せずクローズされるエッジケースを避けるため、慎重に実装されています。</li>
+<li>**制限事項**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html#L40" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_beam_h__h2_blist.html&quot;}, '*');"><code>h2_blist</code></a> は <code>APR_RING</code> をラップしたもので、動的メモリ確保を行わない軽量なリスト構造です。</li>
+<li>**省略された詳細**: 本ファイルは同期と転送ロジックに集中しており、HTTP/2 プロトコル固有のフレーム解析などは <a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.c.html&quot;}, '*');"><code>h2_protocol.c</code></a> 等に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__h2_blist_count.html" target="wiki-view"><code>h2_blist_count</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__bucket_is_mmap.html" target="wiki-view"><code>bucket_is_mmap</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__bucket_mem_used.html" target="wiki-view"><code>bucket_mem_used</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__report_consumption.html" target="wiki-view"><code>report_consumption</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__calc_buffered.html" target="wiki-view"><code>calc_buffered</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__purge_consumed_buckets.html" target="wiki-view"><code>purge_consumed_buckets</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__purge_eor_buckets.html" target="wiki-view"><code>purge_eor_buckets</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__calc_space_left.html" target="wiki-view"><code>calc_space_left</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__buffer_is_empty.html" target="wiki-view"><code>buffer_is_empty</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__wait_not_empty.html" target="wiki-view"><code>wait_not_empty</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__wait_not_full.html" target="wiki-view"><code>wait_not_full</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_beam_c__h2_blist_cleanup.html" target="wiki-view"><code>h2_blist_cleanup</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

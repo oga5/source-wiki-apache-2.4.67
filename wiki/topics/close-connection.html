@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/close-connection.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>close_connection</h1>
+<h2>概念</h2>
+<p><code>close_connection</code> は、Apache HTTP Server（httpd）のマルチプロセッシングモジュールである <code>event</code> MPM、およびサポートツールである <code>ab</code>（ApacheBench）の双方において、ネットワーク接続のクローズ（切断）処理を担当する内部関数です。</p>
+<h2>なぜ重要か</h2>
+<p>接続のクローズ処理は、リソースのリークを防ぎ、サーバーおよびクライアントの接続状態を正しく遷移させるために不可欠です。</p>
+<ul>
+<li>**<code>event</code> MPM** においては、非同期接続処理の中で接続を安全に終了し、スレッドやメモリプールなどのリソースを再利用可能な状態に戻す役割を担います（<a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_push_pool.html&quot;}, '*');"><code>ap_queue_info_push_pool</code></a> の呼び出しを伴います）。</li>
+<li>**<code>ab</code>（ApacheBench）** においては、ベンチマーク測定中に接続を適切に切断し、必要に応じて次の接続を開始する（<a class="wiki-source-link" href="../../source/support/ab.c.html#L1390" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__start_connect.html&quot;}, '*');"><code>start_connect</code></a>）など、測定の正確性と継続性を維持するために重要です。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/support.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/support.html&quot;, &quot;source&quot;: &quot;source/support/ab.c.html&quot;}, '*');"><code>module:support</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__close_connection.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__close_connection.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L881&quot;}, '*');"><code>symbol:server/mpm/event/event.c#close_connection</code></a></li>
+<li>シグネチャ: <code>static void close_connection(event_conn_state_t *cs)</code></li>
+<li><a class="wiki-entity-link" href="../symbols/support__ab_c__close_connection.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__close_connection.html&quot;, &quot;source&quot;: &quot;source/support/ab.c.html#L1519&quot;}, '*');"><code>symbol:support/ab.c#close_connection</code></a></li>
+<li>シグネチャ: <code>static void close_connection(struct connection * c)</code></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、詳細なエンドツーエンドの実行フローは完全には解析されていません。ただし、静的解析から以下の呼び出し関係が判明しています。</p>
+<p>1. **呼び出しのトリガー**: 両モジュールにおいて、<code>listener_thread</code>、<code>process_socket</code>、<a class="wiki-source-link" href="../../source/support/ab.c.html#L1571" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__read_connection.html&quot;}, '*');"><code>read_connection</code></a>、<a class="wiki-source-link" href="../../source/support/ab.c.html#L847" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__write_request.html&quot;}, '*');"><code>write_request</code></a>、<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L1535" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__process_lingering_close.html&quot;}, '*');"><code>process_lingering_close</code></a>、<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html#L896" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__shutdown_connection.html&quot;}, '*');"><code>shutdown_connection</code></a>、<a class="wiki-source-link" href="../../source/support/ab.c.html#L735" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__ssl_proceed_handshake.html&quot;}, '*');"><code>ssl_proceed_handshake</code></a> などの接続処理の各フェーズから <code>close_connection</code> が呼び出されます。 2. **後続処理**:</p>
+<ul>
+<li><code>event</code> MPM では、接続終了にともない <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_push_pool.html&quot;}, '*');"><code>ap_queue_info_push_pool</code></a> が呼び出され、プール管理が行われます。</li>
+<li><code>ab</code> では、<a class="wiki-source-link" href="../../source/support/ab.c.html#L540" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__set_conn_state.html&quot;}, '*');"><code>set_conn_state</code></a> による接続状態の更新や、<a class="wiki-source-link" href="../../source/support/ab.c.html#L1390" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__start_connect.html&quot;}, '*');"><code>start_connect</code></a> による新たな接続の開始処理が呼び出されます。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<p>現時点では、接続クローズ時における具体的な前提条件や不変条件（例：ロックの保持状態、ソケットの有効性など）は解析されておらず、未確定です。</p>
+<h2>よくある落とし穴</h2>
+<p>現時点では、エラーハンドリングの不備やリソース競合など、この処理に関連する具体的な失敗モードや落とし穴は解析されておらず、未確定です。</p>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>（<code>close_connection</code> の実装と <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_push_pool.html&quot;}, '*');"><code>ap_queue_info_push_pool</code></a> との連携）</li>
+<li><a class="wiki-source-link" href="../../source/support/ab.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/ab.c.html&quot;}, '*');"><code>support/ab.c</code></a>（<code>close_connection</code> の実装と <a class="wiki-source-link" href="../../source/support/ab.c.html#L1390" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__ab_c__start_connect.html&quot;}, '*');"><code>start_connect</code></a> による再接続制御）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/shared-object-cache-socache-providers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Shared Object Cache (socache) Providers</h1>
+<h2>概念</h2>
+<p><code>Shared Object Cache (socache) Providers</code> は、Apache HTTP Server (httpd) において、SSLセッションや認証トークンなどの小さなメタデータオブジェクトを、異なるストレージバックエンドにキャッシュするための共通抽象化レイヤー（インターフェース）です。これにより、具体的なキャッシュ実装の詳細を呼び出し側から隠蔽します。</p>
+<h2>なぜ重要か</h2>
+<p>異なるキャッシュストレージ実装（共有メモリ、Memcached、Redisなど）に対して統一されたAPIを提供することで、呼び出し側モジュール（例: <a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a>）が特定のバックエンドに依存することなくキャッシュ機能を利用できるようになります。これにより、システムの規模や要件（単一サーバーでの高速なローカルキャッシュから、複数サーバー間での分散キャッシュまで）に応じて、設定のみでキャッシュバックエンドを柔軟に切り替えることが可能になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> によるインターフェース定義)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a> (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>mod_socache_shmcb.c</code></a>, <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_memcache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_memcache.c.html&quot;}, '*');"><code>mod_socache_memcache.c</code></a>, <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_redis.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_redis.c.html&quot;}, '*');"><code>mod_socache_redis.c</code></a> などの具体的なプロバイダー実装)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a>** (<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a>):</li>
+<p>すべての socache プロバイダーが実装しなければならない関数ポインタ群（<code>create</code>, <code>init</code>, <code>store</code>, <code>retrieve</code>, <code>remove</code>, <code>status</code> など）を定義する構造体。</p>
+<li>**<code>socache_shmcb_provider</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a>):</li>
+<p>共有メモリ（Cyclic Buffer）を使用した、高パフォーマンスなローカルキャッシュプロバイダー。</p>
+<li>**<code>socache_mc_provider</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_memcache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_memcache.c.html&quot;}, '*');"><code>modules/cache/mod_socache_memcache.c</code></a>):</li>
+<p>外部の Memcached サーバー群をバックエンドとして利用する分散キャッシュプロバイダー。</p>
+<li>**<code>socache_redis_provider</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_redis.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_redis.c.html&quot;}, '*');"><code>modules/cache/mod_socache_redis.c</code></a>):</li>
+<p>外部の Redis サーバーをバックエンドとして利用する分散キャッシュプロバイダー。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードの範囲内では、呼び出し元モジュールとプロバイダー間の詳細なライフサイクル管理やエンドツーエンドの完全な制御フローは定義されていませんが、一般的な流れは以下の通りです。</p>
+<p>1. **登録**: サーバー起動時に、各 <code>mod_socache_*</code> モジュールが <a class="wiki-source-link" href="../../source/server/provider.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__provider_c__ap_register_provider.html&quot;}, '*');"><code>ap_register_provider</code></a> を使用して、自身の <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> 実装を登録します。 2. **初期化**: キャッシュを利用するモジュールが、設定されたプロバイダー名に基づいてプロバイダーを取得し、<code>create</code> および <code>init</code> を呼び出してキャッシュインスタンスを初期化します。 3. **利用**: リクエスト処理中に、<code>store</code> を呼び出してオブジェクトを保存し、<code>retrieve</code> を呼び出してオブジェクトを検索・取得します。</p>
+<h2>重要な不変条件</h2>
+<p>提供されたソースコードの範囲内では、厳密な不変条件は完全には定義されていませんが、以下の前提が存在します。</p>
+<ul>
+<li>**スレッドセーフティ**: 各プロバイダーの実装（特に <code>store</code> や <code>retrieve</code>）は、マルチプロセス/マルチスレッド環境（MPM）において安全に並行呼び出しができるように設計されている必要があります（例: <code>mod_socache_shmcb</code> におけるミューテックス制御など）。</li>
+<li>**シリアライズ**: キャッシュされるキーおよび値は、プロバイダーに渡される時点でバイト列にシリアライズされている必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>提供されたソースコードの範囲内では、具体的な落とし穴の詳細は完全には定義されていませんが、実装の性質上、以下の点に注意する必要があります。</p>
+<ul>
+<li>**ネットワーク依存性**: <code>mod_socache_memcache</code> や <code>mod_socache_redis</code> などの外部キャッシュプロバイダーを使用する場合、ネットワークの遅延や切断がWebサーバー全体のレスポンス性能や可用性に直接影響を与える可能性があります。</li>
+<li>**容量制限**: <code>mod_socache_shmcb</code> などの共有メモリバッファはサイズが固定されているため、キャッシュが溢れた場合のデータ追い出し（Eviction）アルゴリズムの挙動を理解した上で、適切なバッファサイズを設計する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> (プロバイダーインターフェースの定義)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a> (共有メモリバッファによる実装例)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_memcache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_memcache.c.html&quot;}, '*');"><code>modules/cache/mod_socache_memcache.c</code></a> (Memcached 連携の実装例)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_redis.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_redis.c.html&quot;}, '*');"><code>modules/cache/mod_socache_redis.c</code></a> (Redis 連携の実装例)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

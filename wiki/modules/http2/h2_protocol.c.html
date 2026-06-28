@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_protocol.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.c.html&quot;}, '*');">modules/http2/h2_protocol.c</a></h1>
+<h2>概要</h2>
+<p>HTTP/2 プロトコル仕様（RFC 7540）への準拠を維持するためのユーティリティおよび検証ロジックを提供します。主に接続時のプロトコルネゴシエーションと、TLS セキュリティ要件のチェックを担当します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> の中核となる接続管理（<code>h2_session</code> や <code>h2_c1</code>）を補佐する補助モジュールです。接続が HTTP/2 を利用可能か判断するゲートキーパーの役割を果たします。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロトコル識別**: TLS (ALPN) およびクリアテキスト（h2c）で使用されるプロトコル ID の定義。</li>
+<li>**エラーハンドリング**: HTTP/2 エラーコードに対応する人間が読める説明文の提供。</li>
+<li>**セキュリティ検証**: RFC 7540 で禁止されている脆弱な暗号スイート（Cipher Suite）のブラックリスト管理と、TLS バージョン（1.2 以上）の検証。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.c.html&quot;}, '*');"><code>H2_MAGIC_TOKEN</code></a>: HTTP/2 クリアテキスト接続の開始時に送信される接続前文（Connection Preface）。</li>
+<li><code>h2_protocol_is_acceptable_c1()</code>: 接続が HTTP/2 のセキュリティ要件を満たしているかを判定する主要関数。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.c.html&quot;}, '*');"><code>h2_protocol_ids_tls</code></a> / <a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html#L52" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.c.html&quot;}, '*');"><code>h2_protocol_ids_clear</code></a>: サポートするプロトコル識別子のリスト。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>h2_protocol_init()</code> が呼び出され、<code>cipher_init()</code> を通じてブラックリスト（<code>BLCNames</code>）がハッシュテーブルとして構築されます。 2. **検証**: 接続確立時、<code>h2_protocol_is_acceptable_c1()</code> が呼ばれます。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/server/ssl.c.html#L186" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__ssl_c__ap_ssl_var_lookup.html&quot;}, '*');"><code>ap_ssl_var_lookup</code></a> を使用して現在の TLS プロトコルと暗号スイートを取得します。</li>
+<li><code>cipher_is_blacklisted()</code> を呼び出し、現在の暗号がブラックリストに含まれていないか確認します。</li>
+<li>条件を満たさない場合、ログを出力し <code>0</code>（不適合）を返します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a>: Apache HTTP Server のコアおよび SSL/TLS インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_config.h.html&quot;}, '*');"><code>h2_config.h</code></a>: モジュール固有の設定およびプライベート定義。</li>
+<li><code>apr_hash.h</code> (間接的): ブラックリスト管理に使用。</li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_optional_hooks.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.h.html&quot;}, '*');"><code>h2_bucket_beam.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.h.html&quot;}, '*');"><code>h2_c1.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2.h.html&quot;}, '*');"><code>h2_c2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_conn_ctx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_conn_ctx.h.html&quot;}, '*');"><code>h2_conn_ctx.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_headers.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_headers.h.html&quot;}, '*');"><code>h2_headers.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_protocol.h.html&quot;}, '*');"><code>h2_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_request.h.html&quot;}, '*');"><code>h2_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.h.html&quot;}, '*');"><code>h2_session.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>h2_stream.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>h2_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/mod_http2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.h.html&quot;}, '*');"><code>mod_http2.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_session.c.html&quot;}, '*');"><code>h2_session.c</code></a>: このファイルで定義されたプロトコル ID や検証ロジックを利用してセッションを開始します。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/mod_http2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_http2.c.html&quot;}, '*');"><code>mod_http2.c</code></a>: モジュールの初期化プロセスで <a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html#L423" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_protocol_c__h2_protocol_init.html&quot;}, '*');"><code>h2_protocol_init</code></a> を呼び出します。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは、RFC 7540 Appendix A に基づく「ブラックリスト」をハードコードしています。新しい脆弱な暗号スイートが発見された場合、このリストの更新が必要です。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_protocol.c.html#L432" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_protocol_c__h2_protocol_is_acceptable_c1.html&quot;}, '*');"><code>h2_protocol_is_acceptable_c1</code></a> 内の <code>require_all</code> フラグは、TLS ハンドシェイクが完了していない段階で厳格なチェックを行うべきかを制御します。ハンドシェイク中の不完全な状態を許容するかどうかの判断に使用されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_protocol_c__h2_protocol_err_description.html" target="wiki-view"><code>h2_protocol_err_description</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_protocol_c__cipher_init.html" target="wiki-view"><code>cipher_init</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_protocol_c__cipher_is_blacklisted.html" target="wiki-view"><code>cipher_is_blacklisted</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_protocol_c__h2_protocol_init.html" target="wiki-view"><code>h2_protocol_init</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_protocol_c__h2_protocol_is_acceptable_c1.html" target="wiki-view"><code>h2_protocol_is_acceptable_c1</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

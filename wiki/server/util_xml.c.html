@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_xml.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_xml.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_xml.c.html&quot;}, '*');">server/util_xml.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server における XML リクエストボディの読み込みと解析を抽象化するユーティリティモジュールです。主に WebDAV などの XML を利用するモジュールが、リクエストボディを安全かつ効率的に取得するために使用します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール群の一部として、<code>apr_xml</code>（Apache Portable Runtime の XML ライブラリ）を HTTP リクエスト処理の文脈に統合する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエストボディのストリーミング読み込み**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を使用し、バケットブリゲード経由でリクエストボディを段階的に取得します。</li>
+<li>**サイズ制限の適用**: <code>LimitXMLRequestBody</code> ディレクティブで設定された制限値を遵守し、超過した場合はエラーを返します。</li>
+<li>**XML 解析の実行**: <code>apr_xml</code> パーサーへデータを供給し、最終的なドキュメント構造（<code>apr_xml_doc</code>）を生成します。</li>
+<li>**文字コード変換**: EBCDIC 環境において、必要に応じて文字コード変換を適用します。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_xml.c.html#L36" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_xml_c__ap_xml_parse_input.html&quot;}, '*');"><code>ap_xml_parse_input</code></a>: 本ファイルの主要な公開関数。リクエストボディを読み込み、解析済みの XML ドキュメントを返します。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_xml.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_xml.c.html&quot;}, '*');"><code>READ_BLOCKSIZE</code></a>: 読み込み時に使用するバッファサイズ（2048バイト）。</li>
+<li><code>apr_xml_parser</code>: <code>apr_xml</code> が提供する解析用コンテキスト。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **初期化**: <code>apr_xml_parser_create</code> でパーサーを生成し、<code>apr_brigade_create</code> で読み込み用ブリゲードを準備します。 2.  **ループ処理**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_get_brigade.html&quot;}, '*');"><code>ap_get_brigade</code></a> を呼び出し、EOS（End of Stream）に達するまでデータを読み込みます。 3.  **検証と供給**: 読み込んだ各バケットのサイズを累積し、制限値を超えていないか確認した後、<code>apr_xml_parser_feed</code> でパーサーにデータを渡します。 4.  **終了処理**: EOS 到達後、<code>apr_xml_parser_done</code> を呼び出して解析を完了させ、結果を <code>pdoc</code> に格納します。 5.  **エラーハンドリング**: 読み込みエラーや解析エラーが発生した場合は、ログを出力し適切な HTTP ステータスコード（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L512" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_BAD_REQUEST</code></a> や <a class="wiki-source-link" href="../../source/include/httpd.h.html#L525" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>HTTP_REQUEST_ENTITY_TOO_LARGE</code></a>）を返します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_xml.h</code>: APR の XML 解析機能。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: Apache HTTP Server のコア機能およびログ出力機能。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_charset.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_charset.h.html&quot;}, '*');"><code>util_charset.h</code></a>: 文字コード変換用ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_xml.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_xml.h.html&quot;}, '*');"><code>util_xml.h</code></a>: 本ファイルのヘッダー。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_xml.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_xml.h.html&quot;}, '*');"><code>include/util_xml.h</code></a>: 本関数の宣言とインターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: <a class="wiki-source-link" href="../../source/server/core.c.html#L3865" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_get_limit_xml_body.html&quot;}, '*');"><code>ap_get_limit_xml_body</code></a> など、設定値の取得に関連する関数が定義されています。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>apr_xml</code> のラッパーであり、HTTP リクエストのライフサイクル（<code>request_rec</code>）に特化した実装です。</li>
+<li>解析エラーが発生した場合、<code>apr_xml_parser_geterror</code> を使用して詳細なエラーメッセージを取得し、ログに記録する設計になっています。</li>
+<li>EBCDIC 環境での動作を考慮した条件付きコンパイルが含まれている点に注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_xml_c__ap_xml_parse_input.html" target="wiki-view"><code>ap_xml_parse_input</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

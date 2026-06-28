@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/caching-and-shared-object-cache-socache-infrastructure.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Caching and Shared Object Cache (socache) Infrastructure</h1>
+<h2>概念</h2>
+<p>Apache HTTP Serverにおけるキャッシュインフラストラクチャは、主に2つのレイヤーで構成されています。</p>
+<p>1. **HTTPレスポンスキャッシュ (<code>mod_cache</code>)**: HTTPリクエストに対するレスポンスを効率的にキャッシュし、再利用するための高レベルな仕組みです。 2. **共有オブジェクトキャッシュ (socache)**: セッション情報や認証情報などの小規模なオブジェクトを、共有メモリ（SHMCB）やDBMなどのバックエンドにキー・バリュー形式で保存するための低レベルな抽象化レイヤーです。</p>
+<p><code>ap_socache_instance_t</code> のような不透明な（opaque）構造体を用いることで、具体的なキャッシュ実装の詳細を隠蔽し、統一されたインターフェースを介した操作を可能にしています。</p>
+<h2>なぜ重要か</h2>
+<p>キャッシュインフラストラクチャは、サーバーの応答性能向上とリソース消費の削減において極めて重要な役割を果たします。</p>
+<ul>
+<li>**高速なレスポンス提供**: <a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__cache_quick_handler.html&quot;}, '*');"><code>cache_quick_handler</code></a> を使用することで、リクエスト処理の極めて早い段階（クイックハンドラフェーズ）でキャッシュのヒット判定を行い、重いバックエンド処理をバイパスしてレスポンスを即座に返却できます。</li>
+<li>**モジュール性と拡張性**: <code>socache</code> インフラストラクチャにより、認証モジュール（<code>mod_authn_socache</code>）やその他のモジュールは、具体的なストレージの仕組み（共有メモリ、ファイルなど）を意識することなく、統一されたAPIでデータを永続化・共有できます。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__ap_socache_h__ap_socache_instance_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_instance_t.html&quot;, &quot;source&quot;: &quot;source/include/ap_socache.h.html#L49&quot;}, '*');"><code>symbol:include/ap_socache.h#ap_socache_instance_t</code></a>**: 各socacheプロバイダー実装において、個別のキャッシュインスタンスの状態を保持するための不透明な構造体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__cache__mod_cache_c__cache_quick_handler.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__cache_quick_handler.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_cache.c.html#L83&quot;}, '*');"><code>symbol:modules/cache/mod_cache.c#cache_quick_handler</code></a>**: クイックハンドラフェーズにおいて、キャッシュのヒット判定、レスポンスの提供、またはキャッシュ保存用フィルタの挿入を行うメインエントリポイント。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__cache__mod_cache_c__create_dir_config.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__create_dir_config.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_cache.c.html#L1929&quot;}, '*');"><code>symbol:modules/cache/mod_cache.c#create_dir_config</code></a>**: ディレクトリごとのキャッシュ設定構造体を生成する関数。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_socache_shmcb.c.html#L497&quot;}, '*');"><code>symbol:modules/cache/mod_socache_shmcb.c#socache_shmcb_store</code></a>**: 共有メモリベースの循環バッファ（SHMCB）キャッシュにデータを保存する具体的なプロバイダー関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、<code>mod_cache</code>（HTTPレスポンスキャッシュ）と <code>socache</code>（小規模オブジェクトキャッシュ）の間の直接的な統合や、システム全体における完全なエンドツーエンドの連携フローは完全には明らかになっていません。</p>
+<p>ただし、それぞれのレイヤーにおける個別の処理フローは以下の通り定義されています。</p>
+<h3>HTTPキャッシュリクエスト処理の流れ (<code>mod_cache</code>)</h3>
+<p>1. **リクエスト受信**: クイックハンドラフックにより <a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__cache_quick_handler.html&quot;}, '*');"><code>cache_quick_handler</code></a> が起動します。 2. **判定と検索**:</p>
+<ul>
+<li>リクエストメソッドが <code>GET</code> の場合、キャッシュ検索（<a class="wiki-source-link" href="../../source/modules/cache/cache_storage.c.html#L214" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_storage_c__cache_select.html&quot;}, '*');"><code>cache_select</code></a>）を行います。</li>
+<li><code>PUT/POST/DELETE</code> などの場合は、キャッシュ無効化フィルタを挿入して処理を後続に委譲（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a>）します。</li>
+<p>3. **キャッシュヒット時**: <code>CACHE_OUT</code> フィルタを挿入し、既存のフィルタスタックを整理した上で、キャッシュからレスポンスを直接クライアントに送信します。 4. **キャッシュミス時**: <a class="wiki-source-link" href="../../source/modules/cache/cache_util.c.html#L279" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_try_lock.html&quot;}, '*');"><code>cache_try_lock</code></a> による排他制御を試み、成功すれば <code>CACHE_SAVE</code> および <code>CACHE_REMOVE_URL</code> フィルタを挿入してバックエンドからのレスポンスをキャッシュに保存する準備をします。</p>
+</ul>
+<h3>SHMCBキャッシュへの保存の流れ (<code>mod_socache_shmcb</code>)</h3>
+<p>1. **呼び出し**: <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> インターフェース経由で <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> が呼び出されます。 2. **サブキャッシュ特定**: キー（<code>id</code>）のハッシュ値に基づき、対象となるサブキャッシュ領域を特定します。 3. **既存エントリ削除**: 重複を避けるため、同一IDの既存エントリを削除（<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L934" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__shmcb_subcache_remove.html&quot;}, '*');"><code>shmcb_subcache_remove</code></a>）します。 4. **書き込み**: 新しいデータをサブキャッシュに書き込み（<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L769" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__shmcb_subcache_store.html&quot;}, '*');"><code>shmcb_subcache_store</code></a>）、統計カウンタ（新規保存数または置換数）をインクリメントします。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**socacheインスタンスのライフサイクル**: <code>ap_socache_instance_t</code> は、対応するプロバイダーの <code>create</code> メソッドによって生成され、かつ <code>init</code> メソッドが呼び出されるまでは、キャッシュ操作に使用してはなりません。</li>
+<li>**認証情報のキャッシュ除外**: <a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__cache_quick_handler.html&quot;}, '*');"><code>cache_quick_handler</code></a> において、リクエストに <code>Authorization</code> ヘッダーが含まれている場合、そのリクエストはキャッシュ対象外として扱われます。</li>
+<li>**メモリプールの局所性**: <a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__cache_quick_handler.html&quot;}, '*');"><code>cache_quick_handler</code></a> におけるすべてのメモリ割り当ては、リクエストのライフサイクルに追従するよう <code>r-&gt;pool</code> に紐付いている必要があります。</li>
+<li>**SHMCBのキー長制限**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> に渡されるキーの長さ（<code>idlen</code>）は、必ず **4バイト以上** でなければなりません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**スレッドセーフティの欠如**: <code>mod_socache_shmcb</code> は <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a> として定義されており、<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> 自体は排他制御（ロック管理）を行いません。呼び出し側で適切なロック管理を行わない場合、データ破損や競合が発生する恐れがあります。</li>
+<li>**キー長不足による保存失敗**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> を呼び出す際、4バイト未満のキーを渡すと <code>APR_EINVAL</code> エラーとなり、保存処理が即座に中止されます。</li>
+<li>**ロック競合時のバイパス**: <a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html#L83" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_c__cache_quick_handler.html&quot;}, '*');"><code>cache_quick_handler</code></a> 内で <a class="wiki-source-link" href="../../source/modules/cache/cache_util.c.html#L279" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__cache_util_c__cache_try_lock.html&quot;}, '*');"><code>cache_try_lock</code></a> が失敗した場合、キャッシュの保存処理は静かにスキップされ、リクエストはバックエンドへ透過されます。この挙動をエラーと誤認しないよう注意が必要です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> (socacheの基本インターフェース定義)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache.c.html&quot;}, '*');"><code>modules/cache/mod_cache.c</code></a> (HTTPキャッシュのコアロジック)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a> (共有メモリキャッシュの具体的な実装)</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>modules/cache/mod_cache_disk.c</code></a> (ディスクキャッシュプロバイダーの実装)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

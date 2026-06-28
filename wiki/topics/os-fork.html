@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/os-fork.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>os_fork</h1>
+<h2>概念</h2>
+<p><code>os_fork</code> は、Apache HTTP Server が動作するプラットフォーム（特に BS2000/OSD/POSIX 環境や Unix 環境）において、適切なプロセス生成処理を抽象化・カプセル化するためのラッパー関数です。プラットフォーム固有のプロセス生成ロジック（標準の <code>fork()</code> や、BS2000 固有の <code>ufork()</code> など）を呼び出し元から隠蔽します。</p>
+<h2>なぜ重要か</h2>
+<p>マルチプロセスモデル（例: <code>prefork</code> MPM）を採用する Web サーバーにおいて、プロセスの安全かつ適切な生成は不可欠です。特に BS2000 環境では、実行環境の設定や指定されたユーザー権限に応じて <code>fork()</code> と <code>ufork()</code> を適切に使い分ける必要があり、<code>os_fork</code> はこのプラットフォーム固有の複雑な分岐処理を一元管理する役割を担っています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/os__bs2000.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__bs2000.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/ebcdic.c.html&quot;}, '*');"><code>module:os/bs2000</code></a> : BS2000（OSD/POSIX）環境向けのプロセス生成処理を実装しています。</li>
+<li><a class="wiki-entity-link" href="../modules/os__unix.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/os__unix.html&quot;, &quot;source&quot;: &quot;source/os/unix/os.h.html&quot;}, '*');"><code>module:os/unix</code></a> : Unix 環境向けの <code>os_fork</code> 実装を提供します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/os__bs2000__os_c__os_fork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__bs2000__os_c__os_fork.html&quot;, &quot;source&quot;: &quot;source/os/bs2000/os.c.html#L98&quot;}, '*');"><code>symbol:os/bs2000/os.c#os_fork</code></a> : BS2000 環境用の実装。<code>os_forktype</code> の結果に基づき、<code>fork()</code> または <code>ufork()</code> を選択実行します。</li>
+<li><a class="wiki-entity-link" href="../symbols/os__unix__unixd_c__os_fork.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__unix__unixd_c__os_fork.html&quot;, &quot;source&quot;: &quot;source/os/unix/unixd.c.html#L698&quot;}, '*');"><code>symbol:os/unix/unixd.c#os_fork</code></a> : Unix 環境用の実装（詳細な振る舞いは未解析）。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>BS2000 環境における <code>os_fork</code> の処理フローは以下の通りです： 1. <a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> などの呼び出し元から、切り替え対象のユーザー名（<code>user</code>）を引数として <code>os_fork</code> が呼び出されます。 2. <code>os_forktype(0)</code> を呼び出し、現在のプロセス生成モード（<code>bs2_ForkType</code>）を判定します。 3. 判定されたモードに応じて以下の処理を行います：</p>
+<ul>
+<li>**<code>bs2_FORK</code>**: 標準ライブラリの <code>fork()</code> を実行します。</li>
+<li>**<code>bs2_UFORK</code>**: 引数 <code>user</code> を <code>ap_str_toupper()</code> で大文字に変換し、<code>ufork(username)</code> を実行します。</li>
+<li>**その他**: 生成された PID を 0 に設定します。</li>
+<p>4. 生成されたプロセスの PID（またはエラー時の -1）を呼び出し元に返します。</p>
+</ul>
+<p>※ Unix 環境（<a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a>）における具体的なエンドツーエンドの流れや、呼び出し元との詳細な連携フローについては、現時点では解析されておらず未詳です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**BS2000 環境における不変条件**:</li>
+<li><code>bs2_UFORK</code> モードで動作する場合、渡された <code>user</code> 引数は必ず大文字に変換されてから <code>ufork()</code> に渡されます。</li>
+<li><code>user</code> 名の長さは <code>USER_LEN</code> を超えてはなりません。</li>
+<li><code>ufork()</code> の実行時に <code>EPERM</code>（権限エラー）が発生した場合、プロセスは即座に緊急ログを出力し、<code>exit(1)</code> で異常終了しなければなりません（サーバーの安全な停止を保証するため）。</li>
+</ul>
+<p>※ Unix 環境における不変条件については、現時点では解析されておらず未詳です。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**BS2000 環境**:</li>
+<li><code>ufork()</code> が <code>EPERM</code> を返した場合、関数はエラーを呼び出し元に返すのではなく、プロセス自体を <code>exit(1)</code> で強制終了します。このため、呼び出し元でエラーハンドリングを行う余地がなく、設定不備がある場合はサーバーが即座に緊急停止する点に注意が必要です。</li>
+<li><code>user</code> 名の長さ制限（<code>USER_LEN</code>）を超えた場合の挙動や、BS2000 のバージョン依存による <code>ufork()</code> の挙動変化に注意する必要があります。</li>
+<li>**Unix 環境**:</li>
+<li>現時点では詳細な解析が行われていないため、Unix 環境特有の落とし穴や制約は未詳です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/os/bs2000/os.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/bs2000/os.c.html&quot;}, '*');"><code>os/bs2000/os.c</code></a> : BS2000 環境における <code>os_fork</code> の具体的な実装と、<code>os_forktype</code> や <code>ufork</code> の連携を確認できます。</li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.c.html&quot;}, '*');"><code>os/unix/unixd.c</code></a> : Unix 環境における <code>os_fork</code> の実装詳細を解析するための起点となります。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> : <code>os_fork</code> を呼び出すマルチプロセス管理（MPM）側の処理フローを確認できます。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

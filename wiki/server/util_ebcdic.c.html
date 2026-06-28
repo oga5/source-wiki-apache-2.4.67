@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/util_ebcdic.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_ebcdic.c.html&quot;}, '*');">server/util_ebcdic.c</a></h1>
+<h2>概要</h2>
+<p>EBCDIC（拡張二進化十進コード）環境下で動作するApache HTTP Serverにおいて、プロトコルデータとASCII間の文字コード変換を管理するユーティリティです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールの一部として、プラットフォーム固有の文字コード差異を吸収します。非EBCDIC環境ではコンパイル時に除外されるか、空の処理（NOOP）に置換されるため、移植性を維持しつつ特定のメインフレーム環境等での動作を保証します。</p>
+<h2>責務</h2>
+<ul>
+<li>**変換ハンドラの初期化**: <a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a> を通じて、変換に必要な <code>apr_xlate</code> ハンドルを生成し、MD5やSHA1等のライブラリにEBCDIC変換設定を適用する。</li>
+<li>**バッファ変換**: プロトコルレベルのデータ（ヘッダー等）を、実装環境の文字セットとASCII間で相互変換する。</li>
+<li>**ストリーム出力の変換**: ASCII形式で送信すべきデータを、変換後にストリームへ書き出す。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a>: 起動時に呼び出され、変換テーブルと関連ライブラリを初期化する。</li>
+<li><code>ap_xlate_proto_to_ascii</code>: バッファ内のデータをローカル文字セットからASCIIへ変換する。</li>
+<li><code>ap_xlate_proto_from_ascii</code>: バッファ内のデータをASCIIからローカル文字セットへ変換する。</li>
+<li><code>ap_rvputs_proto_in_ascii</code>: 可変長引数を受け取り、変換後に <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L487" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_rputs.html&quot;}, '*');"><code>ap_rputs</code></a> で出力するラッパー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/util_ebcdic.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_ebcdic_c__ap_init_ebcdic.html&quot;}, '*');"><code>ap_init_ebcdic</code></a> が <code>apr_xlate_open</code> を呼び出し、変換ハンドルをグローバル変数に保持します。同時に、MD5/SHA1/Base64の各処理系に対して変換ハンドルを登録します。 2. **変換処理**: <code>ap_xlate_proto_to_ascii</code> 等は、<code>apr_xlate_conv_buffer</code> を利用し、インプレース（同一バッファ内）で文字コード変換を行います。 3. **出力フロー**: <code>ap_rvputs_proto_in_ascii</code> は、引数の文字列をプールから確保したメモリにコピーし、変換を適用してから <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L487" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_rputs.html&quot;}, '*');"><code>ap_rputs</code></a> へ渡すことで、ネットワーク送信データが常にASCIIであることを保証します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_xlate</code>: 文字コード変換の基盤。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>: <code>request_rec</code> 等のコア構造体定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>util_ebcdic.h</code></a>: 公開インターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: エラーログ出力用。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/util_charset.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_charset.h.html&quot;}, '*');"><code>include/util_charset.h</code></a>: 文字セット定義に関連するヘッダー。</li>
+<li><a class="wiki-source-link" href="../../source/server/util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util.c.html&quot;}, '*');"><code>server/util.c</code></a>: <a class="wiki-source-link" href="../../source/include/http_protocol.h.html#L487" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_protocol_h__ap_rputs.html&quot;}, '*');"><code>ap_rputs</code></a> 等の出力系関数の実装元。</li>
+<li><code>apr</code> (Apache Portable Runtime): <code>apr_xlate</code> や <code>apr_MD5InitEBCDIC</code> などの低レイヤーAPIを提供。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは <code>APR_CHARSET_EBCDIC</code> が定義されている環境でのみ有効です。</li>
+<li>非EBCDIC環境では、ヘッダーファイル <a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>util_ebcdic.h</code></a> 内で関数が空のマクロに置換されるため、呼び出し側で条件分岐を意識する必要はありません。</li>
+<li><code>ap_hdrs_to_ascii</code> 等のグローバル変数は、このファイル内で静的に管理されており、初期化順序には注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__util_ebcdic_c__ap_init_ebcdic.html" target="wiki-view"><code>ap_init_ebcdic</code></a></li>
+<li><a href="../symbols/server__util_ebcdic_c__ap_xlate_proto_to_ascii.html" target="wiki-view"><code>ap_xlate_proto_to_ascii</code></a></li>
+<li><a href="../symbols/server__util_ebcdic_c__ap_xlate_proto_from_ascii.html" target="wiki-view"><code>ap_xlate_proto_from_ascii</code></a></li>
+<li><a href="../symbols/server__util_ebcdic_c__ap_rvputs_proto_in_ascii.html" target="wiki-view"><code>ap_rvputs_proto_in_ascii</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

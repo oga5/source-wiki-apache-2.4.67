@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__ssl__ssl_util_ocsp_c__get_line.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>get_line</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/ssl/ssl_util_ocsp.c:154</code></li>
+</ul>
+<h2>目的</h2>
+<p>OCSP レスポンダから送信された HTTP レスポンスのストリームから、1行単位で文字列を読み取り、改行コードを除去してメモリプール上に返却する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>char *get_line(apr_bucket_brigade *bbout, apr_bucket_brigade *bbin, conn_rec *c, apr_pool_t *p);</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>bbout</code>: 読み取った行を一時的に格納するためのバケットブリゲード。</li>
+<li><code>bbin</code>: 読み取り元のソースとなるバケットブリゲード。</li>
+<li><code>c</code>: ログ出力に使用する接続レコード。</li>
+<li><a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a>: 文字列の割り当てに使用するメモリプール。</li>
+<li>**出力**:</li>
+<li>成功時: 読み取った行の内容（改行コード除去済み、ヌル終端文字列）。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>bbout</code> は呼び出しのたびに <code>apr_brigade_cleanup</code> によって初期化される。</li>
+<li>読み取られた行は必ず <code>APR_ASCII_LF</code> で終了している必要がある。</li>
+<li><code>APR_ASCII_CR</code> が含まれる場合は、それも除去される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>bbout</code> をクリーンアップする。 2. <code>apr_brigade_split_line</code> を使用し、<code>bbin</code> から最大 8192 バイトまでを <code>bbout</code> に切り出す。 3. <code>apr_brigade_pflatten</code> を使用し、ブリゲードの内容をメモリプール <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> 上の文字列 <code>line</code> にフラット化する。 4. 読み取りサイズが 0 の場合、または行末が <code>LF</code> でない場合はエラーとして <code>NULL</code> を返す。 5. 行末の <code>LF</code> を <code>\0</code> に置換し、直前が <code>CR</code> であればそれも <code>\0</code> に置換する。 6. 処理された文字列 <code>line</code> を返す。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><code>modules/ssl/ssl_util_ocsp.c:219</code></li>
+<li><code>modules/ssl/ssl_util_ocsp.c:233</code></li>
+<li>**呼び出し先**:</li>
+<li><code>apr_brigade_cleanup</code></li>
+<li><code>apr_brigade_split_line</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html#L492" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>ap_log_cerror</code></a></li>
+<li><code>apr_brigade_pflatten</code></li>
+</ul>
+<p>*注: <a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a> および <a class="wiki-source-link" href="../../source/support/htdigest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htdigest.c.html&quot;}, '*');"><code>support/htdigest.c</code></a> に同名のシンボル参照が見られるが、本関数との直接的な呼び出し関係はソースコードの文脈からは確認できない。*</p>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>apr_bucket_brigade</code>: HTTP ストリームのバッファリングに使用。</li>
+<li><code>conn_rec</code>: 接続状態およびログ出力用。</li>
+<li><code>apr_pool_t</code>: メモリ管理用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>apr_brigade_split_line</code> が失敗した場合、エラーログを出力し <code>NULL</code> を返す。</li>
+<li>読み取ったデータが空（<code>len == 0</code>）の場合、エラーログを出力し <code>NULL</code> を返す。</li>
+<li>行末が <code>LF</code> でない場合（行が長すぎる等）、エラーログを出力し <code>NULL</code> を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> 内の簡易 HTTP クライアント実装の一部である。</li>
+<li>8192 バイトを超える行はエラーとして扱われる。</li>
+<li>将来的に標準的な HTTP クライアントライブラリへ移行する際は、本関数を含む簡易実装全体が置き換え対象となる。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

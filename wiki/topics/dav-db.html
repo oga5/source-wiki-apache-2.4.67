@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/dav-db.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>dav_db</h1>
+<h2>概念</h2>
+<p><code>dav_db</code> は、Apache HTTP Server の WebDAV モジュール（<code>mod_dav</code>）において、WebDAV プロパティ（Dead Properties）などのメタデータを永続化するためのデータベース（DBM）接続状態やコンテキストを管理・抽象化する構造体です。</p>
+<p><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> では不透明な構造体（Opaque Structure）として前方宣言されており、具体的なデータ構造の定義は <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a> などの各ストレージプロバイダーの実装に隠蔽されています。</p>
+<h2>なぜ重要か</h2>
+<p>WebDAV プロパティデータベースの具体的な実装詳細（DBM ファイルハンドル、名前空間テーブル、URI インデックスなど）を <code>mod_dav</code> コアから隠蔽するためです。これにより、コアモジュールは具体的なデータベースの仕組みに依存することなく、抽象化されたインターフェースを介してプロパティの読み書きや削除を行うことができます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a> (DBM を用いた具体的なファイルシステムリポジトリの実装)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__main.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>module:modules/dav/main</code></a> (WebDAV コアの定義と抽象インターフェース)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__main__mod_dav_h__dav_db.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_db.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/mod_dav.h.html#L1201&quot;}, '*');"><code>symbol:modules/dav/main/mod_dav.h#dav_db</code></a>**</li>
+<li><code>typedef struct dav_db dav_db;</code> として前方宣言された不透明な構造体。データベース操作関数（<a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_fetch.html&quot;}, '*');"><code>dav_dbm_fetch</code></a>, <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_store.html&quot;}, '*');"><code>dav_dbm_store</code></a> など）の引数として使用されます。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__fs__dbm_c__dav_db.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_db.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html#L52&quot;}, '*');"><code>symbol:modules/dav/fs/dbm.c#dav_db</code></a>**</li>
+<li><code>mod_dav_fs</code> における具体的な構造体定義。以下の主要なフィールドを保持します。</li>
+<li><code>apr_pool_t *pool</code>: データベース接続のライフサイクルを管理するメモリプール。</li>
+<li><code>apr_dbm_t *file</code>: 基盤となる DBM ファイルハンドル。</li>
+<li><code>dav_buffer ns_table</code> / <code>short ns_count</code> / <code>int ns_table_dirty</code>: XML 名前空間 URI を保持・管理し、DBM キーの最適化に使用されるテーブルとフラグ。</li>
+<li><code>apr_hash_t *uri_index</code>: URI からテーブルインデックスへのマッピングを保持するハッシュテーブル。</li>
+<li><code>dav_buffer wb_key</code>: キー生成用の静的バッファ。</li>
+<li><code>apr_datum_t iter</code>: DBM 内のキーを順次走査するためのイテレータ状態。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報から確認できる操作の流れは以下の通りです。</p>
+<p>1. **初期化とオープン**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L415" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_propdb_open.html&quot;}, '*');"><code>dav_propdb_open</code></a>（または <code>dav_fs_dbm_open</code>）により <code>dav_db</code> が初期化され、DBM ファイルがオープンされます。この際、<code>METADATA</code> キーからバージョン情報や名前空間テーブル（<code>ns_table</code>）が構築されます。 2. **キーの生成**: プロパティの読み書きの際、<a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L328" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_build_key.html&quot;}, '*');"><code>dav_build_key</code></a> が <code>uri_index</code> を参照し、名前空間 ID とプロパティ名から <code>#:name</code> 形式の DBM キーを生成します。 3. **データの操作**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_fetch.html&quot;}, '*');"><code>dav_dbm_fetch</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L232" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_store.html&quot;}, '*');"><code>dav_dbm_store</code></a>、<a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L239" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_delete.html&quot;}, '*');"><code>dav_dbm_delete</code></a> などの関数に <code>dav_db</code> ポインタを渡すことで、データの読み書きや削除が行われます。 4. **反復処理**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L251" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_firstkey.html&quot;}, '*');"><code>dav_dbm_firstkey</code></a> および <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L258" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_nextkey.html&quot;}, '*');"><code>dav_dbm_nextkey</code></a> を使用し、<code>iter</code> フィールドを介して DBM 内のキーを順次走査します。 5. **クローズ**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L212" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_dbm_close.html&quot;}, '*');"><code>dav_dbm_close</code></a> により DBM ファイルが閉じられ、リソースが解放されます。</p>
+<p>※ WebDAV リクエストの受信からレスポンス送信に至る完全なエンドツーエンドの呼び出しフロー全体は、提供されたコンテキストからは未解明です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**ライフサイクルの紐付け**: <code>dav_db</code> は <code>apr_pool_t</code> に紐付いており、このプールの生存期間中のみ有効です。</li>
+<li>**名前空間テーブルの同期**: 名前空間テーブルが変更された場合、<code>ns_table_dirty</code> フラグがセットされ、データベースへ書き戻す必要があることを示します。</li>
+<li>**キー生成バッファの排他性**: <code>wb_key</code> は <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L328" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_build_key.html&quot;}, '*');"><code>dav_build_key</code></a> で使用される静的バッファとして機能するため、呼び出し側は取得した結果を直ちにコピーする必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**メモリリーク**: <code>dav_db</code> は <code>apr_pool_t</code> に依存しているため、プール解放時に適切にクローズされない場合、DBM リソースのリークが発生します。</li>
+<li>**並行書き込み時の不整合**: DBM の性質上、読み取りと書き込みが重なる際の再試行ロジックが不足しており、高負荷環境下での並行書き込み時に整合性が損なわれる可能性があります。</li>
+<li>**バッファの再利用**: <a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html#L328" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__dbm_c__dav_build_key.html&quot;}, '*');"><code>dav_build_key</code></a> が使用する <code>wb_key</code> は静的バッファであるため、連続して呼び出すと以前のデータが上書きされます。</li>
+<li>**不完全なバージョン管理**: <code>METADATA</code> のマイナーバージョン更新ロジックは現在不完全です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a> (抽象インターフェースと前方宣言の確認)</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/dbm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>modules/dav/fs/dbm.c</code></a> (DBM を用いた具体的な構造体定義と操作関数の実装詳細)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L416" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__server_maintenance.html&quot;}, '*');">server_maintenance</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/mpmt_os2/mpmt_os2_child.c:416</code></li>
+</ul>
+<h2>目的</h2>
+<p>子プロセス内のスレッドプールを監視し、アイドルスレッド数と保留中の接続数に基づいて、ワーカーの生成または終了を動的に調整する管理スレッドのメインループ。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void server_maintenance(void *vpArg)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>vpArg</code> (voidポインタ、未使用)</li>
+<li>**出力**: なし（戻り値なし）</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> プールが初期化されていること。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>shutdown_event</code></a> イベントセマフォが有効であること。</li>
+<li><a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a> が共有メモリ上にマップされ、アクセス可能であること。</li>
+<li>OS/2 の名前付きキュー <code>/queues/httpd/work.&lt;pid&gt;</code> が存在すること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **キューのオープン**: <code>DosOpenQueue</code> を使用して、現在のプロセスIDに対応する作業キューを開く。失敗時はエラーログを出力して終了する。 2. **監視ループ**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>shutdown_event</code></a> がシグナルされるか、500ms のタイムアウトが発生するまで以下の処理を繰り返す。</p>
+<ul>
+<li>**アイドル数集計**: スコアボードを走査し、<a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>SERVER_READY</code></a> 状態のスレッド数をカウントする。</li>
+<li>**キュー確認**: <code>DosQueryQueue</code> で保留中の接続数を取得する。</li>
+<li>**スレッド生成**: 必要数（<code>ap_min_spare_threads - アイドル数 + 保留数</code>）が正の場合、<code>add_worker()</code> を呼び出して新規ワーカーを生成する。</li>
+<li>**スレッド終了**: アイドル数が <code>ap_max_spare_threads + 保留数</code> を超える場合、<code>DosWriteQueue</code> に <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L62" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>WORKTYPE_EXIT</code></a> を書き込み、ワーカーの終了を促す。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>server/mpm/mpmt_os2/mpmt_os2_child.c</code></a> 内の <code>_beginthread</code>（スレッド起動時）。</li>
+<li>**呼び出し先**: <code>add_worker()</code>（スレッド生成）、<code>DosOpenQueue</code>, <code>DosQueryQueue</code>, <code>DosWriteQueue</code>, <code>DosWaitEventSem</code>（OS/2 API）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/scoreboard.c.html#L44" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>ap_scoreboard_image</code></a>: スレッドのステータスを保持する共有メモリ構造体。</li>
+<li><code>workq</code>: OS/2 の FIFO キュー。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L69" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>shutdown_event</code></a>: プロセス終了を通知するイベントセマフォ。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**キューオープン失敗**: <code>DosOpenQueue</code> が失敗した場合、ログを出力してスレッドを即時終了する。</li>
+<li>**スレッド上限**: <code>HARD_THREAD_LIMIT</code> を超えるスレッド生成は行われない（<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L293" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__mpmt_os2__mpmt_os2_child_c__add_worker.html&quot;}, '*');"><code>add_worker</code></a> 側の実装に依存）。</li>
+<li>**タイムアウト**: <code>DosWaitEventSem</code> は 500ms ごとにタイムアウトし、ループを継続して再評価を行う。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>_beginthread</code> で起動されるため、スタックサイズやスレッドコンテキストの管理に注意すること。</li>
+<li><code>ap_min_spare_threads</code> および <code>ap_max_spare_threads</code> の設定値がスレッド増減の閾値となる。</li>
+<li>OS/2 API のエラーコードは <code>APR_FROM_OS_ERROR(rc)</code> を介して APR エラーに変換されている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

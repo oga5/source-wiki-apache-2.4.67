@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__core__mod_watchdog_c__ap_watchdog_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>ap_watchdog_t</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>modules/core/mod_watchdog.c:46</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server におけるバックグラウンド・タスク監視（Watchdog）フレームワークのメイン構造体であり、特定の監視インスタンスに関連するスレッド、排他制御、およびコールバックリストを保持・管理します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct ap_watchdog_t {
+    apr_uint32_t          thread_started; /* スレッド実行時に1に設定 */
+    apr_proc_mutex_t     *mutex;          /* プロセス間排他制御用 */
+    const char           *name;           /* インスタンス名 */
+    watchdog_list_t      *callbacks;      /* 登録されたコールバックのリスト */
+    int                   is_running;     /* 実行状態フラグ */
+    int                   singleton;      /* シングルトンモードの有効化フラグ */
+    int                   active;         /* アクティブ状態フラグ */
+    apr_interval_time_t   step;           /* 実行間隔 */
+    apr_thread_t         *thread;         /* ワーカースレッド */
+    apr_pool_t           *pool;           /* メモリ管理用プール */
+};</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__ap_watchdog_get_instance.html&quot;}, '*');"><code>ap_watchdog_get_instance</code></a> を介して生成・取得されます。</li>
+<li>**出力**: 内部の <code>thread</code> が <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L107" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker.html&quot;}, '*');"><code>wd_worker</code></a> を実行し、登録されたコールバックを定期的に呼び出します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>pool</code> は登録時に指定されたライフサイクル（通常は <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a>）に従います。</li>
+<li><code>singleton</code> モードが有効な場合、<code>mutex</code> を使用して全子プロセス中で唯一の実行が保証されます。</li>
+<li>コールバック関数内での長時間ブロックは、インスタンス全体の遅延を引き起こします。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L107" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker.html&quot;}, '*');"><code>wd_worker</code></a> が専用スレッドとして起動し、<code>apr_sleep</code> を用いて <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WD_TM_SLICE</code></a>（100ms）ごとにループします。</li>
+<li><code>callbacks</code> リストを走査し、経過時間が <code>step</code> を超えた場合にコールバックを実行します。</li>
+<li>終了時には <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker_cleanup.html&quot;}, '*');"><code>wd_worker_cleanup</code></a> がプール破棄時に呼ばれ、<code>STOPPING</code> 状態を通知してスレッドを <code>join</code> します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.c.html&quot;}, '*');"><code>mod_watchdog.c</code></a> 内の <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_startup.html&quot;}, '*');"><code>wd_startup</code></a>, <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__ap_watchdog_get_instance.html&quot;}, '*');"><code>ap_watchdog_get_instance</code></a>, <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L321" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__ap_watchdog_set_callback_interval.html&quot;}, '*');"><code>ap_watchdog_set_callback_interval</code></a>, <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L346" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__ap_watchdog_register_callback.html&quot;}, '*');"><code>ap_watchdog_register_callback</code></a> 等がこの構造体を操作します。また、<a class="wiki-source-link" href="../../source/modules/cluster/mod_heartmonitor.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>mod_heartmonitor.c</code></a> 等の外部モジュールから参照されます。</li>
+<li>**呼び出し先**: 構造体自体はデータ保持用であり、直接的な関数呼び出し先は定義されていません。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__watchdog_list_t.html&quot;}, '*');"><code>watchdog_list_t</code></a>: 登録されたコールバック関数のリンクリスト。</li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_server_conf_t.html&quot;}, '*');"><code>wd_server_conf_t</code></a>: モジュール全体のサーバー設定。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>singleton</code> モードにおいて、<code>apr_proc_mutex</code> のロック取得に失敗したプロセスは待機状態となります。</li>
+<li>スレッド生成やメモリ確保（<code>apr_pcalloc</code>）の失敗は、<code>apr_status_t</code> を通じて呼び出し元に伝播されます。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本構造体は <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.c.html&quot;}, '*');"><code>mod_watchdog.c</code></a> の内部実装と密接に関連しています。</li>
+<li>メモリ所有権は <code>pool</code> に依存するため、インスタンスの破棄タイミングには注意が必要です。</li>
+<li><code>ap_run_watchdog_*</code> フックの具体的な実装は各利用モジュール側に存在するため、本構造体はあくまで実行基盤の管理に徹しています。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

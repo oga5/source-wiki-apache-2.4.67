@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__winnt__mpm_winnt_c__get_listeners_from_parent.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html#L442" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__get_listeners_from_parent.html&quot;}, '*');">get_listeners_from_parent</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/winnt/mpm_winnt.c:442</code></li>
+</ul>
+<h2>目的</h2>
+<p>親プロセスから継承されたリスニングソケット情報をパイプ経由で取得し、子プロセス内で再構築する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>void get_listeners_from_parent(server_rec *s)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>server_rec *s</code>（サーバー設定構造体）。また、グローバルな <code>pipe</code>（親プロセスから継承された標準入力ハンドル）および <code>ap_listeners</code> リストを使用する。</li>
+<li>**出力**: なし（副作用として <code>ap_listeners</code> 内の各 <code>lr-&gt;sd</code> にソケットが割り当てられる）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>親プロセスが事前にソケットをリスニング状態にし、その情報をパイプ経由で送信する準備ができていること。</li>
+<li><code>pipe</code> ハンドルが有効であること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. <code>ap_listeners</code> が空の場合、デフォルトのリスナー構造体を初期化する。 2. <code>ap_listeners</code> リストを走査し、各要素に対して以下の処理を行う。</p>
+<ul>
+<li><code>ReadFile</code> を使用して、親プロセスから <code>WSAPROTOCOL_INFO</code> 構造体を読み取る。</li>
+<li><code>WSASocket</code> を呼び出し、取得したプロトコル情報からソケットを再生成する。</li>
+<li><code>SetHandleInformation</code> を呼び出し、継承フラグを解除する。</li>
+<li><code>apr_os_sock_put</code> を使用して、生成したソケットを <code>ap_listen_rec</code> 構造体に格納する。</li>
+<p>3. 読み取り失敗やソケット生成失敗時には、エラーログを出力して <a class="wiki-source-link" href="../../source/include/httpd.h.html#L333" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDINIT</code></a> でプロセスを終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: </li>
+<li><code>server/mpm/winnt/mpm_winnt.c:437</code>（直接の言及あり）</li>
+<li><code>server/mpm/winnt/mpm_winnt.c:1674</code>（<code>get_listeners_from_parent(s);</code> の呼び出し）</li>
+<li>**呼び出し先**: </li>
+<li><code>ReadFile</code>, <code>WSASocket</code>, <code>SetHandleInformation</code>（Windows API）</li>
+<li><code>apr_os_sock_put</code>, <code>apr_palloc</code>, <code>ap_log_error</code>（APR/Apache API）</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_listen_rec</code>: リスニングソケット情報を保持する構造体。</li>
+<li><code>WSAPROTOCOL_INFO</code>: Windowsソケットのプロトコル情報を格納する構造体。</li>
+<li><code>server_rec</code>: サーバー設定を保持する構造体。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**パイプ読み取り失敗**: 親プロセスからのデータ受信に失敗した場合、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L333" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>APEXIT_CHILDINIT</code></a> で異常終了する。</li>
+<li>**ソケット生成失敗**: <code>WSASocket</code> が <code>INVALID_SOCKET</code> を返した場合、エラーログを出力して異常終了する。</li>
+<li>**継承フラグ設定失敗**: <code>SetHandleInformation</code> が失敗した場合、エラーログを出力するが処理は継続する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数はWindows特有のソケット継承メカニズムに依存している。</li>
+<li>ソース内のコメントによれば、パイプのオープン処理は現在 <a class="wiki-source-link" href="../../source/server/mpm/winnt/mpm_winnt.c.html#L1000" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__winnt_rewrite_args.html&quot;}, '*');"><code>winnt_rewrite_args</code></a> に移動されているため、本関数は読み取り処理のみに専念している。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

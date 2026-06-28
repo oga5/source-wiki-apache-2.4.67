@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/metadata/mod_setenvif.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_setenvif.c.html&quot;}, '*');">modules/metadata/mod_setenvif.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_setenvif</code> は、HTTP リクエストヘッダやリクエスト属性（IPアドレス、URI等）を正規表現や式で評価し、その結果に基づいて環境変数を設定・解除する Apache モジュールです。設定の柔軟性を高めるため、サーバー全体およびディレクトリ単位の両方で構成可能です。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/metadata</code> サブシステムの一部として、リクエスト処理の初期段階で環境変数を注入し、後続のモジュール（<code>mod_rewrite</code> や CGI など）が利用可能なコンテキストを提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>SetEnvIf</code> 系のディレクティブを解析し、正規表現や式をコンパイルして <code>sei_entry</code> 構造体に格納する。</li>
+<li>**リクエスト評価**: <code>post_read_request</code> および <code>header_parser</code> フックでリクエストを検査し、条件に合致した場合に <code>subprocess_env</code> テーブルを更新する。</li>
+<li>**最適化**: 連続する同一ヘッダに対する評価の重複排除や、単純文字列マッチングの高速化（<code>apr_strmatch</code>）を行う。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><code>sei_entry</code>: 個別の条件ルール。正規表現、コンパイル済みパターン、対象環境変数、特殊属性フラグを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L118" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__sei_cfg_rec.html&quot;}, '*');"><code>sei_cfg_rec</code></a>: <code>sei_entry</code> の配列を保持するコンテナ。</li>
+</ul>
+<h3>設定・登録関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__create_setenvif_config.html&quot;}, '*');"><code>create_setenvif_config</code></a>: 設定レコードの初期化。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L151" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__merge_setenvif_config.html&quot;}, '*');"><code>merge_setenvif_config</code></a>: サーバー設定とディレクトリ設定の結合。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L282" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__add_setenvif_core.html&quot;}, '*');"><code>add_setenvif_core</code></a>: <code>SetEnvIf</code> 系ディレクティブの共通処理。正規表現のコンパイルと <code>sei_entry</code> への登録を行う。</li>
+</ul>
+<h3>評価・実行関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__match_headers.html&quot;}, '*');"><code>match_headers</code></a>: モジュールのメインロジック。リクエスト情報を取得し、全ルールを順次評価する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L170" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__is_header_regex.html&quot;}, '*');"><code>is_header_regex</code></a>: ヘッダ名が正規表現を含むか判定する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L190" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__non_regex_pattern.html&quot;}, '*');"><code>non_regex_pattern</code></a>: 正規表現を含まない単純文字列を抽出し、<code>apr_strmatch</code> 用に最適化する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **構成フェーズ**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L282" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__add_setenvif_core.html&quot;}, '*');"><code>add_setenvif_core</code></a> がディレクティブを解析。正規表現は <a class="wiki-source-link" href="../../../source/server/util.c.html#L262" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_pregcomp.html&quot;}, '*');"><code>ap_pregcomp</code></a> でコンパイルされ、単純文字列は <code>apr_strmatch_precompile</code> で最適化される。 2. **実行フェーズ**: <a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_setenvif_c__match_headers.html&quot;}, '*');"><code>match_headers</code></a> が <code>post_read_request</code> と <code>header_parser</code> で呼び出される。</p>
+<ul>
+<li>最初の呼び出しで <a class="wiki-source-link" href="../../../source/modules/metadata/mod_setenvif.c.html#L166" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_setenvif.c.html&quot;}, '*');"><code>SEI_MAGIC_HEIRLOOM</code></a> を用いてフェーズを識別。</li>
+<li><code>sei_entry</code> を順次走査し、<code>val</code>（ヘッダ値や特殊属性）を取得。</li>
+<li><code>apr_strmatch</code> または <a class="wiki-source-link" href="../../../source/server/util_pcre.c.html#L395" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_pcre_c__ap_regexec.html&quot;}, '*');"><code>ap_regexec</code></a> でマッチングを行い、成功時に <code>apr_table_setn</code> で <code>subprocess_env</code> を更新。</li>
+<li>正規表現の置換が必要な場合は <a class="wiki-source-link" href="../../../source/server/util.c.html#L457" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_pregsub.html&quot;}, '*');"><code>ap_pregsub</code></a> を使用。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_strmatch.h</code>: 高速な文字列検索。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>: モジュール設定およびディレクティブ処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: リクエスト情報の取得。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_headers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_headers.c.html&quot;}, '*');"><code>mod_headers.c</code></a>: 環境変数ではなく、HTTP レスポンスヘッダの操作を行う類似モジュール。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/metadata/mod_env.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_env.c.html&quot;}, '*');"><code>mod_env.c</code></a>: 環境変数の静的な設定を行うモジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: 設定データは <code>cmd-&gt;pool</code> に割り当てられ、リクエスト処理中の動的メモリは <code>r-&gt;pool</code> を使用します。</li>
+<li>**パフォーマンス**: 同一ヘッダに対する連続したルールは、ポインタ比較によってヘッダ値の取得をスキップする最適化が施されています。</li>
+<li>**制約**: <code>SetEnvIf</code> はリクエスト処理の非常に早い段階で実行されるため、後続のモジュールが動的に生成したヘッダには反応できない場合があります。</li>
+<li>**未実装・浅い部分**: <code>ap_expr</code> の評価は <a class="wiki-source-link" href="../../../source/server/util_expr_eval.c.html#L875" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_expr_eval_c__ap_expr_exec_re.html&quot;}, '*');"><code>ap_expr_exec_re</code></a> に委譲されており、式評価の詳細なロジックはこのファイルには含まれません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__special.html" target="wiki-view"><code>special</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__sei_entry.html" target="wiki-view"><code>sei_entry</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__sei_cfg_rec.html" target="wiki-view"><code>sei_cfg_rec</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__create_setenvif_config.html" target="wiki-view"><code>create_setenvif_config</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__create_setenvif_config_svr.html" target="wiki-view"><code>create_setenvif_config_svr</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__create_setenvif_config_dir.html" target="wiki-view"><code>create_setenvif_config_dir</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__merge_setenvif_config.html" target="wiki-view"><code>merge_setenvif_config</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__is_header_regex.html" target="wiki-view"><code>is_header_regex</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__non_regex_pattern.html" target="wiki-view"><code>non_regex_pattern</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__add_envvars.html" target="wiki-view"><code>add_envvars</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__add_setenvif_core.html" target="wiki-view"><code>add_setenvif_core</code></a></li>
+<li><a href="../../symbols/modules__metadata__mod_setenvif_c__add_setenvif.html" target="wiki-view"><code>add_setenvif</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

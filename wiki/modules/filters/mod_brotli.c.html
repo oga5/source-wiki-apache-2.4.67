@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_brotli.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_brotli.c.html&quot;}, '*');">modules/filters/mod_brotli.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_brotli.c.html&quot;}, '*');"><code>mod_brotli.c</code></a> は、Apache HTTP Server 用の出力フィルタモジュールであり、Brotli アルゴリズムを用いた動的なコンテンツ圧縮を提供します。<code>mod_deflate</code> と同様のインターフェースと設定項目を持ち、透過的な圧縮によって転送データ量を削減します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/filters</code> サブシステムにおいて、コンテンツエンコーディングを操作するフィルタの一つです。<code>AP_FTYPE_CONTENT_SET</code> フィルタとして登録され、レスポンスボディがクライアントへ送信される直前のストリームを処理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: Brotli の圧縮品質、ウィンドウサイズ、ETag の扱い、および統計用ノートの設定。</li>
+<li>**フィルタリング**: <code>Accept-Encoding: br</code> をサポートするクライアントに対し、レスポンスを Brotli 形式で圧縮。</li>
+<li>**メタデータ管理**: 圧縮に伴う <code>Content-Encoding</code> ヘッダーの更新、<code>Content-Length</code> の削除、および <code>ETag</code> の調整。</li>
+<li>**統計出力**: 圧縮率や入出力バイト数をリクエストノートとして記録。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__brotli_server_config_t.html&quot;}, '*');"><code>brotli_server_config_t</code></a>: サーバー単位の設定（品質、ウィンドウサイズ、ETag 処理モード等）を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__brotli_ctx_t.html&quot;}, '*');"><code>brotli_ctx_t</code></a>: リクエスト単位のコンテキスト。Brotli エンコーダの状態、出力用バケットブリゲード、入出力バイト数を管理。</li>
+</ul>
+<h3>設定用ハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L66" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__set_filter_note.html&quot;}, '*');"><code>set_filter_note</code></a>, <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__set_compression_quality.html&quot;}, '*');"><code>set_compression_quality</code></a>, <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__set_compression_lgwin.html&quot;}, '*');"><code>set_compression_lgwin</code></a>, <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L124" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__set_compression_lgblock.html&quot;}, '*');"><code>set_compression_lgblock</code></a>, <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L139" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__set_etag_mode.html&quot;}, '*');"><code>set_etag_mode</code></a>: <code>httpd.conf</code> からの設定値を解析し、<a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__brotli_server_config_t.html&quot;}, '*');"><code>brotli_server_config_t</code></a> に適用する。</li>
+</ul>
+<h3>フィルタ処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L330" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__compress_filter.html&quot;}, '*');"><code>compress_filter</code></a>: メインのフィルタ関数。リクエストの適合性判定、コンテキストの初期化、バケットの圧縮処理を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__process_chunk.html&quot;}, '*');"><code>process_chunk</code></a>: バケットデータを Brotli エンコーダに渡し、圧縮済みデータをブリゲードへ挿入する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L263" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__flush.html&quot;}, '*');"><code>flush</code></a>: <code>BROTLI_OPERATION_FLUSH</code> または <code>FINISH</code> を用いてエンコーダのバッファをフラッシュする。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L330" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__compress_filter.html&quot;}, '*');"><code>compress_filter</code></a> がリクエストを評価し、圧縮対象であれば <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L189" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__create_ctx.html&quot;}, '*');"><code>create_ctx</code></a> で <code>BrotliEncoderState</code> を生成。 2. **データ処理**:</p>
+<ul>
+<li>バケットを読み込み <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__process_chunk.html&quot;}, '*');"><code>process_chunk</code></a> へ渡す。</li>
+<li><code>BrotliEncoderCompressStream</code> を呼び出し、出力がある場合は <code>BrotliEncoderTakeOutput</code> で取得。</li>
+<li>取得したデータは <code>apr_bucket_transient_create</code> でブリゲードに挿入し、<a class="wiki-source-link" href="../../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で下流へ送出。</li>
+<p>3. **終了処理**: <code>EOS</code> バケット受信時に <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L263" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__flush.html&quot;}, '*');"><code>flush</code></a> を呼び出し、残りのデータをフラッシュ。その後、統計情報をリクエストノートに書き込み、<a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L180" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__cleanup_ctx.html&quot;}, '*');"><code>cleanup_ctx</code></a> でエンコーダインスタンスを破棄。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: Apache HTTP Server のコア機能。</li>
+<li><code>apr_strings.h</code>: 文字列操作ユーティリティ。</li>
+<li><code>brotli/encode.h</code>: Brotli 圧縮ライブラリの API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_deflate.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_deflate.c.html&quot;}, '*');"><code>mod_deflate.c</code></a>: 本モジュールの設計上の参照元。ETag 処理や設定項目が類似している。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>: Apache のフィルタチェーンの仕組み。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__brotli_ctx_t.html&quot;}, '*');"><code>brotli_ctx_t</code></a> はリクエストプールに紐付いており、<a class="wiki-source-link" href="../../../source/modules/filters/mod_brotli.c.html#L180" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_brotli_c__cleanup_ctx.html&quot;}, '*');"><code>cleanup_ctx</code></a> がプールクリーンアップ時に <code>BrotliEncoderDestroyInstance</code> を呼び出すことでメモリリークを防いでいます。</li>
+<li>**ETag の扱い**: 圧縮によりコンテンツが変化するため、デフォルトで ETag に <code>-br</code> サフィックスを付与します。これは <code>BrotliAlterETag</code> で変更可能です。</li>
+<li>**制限事項**: サブクエストや <code>Content-Range</code> が存在するリクエストは圧縮対象外となります。</li>
+<li>**省略箇所**: 本ファイルは Brotli ライブラリの低レベルな圧縮ロジック（<code>enc/</code> 以下）には関与せず、Apache のバケットブリゲードと Brotli API の橋渡しに特化しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__etag_mode_e.html" target="wiki-view"><code>etag_mode_e</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__brotli_server_config_t.html" target="wiki-view"><code>brotli_server_config_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__create_server_config.html" target="wiki-view"><code>create_server_config</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__set_filter_note.html" target="wiki-view"><code>set_filter_note</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__set_compression_quality.html" target="wiki-view"><code>set_compression_quality</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__set_compression_lgwin.html" target="wiki-view"><code>set_compression_lgwin</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__set_compression_lgblock.html" target="wiki-view"><code>set_compression_lgblock</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__set_etag_mode.html" target="wiki-view"><code>set_etag_mode</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__brotli_ctx_t.html" target="wiki-view"><code>brotli_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__alloc_func.html" target="wiki-view"><code>alloc_func</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__free_func.html" target="wiki-view"><code>free_func</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_brotli_c__cleanup_ctx.html" target="wiki-view"><code>cleanup_ctx</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

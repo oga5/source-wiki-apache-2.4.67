@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/clients/h2ws.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');">test/clients/h2ws.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>h2ws.c</code></a> は、HTTP/2 を介した WebSocket (RFC 8441) の接続テストを行うためのコマンドラインクライアントです。<code>nghttp2</code> ライブラリを利用して HTTP/2 セッションを管理し、特定のプロトコル違反や正常系シナリオをシミュレートしてサーバーの挙動を検証します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/clients</code> モジュールにおける唯一のツールであり、HTTP/2 サーバーの WebSocket 対応機能をテストするための統合テスト用クライアントとして機能します。</p>
+<h2>責務</h2>
+<ul>
+<li>**URI 解析**: WebSocket URI の分解と正規化。</li>
+<li>**セッション管理**: <code>nghttp2</code> を用いた TCP ソケット接続、セッションの初期化、およびコールバックのディスパッチ。</li>
+<li>**ストリーム制御**: HTTP/2 ストリームのライフサイクル管理（作成、データ送信、クローズ処理）。</li>
+<li>**シナリオ実行**: 指定されたテストケースに基づき、意図的に不完全なヘッダーセットを送信するなどのプロトコルテスト。</li>
+<li>**I/O 多重化**: <code>poll()</code> を使用した非同期的な読み書きの制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>セッション管理</h3>
+<ul>
+<li><code>struct h2_session</code>: HTTP/2 セッションの状態（ソケット、<code>nghttp2</code> セッションオブジェクト、ストリームリスト）を保持。</li>
+<li><code>h2_session_open()</code>: 接続の確立、非ブロッキング設定、<code>nghttp2</code> コールバックの登録を行う。</li>
+<li><code>h2_session_run()</code>: <code>poll()</code> ループを回し、I/O イベントを処理するメインループ。</li>
+</ul>
+<h3>ストリーム管理</h3>
+<ul>
+<li><code>struct h2_stream</code>: 個別の HTTP/2 ストリームの状態（ID、URI、コールバック関数）を保持。</li>
+<li><code>ws_stream_submit()</code>: <code>CONNECT</code> メソッドを用いた WebSocket ストリームの開始。</li>
+<li><code>ws_stream_read_req_body()</code>: ストリームのデータ送信（stdin 等からの読み込み）を処理する <code>nghttp2</code> コールバック。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><code>parse_uri()</code>: <code>ws://</code> または <code>wss://</code> URI を解析し、ホスト・ポート・パスを抽出。</li>
+<li><a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>MAKE_NV</code></a>, <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/clients/h2ws.c.html&quot;}, '*');"><code>MAKE_NV_CS</code></a>: <code>nghttp2</code> 用のヘッダーフィールド（Name-Value）を生成するマクロ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>main</code> が <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L215" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__parse_uri.html&quot;}, '*');"><code>parse_uri</code></a> で引数を解析し、<a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L606" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__h2_session_open.html&quot;}, '*');"><code>h2_session_open</code></a> で TCP 接続と <code>nghttp2</code> セッションを構築。 2. **ストリーム生成**: シナリオに応じて <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L903" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__ws_stream_submit.html&quot;}, '*');"><code>ws_stream_submit</code></a> が呼ばれ、<code>nghttp2_submit_request</code> で <code>CONNECT</code> フレームを送信。 3. **イベントループ**: <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L783" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__h2_session_run.html&quot;}, '*');"><code>h2_session_run</code></a> が <code>poll()</code> を呼び出し、ソケットの読み書き可能状態を監視。 4. **コールバック**: <code>nghttp2</code> からのイベント（<code>on_frame_recv</code>, <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html#L588" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_session_c__on_header.html&quot;}, '*');"><code>on_header</code></a> 等）が <code>h2_session</code> の各関数をトリガーし、状態を更新。 5. **終了**: 全ストリームがクローズされるとループを抜け、セッションを終了。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>nghttp2/nghttp2.h</code>: HTTP/2 プロトコルスタック。</li>
+<li><code>apr.h</code>: Apache Portable Runtime (基本型定義)。</li>
+<li>標準 C ライブラリ: <code>poll.h</code>, <code>sys/socket.h</code>, <code>netinet/tcp.h</code> 等のネットワーク関連ヘッダー。</li>
+<li><code>assert.h</code></li>
+<li><code>errno.h</code></li>
+<li><code>inttypes.h</code></li>
+<li><code>signal.h</code></li>
+<li><code>stdio.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>string.h</code></li>
+<li><code>sys/time.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>time.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>nghttp2</code> ライブラリのドキュメント: 本ファイルは <code>nghttp2</code> のコールバック API に強く依存しているため、API 仕様の理解が必須。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L206" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__uri.html&quot;}, '*');"><code>uri</code></a> 構造体内の文字列や <code>h2_stream</code> は動的に確保されることがありますが、本ツールはテスト用であり、終了時に明示的な全メモリ解放を行わない箇所があります。</li>
+<li>**非ブロッキング**: ソケットは <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L264" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__sock_nonblock_nodelay.html&quot;}, '*');"><code>sock_nonblock_nodelay</code></a> により非ブロッキングモードで動作します。<code>EWOULDBLOCK</code> 等の処理は <code>nghttp2</code> のコールバック内で適切にハンドリングされています。</li>
+<li>**制限事項**: 本ファイルは「完全な URI パーサー」ではなく、テストに必要な最小限の機能のみを実装しています。また、<code>wss://</code> (TLS) の実装は <a class="wiki-source-link" href="../../../source/test/clients/h2ws.c.html#L215" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/test__clients__h2ws_c__parse_uri.html&quot;}, '*');"><code>parse_uri</code></a> で認識されますが、実際の TLS ハンドシェイク処理は本ソース内には含まれておらず、平文の <code>ws://</code> 接続を主眼としています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/test__clients__h2ws_c__log_out.html" target="wiki-view"><code>log_out</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__log_err.html" target="wiki-view"><code>log_err</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__log_info.html" target="wiki-view"><code>log_info</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__log_debug.html" target="wiki-view"><code>log_debug</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__log_errf.html" target="wiki-view"><code>log_errf</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__log_infof.html" target="wiki-view"><code>log_infof</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__uri.html" target="wiki-view"><code>uri</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__h2_session.html" target="wiki-view"><code>h2_session</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__h2_stream.html" target="wiki-view"><code>h2_stream</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__pollfd.html" target="wiki-view"><code>pollfd</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__h2_poll_ctx.html" target="wiki-view"><code>h2_poll_ctx</code></a></li>
+<li><a href="../../symbols/test__clients__h2ws_c__ws_stream.html" target="wiki-view"><code>ws_stream</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

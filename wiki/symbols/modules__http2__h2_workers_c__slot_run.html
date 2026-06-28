@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_workers_c__slot_run.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L234" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__slot_run.html&quot;}, '*');">slot_run</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_workers.c:234</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 ワーカープールにおける個々のスレッドのメインループを実行し、接続プロデューサーからタスク（<code>conn_rec</code>）を取得して処理を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void* APR_THREAD_FUNC slot_run(apr_thread_t *thread, void *wctx)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: </li>
+<li><code>thread</code>: 実行中のスレッドハンドル。</li>
+<li><code>wctx</code>: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_slot.html&quot;}, '*');"><code>h2_slot</code></a> 構造体へのポインタ（ワーカーのコンテキスト）。</li>
+<li>**出力**: <code>NULL</code>（スレッド終了時に返却）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>workers-&gt;lock</code> ミューテックスにより、リングバッファ操作および状態遷移が保護されている。</li>
+<li><code>slot-&gt;prod</code> が有効であること（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L2342" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>AP_DEBUG_ASSERT</code></a> で検証）。</li>
+<li><code>c-&gt;master</code> が存在する場合、接続 ID は <code>(c-&gt;master-&gt;id &lt;&lt; 8)^slot-&gt;id</code> として計算される。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: スロット状態を <code>H2_SLOT_RUN</code> に設定し、ループを開始する。 2. **タスク取得**: <code>get_next(slot)</code> を呼び出し、処理対象の接続を取得する。 3. **接続処理**:</p>
+<ul>
+<li><code>c-&gt;current_thread</code> に現在のスレッドを設定。</li>
+<li><a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> または <a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L667" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_process.html&quot;}, '*');"><code>h2_c2_process</code></a> を実行して接続を処理。</li>
+<li>完了後、<code>slot-&gt;prod-&gt;fn_done</code> を呼び出し、必要に応じて <code>workers-&gt;prod_done</code> をブロードキャストする。</li>
+<p>4. **アイドル待機**: タスクがない場合、<code>workers-&gt;idle</code> リングに移動し、<code>more_work</code> 条件変数で待機する。</p>
+<li><code>idle_limit</code> が設定されている場合、タイムアウト時にスロットを終了（<code>H2_SLOT_ZOMBIE</code> へ移行）させる。</li>
+<p>5. **終了処理**: ループを抜ける際、スロットを <code>H2_SLOT_ZOMBIE</code> に設定し、<code>workers-&gt;zombie</code> リングへ移動して終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__activate_slot.html&quot;}, '*');"><code>activate_slot</code></a>（<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_workers.c.html&quot;}, '*');"><code>modules/http2/h2_workers.c</code></a> 内でスレッド生成時に指定）。</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__get_next.html&quot;}, '*');"><code>get_next</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__join_zombies.html&quot;}, '*');"><code>join_zombies</code></a>, <a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> (または <a class="wiki-source-link" href="../../source/modules/http2/h2_c2.c.html#L667" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_c__h2_c2_process.html&quot;}, '*');"><code>h2_c2_process</code></a>), <code>slot-&gt;prod-&gt;fn_done</code>。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>h2_workers</code>: プール全体の管理構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__h2_slot.html&quot;}, '*');"><code>h2_slot</code></a>: ワーカーの状態と同期プリミティブを保持。</li>
+<li><code>ap_conn_producer_t</code>: 接続供給元。</li>
+<li><code>conn_rec</code>: 処理対象の接続情報。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**接続 ID の衝突**: 256個を超えるワーカーや高負荷環境下では、接続 ID 生成ロジックにおいて衝突が発生する可能性がある。</li>
+<li>**タイムアウト**: <code>idle_limit</code> を超えて待機した場合、スレッドは自動的に終了する。</li>
+<li>**シャットダウン**: <code>workers-&gt;aborted</code> または <code>slot-&gt;should_shutdown</code> が真になると、ループを即座に終了する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>h2_workers</code> のスレッドライフサイクルの中核を担う。</li>
+<li><code>c-&gt;id</code> の計算ロジックは <code>mod_unique_id</code> との互換性を維持するための暫定的な実装であり、変更には注意を要する。</li>
+<li>スレッド終了時の <code>H2_SLOT_ZOMBIE</code> への遷移は、<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__join_zombies.html&quot;}, '*');"><code>join_zombies</code></a> によるリソース回収を確実にするために重要である。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

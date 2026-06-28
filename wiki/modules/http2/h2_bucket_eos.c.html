@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_bucket_eos.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_eos.c.html&quot;}, '*');">modules/http2/h2_bucket_eos.c</a></h1>
+<h2>概要</h2>
+<p>HTTP/2 ストリームの終了（EOS: End of Stream）を表現するためのカスタム APR バケット型を定義するファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_http2</code> におけるストリーム処理において、データストリームの終端を明示的に通知するためのメタデータバケットを提供します。これは、HTTP/2 のストリーム状態遷移を Apache HTTP Server のバケットチェーン上で管理するために不可欠なコンポーネントです。</p>
+<h2>責務</h2>
+<ul>
+<li>**EOS バケットの生成と管理**: <code>h2_stream</code> オブジェクトと紐付いたカスタムバケットの作成。</li>
+<li>**ライフサイクル同期**: ストリームの終了イベント（<code>H2_SEV_EOS_SENT</code>）を、バケットの破棄タイミングに合わせてディスパッチする。</li>
+<li>**リソース保護**: ストリームのプールとバケットの生存期間を調整し、二重解放や不正なアクセスを防ぐ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.c.html#L104" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_eos.c.html&quot;}, '*');"><code>h2_bucket_type_eos</code></a>: このバケットの挙動を定義する <code>apr_bucket_type_t</code> 構造体。</li>
+<li><code>h2_bucket_eos_create()</code>: 新しい EOS バケットを生成し、ストリームのクリーンアップ処理を登録する公開関数。</li>
+<li><code>bucket_destroy()</code>: バケット破棄時にストリームへ EOS 送信イベントを通知する内部関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **生成**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos_create.html&quot;}, '*');"><code>h2_bucket_eos_create</code></a> が呼ばれると、バケットが割り当てられ、ストリームのプールに <a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.c.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_eos_c__bucket_cleanup.html&quot;}, '*');"><code>bucket_cleanup</code></a> が登録されます。 2. **伝搬**: バケットチェーンを EOS バケットが通過します。<code>bucket_read</code> はメタデータバケットであるため、データは返さず成功を返します。 3. **破棄**: バケットが解放される際、<code>bucket_destroy</code> が実行されます。</p>
+<ul>
+<li>ストリームがまだ存在する場合、<a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_dispatch.html&quot;}, '*');"><code>h2_stream_dispatch</code></a> を通じて <code>H2_SEV_EOS_SENT</code> イベントが発行されます。</li>
+<li><code>apr_pool_cleanup_kill</code> により、プール側のクリーンアップ登録が解除され、二重処理を防止します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_util.h.html#L476" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_util.h.html&quot;}, '*');"><code>apr_bucket</code></a> (APR): バケットの基本構造と型定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.h.html&quot;}, '*');"><code>h2_stream.h</code></a>: ストリームの状態管理とイベントディスパッチ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_private.h.html&quot;}, '*');"><code>h2_private.h</code></a>: モジュール内部の共通定義。</li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_eos.h.html&quot;}, '*');"><code>h2_bucket_eos.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_mplx.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_mplx.h.html&quot;}, '*');"><code>h2_mplx.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>stddef.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_eos.h.html&quot;}, '*');"><code>h2_bucket_eos.h</code></a>: 公開インターフェース定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_stream.c.html&quot;}, '*');"><code>h2_stream.c</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_stream.c.html#L392" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_stream_c__h2_stream_dispatch.html&quot;}, '*');"><code>h2_stream_dispatch</code></a> の実装元。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_beam.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_bucket_beam.c.html&quot;}, '*');"><code>h2_bucket_beam.c</code></a>: ストリーム間でのバケット転送を行う関連コンポーネント。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>このバケットは「メタデータ」として扱われます。<code>bucket_read</code> が呼び出されても、実際のデータは読み取られません。</li>
+<li>ストリームの生存期間とバケットの生存期間が異なる可能性があるため、<a class="wiki-source-link" href="../../../source/modules/http2/h2_bucket_eos.c.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_bucket_eos_c__bucket_cleanup.html&quot;}, '*');"><code>bucket_cleanup</code></a> と <code>bucket_destroy</code> の両方でストリームのポインタを安全に管理する設計になっています。</li>
+<li><code>H2_SEV_EOS_SENT</code> イベントは、ストリームの終了処理をトリガーする重要なシグナルであることに注意してください。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos.html" target="wiki-view"><code>h2_bucket_eos</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__bucket_cleanup.html" target="wiki-view"><code>bucket_cleanup</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__bucket_read.html" target="wiki-view"><code>bucket_read</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos_make.html" target="wiki-view"><code>h2_bucket_eos_make</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__h2_bucket_eos_create.html" target="wiki-view"><code>h2_bucket_eos_create</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_bucket_eos_c__bucket_destroy.html" target="wiki-view"><code>bucket_destroy</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

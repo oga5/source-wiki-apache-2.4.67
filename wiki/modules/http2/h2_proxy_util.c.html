@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/http2/h2_proxy_util.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');">modules/http2/h2_proxy_util.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.c.html&quot;}, '*');"><code>h2_proxy_util.c</code></a> は、Apache HTTP Server の HTTP/2 プロキシ機能（<code>mod_proxy_http2</code>）で使用される汎用的なデータ構造とユーティリティ関数を提供します。主に、HTTP/2 フレームのデバッグ出力、整数識別子を持つ構造体のハッシュ管理、ソート済み整数キュー、および HTTP/1 と HTTP/2 間のヘッダー変換ロジックを担います。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy_http2</code> サブシステムにおける「基盤ユーティリティ層」です。ビジネスロジック（セッション管理やストリーム制御）から切り離された、再利用可能なデータ構造と変換処理を分離することで、コードの保守性を高めています。</p>
+<h2>責務</h2>
+<ul>
+<li>**データ構造の提供**: 整数 ID をキーとするハッシュテーブル（<code>ihash</code>）、ソート済み整数キュー（<code>iqueue</code>）、およびスレッドセーフな FIFO キュー（<code>h2_proxy_fifo</code>）の実装。</li>
+<li>**ヘッダー変換**: HTTP/1 の <code>apr_table_t</code> と HTTP/2 の <code>nghttp2_nv</code> 間の相互変換、およびプロキシ特有のヘッダーフィルタリング。</li>
+<li>**デバッグ支援**: <code>nghttp2_frame</code> の内容を人間が読める形式に変換するログ出力機能。</li>
+<li>**リンクヘッダー処理**: RFC 5988 に基づく <code>Link</code> ヘッダーのパースと、リバースプロキシ環境下での URI 書き換え。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ハッシュ管理 (<code>ihash</code>)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_create.html&quot;}, '*');"><code>h2_proxy_ihash_create</code></a>: 構造体内の整数メンバーをキーとするハッシュを生成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L122" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_add.html&quot;}, '*');"><code>h2_proxy_ihash_add</code></a>/<code>remove</code>: ハッシュへの要素追加・削除。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_shift.html&quot;}, '*');"><code>h2_proxy_ihash_shift</code></a>: ハッシュから要素をバッファへ取り出し削除する（キュー的利用）。</li>
+</ul>
+<h3>キュー管理 (<code>iqueue</code>, <code>fifo</code>)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_iq_create.html&quot;}, '*');"><code>h2_proxy_iq_create</code></a>: ソート順序を定義可能な整数キューの生成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L286" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_iq_sort.html&quot;}, '*');"><code>h2_proxy_iq_sort</code></a>: 挿入ソートアルゴリズムを用いたキューの再整列。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L1162" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_fifo_create.html&quot;}, '*');"><code>h2_proxy_fifo_create</code></a>: スレッドセーフな FIFO キュー。<code>apr_thread_cond_t</code> を用いたブロッキング操作をサポート。</li>
+</ul>
+<h3>ヘッダー変換</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L428" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_util_nghd_make_req.html&quot;}, '*');"><code>h2_proxy_util_nghd_make_req</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.h.html#L176" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_h__h2_proxy_request.html&quot;}, '*');"><code>h2_proxy_request</code></a> から HTTP/2 用のヘッダーリストを生成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L515" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_res_ignore_header.html&quot;}, '*');"><code>h2_proxy_res_ignore_header</code></a>: プロキシ転送時に無視すべきヘッダーの判定。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**ハッシュ/キュー操作**: <code>ihash</code> は <code>apr_hash_t</code> をラップし、構造体のオフセットを利用してキーを抽出します。<code>iqueue</code> は動的配列を用い、<code>iq_bubble_up</code>/<code>down</code> を使ってソート状態を維持します。</li>
+<li>**FIFO 処理**: <code>h2_proxy_fifo</code> はミューテックスと条件変数で保護されており、<code>fifo_push</code>/<code>fifo_pull</code> は <code>block</code> フラグに応じて待機または即時復帰します。</li>
+<li>**リンクヘッダー解析**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.c.html#L1043" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_proxy_util_c__h2_proxy_link_reverse_map.html&quot;}, '*');"><code>h2_proxy_link_reverse_map</code></a> は、文字列をスキャンする <code>link_ctx</code> を使用し、トークン単位でパースして URI を書き換える再帰的でないステートマシンとして動作します。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_thread_mutex.h</code>, <code>apr_thread_cond.h</code>: スレッドセーフなキューの実装に使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシ設定やリバースプロキシの URI マッピング機能を利用。</li>
+<li><code>nghttp2/nghttp2.h</code>: HTTP/2 フレーム構造体と定数定義。</li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2.h.html&quot;}, '*');"><code>h2.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_util.h.html&quot;}, '*');"><code>h2_proxy_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_proxy_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_proxy_session.c.html&quot;}, '*');"><code>h2_proxy_session.c</code></a>: 本ファイルで定義された <code>ihash</code> や <code>iqueue</code> を利用してストリームやセッションを管理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/mod_proxy_http2.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/mod_proxy_http2.c.html&quot;}, '*');"><code>mod_proxy_http2.c</code></a>: プロキシのメインエントリポイント。ヘッダー変換ユーティリティを呼び出す。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのデータ構造は <code>apr_pool_t</code> を介して割り当てられます。ライフサイクルはプールに依存するため、明示的な <code>free</code> は不要ですが、<code>fifo</code> のように <code>apr_pool_cleanup_register</code> でクリーンアップが登録されているものもあります。</li>
+<li>**パフォーマンス**: <code>iqueue</code> のソートは、変更が最小限であることを前提とした最適化が行われています。</li>
+<li>**省略された詳細**: <code>link_ctx</code> 内のパースロジックは非常に詳細なステートマシンですが、RFC 5988 の仕様に厳密に従うため、複雑なネスト構造になっています。</li>
+<li>**不変条件**: <code>ihash</code> を使用する際は、構造体内の整数 ID メンバーが変更されないことが前提です。変更が必要な場合は、一度 <code>remove</code> してから <code>add</code> する必要があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h2_proxy_log2.html" target="wiki-view"><code>h2_proxy_log2</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_t.html" target="wiki-view"><code>h2_proxy_ihash_t</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_create.html" target="wiki-view"><code>h2_proxy_ihash_create</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_count.html" target="wiki-view"><code>h2_proxy_ihash_count</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h2_proxy_ihash_empty.html" target="wiki-view"><code>h2_proxy_ihash_empty</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__iter_ctx.html" target="wiki-view"><code>iter_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__collect_ctx.html" target="wiki-view"><code>collect_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__icollect_ctx.html" target="wiki-view"><code>icollect_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__literal.html" target="wiki-view"><code>literal</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h1_ctx.html" target="wiki-view"><code>h1_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__link_ctx.html" target="wiki-view"><code>link_ctx</code></a></li>
+<li><a href="../../symbols/modules__http2__h2_proxy_util_c__h2_proxy_fifo.html" target="wiki-view"><code>h2_proxy_fifo</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

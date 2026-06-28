@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/md_result.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_result.c.html&quot;}, '*');">modules/md/md_result.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_result.c.html&quot;}, '*');"><code>md_result.c</code></a> は、Managed Domain (MD) の処理結果や状態遷移を追跡・管理するためのデータ構造 <code>md_result_t</code> を提供します。エラー情報、アクティビティの進捗、およびサブ問題（ACMEプロトコル等で発生する詳細なエラー）を保持し、JSONへのシリアライズやログ出力、状態変更時のコールバック通知をサポートします。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/md</code> サブシステムにおいて、非同期処理や複雑なACMEトランザクションの結果を統一的に扱うための共通基盤です。他のコンポーネント（<a class="wiki-source-link" href="../../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a>, <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> 等）が処理の成功・失敗を記録し、状態の変化を監視するために利用されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**結果の保持**: ステータスコード、問題の記述、詳細メッセージ、および関連するJSONサブ問題の管理。</li>
+<li>**状態通知**: 状態が更新された際に呼び出されるコールバック（<a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__on_change.html&quot;}, '*');"><code>on_change</code></a>, <code>on_raise</code>, <code>on_holler</code>）の管理と実行。</li>
+<li>**シリアライズ**: <code>md_json_t</code> を介した結果の永続化および復元。</li>
+<li>**診断**: 構造化されたログ出力機能の提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ライフサイクル管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_make.html&quot;}, '*');"><code>md_result_make</code></a>: <code>md_result_t</code> オブジェクトの初期化。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_md_make.html&quot;}, '*');"><code>md_result_md_make</code></a>: 特定のMD名に関連付けた初期化。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L57" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_reset.html&quot;}, '*');"><code>md_result_reset</code></a>: 既存オブジェクトのフィールドをクリアし再利用可能にする。</li>
+</ul>
+<h3>状態更新・設定</h3>
+<ul>
+<li><code>md_result_activity_set/printf</code>: 現在の処理アクティビティを更新。</li>
+<li><code>md_result_set/problem_set/printf</code>: ステータスおよびエラー詳細を更新。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L138" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_delay_set.html&quot;}, '*');"><code>md_result_delay_set</code></a>: 処理再開予定時刻（<code>ready_at</code>）の設定。</li>
+</ul>
+<h3>シリアライズ・比較</h3>
+<ul>
+<li><code>md_result_from_json / to_json</code>: JSON形式との相互変換。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_cmp.html&quot;}, '*');"><code>md_result_cmp</code></a>: 2つの結果オブジェクトの等価性比較。</li>
+<li><code>md_result_assign / dup</code>: オブジェクトのコピー（<code>dup</code> はメモリを複製）。</li>
+</ul>
+<h3>イベント通知</h3>
+<ul>
+<li><code>md_result_on_change / on_raise / on_holler</code>: 状態変更やイベント発生時のコールバック登録。</li>
+<li><code>md_result_raise / holler</code>: 登録されたイベントハンドラの実行。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<ul>
+<li>**状態更新フロー**: <a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L91" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_set.html&quot;}, '*');"><code>md_result_set</code></a> などのセッター関数が呼ばれると、内部で <code>on_change()</code> が呼び出され、登録されたコールバックが実行されます。これにより、UIやログへの即時反映が可能になります。</li>
+<li>**メモリ管理**: すべての文字列やJSON構造体は、<code>md_result_t</code> が保持する <code>apr_pool_t</code> から割り当てられます。<a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L216" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_dup.html&quot;}, '*');"><code>md_result_dup</code></a> を使用する場合、深いコピー（Deep Copy）が行われ、メモリの生存期間はプールに依存します。</li>
+<li>**エラーパス**: <a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L100" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_problem_set.html&quot;}, '*');"><code>md_result_problem_set</code></a> 等で <code>subproblems</code> が渡されると、<a class="wiki-source-link" href="../../../source/modules/md/md_json.c.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_json_c__md_json_clone.html&quot;}, '*');"><code>md_json_clone</code></a> を用いて結果オブジェクトのプール内に複製されます。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_pool_t</code> (APR): メモリ管理の基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');"><code>md_json.h</code></a>: JSON形式での状態保持とシリアライズ。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a>: 構造化されたログ出力。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_result.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_result.h.html&quot;}, '*');"><code>md_result.h</code></a>: 公開インターフェース定義。</li>
+<li><code>apr_date.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_time.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a></li>
+<li><code>stddef.h</code></li>
+<li><code>stdio.h</code></li>
+<li><code>stdlib.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_reg.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.c.html&quot;}, '*');"><code>md_reg.c</code></a>: MDの登録管理において、処理結果を永続化する際に本モジュールを利用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_json.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.c.html&quot;}, '*');"><code>md_json.c</code></a>: JSONデータの操作とクローン処理の提供。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.c.html&quot;}, '*');"><code>md_log.c</code></a>: ログ出力のフォーマットとレベル制御。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>md_result_t</code> は自身が保持する <code>apr_pool_t</code> を所有しており、すべての文字列やJSONオブジェクトはこのプールから割り当てられます。外部から渡されたデータは、必要に応じて <code>apr_pstrdup</code> や <a class="wiki-source-link" href="../../../source/modules/md/md_json.c.html#L116" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_json_c__md_json_clone.html&quot;}, '*');"><code>md_json_clone</code></a> で複製されます。</li>
+<li>**不変条件**: <code>md_result_t</code> の各フィールドは、セッター関数を経由して更新されることが想定されています。直接のフィールド操作はコールバックが発火しないため避けてください。</li>
+<li>**省略された詳細**: 本ファイルはデータ構造の管理に特化しており、ACMEプロトコル固有のロジック（証明書発行の具体的な手順など）は含まれていません。それらは <a class="wiki-source-link" href="../../../source/modules/md/md_acme.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_acme.c.html&quot;}, '*');"><code>md_acme.c</code></a> 等の呼び出し元で処理されます。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/md/md_result.c.html#L227" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_result_c__md_result_log.html&quot;}, '*');"><code>md_result_log</code></a> はログレベルが有効な場合のみ文字列構築を行うため、不要なオーバーヘッドを抑制しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__md_result_c__dup_trim.html" target="wiki-view"><code>dup_trim</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_make.html" target="wiki-view"><code>md_result_make</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_md_make.html" target="wiki-view"><code>md_result_md_make</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_reset.html" target="wiki-view"><code>md_result_reset</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__on_change.html" target="wiki-view"><code>on_change</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_activity_set.html" target="wiki-view"><code>md_result_activity_set</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_activity_setn.html" target="wiki-view"><code>md_result_activity_setn</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_activity_printf.html" target="wiki-view"><code>md_result_activity_printf</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_set.html" target="wiki-view"><code>md_result_set</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_problem_set.html" target="wiki-view"><code>md_result_problem_set</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_problem_printf.html" target="wiki-view"><code>md_result_problem_printf</code></a></li>
+<li><a href="../../symbols/modules__md__md_result_c__md_result_printf.html" target="wiki-view"><code>md_result_printf</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

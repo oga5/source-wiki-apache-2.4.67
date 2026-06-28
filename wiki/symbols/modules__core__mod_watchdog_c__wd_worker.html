@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__core__mod_watchdog_c__wd_worker.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L107" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_worker.html&quot;}, '*');">wd_worker</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/core/mod_watchdog.c:107</code></li>
+</ul>
+<h2>目的</h2>
+<p>Watchdog インスタンス専用のワーカースレッドのメインループとして機能し、登録されたコールバック関数の定期実行、状態遷移（STARTING, RUNNING, STOPPING）の管理、およびプロセス間排他制御（シングルトンモード時）を行います。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void* APR_THREAD_FUNC wd_worker(apr_thread_t *thread, void *data)</code></pre>
+<ul>
+<li><code>thread</code>: 実行中のスレッドハンドル。</li>
+<li><code>data</code>: <code>ap_watchdog_t</code> 構造体へのポインタ。</li>
+</ul>
+<h2>入力と出力</h2>
+<ul>
+<li>入力: <code>ap_watchdog_t</code> 構造体（監視対象のコールバックリスト、mutex、状態フラグを含む）。</li>
+<li>出力: なし（スレッド終了時に <code>apr_thread_exit</code> を呼び出す）。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>w-&gt;pool</code> はスレッド生成時に有効であること。</li>
+<li>シングルトンモードの場合、<code>w-&gt;mutex</code> を用いたプロセス間排他制御が成功するまでループが継続されること。</li>
+<li>MPM の状態が <a class="wiki-source-link" href="../../source/include/ap_mpm.h.html#L142" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>AP_MPMQ_STOPPING</code></a> になった場合、速やかにループを終了すること。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: スレッド開始フラグを立て、シングルトンモードであれば <code>apr_proc_mutex_trylock</code> でロックを獲得するまで待機する。 2. **開始処理**: <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WATCHDOG_STATE_STARTING</code></a> 状態で登録済みコールバックを順次実行する。 3. **メインループ**: <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WD_TM_SLICE</code></a>（100ms）間隔でループし、以下の処理を行う。</p>
+<ul>
+<li>MPM の停止状態を監視。</li>
+<li>各コールバックの経過時間を計算し、<code>interval</code> を超過していれば <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WATCHDOG_STATE_RUNNING</code></a> 状態で実行。</li>
+<li>コールバック未登録の場合は <code>ap_run_watchdog_step</code> フックを実行。</li>
+<p>4. **終了処理**: ループ終了後、<a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L77" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WATCHDOG_STATE_STOPPING</code></a> 状態でコールバックを実行し、ロックを解放してスレッドを終了する。</p>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>呼び出し元: <a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.c.html&quot;}, '*');"><code>modules/core/mod_watchdog.c</code></a> 内の <code>ap_thread_create</code>（<a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L268" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__wd_startup.html&quot;}, '*');"><code>wd_startup</code></a> 等から間接的に起動）。</li>
+<li>呼び出し先: </li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L421" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_mpm_query.html&quot;}, '*');"><code>ap_mpm_query</code></a>（MPM 状態確認）</li>
+<li><code>apr_proc_mutex_trylock</code> / <code>apr_proc_mutex_unlock</code>（排他制御）</li>
+<li><code>wl-&gt;callback_fn</code>（登録されたコールバック関数の実行）</li>
+<li><code>ap_run_watchdog_init</code> / <code>ap_run_watchdog_step</code> / <code>ap_run_watchdog_exit</code>（フックの実行）</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>ap_watchdog_t</code>: 監視インスタンスのメイン構造体。</li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.c.html#L33" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_watchdog_c__watchdog_list_t.html&quot;}, '*');"><code>watchdog_list_t</code></a>: コールバック関数と実行間隔を保持するリスト。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L421" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_mpm_query.html&quot;}, '*');"><code>ap_mpm_query</code></a> が失敗した場合、スレッドは安全に終了する。</li>
+<li>シングルトンモードでロック獲得に失敗し続ける場合、プロセス終了まで待機ループを継続する。</li>
+<li>コールバック関数内で長時間ブロックが発生すると、当該 Watchdog インスタンス全体の実行間隔に遅延が生じる。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>apr_pool_t</code> を使用してメモリを管理しており、ループ内で <code>temp_pool</code> をクリアすることでメモリ消費を抑制している。</li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_watchdog.h.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>AP_WD_TM_SLICE</code></a> はスレッドの応答性と負荷のトレードオフを決定する定数である。</li>
+<li>シングルトンモードのロック取得後の待機処理は、シャットダウン時の競合を避けるためのヒューリスティックな実装が含まれている。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

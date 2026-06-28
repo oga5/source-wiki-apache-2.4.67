@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm/winnt/child.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');">server/mpm/winnt/child.c</a></h1>
+<h2>概要</h2>
+<p>Windows 版 Apache HTTP Server におけるマルチプロセッシングモジュール（MPM）の「子プロセス」のライフサイクルと、接続処理の基盤を実装するファイルです。Windows の I/O Completion Port (IOCP) を活用した非同期接続モデルを管理します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mpm_winnt</code> モジュールの一部として、子プロセスの起動、リスナー（Accept）スレッドの管理、およびワーカー（Worker）スレッドへの接続受け渡しを担います。<a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>mpm_winnt.c</code></a> がプロセス全体の制御を行うのに対し、本ファイルは子プロセス内部の実行環境を完結させます。</p>
+<h2>責務</h2>
+<ul>
+<li>**接続コンテキスト管理**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> を用いた接続情報のプールと再利用。</li>
+<li>**リスナー・スレッド**: <code>AcceptEx</code> または標準 <code>accept()</code> を用いた接続受け入れと IOCP への通知。</li>
+<li>**ワーカー・スレッド**: IOCP を監視し、接続を順次処理するメインループの実行。</li>
+<li>**プロセス制御**: 子プロセスの正常終了、強制終了、および親プロセス監視のイベントループ。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>接続コンテキスト</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a>: 接続状態を保持する構造体。<code>OVERLAPPED</code> 構造体を含み、IOCP との連携に使用。</li>
+<li><code>mpm_get_completion_context()</code>: プールからコンテキストを取得、または新規作成。</li>
+<li><code>mpm_recycle_completion_context()</code>: 処理済みコンテキストを再利用キューへ戻す。</li>
+</ul>
+<h3>スレッド・メイン関数</h3>
+<ul>
+<li><code>winnt_accept()</code>: リスナー・スレッドの本体。接続を待ち受け、<code>PostQueuedCompletionStatus</code> でワーカーへ通知。</li>
+<li><code>worker_main()</code>: ワーカー・スレッドの本体。<code>GetQueuedCompletionStatus</code> で接続を待機し、HTTP 接続処理を実行。</li>
+<li><code>child_main()</code>: 子プロセスのメイン制御スレッド。スレッド生成、イベント監視、シャットダウン処理を統括。</li>
+</ul>
+<h3>状態管理</h3>
+<ul>
+<li><code>ThreadDispatchIOCP</code>: 接続受け渡しに使用される I/O Completion Port ハンドル。</li>
+<li><code>qhead</code>, <code>qtail</code>: 接続コンテキストの再利用キュー。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>child_main</code> が <code>ThreadDispatchIOCP</code> を作成し、<code>worker_main</code> スレッド群を起動。 2. **接続受け入れ**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html#L350" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_accept.html&quot;}, '*');"><code>winnt_accept</code></a> がリスナーソケットで待機。接続確立後、<code>PostQueuedCompletionStatus</code> を介して <code>ThreadDispatchIOCP</code> に <code>IOCP_CONNECTION_ACCEPTED</code> を送信。 3. **ワーカー処理**: <code>worker_main</code> は <code>GetQueuedCompletionStatus</code> でブロックし、通知を受け取ると <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> を取得して HTTP 接続処理（<a class="wiki-source-link" href="../../../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a>）を開始。 4. **終了処理**: <code>child_main</code> が <code>exit_event</code> を検知すると、リスナーを停止し、ワーカーに <code>IOCP_SHUTDOWN</code> を送信して全スレッドの終了を待機。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code>, <code>apr_thread_proc.h</code>, <code>apr_shm.h</code>: APR によるプラットフォーム抽象化。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.h.html&quot;}, '*');"><code>mpm_winnt.h</code></a>: MPM 固有の定義。</li>
+<li><code>mswsock.h</code>: Windows 固有の <code>AcceptEx</code> 等のソケット拡張機能。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>: HTTP サーバーコア機能。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_atomic.h</code></li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_mutex.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_vhost.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_vhost.h.html&quot;}, '*');"><code>http_vhost.h</code></a></li>
+<li><code>malloc.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><code>mpm_default.h</code></li>
+<li><code>process.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');"><code>mpm_winnt.c</code></a>: 子プロセスの生成元であり、MPM 全体の設定を保持。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>service.c</code></a>: Windows サービスとしての制御ロジック。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> プールが子プロセスの生存期間を管理します。<a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html&quot;}, '*');"><code>winnt_conn_ctx_t</code></a> の再利用はメモリ断片化を防ぐための最適化ですが、エラーパスで一部リークする可能性がある旨がソース内にコメントされています。</li>
+<li>**AcceptEx**: Windows 固有の高性能な接続受け入れ API です。<code>AcceptFilter</code> 設定により <code>none</code>（標準 <code>accept</code>）と <code>connect</code>（<code>AcceptEx</code>）を切り替え可能です。</li>
+<li>**シャットダウン**: <code>g_blocked_threads</code> を用いて、終了時に全ワーカーが確実に IOCP から抜けるよう調整しています。</li>
+<li>**省略箇所**: <code>apr_proc_other_child_refresh_all</code> 等の外部プロセス監視ロジックは、ビルド環境（<code>APR_HAS_OTHER_CHILD</code>）に依存するため、環境によって挙動が異なります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__LPOVERLAPPED.html" target="wiki-view"><code>LPOVERLAPPED</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__struct.html" target="wiki-view"><code>struct</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__winnt_conn_ctx_t.html" target="wiki-view"><code>winnt_conn_ctx_t</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__io_state_e.html" target="wiki-view"><code>io_state_e</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__mpm_recycle_completion_context.html" target="wiki-view"><code>mpm_recycle_completion_context</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__mpm_get_completion_context.html" target="wiki-view"><code>mpm_get_completion_context</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__accept_filter_e.html" target="wiki-view"><code>accept_filter_e</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__accept_filter_to_string.html" target="wiki-view"><code>accept_filter_to_string</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__get_accept_filter.html" target="wiki-view"><code>get_accept_filter</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__winnt_accept.html" target="wiki-view"><code>winnt_accept</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__winnt_get_connection.html" target="wiki-view"><code>winnt_get_connection</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__child_c__worker_main.html" target="wiki-view"><code>worker_main</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

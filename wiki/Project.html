@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>Project.md</title><link rel="stylesheet" href="../styles.css"></head><body><h1>httpd-2.4.67</h1>
+<h2>このシステムは何か</h2>
+<p><code>httpd-2.4.67</code> は、Apache HTTP Server のソースコードベースです。モジュール化されたアーキテクチャを採用しており、リクエスト処理、プロトコル制御、セキュリティ、キャッシュ、およびプラットフォーム固有の抽象化レイヤーを個別のモジュールとして実装しています。</p>
+<h2>アーキテクチャ概観</h2>
+<p>本システムは、コアエンジンと、それを拡張する多数のモジュール群で構成されています。</p>
+<ul>
+<li>**コア**: リクエスト処理のライフサイクル、設定管理、およびマルチプロセッシング（MPM）の基盤を提供します。</li>
+<li>**MPM**: OS に適した並行処理モデル（Event, Worker, Prefork 等）を選択・実装します。</li>
+<li>**フィルタチェーン**: バケットブリゲード（<code>apr_bucket_brigade</code>）を介したストリーム処理パイプラインにより、データの加工・転送を行います。</li>
+<li>**プロバイダーモデル**: 認証、認可、キャッシュ、ロック管理などの機能を抽象化し、バックエンド実装を疎結合に切り替え可能にしています。</li>
+</ul>
+<h2>主要モジュール</h2>
+<ul>
+<li>**<code>server</code>**: サーバーの起動、設定、MPM 管理の基盤。</li>
+<li>**<code>modules/http</code> / <code>modules/http2</code>**: HTTP/1.1 および HTTP/2 プロトコルの実装。</li>
+<li>**<code>modules/aaa</code>**: 認証・認可（AAA）フレームワーク。</li>
+<li>**<code>modules/cache</code>**: コンテンツキャッシュおよび共有オブジェクトキャッシュ（socache）。</li>
+<li>**<code>modules/dav</code>**: WebDAV プロトコルおよびリポジトリ管理。</li>
+<li>**<code>modules/proxy</code>**: ロードバランサおよび各種プロトコルプロキシ。</li>
+<li>**<code>modules/ssl</code>**: OpenSSL を用いたセキュア通信。</li>
+<li>**<code>modules/md</code>**: ACME プロトコルによる証明書自動管理。</li>
+</ul>
+<h2>実行時ライフサイクル</h2>
+<p>1. **初期化**: <code>main</code> 関数から起動し、設定ファイルをパースして設定ツリーを構築。各モジュールの <code>register_hooks</code> が呼び出され、処理フェーズにハンドラが登録されます。 2. **MPM 起動**: 選択された MPM が子プロセス/スレッドを生成し、リスナーソケットを監視します。 3. **リクエスト処理**: 接続を受け入れると、フィルタチェーンを介してリクエストが解析され、適切なハンドラへディスパッチされます。 4. **終了**: シグナル受信により <code>clean_child_exit</code> 等が呼び出され、リソースのクリーンアップとプロセスの終了が行われます。</p>
+<h2>中核データ構造</h2>
+<ul>
+<li>**<code>request_rec</code>**: リクエストのライフサイクル全体を管理するコンテキスト。</li>
+<li>**<code>conn_rec</code>**: 接続ごとの状態を保持。</li>
+<li>**<code>ap_filter_t</code>**: フィルタチェーンの各ノード。</li>
+<li>**<code>apr_bucket_brigade</code>**: フィルタ間を流れるデータストリームのコンテナ。</li>
+<li>**<a class="wiki-source-link" href="../source/include/http_config.h.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__module.html&quot;}, '*');"><code>module</code></a>**: モジュールのエントリポイントと設定を保持する構造体。</li>
+<li>**<a class="wiki-source-link" href="../source/include/http_config.h.html#L509" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_conf_vector_t.html&quot;}, '*');"><code>ap_conf_vector_t</code></a>**: モジュールごとの設定情報を格納するベクトル。</li>
+</ul>
+<h2>横断的トピック</h2>
+<ul>
+<li>**メモリ管理**: <code>apr_pool_t</code> を用いた階層的なメモリ管理により、リクエストや接続の終了時にリソースを一括解放します。</li>
+<li>**フック機構**: <code>AP_IMPLEMENT_HOOK_*</code> マクロにより、モジュール間で疎結合な処理の挿入を可能にします。</li>
+<li>**共有メモリ管理**: <a class="wiki-source-link" href="../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> や <code>socache</code> を通じ、プロセス間での状態共有（セッションキャッシュやロードバランサのステータス）を実現します。</li>
+<li>**プロトコル抽象化**: <code>apr_off_t</code> や <code>apr_status_t</code> を用いたプラットフォーム非依存のデータ型管理。</li>
+</ul>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>include/httpd.h</code></a> (基本構造の理解) 2. <a class="wiki-source-link" href="../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> (設定とモジュール管理) 3. <a class="wiki-source-link" href="../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> (並行処理モデルの理解) 4. <a class="wiki-source-link" href="../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a> (リクエスト処理のライフサイクル) 5. <a class="wiki-source-link" href="../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> (フィルタチェーンの仕組み) 6. <a class="wiki-source-link" href="../source/modules/aaa/mod_authn_core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_core.c.html&quot;}, '*');"><code>modules/aaa/mod_authn_core.c</code></a> (プロバイダーフレームワークの例)</p>
+<h2>未解決の問い</h2>
+<ul>
+<li>各 MPM 間での <code>child_main</code> や <code>perform_idle_server_maintenance</code> の詳細な差異と、それらがシステム全体の安定性に与える影響の精緻化。</li>
+<li><code>mod_dav</code> におけるロックデータベースの並行書き込み時の整合性保証メカニズムの検証。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

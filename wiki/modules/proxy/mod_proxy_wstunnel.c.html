@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/proxy/mod_proxy_wstunnel.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_wstunnel.c.html&quot;}, '*');">modules/proxy/mod_proxy_wstunnel.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_proxy_wstunnel</code> は、Apache HTTP Server における WebSocket プロトコル（<code>ws:</code> / <code>wss:</code>）のトンネリングを専門に扱うプロキシモジュールです。HTTP アップグレードリクエストをバックエンドへ転送し、双方向のデータストリームを確立します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_proxy</code> サブシステムの一部として、特定のスキーム（<code>ws</code>, <code>wss</code>）に対するハンドラを提供します。<code>mod_proxy_http</code> と共存し、設定に応じてフォールバックを行う柔軟性を持ちます。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト処理**: WebSocket アップグレードリクエストの検証とバックエンドへの転送。</li>
+<li>**トンネリング**: クライアントとバックエンド間の双方向通信を <code>apr_pollset</code> を用いて非同期的に中継。</li>
+<li>**設定管理**: <code>ProxyWebsocketFallbackToProxyHttp</code> ディレクティブによる <code>mod_proxy_http</code> へのフォールバック制御。</li>
+<li>**URL 正規化**: WebSocket 特有のスキームを処理し、バックエンド接続用の正規化された URL を生成。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定とライフサイクル</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L22" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxyws_dir_conf.html&quot;}, '*');"><code>proxyws_dir_conf</code></a>: ディレクトリ単位の設定構造体。フォールバックの可否を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L445" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__create_proxyws_dir_config.html&quot;}, '*');"><code>create_proxyws_dir_config</code></a> / <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L455" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__merge_proxyws_dir_config.html&quot;}, '*');"><code>merge_proxyws_dir_config</code></a>: 設定の初期化と継承ロジック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L496" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__ws_proxy_hooks.html&quot;}, '*');"><code>ws_proxy_hooks</code></a>: <code>proxy_hook_scheme_handler</code> 等を登録し、<code>mod_proxy_http</code> より優先的に処理を行うためのフック設定。</li>
+</ul>
+<h3>プロキシ処理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L346" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_handler.html&quot;}, '*');"><code>proxy_wstunnel_handler</code></a>: メインのエントリポイント。接続の確立からトンネリングの開始までを統括。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_request.html&quot;}, '*');"><code>proxy_wstunnel_request</code></a>: 実際のトンネリングループ。<code>apr_pollset</code> を使用してクライアントとバックエンドのソケットを監視し、データを転送。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_canon.html&quot;}, '*');"><code>proxy_wstunnel_canon</code></a>: URL の解析と正規化。<code>ws</code>/<code>wss</code> スキームを処理し、バックエンド接続用の <code>r-&gt;filename</code> を構築。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **フック**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L29" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_check_trans.html&quot;}, '*');"><code>proxy_wstunnel_check_trans</code></a> がリクエストをインターセプトし、<code>Upgrade</code> ヘッダーの有無を確認。 2. **正規化**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L61" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_canon.html&quot;}, '*');"><code>proxy_wstunnel_canon</code></a> が URL を解析し、<code>proxy:</code> スキームを付与して内部転送用形式に変換。 3. **ハンドラ**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L346" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_handler.html&quot;}, '*');"><code>proxy_wstunnel_handler</code></a> がバックエンド接続を確保し、<a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L3784" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_connect_backend.html&quot;}, '*');"><code>ap_proxy_connect_backend</code></a> で接続を確立。 4. **トンネリング**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_request.html&quot;}, '*');"><code>proxy_wstunnel_request</code></a> が <code>apr_pollset</code> を作成し、クライアントとバックエンドのソケットを登録。ループ内で <a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html#L5222" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__proxy_util_c__ap_proxy_transfer_between_connections.html&quot;}, '*');"><code>ap_proxy_transfer_between_connections</code></a> を呼び出し、双方向のデータ転送を実行。 5. **終了**: どちらかの接続が切断されるかエラーが発生するまでループし、最後に接続を解放。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a>: プロキシ共通のデータ構造（<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L269" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_conn_rec.html&quot;}, '*');"><code>proxy_conn_rec</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.h.html#L114" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_h__proxy_worker.html&quot;}, '*');"><code>proxy_worker</code></a> 等）と API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>: モジュール設定およびディレクティブ定義用。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_http.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_http.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_http.c</code></a>: 本モジュールがフォールバック先として依存する、標準的な HTTP プロキシモジュール。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/proxy/proxy_util.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/proxy_util.c.html&quot;}, '*');"><code>modules/proxy/proxy_util.c</code></a>: 接続の管理や転送処理の共通関数群。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <code>r-&gt;pool</code> を使用してリクエスト単位のライフサイクルを管理しています。<code>apr_brigade</code> はバックエンドとの通信バッファとして使用されます。</li>
+<li>**トンネリングの性質**: <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L163" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_request.html&quot;}, '*');"><code>proxy_wstunnel_request</code></a> 内のループは、トンネルが確立されるとリクエスト処理全体を占有します。そのため、このハンドラが実行されると他の処理は行われません。</li>
+<li>**フォールバック**: <code>mod_proxy_http</code> がロードされている場合、設定によりそちらへ処理を委譲可能です。<a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy_wstunnel.c.html#L496" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_wstunnel_c__ws_proxy_hooks.html&quot;}, '*');"><code>ws_proxy_hooks</code></a> で <code>mod_proxy_http</code> を成功時の後続として指定している点に注意してください。</li>
+<li>**制限事項**: 本ソースは WebSocket のトンネリングに特化しており、HTTP/2 などの高度なプロトコル変換ロジックは含まれていません。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxyws_dir_conf.html" target="wiki-view"><code>proxyws_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_check_trans.html" target="wiki-view"><code>proxy_wstunnel_check_trans</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_canon.html" target="wiki-view"><code>proxy_wstunnel_canon</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_request.html" target="wiki-view"><code>proxy_wstunnel_request</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_handler.html" target="wiki-view"><code>proxy_wstunnel_handler</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__create_proxyws_dir_config.html" target="wiki-view"><code>create_proxyws_dir_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__merge_proxyws_dir_config.html" target="wiki-view"><code>merge_proxyws_dir_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxyws_fallback_to_proxy_http.html" target="wiki-view"><code>proxyws_fallback_to_proxy_http</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__proxy_wstunnel_post_config.html" target="wiki-view"><code>proxy_wstunnel_post_config</code></a></li>
+<li><a href="../../symbols/modules__proxy__mod_proxy_wstunnel_c__ws_proxy_hooks.html" target="wiki-view"><code>ws_proxy_hooks</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

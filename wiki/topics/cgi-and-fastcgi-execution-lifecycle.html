@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/cgi-and-fastcgi-execution-lifecycle.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>CGI and FastCGI Execution Lifecycle</h1>
+<h2>概念</h2>
+<p><code>CGI and FastCGI Execution Lifecycle</code> は、Apache HTTP Server が外部の CGI (Common Gateway Interface) スクリプトや関連するバックエンドプロセスを起動・管理し、リクエストおよびレスポンスの仲介を行うライフサイクルです。これには、環境変数のセットアップ、プロセスのフォーク（または専用デーモンへの処理委譲）、および標準入出力を介した通信の管理が含まれます。</p>
+<h2>なぜ重要か</h2>
+<p>動的コンテンツを生成する外部プロセスと安全かつ効率的に連携することは、Webサーバーのパフォーマンスと安定性に直結します。特にマルチスレッド型のMPM（Multi-Processing Module）環境では、リクエストごとに直接プロセスをフォークするとシステム全体のパフォーマンス低下やスレッド安全性の問題が生じるため、専用のデーモンプロセスを介して実行を制御する仕組みが極めて重要になります。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__generators.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__generators.html&quot;, &quot;source&quot;: &quot;source/modules/generators/cgi_common.h.html&quot;}, '*');"><code>module:modules/generators</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本ライフサイクルは、主に以下のファイル群によって構成されています：</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a>**: CGI および CGID モジュール間で共有される共通のデータ構造やヘルパー定義を提供します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a>**: 主にシングルスレッド（Preforkなど）環境向けに、Webサーバープロセスから直接CGIスクリプトをフォークして実行する標準CGIモジュールです。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a>**: マルチスレッド環境向けに、専用のCGIデーモンプロセス（<code>cgid</code>）をバックグラウンドで起動し、ソケット通信を介してCGIスクリプトの起動と通信を処理するモジュールです。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、提供されたソースコードの詳細な解析が不足しているため、具体的な関数呼び出しレベルでのエンドツーエンドの制御フローは完全には判明していません。</p>
+<p>一般的な動作モデルとしては、以下の流れが想定されます： 1. クライアントからのリクエストを Apache が受信し、CGIハンドラが起動します。 2. <code>mod_cgi</code> または <code>mod_cgid</code> が、リクエスト情報に基づいて環境変数を構築します。 3. <code>mod_cgi</code> の場合は直接子プロセスをフォークしてスクリプトを実行し、<code>mod_cgid</code> の場合はUNIXドメインソケットを介して <code>cgid</code> デーモンに実行を依頼します。 4. 外部CGIスクリプトが実行され、標準出力を介してレスポンスがWebサーバーに返送されます。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、モジュール間における厳密な不変条件（スレッド安全性、ソケット記述子の生存期間、シグナルハンドリングの制約など）は完全には特定されていません。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**MPMとモジュールの不適合**: マルチスレッドMPM（WorkerやEventなど）を使用しているにもかかわらず、<code>mod_cgid</code> ではなく <code>mod_cgi</code> を使用すると、フォーク時のオーバーヘッドやシグナル処理の競合が発生する可能性があります。</li>
+<li>**環境変数の管理**: 外部プロセスに引き渡される環境変数のフィルタリングやサニタイズが不十分な場合、セキュリティ上の脆弱性につながる恐れがあります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/generators/cgi_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/cgi_common.h.html&quot;}, '*');"><code>modules/generators/cgi_common.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgi.c.html&quot;}, '*');"><code>modules/generators/mod_cgi.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/generators/mod_cgid.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/generators/mod_cgid.c.html&quot;}, '*');"><code>modules/generators/mod_cgid.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

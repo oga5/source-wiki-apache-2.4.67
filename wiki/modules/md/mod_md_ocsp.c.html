@@ -1,0 +1,100 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/md/mod_md_ocsp.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_ocsp.c.html&quot;}, '*');">modules/md/mod_md_ocsp.c</a></h1>
+<h2>概要</h2>
+<p>本ファイルは、Apache HTTP Server における OCSP Stapling の統合管理を担当します。<code>mod_md</code> の一部として、証明書のステータス取得、キャッシュ、および定期的な更新（Watchdog 経由）を自動化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_md</code> サブシステムにおいて、OCSP レスポンスのライフサイクルを管理するレイヤーです。<a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> が提供するフックと連携し、証明書の検証に必要な OCSP ステータスを透過的に提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**ステータス提供**: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> からの要求に対し、キャッシュされた OCSP レスポンスを供給する。</li>
+<li>**初期化と検証**: 証明書チェーンを解析し、OCSP Stapling の対象となる証明書を特定・準備する。</li>
+<li>**バックグラウンド更新**: <code>mod_watchdog</code> を利用し、定期的に OCSP レスポンスを更新する。</li>
+<li>**ハウスキーピング**: 古くなった OCSP レスポンスファイルを定期的に削除し、ストレージの肥大化を防止する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>ステータス管理 (Public API)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L56" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__md_ocsp_prime_status.html&quot;}, '*');"><code>md_ocsp_prime_status</code></a>: 証明書チェーンを解析し、OCSP ステータスの取得準備を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__md_ocsp_provide_status.html&quot;}, '*');"><code>md_ocsp_provide_status</code></a>: <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> から呼ばれるコールバック関数。キャッシュされた OCSP レスポンスを供給する。</li>
+</ul>
+<h3>Watchdog 制御</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L215" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__md_ocsp_start_watching.html&quot;}, '*');"><code>md_ocsp_start_watching</code></a>: OCSP 更新用 Watchdog を登録・起動する。</li>
+<li><code>run_watchdog</code>: Watchdog のメインループ。<a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.c.html#L895" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_ocsp_c__md_ocsp_renew.html&quot;}, '*');"><code>md_ocsp_renew</code></a> を呼び出し、次回の実行タイミングを計算する。</li>
+</ul>
+<h3>内部構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L142" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__md_ocsp_ctx_t.html&quot;}, '*');"><code>md_ocsp_ctx_t</code></a>: Watchdog の実行コンテキスト。サーバー設定と <code>mod_watchdog</code> インスタンスを保持する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L215" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__md_ocsp_start_watching.html&quot;}, '*');"><code>md_ocsp_start_watching</code></a> が呼ばれ、専用のメモリプールと <code>mod_watchdog</code> インスタンスが作成される。 2. **ステータス更新**: <code>run_watchdog</code> が定期的に起動し、<a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.c.html#L895" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_ocsp_c__md_ocsp_renew.html&quot;}, '*');"><code>md_ocsp_renew</code></a> を通じて各証明書の OCSP レスポンスを更新する。 3. **リクエスト処理**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> が <a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L108" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__md_ocsp_provide_status.html&quot;}, '*');"><code>md_ocsp_provide_status</code></a> を呼び出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__staple_here.html&quot;}, '*');"><code>staple_here</code></a> で設定を確認し、<a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.c.html#L388" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_ocsp_c__md_ocsp_get_status.html&quot;}, '*');"><code>md_ocsp_get_status</code></a> を経由してストレージから DER 形式のレスポンスを取得する。</li>
+<p>4. **クリーンアップ**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L204" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__ocsp_remove_old_responses.html&quot;}, '*');"><code>ocsp_remove_old_responses</code></a> が古いレスポンスファイルを削除し、ストレージの整合性を維持する。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_watchdog.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_watchdog.h.html&quot;}, '*');"><code>mod_watchdog.h</code></a>: バックグラウンドタスクの実行基盤。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_ocsp.h.html&quot;}, '*');"><code>md_ocsp.h</code></a>: OCSP ロジックのコア実装（<a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.c.html#L895" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__md_ocsp_c__md_ocsp_renew.html&quot;}, '*');"><code>md_ocsp_renew</code></a> 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_config.h.html&quot;}, '*');"><code>mod_md_config.h</code></a>: <code>MD_CONFIG_STAPLING</code> 等の設定値取得。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a>: <code>ap_ssl_ocsp_copy_resp</code> 等の <a class="wiki-source-link" href="../../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> インターフェース。</li>
+<li><code>apr_date.h</code></li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_time.h</code></li>
+<li><code>assert.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md.h.html&quot;}, '*');"><code>md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_crypt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_crypt.h.html&quot;}, '*');"><code>md_crypt.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_http.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_http.h.html&quot;}, '*');"><code>md_http.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_json.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_json.h.html&quot;}, '*');"><code>md_json.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_log.h.html&quot;}, '*');"><code>md_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_reg.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_reg.h.html&quot;}, '*');"><code>md_reg.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_store.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_store.h.html&quot;}, '*');"><code>md_store.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_time.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_time.h.html&quot;}, '*');"><code>md_time.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_util.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_util.h.html&quot;}, '*');"><code>md_util.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md.h.html&quot;}, '*');"><code>mod_md.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_ocsp.h.html&quot;}, '*');"><code>mod_md_ocsp.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_private.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_private.h.html&quot;}, '*');"><code>mod_md_private.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_ocsp.c.html&quot;}, '*');"><code>md_ocsp.c</code></a>: OCSP レスポンスの取得・保存・解析を行う低レイヤー実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/md/mod_md_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/mod_md_config.c.html&quot;}, '*');"><code>mod_md_config.c</code></a>: OCSP 関連の設定ディレクティブの定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: Watchdog 用のコンテキストは、サーバーのライフサイクルを跨いで生存させるため、専用の <code>apr_pool_t</code> と <code>apr_allocator_t</code> を使用しています。</li>
+<li>**エラーパス**: <a class="wiki-source-link" href="../../../source/modules/md/mod_md_ocsp.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__md__mod_md_ocsp_c__staple_here.html&quot;}, '*');"><code>staple_here</code></a> が偽を返す場合、OCSP Stapling はスキップされ、<a class="wiki-source-link" href="../../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a> が返されます。これは設定ミスや無効な証明書チェーンの場合の標準的な挙動です。</li>
+<li>**制約**: <code>mod_watchdog</code> が必須です。これがロードされていない場合、OCSP Stapling 機能は初期化時にエラーとなります。</li>
+<li>**省略箇所**: 本ファイルは <code>mod_watchdog</code> とのインターフェースに特化しており、実際の OCSP 通信プロトコル（ASN.1 解析や HTTP 通信）の詳細は <a class="wiki-source-link" href="../../../source/modules/md/md_ocsp.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/md/md_ocsp.c.html&quot;}, '*');"><code>md_ocsp.c</code></a> に委譲されています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__staple_here.html" target="wiki-view"><code>staple_here</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_prime_status.html" target="wiki-view"><code>md_ocsp_prime_status</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__ocsp_copy_ctx_t.html" target="wiki-view"><code>ocsp_copy_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_provide_status.html" target="wiki-view"><code>md_ocsp_provide_status</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_ctx_t.html" target="wiki-view"><code>md_ocsp_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__next_run_default.html" target="wiki-view"><code>next_run_default</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__run_watchdog.html" target="wiki-view"><code>run_watchdog</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__ocsp_remove_old_responses.html" target="wiki-view"><code>ocsp_remove_old_responses</code></a></li>
+<li><a href="../../symbols/modules__md__mod_md_ocsp_c__md_ocsp_start_watching.html" target="wiki-view"><code>md_ocsp_start_watching</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

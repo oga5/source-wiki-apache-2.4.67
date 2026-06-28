@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__filters__mod_data_c__data_out_filter.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/filters/mod_data.c.html#L65" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_data_c__data_out_filter.html&quot;}, '*');">data_out_filter</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/filters/mod_data.c:65</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP レスポンスボディを RFC 2397 形式の「data URL」スキーム（<code>data:[&lt;mime-type&gt;];base64,&lt;payload&gt;</code>）に変換する出力フィルタです。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t data_out_filter(ap_filter_t *f, apr_bucket_brigade *bb)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>ap_filter_t *f</code>（フィルタコンテキスト）、<code>apr_bucket_brigade *bb</code>（処理対象のバケットブリゲード）。</li>
+<li>**出力**: <code>apr_status_t</code>（処理結果ステータス）。成功時は <code>APR_SUCCESS</code> を返します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>初回呼び出し時に <code>f-&gt;ctx</code> が初期化され、data URL のヘッダー部分が生成されます。</li>
+<li>サブリクエストに対してはフィルタを適用せず、そのまま後続のフィルタへパススルーします。</li>
+<li>Base64 エンコードの性質上、3バイト単位の処理が必要であり、端数は <code>ctx-&gt;overflow</code> に保持されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **初期化**: 初回呼び出し時に <a class="wiki-source-link" href="../../source/modules/filters/mod_data.c.html#L40" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_data_c__data_ctx.html&quot;}, '*');"><code>data_ctx</code></a> を作成し、<code>Content-Type</code> を <code>text/plain</code> に変更します。<code>Content-Length</code> が存在する場合は、Base64 エンコード後のサイズを再計算して更新します。 2. **変換ループ**:</p>
+<ul>
+<li><code>EOS</code> (End of Stream) バケット: <code>overflow</code> バッファに残った端数を処理し、<code>EOS</code> を下流へ渡してフィルタを解除します。</li>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_proxy_html.c.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_proxy_html.c.html&quot;}, '*');"><code>FLUSH</code></a> バケット: 蓄積されたデータを下流へ流します。</li>
+<li>メタデータバケット: 変換せずにそのまま下流へ渡します。</li>
+<li>データバケット: 最大 6000 バイト単位で読み取り、Base64 エンコードを適用して <code>ctx-&gt;bb</code> に書き込み、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> で後続へ渡します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/filters/mod_data.c:245</code> にて <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L257" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_register_output_filter.html&quot;}, '*');"><code>ap_register_output_filter</code></a> を通じて登録されています。</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介してフィルタチェーンの後続フィルタを呼び出します。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/filters/mod_data.c.html#L40" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_data_c__data_ctx.html&quot;}, '*');"><code>data_ctx</code></a>: フィルタのコンテキスト。Base64 変換用の <code>overflow</code> バッファと出力用ブリゲード <code>bb</code> を保持します。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**サブリクエスト**: フィルタを適用せずパススルーします。</li>
+<li>**Content-Length**: 解析不能または <code>APR_INT32_MAX</code> を超える場合はヘッダーを削除します。</li>
+<li>**メモリ**: <code>APR_BUCKET_BUFF_SIZE</code> を利用してメモリ消費を抑制しています。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本フィルタは <code>EOS</code> を基準に終了判定を行うため、サブリクエストでの動作には制限があります。</li>
+<li>Base64 エンコードの端数処理（<code>overflow</code>）が正しく行われるよう、バケットの分割と連結のロジックを維持してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

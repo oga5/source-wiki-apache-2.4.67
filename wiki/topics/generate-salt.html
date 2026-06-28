@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/generate-salt.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>generate_salt</h1>
+<h2>概念</h2>
+<p><code>generate_salt</code> は、Apache HTTP Server（httpd-2.4.67）において、パスワードハッシュ生成時に使用されるランダムなソルト（Salt）文字列を生成するための内部ユーティリティ関数です。この関数は、APR（Apache Portable Runtime）ライブラリの乱数生成機能を利用し、取得した乱数を特定のBase64風文字セット（<code>itoa64</code>）を用いてエンコードし、指定されたバッファに格納します。</p>
+<h2>なぜ重要か</h2>
+<p>パスワードの安全なハッシュ化には、レインボーテーブル攻撃などの事前計算攻撃を防ぐための「ソルト」が不可欠です。<code>generate_salt</code> は、暗号論的に安全な乱数（<code>apr_generate_random_bytes</code> 経由）から一意で予測不可能なソルトを一貫した方法で生成することにより、<code>support</code> モジュール（htpasswdなどのツール）や <code>modules/lua</code> モジュール（Luaスクリプトによる認証処理など）におけるパスワードハッシュの安全性を担保する役割を担っています。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__lua.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__lua.html&quot;, &quot;source&quot;: &quot;source/modules/lua/lua_apr.c.html&quot;}, '*');"><code>module:modules/lua</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/support.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/support.html&quot;, &quot;source&quot;: &quot;source/support/ab.c.html&quot;}, '*');"><code>module:support</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__lua__lua_passwd_c__generate_salt.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__generate_salt.html&quot;, &quot;source&quot;: &quot;source/modules/lua/lua_passwd.c.html#L47&quot;}, '*');"><code>symbol:modules/lua/lua_passwd.c#generate_salt</code></a> : Luaモジュール内でのパスワードハッシュ生成（<a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__mk_password_hash.html&quot;}, '*');"><code>mk_password_hash</code></a> など）に使用される静的（<code>static</code>）関数。</li>
+<li><a class="wiki-entity-link" href="../symbols/support__passwd_common_c__generate_salt.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_c__generate_salt.html&quot;, &quot;source&quot;: &quot;source/support/passwd_common.c.html#L71&quot;}, '*');"><code>symbol:support/passwd_common.c#generate_salt</code></a> : 共通のパスワード管理ツール（<a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_c__mkhash.html&quot;}, '*');"><code>mkhash</code></a> など）で広く使用される関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **呼び出し**: パスワードハッシュ生成処理（<a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.c.html&quot;}, '*');"><code>modules/lua/lua_passwd.c</code></a> の <a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__mk_password_hash.html&quot;}, '*');"><code>mk_password_hash</code></a> や <a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a> の <a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_c__mkhash.html&quot;}, '*');"><code>mkhash</code></a> など）から、必要なソルトの長さ（<code>size</code>）を指定して <code>generate_salt</code> が呼び出されます。 2. **バイト数計算**: 要求された <code>size</code> に基づいて、必要な乱数バイト数 <code>n</code> を算出します。 3. **乱数生成**: APRライブラリの <code>apr_generate_random_bytes</code> を呼び出し、暗号論的に安全なランダムバイト列を取得します。 4. **Base64風エンコード**: 取得したバイト列を、<code>itoa64</code> テーブル（<code>./0-9A-Za-z</code>）を用いてBase64風の文字列に変換します。 5. **格納と終端**: 変換された文字列をバッファ <code>s</code> に書き込み、末尾にヌル文字（<code>\0</code>）を付与して呼び出し元に返します。</p>
+<p>※なお、呼び出し元（<a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__mk_password_hash.html&quot;}, '*');"><code>mk_password_hash</code></a> や <a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_c__mkhash.html&quot;}, '*');"><code>mkhash</code></a>）のさらに上位に位置する、システム全体における完全なエンドツーエンドの認証フローや、これらがどのように統合されて動作するかについての詳細な全体像は、提供されたコンテキストからは未だ完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**バッファサイズ制限**: 生成に必要な乱数バイト数 <code>n</code> は、内部の一時バッファ <code>rnd</code> のサイズ（32バイト）を超えてはなりません。</li>
+<li><a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.c.html&quot;}, '*');"><code>modules/lua/lua_passwd.c</code></a> の実装では、これを超えた場合に <code>ERR_RANDOM</code> エラーを返します。</li>
+<li><a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a> の実装では、これを超えた場合に <code>abort()</code> を呼び出してプロセスを即座に終了させます。</li>
+<li>**出力バッファの確保**: 呼び出し元は、<code>s</code> に対して <code>size + 1</code> 以上のメモリ領域を確保しておく必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**バッファ不足時のアボート**: <a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a> の実装では、要求するソルトのサイズが内部制限（32バイト）を超えると、エラーを返すのではなく <code>abort()</code> によりプロセスが強制終了します。呼び出し側でのサイズ指定には注意が必要です。</li>
+<li>**非標準のBase64エンコード**: 変換に使用される <code>itoa64</code> テーブル（<code>./0-9A-Za-z</code>）は、標準的なBase64（RFC 4648等）とは文字順序や文字セットが異なります。このため、一般的なBase64デコーダで直接デコードすることはできません。</li>
+<li>**グローバル変数の依存**: <a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a> の実装は、エラー出力のために <code>errfile</code> グローバル変数に依存しています。呼び出し前にこれが適切に初期化されている必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.c.html&quot;}, '*');"><code>modules/lua/lua_passwd.c</code></a> : Luaモジュールにおける <code>generate_salt</code> の実装と、その呼び出し元である <a class="wiki-source-link" href="../../source/modules/lua/lua_passwd.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_passwd_c__mk_password_hash.html&quot;}, '*');"><code>mk_password_hash</code></a> などの処理。</li>
+<li><a class="wiki-source-link" href="../../source/support/passwd_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');"><code>support/passwd_common.c</code></a> : 共通サポートツールにおける <code>generate_salt</code> の実装と、<a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L179" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__passwd_common_c__mkhash.html&quot;}, '*');"><code>mkhash</code></a> などの関連処理。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

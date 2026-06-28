@@ -1,0 +1,97 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/filters/mod_charset_lite.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_charset_lite.c.html&quot;}, '*');">modules/filters/mod_charset_lite.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_charset_lite.c.html&quot;}, '*');"><code>mod_charset_lite.c</code></a> は、Apache HTTP Server においてリクエストおよびレスポンスの文字セット変換（トランスコーディング）を行うための軽量なフィルタモジュールです。主に <code>apr_xlate</code> を利用して、設定されたソース文字セットからデフォルト文字セットへの変換を透過的に実行します。</p>
+<h2>モジュール内での役割</h2>
+<p>本モジュールは <code>modules/filters</code> ディレクトリに属し、HTTP フィルタチェーンの一部として動作します。<code>mod_charset</code> や <code>mod_ebcdic</code> の代替となる軽量な実装として設計されており、主に設定ベースの文字セット変換を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: <code>CharsetSourceEnc</code>、<code>CharsetDefault</code>、<code>CharsetOptions</code> ディレクティブによるディレクトリ単位の変換設定の保持とマージ。</li>
+<li>**フィルタ登録**: <code>XLATEIN</code>（入力）および <code>XLATEOUT</code>（出力）フィルタの登録と、リクエストごとの動的な挿入。</li>
+<li>**変換処理**: <code>apr_xlate</code> を用いたバッファ単位の文字コード変換。</li>
+<li>**状態管理**: マルチバイト文字がバケット境界を跨ぐ場合のバッファリングと、変換エラーの追跡。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__charset_dir_t.html&quot;}, '*');"><code>charset_dir_t</code></a>: ディレクトリごとの変換設定（ソース/デフォルト文字セット、暗黙的追加フラグ、強制変換フラグ）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__charset_filter_ctx_t.html&quot;}, '*');"><code>charset_filter_ctx_t</code></a>: フィルタインスタンスごとのコンテキスト。<code>apr_xlate_t</code> ハンドル、変換バッファ、未完了のマルチバイト文字保持用バッファ (<code>buf</code>) を含む。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__charset_req_t.html&quot;}, '*');"><code>charset_req_t</code></a>: リクエストごとの設定情報。<code>request_config</code> に格納される。</li>
+</ul>
+<h3>フィルタ関数</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L754" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__xlate_out_filter.html&quot;}, '*');"><code>xlate_out_filter</code></a>: 出力フィルタ。レスポンスボディを変換して下流へ渡す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L974" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__xlate_in_filter.html&quot;}, '*');"><code>xlate_in_filter</code></a>: 入力フィルタ。リクエストボディを変換して上流へ渡す。</li>
+</ul>
+<h3>ユーティリティ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__find_code_page.html&quot;}, '*');"><code>find_code_page</code></a>: <code>fixup</code> フック。変換が必要か判定し、コンテキストを初期化する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L645" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__xlate_brigade.html&quot;}, '*');"><code>xlate_brigade</code></a>: 変換のコアロジック。バケットを読み込み、<code>apr_xlate_conv_buffer</code> を呼び出す。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L430" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__finish_partial_char.html&quot;}, '*');"><code>finish_partial_char</code></a> / <a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L410" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__set_aside_partial_char.html&quot;}, '*');"><code>set_aside_partial_char</code></a>: バケットを跨ぐマルチバイト文字の処理。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L193" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__find_code_page.html&quot;}, '*');"><code>find_code_page</code></a> がリクエストごとに呼ばれ、設定に基づき <a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__charset_req_t.html&quot;}, '*');"><code>charset_req_t</code></a> を作成。 2. **フィルタ挿入**: <a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L314" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__xlate_insert_filter.html&quot;}, '*');"><code>xlate_insert_filter</code></a> がフィルタチェーンに <code>XLATEIN</code>/<code>XLATEOUT</code> を追加。 3. **変換実行**:</p>
+<ul>
+<li>フィルタが呼ばれると、<a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L645" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__xlate_brigade.html&quot;}, '*');"><code>xlate_brigade</code></a> がバケットを順次処理。</li>
+<li><code>apr_xlate_conv_buffer</code> で変換し、結果を一時バッファへ格納。</li>
+<li>バッファが一杯になるか EOS に達すると、<a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L381" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__filters__mod_charset_lite_c__send_downstream.html&quot;}, '*');"><code>send_downstream</code></a> で下流へ送信。</li>
+<li>マルチバイト文字がバケット境界で分断された場合、<code>ctx-&gt;buf</code> に一時保存し、次回のバケットと結合して変換する。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_xlate.h</code>: 文字セット変換 API。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a>, <code>apr_buckets.h</code>: フィルタチェーンおよびバケット操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a>: Apache モジュール基盤。</li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_charset.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_charset.h.html&quot;}, '*');"><code>util_charset.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/util_charset.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_charset.h.html&quot;}, '*');"><code>util_charset.h</code></a>: 文字セット関連の共通ユーティリティ。</li>
+<li><code>mod_charset.c</code> (言及のみ): 本モジュールの設計上の比較対象。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: コンテキストやブリゲードはリクエストプール (<code>r-&gt;pool</code>) を使用。</li>
+<li>**制約**: </li>
+<li><a class="wiki-source-link" href="../../../source/modules/filters/mod_charset_lite.c.html#L51" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/filters/mod_charset_lite.c.html&quot;}, '*');"><code>FATTEST_CHAR</code></a> (8バイト) を超える文字がバケットを跨ぐ場合、変換エラー (<code>EES_LIMIT</code>) となる。</li>
+<li>マルチバイト文字がバケット境界を跨ぐ際の処理は、現在の実装では2つのバケットを跨ぐケースまでを想定している。</li>
+<li>**注意点**: 変換によってコンテンツ長が変化するため、出力フィルタでは <code>Content-Length</code> ヘッダーを削除する挙動がある。</li>
+<li>**省略された詳細**: <code>apr_xlate</code> 自体の内部実装や、特定のプラットフォーム（EBCDIC環境など）における詳細な挙動については、本ファイルでは抽象化されている。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__ees_t.html" target="wiki-view"><code>ees_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__charset_dir_t.html" target="wiki-view"><code>charset_dir_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__charset_filter_ctx_t.html" target="wiki-view"><code>charset_filter_ctx_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__charset_req_t.html" target="wiki-view"><code>charset_req_t</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__create_charset_dir_conf.html" target="wiki-view"><code>create_charset_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__merge_charset_dir_conf.html" target="wiki-view"><code>merge_charset_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__add_charset_source.html" target="wiki-view"><code>add_charset_source</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__add_charset_default.html" target="wiki-view"><code>add_charset_default</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__add_charset_options.html" target="wiki-view"><code>add_charset_options</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__find_code_page.html" target="wiki-view"><code>find_code_page</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__configured_in_list.html" target="wiki-view"><code>configured_in_list</code></a></li>
+<li><a href="../../symbols/modules__filters__mod_charset_lite_c__xlate_insert_filter.html" target="wiki-view"><code>xlate_insert_filter</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

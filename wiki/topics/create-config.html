@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/create-config.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>create_config</h1>
+<h2>概念</h2>
+<p><code>create_config</code> は、Apache HTTP Server の各モジュールにおいて、サーバーごとの設定構造体を生成・初期化するためのコールバック関数（フック）です。提供されたコードベースからは、<code>mod_cache_disk</code>、<code>mod_cache_socache</code>、<code>mod_proxy_connect</code> などのモジュールで同名の静的関数（<code>static void *create_config(apr_pool_t *p, server_rec *s)</code>）として定義されていることが確認できます。</p>
+<h2>なぜ重要か</h2>
+<p>Apache HTTP Server の起動時や設定読み込みフェーズにおいて、各モジュールが独自の設定パラメータを保持するためのメモリ領域を適切に確保・初期化するために不可欠です。例えば、<code>mod_proxy_connect</code> では、接続を許可するポート範囲を管理する構造体（<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_connect.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_connect_c__connect_conf.html&quot;}, '*');"><code>connect_conf</code></a>）をこの段階で初期化します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__proxy.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__proxy.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/ajp.h.html&quot;}, '*');"><code>module:modules/proxy</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__cache__mod_cache_disk_c__create_config.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_disk_c__create_config.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_cache_disk.c.html#L1416&quot;}, '*');"><code>symbol:modules/cache/mod_cache_disk.c#create_config</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__cache__mod_cache_socache_c__create_config.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__create_config.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_cache_socache.c.html#L1208&quot;}, '*');"><code>symbol:modules/cache/mod_cache_socache.c#create_config</code></a></li>
+<li><a class="wiki-entity-link" href="../symbols/modules__proxy__mod_proxy_connect_c__create_config.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_connect_c__create_config.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/mod_proxy_connect.c.html#L58&quot;}, '*');"><code>symbol:modules/proxy/mod_proxy_connect.c#create_config</code></a></li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>Apache HTTP Server の設定フェーズにおいて、登録されたモジュールの設定作成フックとして呼び出されます。</p>
+<p><code>mod_proxy_connect</code> における具体的な流れは以下の通りです： 1. Apache の設定フェーズから、登録された <code>create_config</code> が呼び出されます（<code>modules/proxy/mod_proxy_connect.c:400</code> にて構造体登録を確認）。 2. <code>apr_pcalloc</code> を使用して、メモリプール <a class="wiki-source-link" href="../../source/server/ssl.c.html#L171" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/ssl.c.html&quot;}, '*');"><code>p</code></a> から <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_connect.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_connect_c__connect_conf.html&quot;}, '*');"><code>connect_conf</code></a> 構造体分のメモリを確保します。 3. <code>apr_array_make</code> を呼び出し、許可されたポート範囲を格納するための配列 <code>allowed_connect_ports</code> を初期容量 10 で初期化します。 4. 初期化された構造体へのポインタを返します。</p>
+<p>なお、<code>mod_cache_disk</code> および <code>mod_cache_socache</code> における具体的なエンドツーエンドの流れや、これらを含むシステム全体での詳細な呼び出しシーケンスは現時点では未解明です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**メモリのゼロクリア**: <code>mod_proxy_connect</code> において、返される <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_connect.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_connect_c__connect_conf.html&quot;}, '*');"><code>connect_conf</code></a> 構造体は <code>apr_pcalloc</code> によりゼロクリアされています。</li>
+<li>**初期容量の確保**: <code>mod_proxy_connect</code> の <code>allowed_connect_ports</code> 配列は、初期容量 10 の <code>apr_array_header_t</code> として確保されます。</li>
+<li><code>mod_cache_disk</code> および <code>mod_cache_socache</code> における不変条件は現時点では未解明です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**メモリ不足時の挙動**: <code>mod_proxy_connect</code> において、メモリ不足時には <code>apr_pcalloc</code> または <code>apr_array_make</code> がプロセスを終了させる可能性があります（APR の標準的な挙動）。</li>
+<li>**構造体変更時の追従**: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_connect.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_connect_c__connect_conf.html&quot;}, '*');"><code>connect_conf</code></a> の構造変更や、許可ポート以外の設定項目を追加する場合は、本関数での初期化処理も同期して更新する必要があります。</li>
+<li><code>mod_cache_disk</code> および <code>mod_cache_socache</code> における落とし穴は現時点では未解明です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_connect.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_connect.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_connect.c</code></a> （<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_connect.c.html#L49" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_connect_c__connect_conf.html&quot;}, '*');"><code>connect_conf</code></a> の初期化処理の実装）</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache_disk.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_disk.c.html&quot;}, '*');"><code>modules/cache/mod_cache_disk.c</code></a> （<code>create_config</code> の定義）</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');"><code>modules/cache/mod_cache_socache.c</code></a> （<code>create_config</code> の定義）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/session/mod_session_crypto.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_crypto.c.html&quot;}, '*');">modules/session/mod_session_crypto.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_session_crypto</code> は、Apache HTTP Server のセッション情報を暗号化・復号化するためのモジュールです。<code>mod_session</code> が管理するセッションデータを、設定されたパスフレーズと暗号化アルゴリズムを用いて保護します。APR (Apache Portable Runtime) の <code>apr_crypto</code> API を抽象化レイヤーとして利用し、セッションの機密性を確保します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_session</code> ファミリーの一員として、セッションデータの永続化（Cookie や DBD など）が行われる直前・直後に介入します。<code>session_encode</code> フックで暗号化を、<code>session_decode</code> フックで復号化を担当し、セッションストレージのバックエンドが何であるかに関わらず、透過的な暗号化を提供します。</p>
+<h2>責務</h2>
+<ul>
+<li>**暗号化・復号化の実行**: <code>apr_crypto</code> を用いたセッション文字列の変換。</li>
+<li>**認証 (MAC)**: SipHash-2-4 を用いたデータの改ざん検知（暗号化データに MAC を付与）。</li>
+<li>**設定管理**: サーバー全体およびディレクトリ単位での暗号化設定（パスフレーズ、暗号化アルゴリズム、ドライバ）の保持とマージ。</li>
+<li>**キー管理**: パスフレーズからの暗号鍵生成と、複数のパスフレーズによる復号試行（キーローテーション対応）。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L45" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_dir_conf.html&quot;}, '*');"><code>session_crypto_dir_conf</code></a>: ディレクトリ単位の設定。パスフレーズのリストと使用する暗号アルゴリズムを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_conf.html&quot;}, '*');"><code>session_crypto_conf</code></a>: サーバー全体の設定。使用する暗号ライブラリ（ドライバ）とパラメータを保持。</li>
+</ul>
+<h3>暗号化・復号化ロジック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L246" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__encrypt_string.html&quot;}, '*');"><code>encrypt_string</code></a>: セッション文字列を暗号化し、Base64 エンコードして返す。UUID をソルトとして使用。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__decrypt_string.html&quot;}, '*');"><code>decrypt_string</code></a>: Base64 デコード後、登録されたパスフレーズを順次試行して復号。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__compute_auth.html&quot;}, '*');"><code>compute_auth</code></a>: SipHash を用いてデータに対する認証タグを生成。</li>
+</ul>
+<h3>初期化・フック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_init.html&quot;}, '*');"><code>session_crypto_init</code></a>: <code>post_config</code> フックで <code>apr_crypto</code> ドライバをロードし、サーバープロセスにコンテキストを保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L483" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_encode.html&quot;}, '*');"><code>session_crypto_encode</code></a> / <code>decode</code>: <code>mod_session</code> のフック関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_init.html&quot;}, '*');"><code>session_crypto_init</code></a> が起動時に呼ばれ、<code>apr_crypto</code> ドライバを初期化。生成された <code>apr_crypto_t</code> コンテキストは <code>apr_pool_userdata_set</code> を介してサーバープロセスプールに格納される。 2. **暗号化フロー**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L483" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_encode.html&quot;}, '*');"><code>session_crypto_encode</code></a> が呼ばれる。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L246" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__encrypt_string.html&quot;}, '*');"><code>encrypt_string</code></a> が <code>apr_crypto_passphrase</code> で鍵を生成し、<code>apr_crypto_block_encrypt</code> でデータを暗号化。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__compute_auth.html&quot;}, '*');"><code>compute_auth</code></a> で MAC を計算し、<code>[MAC][Salt][IV][Ciphertext]</code> の形式で連結。</li>
+<li><code>apr_base64_encode</code> で文字列化。</li>
+<p>3. **復号化フロー**:</p>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L513" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__session_crypto_decode.html&quot;}, '*');"><code>session_crypto_decode</code></a> が呼ばれる。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L344" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__decrypt_string.html&quot;}, '*');"><code>decrypt_string</code></a> が Base64 デコード後、<a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L168" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__session__mod_session_crypto_c__compute_auth.html&quot;}, '*');"><code>compute_auth</code></a> で MAC を検証。</li>
+<li>一致した場合のみ <code>apr_crypto_block_decrypt</code> を実行。複数のパスフレーズが設定されている場合、成功するまでループする。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session.h.html&quot;}, '*');"><code>mod_session.h</code></a>: セッション構造体定義。</li>
+<li><code>apr_crypto.h</code>: 暗号化機能の抽象化。</li>
+<li><code>apr_siphash.h</code>: 認証タグ生成（SipHash）。</li>
+<li><code>apr_base64.h</code>: セッション文字列のエンコード/デコード。</li>
+<li><code>apr_md5.h</code>: パスフレーズから SipHash キーを生成するためのハッシュ関数。</li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apu_version.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session.c.html&quot;}, '*');"><code>modules/session/mod_session.c</code></a>: セッション処理のメインロジック。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/session/mod_session_cookie.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_cookie.c.html&quot;}, '*');"><code>modules/session/mod_session_cookie.c</code></a>: 暗号化されたセッションを Cookie として保存する実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのメモリ割り当ては <code>request_rec</code> のプール (<code>r-&gt;pool</code>) を使用しており、リクエスト終了時に自動解放されます。</li>
+<li>**安全性**: <a class="wiki-source-link" href="../../../source/server/util.c.html#L3783" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_memeq_timingsafe.html&quot;}, '*');"><code>ap_memeq_timingsafe</code></a> を使用して MAC の比較を行っており、タイミング攻撃への耐性を考慮しています。</li>
+<li>**制約**: <code>APU_HAVE_CRYPTO</code> が有効である必要があります。また、<code>SessionCryptoPassphrase</code> は複数指定可能で、復号時には古いパスフレーズも順次試行されるため、キーローテーションが可能です。</li>
+<li>**省略された詳細**: <a class="wiki-source-link" href="../../../source/modules/session/mod_session_crypto.c.html#L101" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/session/mod_session_crypto.c.html&quot;}, '*');"><code>SIPROUND</code></a> などの SipHash 実装の詳細なビット演算は、APR 1.6 未満の環境向けのフォールバック実装です。最新の APR 環境では <code>apr_siphash.h</code> が優先されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__session_crypto_dir_conf.html" target="wiki-view"><code>session_crypto_dir_conf</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__session_crypto_conf.html" target="wiki-view"><code>session_crypto_conf</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__ap_siphash24_auth.html" target="wiki-view"><code>ap_siphash24_auth</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__ap_siphash24.html" target="wiki-view"><code>ap_siphash24</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__compute_auth.html" target="wiki-view"><code>compute_auth</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__crypt_init.html" target="wiki-view"><code>crypt_init</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__encrypt_string.html" target="wiki-view"><code>encrypt_string</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__decrypt_string.html" target="wiki-view"><code>decrypt_string</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__session_crypto_encode.html" target="wiki-view"><code>session_crypto_encode</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__session_crypto_decode.html" target="wiki-view"><code>session_crypto_decode</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__session_crypto_init.html" target="wiki-view"><code>session_crypto_init</code></a></li>
+<li><a href="../../symbols/modules__session__mod_session_crypto_c__create_session_crypto_config.html" target="wiki-view"><code>create_session_crypto_config</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

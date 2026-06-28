@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__http2__h2_workers_c__workers_pool_cleanup.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L372" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__workers_pool_cleanup.html&quot;}, '*');">workers_pool_cleanup</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/http2/h2_workers.c:372</code></li>
+</ul>
+<h2>目的</h2>
+<p>HTTP/2 ワーカープールを安全にシャットダウンし、全ワーカースレッドの終了待機およびリソース解放を行うためのクリーンアップ関数です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t workers_pool_cleanup(void *data)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <code>data</code> (ワーカープール管理構造体 <code>h2_workers*</code> へのポインタ)</li>
+<li>**出力**: <code>apr_status_t</code> (常に <code>APR_SUCCESS</code> を返す)</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>本関数は MPM（Multi-Processing Module）のシャットダウン時に呼び出されることを想定しています。</li>
+<li><code>workers-&gt;lock</code> ミューテックスにより、スレッド状態の変更および同期が保護されています。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **シャットダウン開始**: <code>workers-&gt;shutdown</code> および <code>workers-&gt;aborted</code> フラグを立て、<a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L361" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__wake_all_idles.html&quot;}, '*');"><code>wake_all_idles</code></a> を呼び出して全アイドルスレッドを起床させます。 2. **終了待機**: 最大5秒間、<code>active_slots</code> が0になるまで <code>apr_thread_cond_timedwait</code> を用いて待機します。待機中も定期的に <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L361" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__wake_all_idles.html&quot;}, '*');"><code>wake_all_idles</code></a> を呼び出し、スレッドの終了を促します。 3. **タイムアウト判定**: 5秒経過してもスレッドが残存している場合は警告ログを出力します。 4. **ゾンビ回収**: 最後に <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__join_zombies.html&quot;}, '*');"><code>join_zombies</code></a> を呼び出し、終了したスレッドのリソースを回収します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/http2/h2_workers.c:535</code> (<code>apr_pool_pre_cleanup_register</code> を介して登録)</li>
+<li>**呼び出し先**: <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L361" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__wake_all_idles.html&quot;}, '*');"><code>wake_all_idles</code></a>, <a class="wiki-source-link" href="../../source/modules/http2/h2_workers.c.html#L156" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_workers_c__join_zombies.html&quot;}, '*');"><code>join_zombies</code></a>, <code>apr_thread_mutex_lock/unlock</code>, <code>apr_thread_cond_timedwait</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>h2_workers</code>: プール全体の管理構造体。</li>
+<li><code>apr_thread_mutex_t</code>: スレッド同期用ミューテックス。</li>
+<li><code>apr_thread_cond_t</code>: スレッド待機用条件変数。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**タイムアウト**: 5秒以内に全ワーカーが終了しない場合、警告ログを出力しつつ処理を続行します。</li>
+<li>**強制終了**: MPM のシャットダウンプロセスの一環として実行されるため、接続処理が完了しているかどうかにかかわらず終了処理が進行します。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <code>apr_pool_pre_cleanup_register</code> により登録されており、メモリプール破棄の直前に実行されます。</li>
+<li>接続処理が長引いている場合でも、最大待機時間（5秒）を超えると強制的にゾンビ回収へ移行するため、デバッグ時にはログの <code>APLOGNO(10291)</code> に注目してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

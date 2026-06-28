@@ -1,0 +1,100 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/aaa/mod_authn_socache.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');">modules/aaa/mod_authn_socache.c</a></h1>
+<h2>概要</h2>
+<p><code>mod_authn_socache</code> は、Apache HTTP Server の認証情報（パスワードやハッシュ）を共有オブジェクトキャッシュ（<code>socache</code>）に保存・取得するためのモジュールです。認証バックエンド（LDAP, DB, ファイル等）への負荷を軽減し、認証プロセスを高速化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/aaa</code> サブシステムにおいて、認証プロバイダーのキャッシュ層として機能します。他の認証モジュールが <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L292" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__ap_authn_cache_store.html&quot;}, '*');"><code>ap_authn_cache_store</code></a> を呼び出すことで、認証成功時の結果をキャッシュし、次回以降の認証リクエストをキャッシュから解決します。</p>
+<h2>責務</h2>
+<ul>
+<li>**キャッシュ管理**: <code>socache</code> プロバイダーを介した認証情報の永続化と有効期限管理。</li>
+<li>**設定管理**: ディレクトリ単位でのキャッシュ対象プロバイダーの指定、タイムアウト設定、コンテキスト定義。</li>
+<li>**同期制御**: グローバルミューテックスによるキャッシュアクセス時の排他制御。</li>
+<li>**認証インターフェース**: <a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;}, '*');"><code>authn_provider</code></a> を実装し、<code>check_password</code> および <code>get_realm_hash</code> を提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・ライフサイクル</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L37" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__authn_cache_dircfg.html&quot;}, '*');"><code>authn_cache_dircfg</code></a>: ディレクトリごとの設定構造体（タイムアウト、対象プロバイダー、コンテキスト）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L248" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_cmds</code></a>: <code>AuthnCacheSOCache</code> 等のディレクティブ定義。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L70" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__authn_cache_precfg.html&quot;}, '*');"><code>authn_cache_precfg</code></a> / <code>post_config</code>: モジュール初期化、ミューテックス登録、キャッシュプロバイダーのバインド。</li>
+</ul>
+<h3>キャッシュ操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L292" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__ap_authn_cache_store.html&quot;}, '*');"><code>ap_authn_cache_store</code></a>: 外部モジュールから呼び出されるキャッシュ保存用関数（<code>APR_REGISTER_OPTIONAL_FN</code> で公開）。</li>
+<li><code>check_password</code>: <a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;}, '*');"><code>authn_provider</code></a> の実装。キャッシュからパスワードを取得し <code>apr_password_validate</code> で検証。</li>
+<li><code>get_realm_hash</code>: <a class="wiki-source-link" href="../../../source/include/mod_auth.h.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__mod_auth_h__authn_provider.html&quot;}, '*');"><code>authn_provider</code></a> の実装。ダイジェスト認証用のハッシュを取得。</li>
+</ul>
+<h3>グローバル状態</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a>: キャッシュへの書き込みを保護するグローバルミューテックス。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L47" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>socache_provider</code></a> / <a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>socache_instance</code></a>: 選択されたキャッシュバックエンドの実装とインスタンス。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>post_config</code> で <code>socache</code> プロバイダーを初期化し、グローバルミューテックスを作成。 2. **保存フロー**:</p>
+<ul>
+<li>認証成功後、<a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L292" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__ap_authn_cache_store.html&quot;}, '*');"><code>ap_authn_cache_store</code></a> が呼ばれる。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_authn_socache.c.html#L266" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__construct_key.html&quot;}, '*');"><code>construct_key</code></a> でコンテキストに応じた一意なキーを生成。</li>
+<li>ミューテックスを <code>trylock</code> し、成功した場合のみ <code>socache_provider-&gt;store</code> を実行。</li>
+<p>3. **取得フロー**:</p>
+<li><code>check_password</code> 等が呼ばれると、キーを生成し <code>socache_provider-&gt;retrieve</code> を実行。</li>
+<li>取得した値を <code>apr_password_validate</code> に渡し、結果を返す。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>ap_socache.h</code></a>: キャッシュバックエンドの抽象化レイヤー。</li>
+<li><a class="wiki-source-link" href="../../../source/include/mod_auth.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_auth.h.html&quot;}, '*');"><code>mod_auth.h</code></a>: 認証プロバイダーの定義とインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a>: プロセス間排他制御用。</li>
+<li><code>apr_global_mutex.h</code>: OSレベルのミューテックス管理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_provider.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_provider.h.html&quot;}, '*');"><code>ap_provider.h</code></a></li>
+<li><code>apr_md5.h</code></li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><code>modules/cache/mod_socache_*.c</code>: 実際のキャッシュバックエンド実装（<code>shmcb</code>, <code>dbm</code> 等）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_basic.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_basic.c.html&quot;}, '*');"><code>modules/aaa/mod_auth_basic.c</code></a> / <a class="wiki-source-link" href="../../../source/modules/aaa/mod_auth_digest.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_auth_digest.c.html&quot;}, '*');"><code>mod_auth_digest.c</code></a>: 本モジュールをキャッシュ層として利用する認証モジュール。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <code>r-&gt;pool</code> を多用しており、リクエスト終了時にキャッシュ関連のメモリも解放される設計です。</li>
+<li>**排他制御の注意**: <code>check_password</code> ではパフォーマンスを優先し、読み取り時のミューテックスロックを行っていません。これは <code>socache</code> 実装がスレッドセーフであることを前提としています。</li>
+<li>**制約**: <code>AuthnCacheSOCache</code> はグローバル設定でのみ有効です。</li>
+<li>**未実装・課題**: ソース内の <code>FIXME</code> にある通り、キャッシュとミューテックスは本来グローバルであるべきですが、現在の実装では設定の柔軟性と引き換えに複雑なライフサイクル管理を伴っています。また、<code>retrieve</code> 時の <code>NOTFOUND</code> エラーハンドリングに一部不整合がある可能性があります。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_dircfg.html" target="wiki-view"><code>authn_cache_dircfg</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__remove_lock.html" target="wiki-view"><code>remove_lock</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__destroy_cache.html" target="wiki-view"><code>destroy_cache</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_precfg.html" target="wiki-view"><code>authn_cache_precfg</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_post_config.html" target="wiki-view"><code>authn_cache_post_config</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_child_init.html" target="wiki-view"><code>authn_cache_child_init</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_socache.html" target="wiki-view"><code>authn_cache_socache</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_enable.html" target="wiki-view"><code>authn_cache_enable</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_dircfg_create.html" target="wiki-view"><code>authn_cache_dircfg_create</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_dircfg_merge.html" target="wiki-view"><code>authn_cache_dircfg_merge</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_setprovider.html" target="wiki-view"><code>authn_cache_setprovider</code></a></li>
+<li><a href="../../symbols/modules__aaa__mod_authn_socache_c__authn_cache_timeout.html" target="wiki-view"><code>authn_cache_timeout</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

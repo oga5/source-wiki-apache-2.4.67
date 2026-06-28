@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/server__mpm__worker.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>server/mpm/worker</h1>
+<h2>システム内での役割</h2>
+<p>Apache HTTP Server におけるハイブリッド型マルチプロセッシングモジュール（MPM）の実装です。各子プロセスが複数のスレッドを生成し、各スレッドが単一の接続を処理することで、プロセスベースの MPM よりも効率的なリソース利用と高い同時接続処理能力を実現します。本モジュールはディレクトリ境界に基づき定義されています。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: <code>fork</code> による子プロセスの生成と、スコアボードを用いた死活監視。</li>
+<li>**スレッド管理**: リスナー用スレッドと、リクエスト処理用ワーカープールスレッドの生成・管理。</li>
+<li>**接続の受け渡し**: リスナーが受け取ったソケットを <code>fd_queue</code> を介してワーカーへ引き渡す。</li>
+<li>**ライフサイクル制御**: 設定の検証、Graceful/Ungraceful な再起動・終了処理、リソースのクリーンアップ。</li>
+<li>**デフォルト値の提供**: 設定ファイルで指定がない場合の動作パラメータの基準定義。</li>
+</ul>
+<h2>このモジュールのファイル</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>server/mpm/worker/mpm_default.h</code></a>: プロセス・スレッド管理のデフォルト定数定義。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>: プロセス管理、スレッド生成、接続処理のメインロジック。</li>
+</ul>
+<h2>主要なデータ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L145" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__worker_retained_data.html&quot;}, '*');"><code>worker_retained_data</code></a>: モジュール再読み込み時にも保持される世代管理データ。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L174" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__worker_child_bucket.html&quot;}, '*');"><code>worker_child_bucket</code></a>: 子プロセスの管理用構造。</li>
+<li><code>worker_queue</code> / <code>worker_queue_info</code>: リスナーとワーカー間でソケットをやり取りするためのキュー。</li>
+<li><code>proc_info</code> / <code>thread_starter</code>: プロセスおよびスレッド起動時の制御情報。</li>
+</ul>
+<h2>主なフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html#L1748" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__worker_run.html&quot;}, '*');"><code>worker_run</code></a> がメインループを開始し、<code>startup_children</code> が初期プロセスを生成。 2. **リスナー**: <code>listener_thread</code> が <code>apr_pollset</code> で接続を待機し、接続をキューへ投入。 3. **ワーカー**: <code>worker_thread</code> がキューからソケットを取得し、<a class="wiki-source-link" href="../../source/server/connection.c.html#L210" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__connection_c__ap_process_connection.html&quot;}, '*');"><code>ap_process_connection</code></a> を実行。 4. **終了処理**: <code>signal_threads</code> が終了フラグを伝播し、<code>join_workers</code> でスレッドを回収。</p>
+<h2>外部依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr_thread_proc.h</code>, <code>apr_poll.h</code>, <code>apr_proc_mutex.h</code> 等による OS 抽象化。</li>
+<li>**Apache Core**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a>, <a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a> 等によるサーバー状態管理。</li>
+<li>**MPM 共通**: <a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>, <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.h.html&quot;}, '*');"><code>mpm_fdqueue.h</code></a> によるキュー管理とプロセス管理。</li>
+</ul>
+<h2>内部構成</h2>
+<ul>
+<li>子モジュール数: 0</li>
+</ul>
+<h2>推奨読書順</h2>
+<p>1. <a class="wiki-source-link" href="../../source/server/mpm/worker/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>server/mpm/worker/mpm_default.h</code></a> (設定パラメータの理解) 2. <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> (プロセス・スレッド管理のメインロジック)</p>
+<h2>未解決の問い</h2>
+<ul>
+<li>LLM ベースのモジュール合成を追加した後で、責務とフローを精緻化する。</li>
+<li><code>ap_mpm_podx</code> 関連のパイプ通信や <a class="wiki-source-link" href="../../source/include/scoreboard.h.html#L161" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__scoreboard_h__scoreboard.html&quot;}, '*');"><code>scoreboard</code></a> 更新ロジックの詳細な依存関係の整理。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

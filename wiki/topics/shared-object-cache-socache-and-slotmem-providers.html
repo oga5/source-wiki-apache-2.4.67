@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/shared-object-cache-socache-and-slotmem-providers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Shared Object Cache (socache) and Slotmem Providers</h1>
+<h2>概念</h2>
+<p><code>Shared Object Cache (socache)</code> および <code>Slotmem Providers</code> は、Apache HTTP Server においてプロセス間やスレッド間でデータを共有・キャッシュするための抽象化レイヤーです。</p>
+<ul>
+<li>**socache (Shared Object Cache)**: SSL セッションや認証情報などの小規模なオブジェクトをキャッシュするための仕組みです。バックエンドの実装（SHMCB や DBM など）を抽象化します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');">slotmem</a>**: 固定サイズのスロットに分割された共有メモリ領域を管理するための仕組みです。ロードバランサーのステータス管理などに利用されます。</li>
+</ul>
+<p>これらは不透明な（opaque）ハンドルを介して操作され、具体的なメモリ管理や排他制御の詳細は各プロバイダー実装に隠蔽されています。</p>
+<h2>なぜ重要か</h2>
+<p>マルチプロセス・マルチスレッドで動作する Apache HTTP Server において、プロセス境界を越えて効率的かつ安全にデータを共有することは、パフォーマンスと一貫性の維持に不可欠です。</p>
+<ul>
+<li>**抽象化による柔軟性**: 利用側モジュール（認証やプロキシなど）は、具体的な共有メモリの確保方法やキャッシュアルゴリズム（循環バッファ、DBM など）を意識することなく、統一されたインターフェースでデータを操作できます。</li>
+<li>**効率的なリソース利用**: <code>mod_socache_shmcb</code> のような共有メモリベースの循環バッファ（SHMCB）を使用することで、ロック競合を最小限に抑えつつ、高速なデータ保存・参照を実現します。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__slotmem.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__slotmem.html&quot;, &quot;source&quot;: &quot;source/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>module:modules/slotmem</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__ap_slotmem_h__ap_slotmem_instance_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_instance_t.html&quot;, &quot;source&quot;: &quot;source/include/ap_slotmem.h.html#L75&quot;}, '*');"><code>symbol:include/ap_slotmem.h#ap_slotmem_instance_t</code></a>**: 共有メモリ領域を識別・管理するための不透明なハンドル。<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> の API を通じて操作されます。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/include__ap_socache_h__ap_socache_instance_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_instance_t.html&quot;, &quot;source&quot;: &quot;source/include/ap_socache.h.html#L49&quot;}, '*');"><code>symbol:include/ap_socache.h#ap_socache_instance_t</code></a>**: socache バックエンドの個別インスタンス状態を保持する不透明な構造体。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_socache_shmcb.c.html#L497&quot;}, '*');"><code>symbol:modules/cache/mod_socache_shmcb.c#socache_shmcb_store</code></a>**: 共有メモリベースの循環バッファ（SHMCB）にデータを保存する具体的な関数。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報からは、システム全体における完全なエンドツーエンドの初期化から破棄にいたる詳細なフローは完全には明らかになっていません。しかし、部分的な流れとして以下が確認できます。</p>
+<p>1. **インスタンスの生成と初期化**:</p>
+<ul>
+<li><code>ap_slotmem_instance_t</code> は、プロバイダーの <code>create</code> または <code>attach</code> メソッドによって生成され、共有メモリ領域へのアタッチが行われます。</li>
+<li><code>ap_socache_instance_t</code> は、プロバイダーの <code>create</code> メソッドで生成され、<code>init</code> メソッドが呼び出されることでキャッシュ操作が可能になります。</li>
+<p>2. **データの保存（SHMCB の例）**:</p>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> が呼び出されると、キー（<code>id</code>）から <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L166" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>SHMCB_MASK</code></a> を用いて対象のサブキャッシュを特定します。</li>
+<li>既存の同一 ID エントリを <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L934" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__shmcb_subcache_remove.html&quot;}, '*');"><code>shmcb_subcache_remove</code></a> で削除し、<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L769" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__shmcb_subcache_store.html&quot;}, '*');"><code>shmcb_subcache_store</code></a> によって新しいデータを書き込みます。</li>
+</ul>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**不透明性の維持**: <code>ap_slotmem_instance_t</code> および <code>ap_socache_instance_t</code> は不透明な型（opaque）であり、利用側から直接メンバにアクセスすることはできず、必ずプロバイダーの API を経由しなければなりません。</li>
+<li>**socache インスタンスの有効性**: <code>ap_socache_instance_t</code> は、<code>init</code> メソッドが正常に呼び出されるまで、キャッシュ操作（<code>store</code> や <code>retrieve</code> など）に使用することはできません。</li>
+<li>**SHMCB 保存時のキー長制限**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> において、キャッシュエントリを識別するキーの長さ（<code>idlen</code>）は **4バイト以上** でなければなりません。</li>
+<li>**排他制御の責任**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> 自体は排他制御（ロック）を行いません。呼び出し側が適切にロックを管理する必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**スレッドセーフティの欠如**: <a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html#L497" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_socache_shmcb_c__socache_shmcb_store.html&quot;}, '*');"><code>socache_shmcb_store</code></a> はスレッドセーフではありません（<a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>AP_SOCACHE_FLAG_NOTMPSAFE</code></a>）。呼び出し側で適切なロック管理を行わずにマルチスレッド環境から同時に呼び出すと、データ破損や予期しない挙動を引き起こす可能性があります。</li>
+<li>**キーの長さ不足**: SHMCB キャッシュにデータを保存する際、キーの長さ（<code>idlen</code>）が 4 バイト未満であると、<code>APR_EINVAL</code> エラーとなり保存に失敗します。</li>
+<li>**領域不足（ENOSPC）**: キャッシュサイズやサブキャッシュの容量を超えてデータを保存しようとすると、<code>APR_ENOSPC</code> が返されます。特に大きなキャッシュサイズを設定する際、<code>unsigned int</code> を使用したサイズ計算におけるオーバーフローのリスクに注意が必要です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_shm.c</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

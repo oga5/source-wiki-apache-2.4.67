@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm__winnt__service_c__OpenSCManager.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__OpenSCManager.html&quot;}, '*');">OpenSCManager</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>server/mpm/winnt/service.c:80</code></li>
+</ul>
+<h2>目的</h2>
+<p>Windowsサービスコントロールマネージャ（SCM）への接続ハンドルを取得するためのラッパー関数です。実行環境のOSがUnicode対応かANSI対応かに応じて、適切なWindows API（<code>OpenSCManagerW</code> または <code>OpenSCManagerA</code>）を動的に選択して呼び出します。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>SC_HANDLE OpenSCManager(const void *lpMachine, const void *lpDatabase, DWORD dwAccess)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>lpMachine</code>: ターゲットコンピュータ名（NULLの場合はローカルマシン）。</li>
+<li><code>lpDatabase</code>: サービスコントロールマネージャのデータベース名（NULLの場合は <code>SERVICES_ACTIVE_DATABASE</code>）。</li>
+<li><code>dwAccess</code>: SCMへのアクセス権限（例: <code>SC_MANAGER_CONNECT</code>）。</li>
+<li>**出力**:</li>
+<li>成功時: SCMへのハンドル（<code>SC_HANDLE</code>）。</li>
+<li>失敗時: <code>NULL</code>。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>静的変数 <a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>pfn_OpenSCManager</code></a> が初期化されていない場合、実行時に一度だけOSの文字セット判定を行い、関数ポインタを解決します。</li>
+<li><code>APR_HAS_UNICODE_FS</code> および <code>APR_HAS_ANSI_FS</code> の定義に基づき、コンパイル時に適切なAPIが選択されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. 静的関数ポインタ <a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>pfn_OpenSCManager</code></a> が未設定であれば、<code>IF_WIN_OS_IS_UNICODE</code> または <code>ELSE_WIN_OS_IS_ANSI</code> マクロを使用して、対応するWindows APIのアドレスを代入します。 2. 解決された関数ポインタを介して、引数 <code>lpMachine</code>, <code>lpDatabase</code>, <code>dwAccess</code> を渡してSCMを呼び出します。 3. 取得したハンドルを呼び出し元に返します。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>server/mpm/winnt/service.c</code></a> 内の各所（サービスインストール、アンインストール、状態確認時など）。</li>
+<li><a class="wiki-source-link" href="../../source/support/win32/ApacheMonitor.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/win32/ApacheMonitor.c.html&quot;}, '*');"><code>support/win32/ApacheMonitor.c</code></a>（外部ツール）。</li>
+<li>**呼び出し先**:</li>
+<li><code>OpenSCManagerW</code> または <code>OpenSCManagerA</code>（Windows API）。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>SC_HANDLE</code>: Windows APIで定義されるサービスハンドル型。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__DWORD.html&quot;}, '*');"><code>DWORD</code></a>: アクセス権限を指定する型。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>SCMへの接続権限がない場合や、指定したマシン/データベースが存在しない場合は <code>NULL</code> を返します。</li>
+<li>呼び出し元は、返されたハンドルが <code>NULL</code> でないことを確認し、不要になった時点で <code>CloseServiceHandle</code> を呼び出す必要があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は、<a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>service.c</code></a> 内で直接 <a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__service_c__OpenSCManager.html&quot;}, '*');"><code>OpenSCManager</code></a> を呼び出す際の抽象化レイヤーとして機能しています。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/winnt/service.c.html#L79" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>pfn_OpenSCManager</code></a> は静的変数であるため、マルチスレッド環境下での初期化競合については、呼び出し側のコンテキスト（初期化順序）に依存します。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

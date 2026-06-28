@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/webdav-engine-and-lock-providers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>WebDAV Engine and Lock Providers</h1>
+<h2>概念</h2>
+<p>**WebDAV Engine and Lock Providers** は、Apache HTTP Server（<code>mod_dav</code>）におけるWebDAVプロトコル処理エンジンと、そのバックエンドとなるロックおよびプロパティ管理プロバイダ（<code>mod_dav_fs</code> など）の協調動作メカニズムです。</p>
+<p><code>mod_dav</code> は汎用的なWebDAVプロトコルエンジンとして機能し、実際のファイルシステム操作、ロック管理、およびプロパティ管理などの具体的な処理は、抽象化されたプロバイダインターフェースを介して各プロバイダモジュールに委譲されます。</p>
+<h2>なぜ重要か</h2>
+<p>WebDAV仕様（RFC 4918など）で要求されるリソースのロック管理やプロパティ管理の実装をコアエンジンから分離することで、ストレージバックエンドに依存しない柔軟な設計が可能になります。たとえば、ファイルシステムベースのロック管理（DBMを使用）や、その他のデータベースを用いた管理を、共通のWebDAVプロトコル処理ロジックを変更することなく切り替えることができます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav.html&quot;}, '*');"><code>module:modules/dav</code></a> (WebDAVのコア抽象化層)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__main.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>module:modules/dav/main</code></a> (WebDAVプロトコルエンジン本体)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a> (ファイルシステム固有のプロバイダ実装)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lock_private.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lock_private.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L198&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lock_private</code></a>**</li>
+<p>ロックデータベース（DBM）内での検索や識別に使用される、ロックに関連付けられたプライベートなキー情報（<code>apr_datum_t key</code>）を保持する構造体です。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__fs__lock_c__dav_lockdb_private.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__fs__lock_c__dav_lockdb_private.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/lock.c.html#L180&quot;}, '*');"><code>symbol:modules/dav/fs/lock.c#dav_lockdb_private</code></a>**</li>
+<p>ファイルシステムベースのDAVロックデータベース（DBM）へのアクセスに必要な状態情報（リクエスト、メモリプール、データベースパス、オープン状態、DBハンドルなど）を保持するプライベート構造体です。</p>
+<li>**<a class="wiki-entity-link" href="../symbols/modules__dav__main__mod_dav_h__dav_propdb.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__mod_dav_h__dav_propdb.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/mod_dav.h.html#L1691&quot;}, '*');"><code>symbol:modules/dav/main/mod_dav.h#dav_propdb</code></a>**</li>
+<p>WebDAVプロパティデータベースへのアクセスおよび操作を管理するためのコンテキスト構造体です。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供されたソースコードの断片からは、リクエスト受信からロック取得・解放、プロパティ操作に至る完全なエンドツーエンドの制御フローは完全には明らかになっていません。しかし、部分的な処理の流れとして以下が確認できます。</p>
+<p>1. **プロパティ操作の開始**: <a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>mod_dav.c</code></a> などのリクエスト処理フローにおいて、プロパティ操作の開始時に <code>dav_propdb</code> が初期化されます。 2. **ロックデータベースの参照**: ロック操作時には、<code>dav_lockdb_private</code> を通じてロックデータベースのパスやハンドルが参照されます。この際、<code>opened</code> フラグと <code>db</code> ハンドルにより、実際のデータベースオープン処理を初回アクセス時まで遅延させる制御（遅延オープン）が行われます。 3. **ロックの識別**: <code>dav_lock_private</code> の <code>key</code>（<code>apr_datum_t</code> 型）を用いて、ロックデータベースに対する検索や識別が行われます。 4. **クリーンアップ**: プロパティ操作の終了時には、<a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_close_propdb.html&quot;}, '*');"><code>dav_close_propdb</code></a> を通じて明示的にリソースの解放が行われます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**ロックデータベースのオープン状態**: <code>dav_lockdb_private</code> において <code>db</code> が非NULLである場合、データベースは正常に開かれていなければなりません。</li>
+<li>**キーの有効性**: <code>dav_lock_private</code> の <code>key</code> は、ロックデータベース（DBM）へのアクセスに使用される有効なデータ構造（<code>apr_datum_t</code>）である必要があります。</li>
+<li>**メモリ管理の整合性**: <code>dav_lockdb_private</code> 内でのメモリ割り当ては、Apacheのリクエストライフサイクルと整合性を保つため、構造体内の <code>pool</code> メンバ（通常は <code>r-&gt;pool</code> に関連する）を使用する必要があります。</li>
+<li>**プロパティDBのクローズ**: <code>dav_propdb</code> を使用したプロパティ操作のライフサイクルにおいては、最終的に <a class="wiki-source-link" href="../../source/modules/dav/main/props.c.html#L583" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__dav__main__props_c__dav_close_propdb.html&quot;}, '*');"><code>dav_close_propdb</code></a> による明示的なクローズ処理が必要です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**未オープン状態での操作**: <code>dav_lockdb_private</code> の <code>db</code> ハンドルが NULL の状態でデータベース操作を試みると、操作は失敗します。</li>
+<li>**書き込み権限の不足**: 読み取り専用で開かれているデータベースに対して書き込み操作を行うとエラーが発生します。</li>
+<li>**データの破損**: <code>dav_lock_private</code> の <code>key</code> が指す DBM 内のデータが破損している場合、後続のデータベース操作が失敗する可能性があります。</li>
+<li>**プロバイダ未定義**: プロパティ操作において、対応するプロバイダが未定義の場合や、データベースへの接続が確立できない場合はエラーとなります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>: <code>dav_lock_private</code> や <code>dav_lockdb_private</code> の定義と、ファイルシステムベースのロックデータベース操作の実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>: リポジトリプロバイダの実装。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a>: WebDAVエンジンのメインリクエスト処理フロー。</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.h.html&quot;}, '*');"><code>modules/dav/main/mod_dav.h</code></a>: <code>dav_propdb</code> などの共通構造体やプロバイダインターフェースの定義。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

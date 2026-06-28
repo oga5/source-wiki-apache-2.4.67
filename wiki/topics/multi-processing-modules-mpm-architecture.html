@@ -1,0 +1,53 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/multi-processing-modules-mpm-architecture.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Multi-Processing Modules (MPM) Architecture</h1>
+<h2>概念</h2>
+<p><code>Multi-Processing Modules (MPM) Architecture</code> は、Apache HTTP Server がネットワークポートをバインドし、クライアントからの接続を受け付け、それらを処理するためのプロセスやスレッドを管理する並行処理モデルの基盤です。Apache は、異なるオペレーティングシステムや要件に合わせて、異なる並行処理モデル（Prefork、Worker、Event など）をモジュールとして差し替えることができる設計になっています。</p>
+<h2>なぜ重要か</h2>
+<p>Web サーバーのパフォーマンス、スケーラビリティ、およびリソース消費は、並行処理モデルに強く依存します。</p>
+<ul>
+<li>**Prefork (<a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a>)**: スレッドを使用せず、1 つのリクエストを 1 つのプロセスで処理するため、スレッドセーフでないライブラリとの互換性に優れています。</li>
+<li>**Worker (<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a>)**: マルチプロセスとマルチスレッドのハイブリッドモデルであり、メモリ消費を抑えつつ高い並行性を実現します。</li>
+<li>**Event (<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a>)**: Worker モデルをベースに、Keep-Alive 接続などの非同期処理をリスナースレッドに委ねることで、さらに効率的なリソース利用を可能にします。</li>
+</ul>
+<p>共通の API インターフェース（<a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>）を介してこれらを提供することで、コアサーバーのコードを変更することなく、最適な並行処理モデルを選択できます。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm.html&quot;}, '*');"><code>module:server/mpm</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>include/ap_mpm.h</code></a>**: MPM の共通インターフェースを定義します。サーバーコアや他のモジュールが、現在実行中の MPM の特性（スレッド化されているか、動的なプロセス生成を行うかなど）を問い合わせるための <a class="wiki-source-link" href="../../source/server/mpm_common.c.html#L421" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_mpm_query.html&quot;}, '*');"><code>ap_mpm_query</code></a> などの関数を提供します。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>**: イベント駆動型の非同期処理をサポートする Event MPM の実装ファイル。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>**: マルチプロセス・マルチスレッド型の Worker MPM の実装ファイル。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a>**: シングルスレッド・マルチプロセス型の Prefork MPM の実装ファイル。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>親プロセスが起動し、設定された MPM（Event、Worker、Prefork のいずれか）を初期化して起動するまでの詳細な制御フロー、および各 MPM 内部での接続の受け入れからワーカースレッド/プロセスへのディスパッチに関する完全なエンドツーエンドのフローは、提供されたソースコードの範囲からは**まだ十分に特定されていません**。</p>
+<h2>重要な不変条件</h2>
+<p>各 MPM の状態管理、スレッドプールとプロセスプールの同期、およびシグナルハンドリングにおける厳密な不変条件（Invariants）は、提供された情報からは**まだ十分に特定されていません**。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**スレッド安全性の欠如**: スレッドセーフでないサードパーティ製モジュールや PHP 拡張などを、マルチスレッドモデルである Worker や Event MPM で動作させると、メモリ破損や予期しないクラッシュを引き起こす可能性があります。その場合は Prefork MPM を使用する必要があります。</li>
+<li>**リソースの不適切なチューニング**: 各 MPM の設定値（<code>MaxRequestWorkers</code>、<code>ThreadsPerChild</code>、<code>MinSpareThreads</code> など）の不適切な設定は、プロセスのスラッシングやメモリ枯渇、あるいは接続の拒否を招く原因となります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>include/ap_mpm.h</code></a> — MPM 共通 API とクエリ定義の理解。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a> — 非同期イベント駆動モデルの実装詳細。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a> — ハイブリッドマルチスレッドモデルの実装詳細。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>server/mpm/prefork/prefork.c</code></a> — プロセスベースの並行処理モデルの実装詳細。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/webdav-repository-and-locking-mechanisms.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>WebDAV Repository and Locking Mechanisms</h1>
+<h2>概念</h2>
+<p><code>WebDAV Repository and Locking Mechanisms</code> は、Apache HTTP Server（<code>httpd-2.4.67</code>）において、WebDAV（Web Distributed Authoring and Versioning）プロトコルを介したリソース管理と、複数クライアント間での同時編集競合を防ぐためのロック制御を提供する仕組みです。このメカニズムは、汎用的なWebDAV抽象化レイヤーと、具体的なファイルシステムなどのバックエンド実装に分かれています。</p>
+<h2>なぜ重要か</h2>
+<p>WebDAV環境では、複数のユーザーが同時に同じファイルを編集・更新する可能性があります。適切なロックメカニズム（排他ロックや共有ロック）がない場合、データの不整合や上書きによるデータ消失が発生します。また、リポジトリ抽象化により、バックエンドのストレージ（ローカルファイルシステムなど）に依存しない統一されたWebDAVインターフェースを提供することが可能になります。</p>
+<h2>関与するモジュール</h2>
+<p>本メカニズムは以下のモジュール群によって構成されています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__dav.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav.html&quot;}, '*');"><code>module:modules/dav</code></a>: WebDAVのコア抽象化インターフェースを提供します。</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__fs.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__fs.html&quot;, &quot;source&quot;: &quot;source/modules/dav/fs/dbm.c.html&quot;}, '*');"><code>module:modules/dav/fs</code></a>: ローカルファイルシステムをリポジトリとして使用するためのWebDAVバックエンド実装を提供します。</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__lock.html&quot;, &quot;source&quot;: &quot;source/modules/dav/lock/locks.c.html&quot;}, '*');"><code>module:modules/dav/lock</code></a>: 汎用的なロック管理機能を提供します。</li>
+<li><a class="wiki-entity-link" href="../modules/modules__dav__main.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__dav__main.html&quot;, &quot;source&quot;: &quot;source/modules/dav/main/liveprop.c.html&quot;}, '*');"><code>module:modules/dav/main</code></a>: <code>mod_dav</code> のメインエントリポイントであり、リクエストのハンドリングや各プロバイダの仲介を行います。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>提供されたソースファイルから、以下の主要なエンティティが関与していることが示されています。</p>
+<ul>
+<li>**リポジトリプロバイダ (<a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>)**: ファイルシステム上のリソース（ファイルやディレクトリ）をWebDAVリソースとして抽象化し、操作するためのインターフェース。</li>
+<li>**ロックデータベース (<a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>, <a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>)**: ロック情報の永続化や、アクティブなロックの追跡を行うデータベース。</li>
+<li>**WebDAVモジュールコア (<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a>)**: クライアントからのWebDAVメソッド（LOCK, UNLOCK, PROPFINDなど）を受信し、適切なリポジトリやロックプロバイダへ処理を振り分けるコアロジック。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>クライアントからのLOCK/UNLOCKリクエストが、具体的にどのような関数コールスタックを経てファイルシステム上のロックデータベースに反映されるかなど、詳細なエンドツーエンドの制御フローは提供されたコンテキストからはまだ完全には判明していません。</p>
+<p>一般的な流れとしては、<a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a> がリクエストをハンドリングし、<a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a> や <a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a> で定義されたロックプロバイダを呼び出して、対象リソースに対するロックの作成、検証、または解除を行うと推測されます。</p>
+<h2>重要な不変条件</h2>
+<p>ロックの整合性やリポジトリ操作に関する具体的な不変条件（インバリアント）は、提供されたコンテキストからは特定されていません。</p>
+<p>一般的には、排他ロック（Exclusive Lock）が保持されているリソースに対しては、ロック所有者以外の書き込み・削除操作が拒否されなければならないという不変条件が存在すると推測されます。</p>
+<h2>よくある落とし穴</h2>
+<p>ロックデータベースのデッドロック、タイムアウト処理の不備、あるいはファイルシステムとの同期ズレなど、実装や運用における具体的な落とし穴は、提供されたコンテキストからは特定されていません。</p>
+<h2>次に読む場所</h2>
+<p>詳細な実装や動作仕様を理解するためには、以下のソースファイルを参照してください。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/dav/main/mod_dav.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/main/mod_dav.c.html&quot;}, '*');"><code>modules/dav/main/mod_dav.c</code></a>: WebDAVリクエスト処理の全体像とプロバイダの呼び出しフロー</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/repos.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/repos.c.html&quot;}, '*');"><code>modules/dav/fs/repos.c</code></a>: ファイルシステムを対象としたリポジトリ操作の実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/fs/lock.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/fs/lock.c.html&quot;}, '*');"><code>modules/dav/fs/lock.c</code></a>: ファイルシステムベースのロック管理の実装</li>
+<li><a class="wiki-source-link" href="../../source/modules/dav/lock/locks.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/dav/lock/locks.c.html&quot;}, '*');"><code>modules/dav/lock/locks.c</code></a>: 汎用的なロック管理ロジックの実装</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

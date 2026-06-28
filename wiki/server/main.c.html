@@ -1,0 +1,97 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/main.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/main.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/main.c.html&quot;}, '*');">server/main.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server のエントリポイントであり、プロセス初期化、コマンドライン引数の解析、設定ファイルの読み込み、および MPM (Multi-Processing Module) のライフサイクル管理を担う中心的なファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュールにおける最上位の制御層です。他のソースファイルが提供する設定解析やリクエスト処理のロジックを統合し、サーバーの起動から終了までの状態遷移を管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: <code>apr_app_initialize</code> を用いた環境の初期化と、終了時のリソース解放。</li>
+<li>**設定のライフサイクル**: 設定ファイルの読み込み、構文チェック、および設定の再読み込み（graceful <a class="wiki-source-link" href="../../source/server/mpm/netware/mpm_netware.c.html#L291" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__restart.html&quot;}, '*');">restart</a> 等）の制御。</li>
+<li>**コマンドライン解析**: サーバー起動オプション（<code>-D</code>, <code>-f</code>, <code>-t</code> 等）の解釈と実行モードの決定。</li>
+<li>**MPM 統合**: サーバーのメインループにおいて MPM を呼び出し、リクエスト処理を開始する。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロセス・ライフサイクル管理</h3>
+<ul>
+<li><code>main()</code>: サーバーのメインエントリポイント。</li>
+<li><code>init_process()</code>: <code>apr</code> の初期化、メモリプール作成、プロセス構造体の構築を行う。</li>
+<li><code>destroy_and_exit_process()</code>: サーバー終了時のクリーンアップとプロセス終了処理。</li>
+<li><code>reset_process_pconf()</code>: 設定用メモリプール (<a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a>) のリセットとフックの再登録。</li>
+</ul>
+<h3>設定・診断</h3>
+<ul>
+<li><code>show_compile_settings()</code> / <code>show_mpm_settings()</code>: コンパイル時のオプションや MPM の構成情報を出力する。</li>
+<li><code>usage()</code>: コマンドライン引数のヘルプを表示し、プロセスを終了する。</li>
+</ul>
+<h3>内部状態・フック</h3>
+<ul>
+<li><code>deregister_all_hooks()</code>: 設定リセット時に既存のフックを解除する。</li>
+<li><code>abort_on_oom()</code>: メモリ割り当て失敗時の緊急停止ハンドラ。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../source/server/main.c.html#L306" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__main_c__init_process.html&quot;}, '*');"><code>init_process</code></a> で APR を初期化し、グローバルプールを作成。 2. **引数解析**: <code>apr_getopt</code> を使用し、<code>-D</code> や <code>-f</code> などの引数を解析。<a class="wiki-source-link" href="../../source/server/core.c.html#L150" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>ap_run_mode</code></a> を設定して動作モード（通常起動、設定テスト、ダンプ等）を決定。 3. **設定読み込み**: <a class="wiki-source-link" href="../../source/server/config.c.html#L2294" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_read_config.html&quot;}, '*');"><code>ap_read_config</code></a> で設定ファイルをツリー構造に読み込み、<a class="wiki-source-link" href="../../source/server/config.c.html#L1956" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__config_c__ap_process_config_tree.html&quot;}, '*');"><code>ap_process_config_tree</code></a> で適用。 4. **フックの実行**: <code>ap_run_pre_config</code>, <code>ap_run_post_config</code> 等のフックを順次実行し、サーバーを構成。 5. **メインループ**: <code>do-while</code> ループ内で <code>ap_run_mpm</code> を呼び出し、サーバーの稼働を開始。設定変更（シグナル受信）が発生すると、ループ内で設定を再読み込みし、MPM を再起動する。</p>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr.h</code>, <code>apr_pool_t</code>, <code>apr_getopt.h</code> 等（OS 抽象化とメモリ管理）。</li>
+<li>**HTTPD Core**: <a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a>（サーバーのコア構造と設定管理）。</li>
+<li>**MPM**: <a class="wiki-source-link" href="../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>（マルチプロセス/スレッドモデルの抽象化）。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_md5.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_time.h</code></li>
+<li><code>apr_uri.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><code>apu_version.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_vhost.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_vhost.h.html&quot;}, '*');"><code>http_vhost.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>util_ebcdic.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>: 設定ファイルの解析ロジック。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>server/core.c</code></a>: サーバーのコア設定ディレクティブの実装。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_common.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_common.c.html&quot;}, '*');"><code>server/mpm_common.c</code></a>: MPM 共通のユーティリティ。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: <a class="wiki-source-link" href="../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a> (設定用プール) は設定の再読み込み時にクリアされるため、設定関連のデータはここに保持する必要があります。</li>
+<li>**エラー処理**: <code>abort_on_oom</code> が示す通り、メモリ不足は致命的なエラーとして扱われます。</li>
+<li>**設計上の注意**: <code>main()</code> 内の <code>do-while</code> ループは、設定の再読み込みをサポートするための設計ですが、現状では設定ファイルを二度読みするなどの冗長な部分があり、将来的なリファクタリングの対象とされています。</li>
+<li>**プラットフォーム**: <code>WIN32</code> や <a class="wiki-source-link" href="../../source/os/netware/pre_nw.h.html#L34" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/pre_nw.h.html&quot;}, '*');"><code>NETWARE</code></a> 向けの条件付きコンパイルが多用されており、クロスプラットフォーム対応のための複雑な分岐が含まれています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__main_c__show_mpm_settings.html" target="wiki-view"><code>show_mpm_settings</code></a></li>
+<li><a href="../symbols/server__main_c__show_compile_settings.html" target="wiki-view"><code>show_compile_settings</code></a></li>
+<li><a href="../symbols/server__main_c__destroy_and_exit_process.html" target="wiki-view"><code>destroy_and_exit_process</code></a></li>
+<li><a href="../symbols/server__main_c__abort_on_oom.html" target="wiki-view"><code>abort_on_oom</code></a></li>
+<li><a href="../symbols/server__main_c__deregister_all_hooks.html" target="wiki-view"><code>deregister_all_hooks</code></a></li>
+<li><a href="../symbols/server__main_c__reset_process_pconf.html" target="wiki-view"><code>reset_process_pconf</code></a></li>
+<li><a href="../symbols/server__main_c__init_process.html" target="wiki-view"><code>init_process</code></a></li>
+<li><a href="../symbols/server__main_c__usage.html" target="wiki-view"><code>usage</code></a></li>
+<li><a href="../symbols/server__main_c__main.html" target="wiki-view"><code>main</code></a></li>
+<li><a href="../symbols/server__main_c__ap_suck_in_APR.html" target="wiki-view"><code>ap_suck_in_APR</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

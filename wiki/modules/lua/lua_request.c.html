@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/lua/lua_request.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_request.c.html&quot;}, '*');">modules/lua/lua_request.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の <code>mod_lua</code> において、Lua スクリプトから Apache の内部構造（<code>request_rec</code>, <code>conn_rec</code>, <code>server_rec</code>）へアクセスするためのブリッジ機能を提供します。Lua の userdata を介して、HTTP リクエストの属性取得、ヘッダー操作、ボディの読み書き、および各種ユーティリティ関数を公開します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mod_lua</code> の中核となる API 提供レイヤーです。Lua VM がリクエスト処理中に呼び出すメソッドのディスパッチテーブルを構築し、Apache の C 言語ベースのデータ構造を Lua のテーブルや型に変換する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**リクエスト・メタデータ公開**: <code>request_rec</code> のフィールド（URI, メソッド, ステータス等）を Lua から読み書き可能にする。</li>
+<li>**データ変換**: <code>apr_table_t</code> を Lua のテーブルへ変換し、ヘッダーや環境変数の操作を可能にする。</li>
+<li>**I/O 制御**: リクエストボディの読み込み、レスポンスの書き込み、フィルタ操作、WebSocket 通信のサポート。</li>
+<li>**ユーティリティ提供**: 暗号化（MD5/SHA1）、パス操作、ログ出力、設定ツリーの走査などの補助機能。</li>
+<li>**IVM（Inter-VM）共有**: <code>apr_shm</code> を用いたプロセス間でのデータ共有機能の提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>リクエスト・ディスパッチ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2725" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__ap_lua_load_request_lmodule.html&quot;}, '*');"><code>ap_lua_load_request_lmodule</code></a>: Lua VM 初期化時に呼び出され、<code>Apache2.Request</code> メタテーブルとディスパッチハッシュを登録する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L1869" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_dispatch.html&quot;}, '*');"><code>req_dispatch</code></a>: Lua の <code>__index</code> メタメソッド。Lua から <code>r:field</code> が呼ばれた際に、ハッシュから対応する C 関数を検索・実行する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_newindex.html&quot;}, '*');"><code>req_newindex</code></a>: Lua の <code>__newindex</code> メタメソッド。リクエストフィールドへの書き込みを制御する。</li>
+</ul>
+<h3>データ変換・ヘルパー</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L319" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_aprtable2luatable.html&quot;}, '*');"><code>req_aprtable2luatable</code></a>: <code>apr_table_t</code> を Lua のテーブル（キー・値ペアおよび配列）に変換する。</li>
+<li><code>ap_lua_check_request_rec</code>: Lua スタック上の userdata が <code>Apache2.Request</code> であることを検証し、<code>request_rec</code> ポインタを抽出する。</li>
+</ul>
+<h3>WebSocket 関連</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2191" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__lua_websocket_greet.html&quot;}, '*');"><code>lua_websocket_greet</code></a>: WebSocket ハンドシェイク（Sec-WebSocket-Key の検証とレスポンス生成）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2276" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__lua_websocket_read.html&quot;}, '*');"><code>lua_websocket_read</code></a> / <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2407" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__lua_websocket_write.html&quot;}, '*');"><code>lua_websocket_write</code></a>: フレームの解析と構築、マスク処理を含む WebSocket I/O。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2725" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__ap_lua_load_request_lmodule.html&quot;}, '*');"><code>ap_lua_load_request_lmodule</code></a> が <code>Apache2.Request</code> メタテーブルを生成し、<code>Apache2.Request.dispatch</code> レジストリに各メソッドを登録する。 2. **アクセス**: Lua スクリプトが <code>r:method()</code> を呼び出すと、<a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L1869" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_dispatch.html&quot;}, '*');"><code>req_dispatch</code></a> が実行される。 3. **ディスパッチ**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L1869" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_dispatch.html&quot;}, '*');"><code>req_dispatch</code></a> は <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.h.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_h__req_fun_t.html&quot;}, '*');"><code>req_fun_t</code></a> 構造体（関数ポインタと型情報）をハッシュから取得し、型に応じて C 関数を呼び出し、結果を Lua スタックにプッシュする。 4. **データフロー**: <code>apr_table_t</code> などの Apache 内部データは、コールバック関数（<a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L128" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_aprtable2luatable_cb.html&quot;}, '*');"><code>req_aprtable2luatable_cb</code></a> 等）を通じて Lua テーブルへ逐次コピーされる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/mod_lua.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.h.html&quot;}, '*');"><code>mod_lua.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.h.html&quot;}, '*');"><code>lua_apr.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/lua/lua_dbd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_dbd.h.html&quot;}, '*');"><code>lua_dbd.h</code></a>, <a class="wiki-source-link" href="../../../source/modules/lua/lua_passwd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_passwd.h.html&quot;}, '*');"><code>lua_passwd.h</code></a>: モジュール内の共通定義。</li>
+<li><code>apr_pools.h</code>, <code>apr_tables.h</code>: メモリ管理とテーブル操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_varbuf.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_varbuf.h.html&quot;}, '*');"><code>util_varbuf.h</code></a>, <a class="wiki-source-link" href="../../../source/include/util_script.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_script.h.html&quot;}, '*');"><code>util_script.h</code></a>: バッファ操作とスクリプトユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: プロセス・スレッド情報の取得。</li>
+<li><code>apr_date.h</code></li>
+<li><code>apr_thread_mutex.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_cookies.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_cookies.h.html&quot;}, '*');"><code>util_cookies.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/util_md5.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_md5.h.html&quot;}, '*');"><code>util_md5.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/mod_lua.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/mod_lua.c.html&quot;}, '*');"><code>modules/lua/mod_lua.c</code></a>: モジュールのエントリポイント。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_request.h.html&quot;}, '*');"><code>modules/lua/lua_request.h</code></a>: 公開ヘッダー。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/lua/lua_apr.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_apr.c.html&quot;}, '*');"><code>modules/lua/lua_apr.c</code></a>: APR 関連の補助関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべてのメモリ割り当ては <code>request_rec</code> のプール（<code>r-&gt;pool</code>）を使用しており、リクエスト終了時に自動的に解放されます。</li>
+<li>**スレッド安全性**: <code>lua_ivm_set/get</code> は <code>lua_ivm_mutex</code> を使用して共有メモリへのアクセスを保護しています。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L2546" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__lua__lua_request_c__req_newindex.html&quot;}, '*');"><code>req_newindex</code></a> で設定可能なフィールドは限定されています。また、<a class="wiki-source-link" href="../../../source/modules/lua/lua_request.c.html#L42" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/lua/lua_request.c.html&quot;}, '*');"><code>MODLUA_MAX_REG_MATCH</code></a> により正規表現のキャプチャ数に制限があります。</li>
+<li>**省略**: WebSocket のフレーム解析ロジックは非常に詳細ですが、本ファイルでは基本的な HTTP リクエスト処理と混在しています。エラーハンドリングは <code>lua_error</code> を介して Lua 側に伝播されます。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__lua__lua_request_c__request_rec.html" target="wiki-view"><code>request_rec</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__ap_lua_rstack_dump.html" target="wiki-view"><code>ap_lua_rstack_dump</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__ap_lua_check_request_rec.html" target="wiki-view"><code>ap_lua_check_request_rec</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_aprtable2luatable_cb.html" target="wiki-view"><code>req_aprtable2luatable_cb</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_aprtable2luatable_cb_len.html" target="wiki-view"><code>req_aprtable2luatable_cb_len</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__lua_read_body.html" target="wiki-view"><code>lua_read_body</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__lua_write_body.html" target="wiki-view"><code>lua_write_body</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_aprtable2luatable.html" target="wiki-view"><code>req_aprtable2luatable</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_headers_in_table.html" target="wiki-view"><code>req_headers_in_table</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_headers_out_table.html" target="wiki-view"><code>req_headers_out_table</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__req_err_headers_out_table.html" target="wiki-view"><code>req_err_headers_out_table</code></a></li>
+<li><a href="../../symbols/modules__lua__lua_request_c__lua_get_cookie.html" target="wiki-view"><code>lua_get_cookie</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

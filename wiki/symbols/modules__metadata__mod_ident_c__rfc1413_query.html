@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__metadata__mod_ident_c__rfc1413_query.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html#L158" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__metadata__mod_ident_c__rfc1413_query.html&quot;}, '*');">rfc1413_query</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/metadata/mod_ident.c:158</code></li>
+</ul>
+<h2>目的</h2>
+<p>リモートホストの IDENT デーモン（RFC 1413）に対してクエリを送信し、応答からユーザー名を取得して <code>conn_rec</code> に格納する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>apr_status_t rfc1413_query(apr_socket_t *sock, conn_rec *conn, server_rec *srv)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>sock</code>: 接続済みの <code>apr_socket_t</code>。</li>
+<li><code>conn</code>: 接続情報を保持する <code>conn_rec</code>。</li>
+<li><code>srv</code>: エラーログ出力に使用する <code>server_rec</code>。</li>
+<li>**出力**:</li>
+<li>戻り値: 成功時は <code>APR_SUCCESS</code>、失敗時はエラーコード（<code>APR_EINVAL</code> 等）。</li>
+<li>副作用: 成功時、<code>conn-&gt;remote_logname</code> が取得したユーザー名で更新される。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>sock</code> はリモートホストの 113 番ポートに対して既に接続が確立されていること。</li>
+<li><code>conn-&gt;local_addr</code> および <code>conn-&gt;client_addr</code> が有効なポート情報を保持していること。</li>
+<li>応答は <code>\r\n</code> で終端されている必要がある。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **クエリ送信**: <code>conn</code> から取得したローカルポートとリモートポートを <code>&quot;%hu,%hu\r\n&quot;</code> 形式でバッファに書き込み、ASCII 変換後にソケットへ送信する。送信時は部分的な書き込み（short <a class="wiki-source-link" href="../../source/support/passwd_common.c.html#L48" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/passwd_common.c.html&quot;}, '*');">write</a>）を考慮してループ処理を行う。 2. **応答受信**: ソケットから <code>\012</code>（改行）が検出されるまでデータを読み込む。 3. **パース**: 受信したデータを ASCII 変換し、<code>sscanf</code> を用いて <code>&quot;%hu , %hu : USERID :%*[^:]:%512s&quot;</code> 形式で解析する。 4. **検証**: パース結果が 3 項目であること、およびポート番号が送信時と一致することを確認する。 5. **格納**: ユーザー名末尾の <code>\r</code> を除去し、<code>conn-&gt;pool</code> を使用して <code>conn-&gt;remote_logname</code> にコピーする。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_ident.c.html&quot;}, '*');"><code>modules/metadata/mod_ident.c</code></a> 内の関数（ソースコード上の直接的な呼び出し箇所: <code>modules/metadata/mod_ident.c:320</code>）。</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_socket_send</code>, <code>apr_socket_recv</code> (APR ネットワーク I/O)</li>
+<li><code>ap_xlate_proto_to_ascii</code>, <code>ap_xlate_proto_from_ascii</code> (プロトコル変換)</li>
+<li><code>ap_log_error</code> (エラーログ出力)</li>
+<li><code>apr_pstrdup</code> (メモリ割り当て)</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L2403" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>strchr</code></a>, <code>memset</code>, <code>strlen</code>, <code>sscanf</code> (標準 C ライブラリ)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><code>conn_rec</code>: 接続情報および <code>remote_logname</code> の格納先。</li>
+<li><code>apr_socket_t</code>: 通信に使用するソケット。</li>
+<li><code>server_rec</code>: エラーログ出力用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**送信失敗**: <code>apr_socket_send</code> がエラーを返した場合、エラーログを出力して終了する。</li>
+<li>**受信失敗**: <code>apr_socket_recv</code> がエラーを返した場合、または改行が見つかる前にデータが枯渇した場合は <code>APR_EINVAL</code> を返す。</li>
+<li>**パース失敗**: <code>sscanf</code> のフォーマットに一致しない、またはポート番号が一致しない場合は <code>APR_EINVAL</code> を返す。</li>
+<li>**バッファ制限**: <a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html#L76" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_ident.c.html&quot;}, '*');"><code>RFC1413_MAXDATA</code></a> を超える応答や、ユーザー名が <a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_ident.c.html&quot;}, '*');"><code>RFC1413_USERLEN</code></a> (512バイト) を超える場合はパースに失敗する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>sscanf</code> の <code>%512s</code> は <a class="wiki-source-link" href="../../source/modules/metadata/mod_ident.c.html#L73" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/metadata/mod_ident.c.html&quot;}, '*');"><code>RFC1413_USERLEN</code></a> に依存している。定数を変更する場合はこのサイズ指定も更新が必要。</li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html#L2403" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>strchr</code></a> で <code>\012</code> を検索しているのは、ASCII/EBCDIC 両環境で改行コードを正しく扱うための設計である。</li>
+<li><code>conn-&gt;remote_logname</code> はリクエストプール (<code>conn-&gt;pool</code>) に割り当てられるため、明示的な解放は不要である。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

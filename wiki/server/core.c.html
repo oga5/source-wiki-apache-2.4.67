@@ -1,0 +1,126 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/core.c.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');">server/core.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の「コア」モジュールであり、サーバーの基本動作、設定の解析、およびリクエスト処理の基盤を提供します。他のモジュールが依存する設定構造の定義や、HTTP プロトコルの基本ハンドラ、ディレクトリ/ファイル単位のアクセス制御、フィルタの登録などを担う、サーバーの「官僚機構」とも呼べる中心的なファイルです。</p>
+<h2>モジュール内での役割</h2>
+<p><code>server</code> モジュール群の心臓部です。他のモジュール（<code>mod_proxy</code>, <code>mod_so</code> など）が利用する設定の保存場所や、リクエスト処理の最終的なフォールバック（<a class="wiki-source-link" href="../../source/server/core.c.html#L4887" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__default_handler.html&quot;}, '*');"><code>default_handler</code></a>）を提供します。また、設定ファイルのディレクティブ（<code>&lt;Directory&gt;</code>, <code>&lt;VirtualHost&gt;</code> など）を解釈し、サーバーの実行時状態を構築します。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: ディレクトリおよびサーバー単位の設定構造（<a class="wiki-source-link" href="../../source/include/http_core.h.html#L527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_dir_config.html&quot;}, '*');"><code>core_dir_config</code></a>, <a class="wiki-source-link" href="../../source/include/http_core.h.html#L694" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_server_config.html&quot;}, '*');"><code>core_server_config</code></a>）の作成、マージ、および保持。</li>
+<li>**ディレクティブ処理**: 設定ファイル内の主要なディレクティブ（<code>DocumentRoot</code>, <code>Options</code>, <code>AllowOverride</code> 等）の解析と適用。</li>
+<li>**リクエスト処理**: リクエストの翻訳（<a class="wiki-source-link" href="../../source/server/core.c.html#L4758" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_core_translate.html&quot;}, '*');"><code>ap_core_translate</code></a>）、ストレージへのマッピング、およびデフォルトのコンテンツ配信ハンドラ。</li>
+<li>**フィルタ管理**: 入出力フィルタ（<code>CORE_IN</code>, <code>CORE</code>）の登録と管理。</li>
+<li>**環境抽象化**: OS 固有の制限（RLIMIT）やパス操作の抽象化。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体とライフサイクル</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__create_core_dir_config.html&quot;}, '*');"><code>create_core_dir_config</code></a> / <a class="wiki-source-link" href="../../source/server/core.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__merge_core_dir_configs.html&quot;}, '*');"><code>merge_core_dir_configs</code></a>: ディレクトリ単位の設定の初期化とマージ。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L467" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__create_core_server_config.html&quot;}, '*');"><code>create_core_server_config</code></a> / <a class="wiki-source-link" href="../../source/server/core.c.html#L532" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__merge_core_server_configs.html&quot;}, '*');"><code>merge_core_server_configs</code></a>: サーバー（仮想ホスト含む）単位の設定の初期化とマージ。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4454" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>core_cmds</code></a>: サーバー全体で利用可能な全ディレクティブの定義テーブル。</li>
+</ul>
+<h3>リクエスト処理ハンドラ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4758" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_core_translate.html&quot;}, '*');"><code>ap_core_translate</code></a>: URI をファイルシステムパスに変換する。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4887" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__default_handler.html&quot;}, '*');"><code>default_handler</code></a>: 最終的なコンテンツ配信（ファイル読み込みと送信）。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4814" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__core_map_to_storage.html&quot;}, '*');"><code>core_map_to_storage</code></a>: ディレクトリおよびファイルのウォーク処理。</li>
+</ul>
+<h3>フィルタ・フック</h3>
+<ul>
+<li><code>ap_core_input_filter_handle</code> / <code>ap_core_output_filter_handle</code>: コアネットワークフィルタのハンドル。</li>
+<li><code>register_hooks</code>: サーバー起動時に呼び出され、フックを登録する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **設定フェーズ**: <a class="wiki-source-link" href="../../source/server/core.c.html#L4454" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>core_cmds</code></a> に定義された関数が設定ファイルを読み込み、<code>apr_pool_t</code> を使用して設定構造体を構築します。<a class="wiki-source-link" href="../../source/server/core.c.html#L221" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__merge_core_dir_configs.html&quot;}, '*');"><code>merge_core_dir_configs</code></a> 等により、親ディレクトリから子ディレクトリへの設定継承が行われます。 2.  **リクエストフェーズ**:</p>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4758" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_core_translate.html&quot;}, '*');"><code>ap_core_translate</code></a> が URI を <code>r-&gt;filename</code> に変換します。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4814" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__core_map_to_storage.html&quot;}, '*');"><code>core_map_to_storage</code></a> が <a class="wiki-source-link" href="../../source/server/request.c.html#L661" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__request_c__ap_directory_walk.html&quot;}, '*');"><code>ap_directory_walk</code></a> を呼び出し、該当パスの設定を適用します。</li>
+<li><a class="wiki-source-link" href="../../source/server/core.c.html#L4887" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__default_handler.html&quot;}, '*');"><code>default_handler</code></a> がファイルを開き、<code>apr_bucket_brigade</code> を使用してネットワークフィルタへデータを渡します。</li>
+<p>3.  **エラー処理**: <a class="wiki-source-link" href="../../source/server/core.c.html#L1648" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__core_c__ap_custom_response.html&quot;}, '*');"><code>ap_custom_response</code></a> や <code>ErrorDocument</code> ディレクティブにより、エラー発生時の挙動をカスタマイズ可能です。</p>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li>**APR (Apache Portable Runtime)**: <code>apr_pool_t</code>, <code>apr_hash_t</code>, <code>apr_bucket_brigade</code> 等、メモリ管理と低レベル I/O の基盤。</li>
+<li>**<a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');">httpd.h</a> / <a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');">http_config.h</a>**: サーバーの基本構造と設定フレームワーク。</li>
+<li>**<a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');">util_filter.h</a>**: フィルタチェーンの管理。</li>
+<li>**<a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');">mpm_common.h</a>**: マルチプロセッシングモジュールとの連携。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/ap_regex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_regex.h.html&quot;}, '*');"><code>ap_regex.h</code></a></li>
+<li><code>apr.h</code></li>
+<li><code>apr_buckets.h</code></li>
+<li><code>apr_fnmatch.h</code></li>
+<li><code>apr_hash.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_random.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_version.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><code>apu_version.h</code></li>
+<li><a class="wiki-source-link" href="../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>http_request.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_ssl.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_ssl.h.html&quot;}, '*');"><code>http_ssl.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/http_vhost.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_vhost.h.html&quot;}, '*');"><code>http_vhost.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/mod_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mod_core.h.html&quot;}, '*');"><code>mod_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy.h.html&quot;}, '*');"><code>mod_proxy.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/modules/core/mod_so.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_so.h.html&quot;}, '*');"><code>mod_so.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_ebcdic.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_ebcdic.h.html&quot;}, '*');"><code>util_ebcdic.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>util_filter.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_md5.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_md5.h.html&quot;}, '*');"><code>util_md5.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a></li>
+<li><a class="wiki-source-link" href="../../source/include/util_time.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_time.h.html&quot;}, '*');"><code>util_time.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>: 設定ファイルの読み込みと解析の全体フロー。</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_filter.c.html&quot;}, '*');"><code>server/util_filter.c</code></a>: フィルタの登録と実行メカニズム。</li>
+<li><a class="wiki-source-link" href="../../source/server/request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/request.c.html&quot;}, '*');"><code>server/request.c</code></a>: リクエスト処理のライフサイクル。</li>
+<li><a class="wiki-source-link" href="../../source/server/vhost.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/vhost.c.html&quot;}, '*');"><code>server/vhost.c</code></a>: 仮想ホストの管理。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: すべての設定構造体は <code>apr_pool_t</code> に紐付いており、サーバーの再起動や設定の再読み込み時に適切に解放される必要があります。</li>
+<li>**不変条件**: <a class="wiki-source-link" href="../../source/include/http_core.h.html#L527" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_core_h__core_dir_config.html&quot;}, '*');"><code>core_dir_config</code></a> 内の <code>opts_add</code> と <code>opts_remove</code> は、常に <code>(opts_add &amp; opts_remove) == 0</code> を維持する必要があります。</li>
+<li>**注意点**: このファイルは非常に巨大です。特定のディレクティブの挙動を追う場合は、<a class="wiki-source-link" href="../../source/server/core.c.html#L4454" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>core_cmds</code></a> テーブルから該当関数を探すのが最も効率的です。</li>
+<li>**省略範囲**: 複雑な正規表現の評価や、OS 固有の細かい最適化（<code>sendfile</code> 等）については、詳細な実装ロジックを省略しています。これらは <code>mod_core</code> ではなく、この <a class="wiki-source-link" href="../../source/server/core.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/core.c.html&quot;}, '*');"><code>core.c</code></a> が直接所有する責任範囲です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../symbols/server__core_c__create_core_dir_config.html" target="wiki-view"><code>create_core_dir_config</code></a></li>
+<li><a href="../symbols/server__core_c__merge_core_dir_configs.html" target="wiki-view"><code>merge_core_dir_configs</code></a></li>
+<li><a href="../symbols/server__core_c__create_core_server_config.html" target="wiki-view"><code>create_core_server_config</code></a></li>
+<li><a href="../symbols/server__core_c__merge_core_server_configs.html" target="wiki-view"><code>merge_core_server_configs</code></a></li>
+<li><a href="../symbols/server__core_c__ap_add_per_dir_conf.html" target="wiki-view"><code>ap_add_per_dir_conf</code></a></li>
+<li><a href="../symbols/server__core_c__ap_add_per_url_conf.html" target="wiki-view"><code>ap_add_per_url_conf</code></a></li>
+<li><a href="../symbols/server__core_c__ap_add_file_conf.html" target="wiki-view"><code>ap_add_file_conf</code></a></li>
+<li><a href="../symbols/server__core_c__ap_add_if_conf.html" target="wiki-view"><code>ap_add_if_conf</code></a></li>
+<li><a href="../symbols/server__core_c__reorder_sort_rec.html" target="wiki-view"><code>reorder_sort_rec</code></a></li>
+<li><a href="../symbols/server__core_c__sll.html" target="wiki-view"><code>sll</code></a></li>
+<li><a href="../symbols/server__core_c__cmd_parms.html" target="wiki-view"><code>cmd_parms</code></a></li>
+<li><a href="../symbols/server__core_c__server_token_type.html" target="wiki-view"><code>server_token_type</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

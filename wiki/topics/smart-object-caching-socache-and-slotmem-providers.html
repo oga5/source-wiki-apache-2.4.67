@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/smart-object-caching-socache-and-slotmem-providers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Smart Object Caching (socache) and Slotmem Providers</h1>
+<h2>概念</h2>
+<p><code>Smart Object Caching (socache)</code> と <code>Slotmem Providers</code> は、Apache HTTP Server においてプロセス間共有メモリやオブジェクトキャッシュを効率的に管理するための抽象化レイヤーです。</p>
+<ul>
+<li>**socache (<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');">ap_socache.h</a>)**: SSLセッションやその他のオブジェクトをキャッシュするための汎用的なキー・バリュー型キャッシュインターフェースを提供します。</li>
+<li>**<a class="wiki-source-link" href="../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');">slotmem</a> (<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');">ap_slotmem.h</a>)**: 固定サイズのスロットに分割された共有メモリセグメントを管理するためのプロバイダインターフェースを提供します。</li>
+<li>**shmcb (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');">mod_socache_shmcb.c</a>)**: 共有メモリ内のサイクリックバッファ（Shared Memory Cyclic Buffer）を利用して <code>socache</code> インターフェースを実装した具体的なプロバイダです。</li>
+</ul>
+<h2>なぜ重要か</h2>
+<p>マルチプロセスモデル（MPM）を採用する Apache HTTP Server において、SSL/TLS セッションの再開（Session Resumption）やロードバランサのステート管理などのデータを、プロセス間で高速かつ安全に共有・キャッシュすることはパフォーマンス向上に不可欠です。<code>socache</code> と <a class="wiki-source-link" href="../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> は、これらの共有メモリ管理やキャッシュ機構を抽象化し、異なるバックエンド実装（shmcb、dbm、memcacheなど）を統一的に扱うための共通APIを提供します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> (<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a>, <a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a> を含む)</li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a> (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a> を含む)</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a>** (<a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a>):</li>
+<p>スロットベースの共有メモリの作成、アタッチ、データの取得・書き込みなどの操作を定義するプロバイダ構造体。</p>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a>** (<a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a>):</li>
+<p>オブジェクトキャッシュの初期化、オブジェクトの保存（<code>store</code>）、取得（<code>retrieve</code>）、削除（<code>remove</code>）などの操作を定義するプロバイダ構造体。</p>
+<li>**<code>mod_socache_shmcb</code>** (<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a>):</li>
+<p><a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> インターフェースを実装し、共有メモリ上のサイクリックバッファを用いて高効率なキャッシュを提供するモジュール。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>具体的なエンドツーエンドの呼び出しフロー（例：<a class="wiki-source-link" href="../../source/modules/http2/h2_c1.c.html#L335" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c1.c.html&quot;}, '*');"><code>mod_ssl</code></a> がセッションを保存する際に、どのように <code>mod_socache_shmcb</code> を経由して共有メモリにデータが書き込まれるか）の詳細は、提供されたソースコードのコンテキストからは完全には特定されていません。</p>
+<p>一般的な流れとしては、上位モジュールが <a class="wiki-source-link" href="../../source/include/ap_socache.h.html#L89" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_socache_h__ap_socache_provider_t.html&quot;}, '*');"><code>ap_socache_provider_t</code></a> の <code>store</code> や <code>retrieve</code> 関数ポインタを呼び出し、<a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>mod_socache_shmcb.c</code></a> 内の実装が共有メモリ領域への排他的なアクセスとサイクリックバッファへのデータの読み書きを制御します。</p>
+<h2>重要な不変条件</h2>
+<p>提供されたファイル群の具体的な内部状態や排他制御の実装コードが不足しているため、詳細な不変条件は現時点では不明です。ただし、インターフェースの定義から以下の不変条件が想定されます。</p>
+<ul>
+<li>**スロットサイズの固定性**: <a class="wiki-source-link" href="../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> において、確保された各スロットのサイズおよびスロット数は初期化時に決定され、運用の途中で動的に変更することはできません。</li>
+<li>**バッファ境界の維持**: <code>shmcb</code> において、サイクリックバッファへの書き込みは、バッファサイズを超えた場合に古いエントリを安全に破棄（または上書き）し、メモリ破壊を起こさないように制御される必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<p>具体的なエラーハンドリングや競合状態に関する実装コードが提供されていないため、詳細な落とし穴は現時点では不明です。一般的な設計上の注意点として以下が挙げられます。</p>
+<ul>
+<li>**キャッシュサイズ不足**: 共有メモリのサイズ（<code>shmcb</code> のバッファサイズなど）が小さすぎると、頻繁にキャッシュが上書き（追い出し）され、キャッシュヒット率が著しく低下する原因になります。</li>
+<li>**ロック競合**: 複数プロセスから同一の共有メモリ領域へ同時にアクセスが発生した場合、排他制御（ミューテックス）によるボトルネックが発生する可能性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a>: スロットメモリプロバイダのAPI定義と操作関数。</li>
+<li><a class="wiki-source-link" href="../../source/include/ap_socache.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_socache.h.html&quot;}, '*');"><code>include/ap_socache.h</code></a>: スマートオブジェクトキャッシュプロバイダのAPI定義と操作関数。</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_socache_shmcb.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_socache_shmcb.c.html&quot;}, '*');"><code>modules/cache/mod_socache_shmcb.c</code></a>: 共有メモリサイクリックバッファ（shmcb）による具体的なキャッシュ実装の詳細。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

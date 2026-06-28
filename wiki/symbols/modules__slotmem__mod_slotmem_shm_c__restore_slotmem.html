@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html&quot;}, '*');">restore_slotmem</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>modules/slotmem/mod_slotmem_shm.c:196</code></li>
+</ul>
+<h2>目的</h2>
+<p>永続化ファイルから共有メモリ領域へデータを読み込み、MD5チェックサムと記述子（<a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html&quot;}, '*');"><code>sharedslotdesc_t</code></a>）を用いてデータの整合性を検証・復元する。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static apr_status_t restore_slotmem(sharedslotdesc_t *desc,
+                                    const char *storename, apr_size_t size,
+                                    apr_pool_t *pool)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>desc</code>: 共有メモリの構成情報を含む構造体へのポインタ。</li>
+<li><code>storename</code>: 永続化ファイルのパス。</li>
+<li><code>size</code>: 共有メモリセグメントの総サイズ。</li>
+<li><code>pool</code>: ファイル操作に使用するメモリプール。</li>
+<li>**出力**:</li>
+<li><code>apr_status_t</code>: 処理結果。成功時は <code>APR_SUCCESS</code>、不整合時は <code>APR_EMISMATCH</code>、読み込み不足時は <code>APR_INCOMPLETE</code> 等を返す。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li>共有メモリ領域は <code>[desc] [num_free] [data_slots] [inuse_array]</code> の順でレイアウトされている必要がある。</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>AP_SLOTMEM_OFFSET</code></a> 定数により、データ領域の開始位置が厳密に定義されている。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. 指定された <code>storename</code> を読み書きモードで開く。 2. ファイルからデータ領域（<code>desc</code> の直後から <code>size</code> まで）を読み込む。 3. ファイルの末尾（EOF）に達していない場合、MD5チェックサムを読み込み、メモリ上のデータから計算したハッシュ値と比較する。 4. さらに記述子（<code>desc</code>）の整合性を確認するため、ファイル末尾の記述子データとメモリ上の <code>desc</code> を比較する。 5. 互換性のため、EOFに達した場合はチェックサムや記述子の検証をスキップし、成功として扱う。 6. 最後にファイルを閉じる。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>modules/slotmem/mod_slotmem_shm.c:430</code>（<code>slotmem_attach</code> 内で呼び出される）。</li>
+<li>**呼び出し先**: <code>apr_file_open</code>, <code>apr_file_read_full</code>, <code>apr_file_eof</code>, <code>apr_md5</code>, <code>memcmp</code>, <code>ap_log_error</code>, <code>apr_file_close</code>。</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html&quot;}, '*');"><code>sharedslotdesc_t</code></a>: スロットの構成情報（サイズ、個数、型）を保持するヘッダー。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>APR_EMISMATCH</code>: MD5ハッシュまたは記述子の内容が一致しない場合に発生。</li>
+<li><code>APR_INCOMPLETE</code>: ファイルの読み込みサイズが期待値と異なる場合に発生。</li>
+<li><code>APR_EOF</code>: ファイルが予期せず終了した場合の処理分岐。</li>
+<li>互換性対応: 古い形式の永続化ファイルでチェックサムや記述子情報が存在しない場合、EOF判定により検証をバイパスして成功を返す。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>本関数は <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a> の永続化ロジックの中核であり、ファイルフォーマットの変更は <a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__store_slotmem.html&quot;}, '*');"><code>store_slotmem</code></a> との整合性に注意すること。</li>
+<li><a class="wiki-source-link" href="../../source/modules/slotmem/mod_slotmem_shm.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>AP_SLOTMEM_OFFSET</code></a> はメモリレイアウトの境界を決定するため、構造体定義の変更時には必ず確認が必要。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

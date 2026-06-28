@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/handle-headers.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>handle_headers</h1>
+<h2>概念</h2>
+<p><code>handle_headers</code> は、Apache HTTP Server（httpd）の FastCGI 関連モジュールにおいて、バックエンドから受信したデータストリームから HTTP ヘッダの終端（空行）を検出するための関数です。</p>
+<h2>なぜ重要か</h2>
+<p>FastCGI バックエンドからのレスポンスはネットワークの状況などにより分割されて届く可能性があるため、ヘッダの境界（<code>\r\n\r\n</code> または <code>\n\n</code>）を正確に識別し、ヘッダ部分とボディ部分を正しく分離して処理を遷移させるために重要です。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__aaa.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__aaa.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_access_compat.c.html&quot;}, '*');"><code>module:modules/aaa</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__proxy.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__proxy.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/ajp.h.html&quot;}, '*');"><code>module:modules/proxy</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__aaa__mod_authnz_fcgi_c__handle_headers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_fcgi_c__handle_headers.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_authnz_fcgi.c.html#L409&quot;}, '*');"><code>symbol:modules/aaa/mod_authnz_fcgi.c#handle_headers</code></a></li>
+<li>認証・認可 FastCGI モジュール（<code>mod_authnz_fcgi</code>）内の静的関数。<a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html#L465" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_fcgi_c__handle_response.html&quot;}, '*');"><code>handle_response</code></a> から呼び出されます。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_fcgi_c__handle_headers.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/mod_proxy_fcgi.c.html#L543&quot;}, '*');"><code>symbol:modules/proxy/mod_proxy_fcgi.c#handle_headers</code></a></li>
+<li>プロキシ FastCGI モジュール（<code>mod_proxy_fcgi</code>）内の静的関数。受信バッファを走査して状態遷移を管理します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> における処理の流れは以下の通りです： 1. バックエンドからデータを受信すると、<code>handle_headers</code> が呼び出されます。 2. <code>readbuf</code> 内のデータを1バイトずつ走査し、改行コード（<code>\r</code> や <code>\n</code>）の出現パターンに応じて <code>state</code>（状態変数）を更新します。 3. <code>\r\n\r\n</code> または <code>\n\n</code> を検出して <code>HDR_STATE_DONE_WITH_HEADERS</code> に達すると、関数は <code>1</code> を返してヘッダの終端を通知します。終端に達しない場合は <code>0</code> を返し、次のデータ受信を待ちます。</p>
+<p>なお、<a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>mod_authnz_fcgi.c</code></a> 側の <code>handle_headers</code> における詳細なエンドツーエンドの流れや、両モジュール間での共通の呼び出しフローの全容はまだ完全には解析されていません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**状態の一貫性**: <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>mod_proxy_fcgi.c</code></a> の <code>handle_headers</code> において、解析状態を追跡する <code>state</code> 変数は、データの断片化に対応するため、呼び出し間で一貫して保持・更新される必要があります。</li>
+<li>**バッファの有効性**: <code>readbuf</code> は <code>readlen</code> で指定された長さの有効なデータを含んでいなければなりません。</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>mod_authnz_fcgi.c</code></a> 側の不変条件については、現時点では未解析です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**データの断片化**: ヘッダが複数回に分割されて届く場合、<code>state</code> の引き継ぎが正しく行われないと、ヘッダの終端を誤認するか検出に失敗する可能性があります。</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>mod_authnz_fcgi.c</code></a> における具体的な落とし穴や境界条件の詳細は、現時点では未解析です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_fcgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_fcgi.c</code></a> （<code>handle_headers</code> の状態遷移ロジックの詳細）</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authnz_fcgi.c.html&quot;}, '*');"><code>modules/aaa/mod_authnz_fcgi.c</code></a> （<code>handle_headers</code> およびその呼び出し元である <a class="wiki-source-link" href="../../source/modules/aaa/mod_authnz_fcgi.c.html#L465" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authnz_fcgi_c__handle_response.html&quot;}, '*');"><code>handle_response</code></a> の実装）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

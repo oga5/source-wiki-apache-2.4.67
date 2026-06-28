@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/support__rotatelogs_c__post_rotate.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L274" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__post_rotate.html&quot;}, '*');">post_rotate</a></h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <code>function</code></li>
+<li>定義箇所: <code>support/rotatelogs.c:274</code></li>
+</ul>
+<h2>目的</h2>
+<p>ログファイルのローテーション完了後に、オプションで指定されたハードリンクの作成や、外部プログラム（<code>postrotate_prog</code>）の実行を行う。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>static void post_rotate(apr_pool_t *pool, struct logfile *newlog,
+                        rotate_config_t *config, rotate_status_t *status)</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**:</li>
+<li><code>pool</code>: メモリ管理用 APR プール。</li>
+<li><code>newlog</code>: 新しく作成されたログファイルの情報。</li>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L103" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/rotatelogs.c.html&quot;}, '*');"><code>config</code></a>: ローテーション設定（リンク先パス、外部プログラムパス等）。</li>
+<li><code>status</code>: 現在の実行状態。</li>
+<li>**出力**: なし（<code>void</code>）。エラー発生時は <code>stderr</code> にメッセージを出力し、リンク失敗時は <code>exit(2)</code> で終了する。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>config-&gt;linkfile</code> が設定されている場合、既存のリンクファイルを削除してから新しいハードリンクを作成する。</li>
+<li>外部プログラムの実行は、<code>config-&gt;postrotate_prog</code> が設定されている場合にのみ行われる。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<p>1. **ハードリンク作成**: <code>config-&gt;linkfile</code> が存在する場合、既存のリンクを削除し、<code>newlog-&gt;name</code> から <code>config-&gt;linkfile</code> へハードリンクを作成する。 2. **ゾンビプロセス回収**: 外部プログラム実行前に <code>apr_proc_wait_all_procs</code> を呼び出し、完了済みのプロセスを回収する。 3. **プロセス属性設定**: <code>apr_procattr_create</code> を使用してプロセス属性を初期化し、環境変数付きのコマンド実行モード (<code>APR_PROGRAM_ENV</code>) を設定する。 4. **プログラム実行**: 外部プログラムを起動する。引数として <code>newlog-&gt;name</code> を渡し、現在のログファイル名 (<code>status-&gt;current.name</code>) が存在する場合はそれも渡す。</p>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**: <code>support/rotatelogs.c:480</code></li>
+<li>**呼び出し先**:</li>
+<li><a class="wiki-source-link" href="../../source/support/htcacheclean.c.html#L138" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/support/htcacheclean.c.html&quot;}, '*');"><code>apr_file_remove</code></a>, <code>apr_file_link</code></li>
+<li><code>apr_proc_wait_all_procs</code></li>
+<li><code>apr_procattr_create</code>, <code>apr_procattr_error_check_set</code>, <code>apr_procattr_cmdtype_set</code></li>
+<li><code>apr_proc_create</code></li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__rotate_config_t.html&quot;}, '*');"><code>rotate_config_t</code></a>: ローテーション設定を保持。</li>
+<li><a class="wiki-source-link" href="../../source/support/rotatelogs.c.html#L78" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/support__rotatelogs_c__rotate_status_t.html&quot;}, '*');"><code>rotate_status_t</code></a>: 実行状態を保持。</li>
+<li><code>struct logfile</code>: ログファイル名やプールを保持。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li>**リンク作成失敗**: <code>apr_file_link</code> が失敗した場合、エラーメッセージを出力して <code>exit(2)</code> を呼び出す。</li>
+<li>**プロセス属性設定失敗**: <code>apr_procattr_create</code> や属性設定が失敗した場合、エラーメッセージを出力して処理を中断する。</li>
+<li>**プログラム起動失敗**: <code>apr_proc_create</code> が失敗した場合、エラーメッセージを出力して処理を中断する。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li>外部プログラムの実行は非同期で行われる。</li>
+<li>ログファイル名が <code>status-&gt;current.name</code> に存在しない場合、外部プログラムには引数が2つ（プログラム名と新しいログファイル名）のみ渡される。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

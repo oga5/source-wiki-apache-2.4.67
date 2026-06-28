@@ -1,0 +1,98 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/loggers/mod_log_config.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');">modules/loggers/mod_log_config.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>mod_log_config.c</code></a> は、Apache HTTP Server における柔軟なログ記録機能（<code>TransferLog</code>, <code>LogFormat</code>, <code>CustomLog</code>）を実装するコアモジュールです。リクエスト単位の情報を収集し、設定されたフォーマットに従ってファイルやパイプへ書き出す責務を持ちます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/loggers</code> サブシステムにおけるメインエンジンです。他のログモジュール（<code>mod_logio</code> 等）が提供する拡張機能と連携し、リクエスト処理の最終段階（<code>log_transaction</code> フック）で実行されます。</p>
+<h2>責務</h2>
+<ul>
+<li>**設定管理**: サーバーおよびバーチャルホストごとのログ設定（フォーマット、出力先、条件）の保持とマージ。</li>
+<li>**フォーマット解析**: <code>LogFormat</code> 文字列を解析し、実行時に評価可能な <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L287" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__log_format_item.html&quot;}, '*');"><code>log_format_item</code></a> 配列へ変換。</li>
+<li>**リクエスト処理**: リクエストの各フェーズで収集された情報をフォーマットに従って文字列化し、出力先へディスパッチ。</li>
+<li>**出力制御**: 標準的なファイル書き込みおよびバッファリングされた書き込みの制御。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定構造体</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L237" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__multi_log_state.html&quot;}, '*');"><code>multi_log_state</code></a>: サーバー単位のログ設定（フォーマット定義、ログリスト）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L262" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__config_log_state.html&quot;}, '*');"><code>config_log_state</code></a>: 個別のログファイル設定（ファイルパス、フォーマット、条件式）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L287" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__log_format_item.html&quot;}, '*');"><code>log_format_item</code></a>: 解析済みのログ項目（ハンドラ関数、引数、条件）。</li>
+</ul>
+<h3>ログ処理・ディスパッチ</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>log_writer</code></a>: ログ書き込みを行う関数ポインタ（デフォルトまたはバッファリング版）。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1605" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__ap_default_log_writer.html&quot;}, '*');"><code>ap_default_log_writer</code></a>: 非バッファリングの直接書き込み実装。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1678" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__ap_buffered_log_writer.html&quot;}, '*');"><code>ap_buffered_log_writer</code></a>: バッファリングされた書き込み実装。</li>
+</ul>
+<h3>登録・フック</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/os/netware/modules.c.html#L39" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/modules.c.html&quot;}, '*');"><code>log_config_module</code></a>: モジュール定義構造体。</li>
+<li><code>register_hooks</code>: Apache フック（<code>pre_config</code>, <a class="wiki-source-link" href="../../../source/modules/generators/mod_info.c.html#L992" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__generators__mod_info_c__check_config.html&quot;}, '*');"><code>check_config</code></a>, <a class="wiki-source-link" href="../../../source/modules/proxy/mod_proxy.c.html#L3250" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__child_init.html&quot;}, '*');"><code>child_init</code></a>, <code>open_logs</code>, <code>log_transaction</code>）の登録。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1728" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__log_pre_config.html&quot;}, '*');"><code>log_pre_config</code></a> でログハンドラ（<code>%h</code>, <code>%u</code> 等）を <code>log_hash</code> に登録。 2. **設定解析**: <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1294" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__add_custom_log.html&quot;}, '*');"><code>add_custom_log</code></a> 等により <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L262" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__config_log_state.html&quot;}, '*');"><code>config_log_state</code></a> が構築され、<a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1046" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__parse_log_string.html&quot;}, '*');"><code>parse_log_string</code></a> でフォーマットが中間形式に変換される。 3. **ログオープン**: <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1423" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__open_multi_logs.html&quot;}, '*');"><code>open_multi_logs</code></a> が <code>open_logs</code> フックで呼ばれ、ファイルディスクリプタを確保。 4. **トランザクション**: <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1185" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__multi_log_transaction.html&quot;}, '*');"><code>multi_log_transaction</code></a> がリクエスト終了時に呼ばれる。</p>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1109" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__config_log_transaction.html&quot;}, '*');"><code>config_log_transaction</code></a> が各ログ設定を評価。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L1068" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__process_item.html&quot;}, '*');"><code>process_item</code></a> が各フォーマット項目を順次実行し、文字列を生成。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>log_writer</code></a> を介して出力。</li>
+</ul>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr_hash.h</code>, <code>apr_strings.h</code>: 設定管理と文字列操作。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_protocol.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_protocol.h.html&quot;}, '*');"><code>http_protocol.h</code></a>: Apache 設定およびリクエスト処理。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.h.html&quot;}, '*');"><code>mod_log_config.h</code></a>: 外部モジュール向けの公開インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../source/include/util_time.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_time.h.html&quot;}, '*');"><code>util_time.h</code></a>: 時刻フォーマット処理。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a></li>
+<li><code>apr_anylock.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_optional.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>limits.h</code></li>
+<li><code>unistd.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.h.html&quot;}, '*');"><code>modules/loggers/mod_log_config.h</code></a>: 外部モジュールがログハンドラを登録するためのヘッダー。</li>
+<li><a class="wiki-source-link" href="../../../source/server/util_time.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/util_time.c.html&quot;}, '*');"><code>server/util_time.c</code></a>: 時刻キャッシュのロジック（本ファイルでも類似のキャッシュ手法を使用）。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: ほとんどの動的メモリは <code>request_rec</code> のプール（<code>r-&gt;pool</code>）から割り当てられ、リクエスト終了時に自動解放されます。</li>
+<li>**バッファリング**: <code>BufferedLogs</code> が有効な場合、<a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L255" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__buffered_log.html&quot;}, '*');"><code>buffered_log</code></a> 構造体が使用されます。マルチスレッド環境では <code>apr_thread_mutex_t</code> による排他制御が行われます。</li>
+<li>**パフォーマンス**: <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L643" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__log_request_time.html&quot;}, '*');"><code>log_request_time</code></a> 等の関数は、頻繁に呼ばれるため、時刻のキャッシュやスタック利用の最適化が行われています。</li>
+<li>**制約**: <a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L202" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/loggers/mod_log_config.c.html&quot;}, '*');"><code>log_writer</code></a> は <code>open_logs</code> フック実行前に設定する必要があります。</li>
+<li>**省略箇所**: 本ドキュメントでは、各ログハンドラ関数（<a class="wiki-source-link" href="../../../source/modules/loggers/mod_log_config.c.html#L310" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__loggers__mod_log_config_c__log_remote_host.html&quot;}, '*');"><code>log_remote_host</code></a> 等）の詳細な実装ロジックは省略しています。これらは <code>log_hash</code> に登録されたコールバックとして独立しており、必要に応じて個別に参照可能です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__multi_log_state.html" target="wiki-view"><code>multi_log_state</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__buffered_log.html" target="wiki-view"><code>buffered_log</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__config_log_state.html" target="wiki-view"><code>config_log_state</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__log_request_state.html" target="wiki-view"><code>log_request_state</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__log_format_item.html" target="wiki-view"><code>log_format_item</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__constant_item.html" target="wiki-view"><code>constant_item</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__log_remote_host.html" target="wiki-view"><code>log_remote_host</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__log_remote_address.html" target="wiki-view"><code>log_remote_address</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__log_local_address.html" target="wiki-view"><code>log_local_address</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__sle.html" target="wiki-view"><code>sle</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__cached_request_time.html" target="wiki-view"><code>cached_request_time</code></a></li>
+<li><a href="../../symbols/modules__loggers__mod_log_config_c__log_check_config.html" target="wiki-view"><code>log_check_config</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/pass-response.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>pass_response</h1>
+<h2>概念</h2>
+<p><code>pass_response</code> は、Apache HTTP Server（httpd-2.4.67）の複数のモジュールにおいて、バックエンドや解析器から受け取ったレスポンスデータを処理・変換し、フィルタチェーンを通じて後続の処理へ引き渡す（pass する）ために定義されている静的関数です。</p>
+<p>この名称を持つ関数は、以下の2つの異なる文脈で独立して存在しています。 1. **HTTP/2 接続フィルタ (<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>)**: HTTP/1.1 形式で解析されたレスポンスデータを HTTP/2 構造（ヘッダーバケット）へ変換し、フィルタチェーンへ送信します。 2. **SCGI プロキシ (<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');"><code>mod_proxy_scgi.c</code></a>)**: SCGI バックエンドからのレスポンスを読み込み、ヘッダー解析、<code>X-Sendfile</code> や内部リダイレクトの判定、およびクライアントへの転送を行います。</p>
+<h2>なぜ重要か</h2>
+<p>各モジュールにおいて、レスポンス処理の最終段階や、プロトコル変換・ヘッダー調整を伴うデータ転送の要となるためです。</p>
+<ul>
+<li>**HTTP/2 フィルタ**では、HTTP/1.1 形式のレスポンスを HTTP/2 のヘッダーバケットに変換して正しく送信し、次のレスポンス解析に備えて状態をリセットする役割を持ちます。</li>
+<li>**SCGI プロキシ**では、バックエンドからのレスポンスヘッダーを解析し、<code>Content-Length</code> や <code>Transfer-Encoding</code> の調整、<code>X-Sendfile</code> や内部リダイレクトといった特殊な処理を適切にハンドリングしてクライアントへデータを流す役割を持ちます。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__http2.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http2.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2.h.html&quot;}, '*');"><code>module:modules/http2</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__proxy.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__proxy.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/ajp.h.html&quot;}, '*');"><code>module:modules/proxy</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__http2__h2_c2_filter_c__pass_response.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__pass_response.html&quot;, &quot;source&quot;: &quot;source/modules/http2/h2_c2_filter.c.html#L529&quot;}, '*');"><code>symbol:modules/http2/h2_c2_filter.c#pass_response</code></a> (関数)</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__proxy__mod_proxy_scgi_c__pass_response.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__pass_response.html&quot;, &quot;source&quot;: &quot;source/modules/proxy/mod_proxy_scgi.c.html#L363&quot;}, '*');"><code>symbol:modules/proxy/mod_proxy_scgi.c#pass_response</code></a> (関数)</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>これら2つの関数は、それぞれ独立したモジュールで定義されており、直接的な連携関係はありません。それぞれの文脈における流れは以下の通りです。</p>
+<h3>HTTP/2 フィルタ (<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>) の場合</h3>
+<p>1. 解析済みのレスポンス状態（<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html#L382" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_c2_filter_c__h2_response_parser.html&quot;}, '*');"><code>h2_response_parser</code></a>）から <a class="wiki-source-link" href="../../source/modules/http2/h2_headers.h.html#L26" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__http2__h2_headers_h__h2_headers.html&quot;}, '*');"><code>h2_headers</code></a> オブジェクトを生成します。 2. <code>parser-&gt;tmp</code> ブリゲードを初期化し、生成したヘッダーバケットとフラッシュバケットを挿入します。 3. <a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を呼び出し、後続のフィルタへデータを渡します。 4. 処理完了後、<code>parser</code> の状態を <code>H2_RP_STATUS_LINE</code> にリセットし、ヘッダー行配列をクリアして次のレスポンス解析に備えます。 5. レスポンスステータスが 200 以上の場合、<code>conn_ctx-&gt;has_final_response</code> を 1 に設定します。</p>
+<h3>SCGI プロキシ (<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');"><code>mod_proxy_scgi.c</code></a>) の場合</h3>
+<p>1. <code>SOCKET_EX</code> バケットを作成し、バックエンドソケットと統計カウンタを紐付けてブリゲードに挿入します。 2. <a class="wiki-source-link" href="../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> を呼び出し、バックエンドからのレスポンスヘッダーを解析します。 3. <code>Content-Length</code> および <code>Transfer-Encoding</code> をヘッダーから削除します。 4. <code>X-Sendfile</code> や内部リダイレクトの設定がある場合、指定されたヘッダーを検索し、存在すれば <a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html#L60" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_scgi_c__scgi_request_config.html&quot;}, '*');"><code>scgi_request_config</code></a> を設定してサブリクエストや内部リダイレクトへ移行します。 5. 特殊処理に該当しない場合、<a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> を介してレスポンスボディをクライアントへ転送します。</p>
+<p>※ システム全体におけるこれら2つの処理の統合的なエンドツーエンドの相互作用や、詳細な呼び出し元からの完全な制御フローは、現時点では完全には判明していません。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**HTTP/2 フィルタ (<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>)**:</li>
+<li><code>parser</code> 内の <code>http_status</code> および <code>hlines</code> が、有効な HTTP/1.1 レスポンスとして解析済みである必要があります。</li>
+<li><code>parser-&gt;tmp</code> ブリゲードが利用可能でなければなりません。</li>
+<li>同一コネクション上での連続するレスポンス解析をサポートするため、処理完了後に <code>parser</code> の状態が <code>H2_RP_STATUS_LINE</code> にリセットされ、ヘッダー行配列がクリアされる必要があります。</li>
+<li>**SCGI プロキシ (<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');"><code>mod_proxy_scgi.c</code></a>)**:</li>
+<li><code>r-&gt;pool</code> はリクエストの生存期間中有効である必要があります。</li>
+<li><code>conn-&gt;sock</code> は有効なバックエンドソケットでなければなりません。</li>
+<li>コアによる自動決定を優先するため、SCGI プロトコル特有のボディフレーミングにおいて <code>Content-Length</code> や <code>Transfer-Encoding</code> ヘッダーが削除される必要があります。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**HTTP/2 フィルタ (<a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>h2_c2_filter.c</code></a>)**:</li>
+<li><a class="wiki-source-link" href="../../source/server/util_filter.c.html#L564" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_filter_c__ap_pass_brigade.html&quot;}, '*');"><code>ap_pass_brigade</code></a> がエラーを返した場合、そのステータスコードがそのまま呼び出し元へ伝播されるため、エラーハンドリングが不適切だと接続の切断やリソースリークに繋がる可能性があります。</li>
+<li><code>parser</code> の状態リセットが正しく行われないと、後続のレスポンス解析が破損します。</li>
+<li>**SCGI プロキシ (<a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');"><code>mod_proxy_scgi.c</code></a>)**:</li>
+<li>ヘッダー解析に失敗した場合、<a class="wiki-source-link" href="../../source/server/util_script.c.html#L840" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_script_c__ap_scan_script_header_err_brigade_ex.html&quot;}, '*');"><code>ap_scan_script_header_err_brigade_ex</code></a> がエラーを返し、ブリゲードが破棄されて処理が中断されます。</li>
+<li><code>X-Sendfile</code> や内部リダイレクトの判定において、<code>r-&gt;err_headers_out</code> と <code>r-&gt;headers_out</code> の両方を走査する必要があるため、どちらか一方のみを参照すると意図したリダイレクトやファイル送信が行われません。</li>
+<li>**共通**:</li>
+<li>同一名称の関数ですが、モジュール間で直接的な関係はなく、シグネチャも振る舞いも異なるため、混同しないよう注意が必要です。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/http2/h2_c2_filter.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http2/h2_c2_filter.c.html&quot;}, '*');"><code>modules/http2/h2_c2_filter.c</code></a> (特に <code>pass_response</code> 関数の定義箇所)</li>
+<li><a class="wiki-source-link" href="../../source/modules/proxy/mod_proxy_scgi.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/proxy/mod_proxy_scgi.c.html&quot;}, '*');"><code>modules/proxy/mod_proxy_scgi.c</code></a> (特に <code>pass_response</code> 関数の定義箇所)</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

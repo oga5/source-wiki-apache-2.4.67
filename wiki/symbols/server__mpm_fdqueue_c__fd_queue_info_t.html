@@ -1,0 +1,81 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>symbols/server__mpm_fdqueue_c__fd_queue_info_t.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>fd_queue_info_t</h1>
+<h2>定義</h2>
+<ul>
+<li>種別: <a class="wiki-source-link" href="../../source/server/mpm/winnt/child.c.html#L58" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__child_c__struct.html&quot;}, '*');"><code>struct</code></a></li>
+<li>定義箇所: <code>server/mpm_fdqueue.c:31</code></li>
+</ul>
+<h2>目的</h2>
+<p>Apache HTTP Server の MPM（<code>event</code> や <code>worker</code>）において、ワーカー・スレッドのアイドル状態管理、スレッドのブロッキング制御、およびメモリプール（<code>recycled_pools</code>）の再利用リストを管理するための構造体です。</p>
+<h2>シグネチャまたは形状</h2>
+<pre><code>struct fd_queue_info_t {
+    apr_uint32_t volatile idlers;
+    apr_thread_mutex_t *idlers_mutex;
+    apr_thread_cond_t *wait_for_idler;
+    int terminated;
+    int max_idlers;
+    int max_recycled_pools;
+    apr_uint32_t recycled_pools_count;
+    struct recycled_pool *volatile recycled_pools;
+};</code></pre>
+<h2>入力と出力</h2>
+<ul>
+<li>**入力**: <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_create.html&quot;}, '*');"><code>ap_queue_info_create</code></a> を通じて初期化され、各 <code>ap_queue_info_*</code> 関数群の第一引数として渡されます。</li>
+<li>**出力**: <code>idlers</code> カウンタの状態や、<code>recycled_pools</code> リストの操作結果を保持します。</li>
+</ul>
+<h2>前提条件と不変条件</h2>
+<ul>
+<li><code>idlers</code> フィールドは <code>apr_atomic</code> 操作によって更新されます。</li>
+<li><code>idlers</code> の値は <code>zero_pt</code> を基準とし、以下のように解釈されます：</li>
+<li><code>&gt;= zero_pt</code>: アイドル状態のワーカー・スレッド数。</li>
+<li><code>&lt; zero_pt</code>: アイドル・ワーカーを待機しているスレッド数。</li>
+<li><code>recycled_pools</code> はアトミックな操作を介して管理されます。</li>
+</ul>
+<h2>アルゴリズムまたは振る舞い</h2>
+<ul>
+<li>**アイドル管理**: ワーカーがアイドル状態になった際、<a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L105" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_set_idle.html&quot;}, '*');"><code>ap_queue_info_set_idle</code></a> を通じて <code>idlers</code> を更新し、待機中のリスナーを <code>wait_for_idler</code> 条件変数で起床させます。</li>
+<li>**メモリ再利用**: <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L217" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_push_pool.html&quot;}, '*');"><code>ap_queue_info_push_pool</code></a> および <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L253" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_pop_pool.html&quot;}, '*');"><code>ap_queue_info_pop_pool</code></a> を使用し、<code>recycled_pools</code> リストを介してメモリプールの再利用を行い、割り当てコストを削減します。</li>
+</ul>
+<h2>呼び出し元と呼び出し先</h2>
+<ul>
+<li>**呼び出し元**:</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a></li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>server/mpm_fdqueue.c</code></a> 内の各 <code>ap_queue_info_*</code> 関数</li>
+<li>**呼び出し先**:</li>
+<li><code>apr_thread_mutex_t</code> (同期)</li>
+<li><code>apr_thread_cond_t</code> (同期)</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__recycled_pool.html&quot;}, '*');"><code>recycled_pool</code></a> (データ構造)</li>
+</ul>
+<h2>関連データ構造</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L25" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__recycled_pool.html&quot;}, '*');"><code>recycled_pool</code></a>: メモリプールの再利用リストを構成する要素。</li>
+<li><code>apr_thread_mutex_t</code>: <code>idlers_mutex</code> として使用。</li>
+<li><code>apr_thread_cond_t</code>: <code>wait_for_idler</code> として使用。</li>
+</ul>
+<h2>失敗モードと境界条件</h2>
+<ul>
+<li><code>terminated</code> フラグが設定された場合、ワーカーは終了処理へ移行します。</li>
+<li><code>idlers</code> カウンタが負の値になることは、待機スレッドが存在することを意味し、正常な動作範囲内です。</li>
+<li><code>recycled_pools_count</code> が <code>max_recycled_pools</code> を超える場合、メモリ再利用の制限がかかる可能性があります。</li>
+</ul>
+<h2>保守担当者向けメモ</h2>
+<ul>
+<li><code>idlers</code> の <code>zero_pt</code> はマジックナンバーとして機能するため、アトミック操作時の加減算ロジックを変更する際は注意が必要です。</li>
+<li>本構造体は <code>APR_HAS_THREADS</code> が有効な環境でのみ使用されます。</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html#L253" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_fdqueue_c__ap_queue_info_pop_pool.html&quot;}, '*');"><code>ap_queue_info_pop_pool</code></a> 等の関数は呼び出し側のスレッドコンテキストに依存する制約があるため、実装の変更時には <a class="wiki-source-link" href="../../source/server/mpm_fdqueue.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm_fdqueue.c.html&quot;}, '*');"><code>server/mpm_fdqueue.c</code></a> 内の同期設計を確認してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

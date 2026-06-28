@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>test/modules/md/md_env.py.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/test/modules/md/md_env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/md_env.py.html&quot;}, '*');">test/modules/md/md_env.py</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../../source/test/modules/md/md_env.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/md_env.py.html&quot;}, '*');"><code>md_env.py</code></a> は、Apache <code>mod_md</code> モジュールの統合テスト環境を定義する基盤モジュールです。<code>pyhttpd</code> フレームワークを拡張し、ACME プロトコル（Pebble/Boulder）を用いた証明書管理、ローカルストレージの操作、および HTTPD のライフサイクル管理を抽象化します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>test/modules/md</code> ディレクトリ内の全テストケースにおける共通のテストフィクスチャおよびユーティリティを提供します。テスト実行時の環境構築、ACME サーバーとの通信設定、および <code>mod_md</code> が管理する証明書ストアの検証を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**環境構築**: <code>MDTestSetup</code> を通じた <code>mod_md</code> 関連モジュールのロードと Pebble 用の設定ファイル生成。</li>
+<li>**ACME サーバー制御**: ACME サーバー（Pebble/Boulder）の接続状態管理と、証明書発行プロセスの待機（ポーリング）。</li>
+<li>**ストア管理**: <code>mod_md</code> のローカルストレージ（<a class="wiki-source-link" href="../../../../source/test/modules/md/data/store_migrate/1.0/sample1/md_store.json.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;panels/test/modules/md/data/store_migrate/1.0/sample1/md_store.json.html&quot;}, '*');"><code>md_store.json</code></a>, <code>domains/</code>, <code>accounts/</code> 等）の初期化、パージ、および権限検証。</li>
+<li>**検証ユーティリティ**: 証明書の内容、OCSP ステータス、JSON レスポンス、およびファイルシステム上の状態を検証するヘルパーメソッドの提供。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>環境定義</h3>
+<ul>
+<li><code>MDTestEnv</code>: テスト環境のメインクラス。<code>HttpdTestEnv</code> を継承し、ACME 関連のパスや設定を保持。</li>
+<li><code>MDTestSetup</code>: <code>HttpdTestSetup</code> を継承。テスト開始時に <code>mod_md</code> 関連の Apache モジュールを有効化し、Pebble 用のテンプレートを配置。</li>
+</ul>
+<h3>ストア操作</h3>
+<ul>
+<li><code>clear_store()</code> / <code>purge_store()</code>: テスト実行前後のクリーンアップ。</li>
+<li><code>store_domain_file()</code> / <code>path_account()</code>: ストア内の特定のファイルパスを生成するアクセサ群。</li>
+<li><code>check_md_complete()</code>: 指定ドメインの証明書発行が完了し、鍵と証明書が存在することを検証。</li>
+</ul>
+<h3>検証・待機</h3>
+<ul>
+<li><code>await_completion()</code> / <code>await_renewal()</code>: ACME プロセスが完了するまで <code>md-status</code> をポーリング。</li>
+<li><code>check_md_credentials()</code>: 証明書の SAN、有効期限、秘密鍵との整合性を検証。</li>
+<li><code>get_ocsp_status()</code>: <code>openssl s_client</code> を用いて OCSP レスポンスを解析。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>MDTestEnv</code> がインスタンス化される際、環境変数 <code>ACME</code> に基づいてサーバー URL を決定し、ストアディレクトリを初期化します。 2. **セットアップ**: <code>setup_httpd()</code> が呼ばれると、<code>MDTestSetup</code> が <code>mod_md</code> 関連の Apache 設定を生成し、サーバーを起動します。 3. **コマンド実行**: <code>a2md()</code> メソッドが <code>a2md</code> バイナリを呼び出し、ACME サーバーと対話します。引数は <code>a2md_stdargs</code> で事前設定されます。 4. **検証フロー**: テストは <code>get_md_status()</code> で JSON を取得し、<code>check_md()</code> や <code>check_md_complete()</code> で期待される状態（<code>MD_S_COMPLETE</code> 等）と比較します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>pyhttpd.env</code>: 基盤となるテスト環境クラス。</li>
+<li><code>pyhttpd.certs</code>: 証明書生成および検証ユーティリティ。</li>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/md/md_cert_util.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/md_cert_util.py.html&quot;}, '*');"><code>md_cert_util.py</code></a>: 証明書のパースや検証を行うヘルパー。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/test/modules/md/md_cert_util.py.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/test/modules/md/md_cert_util.py.html&quot;}, '*');"><code>test/modules/md/md_cert_util.py</code></a>: 証明書検証ロジックの分離先。</li>
+<li><code>test/modules/md/test_*.py</code>: 本モジュールを利用する各テストケース。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリとライフサイクル**: <code>MDTestEnv</code> は <code>pytest</code> のセッションまたはモジュールスコープで生存することを想定しています。</li>
+<li>**副作用**: <code>clear_store()</code> は物理的にディレクトリを削除するため、テスト実行順序や並列実行には注意が必要です。</li>
+<li>**未実装・浅い部分**: <code>get_apxs_var</code> 等の外部コマンド実行は、実行環境の <code>apxs</code> パスに依存します。また、ACME サーバーが <code>none</code> の場合の挙動は限定的です。</li>
+<li>**制約**: Pebble v2.5.0 以前の EAB サポートに関する制限がコード内にコメントとして残されており、特定の環境ではテストがスキップされる可能性があります。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

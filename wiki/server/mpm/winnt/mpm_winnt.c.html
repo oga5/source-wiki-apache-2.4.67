@@ -1,0 +1,101 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm/winnt/mpm_winnt.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.c.html&quot;}, '*');">server/mpm/winnt/mpm_winnt.c</a></h1>
+<h2>概要</h2>
+<p>Windows環境におけるApache HTTP Serverのマルチプロセッシングモジュール（MPM）のメイン実装です。Windowsのプロセスモデル（親プロセスが子プロセスを管理し、子プロセスが複数のスレッドでリクエストを処理する）を制御します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>mpm_winnt</code> モジュールの中心であり、親プロセスのライフサイクル管理、子プロセスの生成、およびプロセス間通信（IPC）の調整を行います。Windowsサービスとしての動作や、コマンドラインからの制御（<code>-k</code> オプション）を統合する役割を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: 親プロセスによる子プロセスの生成、監視、および終了処理。</li>
+<li>**IPCと同期**: 名前付きイベント（Event）やミューテックスを用いた、親・子プロセス間のシグナル伝達とリソース共有。</li>
+<li>**設定管理**: <code>ThreadsPerChild</code> や <code>ThreadLimit</code> などのMPM固有ディレクティブの解析と検証。</li>
+<li>**サービス統合**: Windowsサービスコントロールマネージャ（SCM）との連携およびサービスライフサイクルの管理。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>プロセス・ライフサイクル管理</h3>
+<ul>
+<li><code>master_main()</code>: 親プロセスのメインループ。子プロセスの監視と、シャットダウン/再起動イベントの待機を行う。</li>
+<li><code>create_process()</code>: 子プロセスを生成し、必要なハンドル（パイプ、イベント、ミューテックス）を継承させる。</li>
+<li><code>winnt_run()</code>: MPMの実行エントリポイント。親と子の役割分担を決定する。</li>
+</ul>
+<h3>IPC・同期</h3>
+<ul>
+<li><code>ap_signal_parent()</code>: 親プロセスに対してシャットダウンや再起動のシグナルを送る。</li>
+<li><code>send_handles_to_child()</code> / <code>get_handles_from_parent()</code>: 子プロセス起動時に、共有メモリや同期オブジェクトのハンドルをパイプ経由で受け渡す。</li>
+<li><code>start_mutex</code>: 子プロセスがリスニングソケットを安全に受け入れるための同期用ミューテックス。</li>
+</ul>
+<h3>設定・フック</h3>
+<ul>
+<li><code>winnt_rewrite_args()</code>: 起動引数を解析し、サービスモードやコマンドラインオプションを処理する。</li>
+<li><code>winnt_hooks()</code>: Apacheの各フェーズ（pre_config, post_config, <a class="wiki-source-link" href="../../../../source/modules/proxy/mod_proxy.c.html#L3250" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__proxy__mod_proxy_c__child_init.html&quot;}, '*');">child_init</a>等）に処理を登録する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html#L1000" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__winnt_rewrite_args.html&quot;}, '*');"><code>winnt_rewrite_args</code></a> が引数を解析し、サービスモードか否かを判定。 2. **起動**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html#L1696" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__winnt_run.html&quot;}, '*');"><code>winnt_run</code></a> が親プロセスとして <code>master_main</code> を呼び出し、<a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html#L542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__create_process.html&quot;}, '*');"><code>create_process</code></a> で子プロセスを生成。 3. **ハンドル継承**: <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.c.html#L542" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__winnt__mpm_winnt_c__create_process.html&quot;}, '*');"><code>create_process</code></a> はパイプを作成し、<code>DuplicateHandle</code> を用いて子プロセスにスコアボードやイベントのハンドルを渡す。 4. **監視**: <code>master_main</code> は <code>WaitForMultipleObjects</code> を使用し、子プロセスの終了、シャットダウンイベント、再起動イベントのいずれかを待機する。 5. **終了/再起動**: イベントが発生すると、対応するフラグを立ててプロセスを再生成または終了させる。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: ApacheコアおよびMPMインターフェース。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/mpm_winnt.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/mpm_winnt.h.html&quot;}, '*');"><code>mpm_winnt.h</code></a>: モジュール内共有定義。</li>
+<li><code>apr_*.h</code>: APR（Apache Portable Runtime）によるプラットフォーム抽象化レイヤー（プロセス、スレッド、ファイル、共有メモリ、ミューテックス）。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: プロセス間での状態共有。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><code>apr_atomic.h</code></li>
+<li><code>apr_general.h</code></li>
+<li><code>apr_getopt.h</code></li>
+<li><code>apr_lib.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_shm.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_mutex.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><code>malloc.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a></li>
+<li><code>mpm_default.h</code></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>child.c</code></a>: 子プロセス内のスレッド管理とリクエスト処理の実装。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/service.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/service.c.html&quot;}, '*');"><code>service.c</code></a>: Windowsサービスとしての登録・制御ロジック。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/winnt/nt_eventlog.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/nt_eventlog.c.html&quot;}, '*');"><code>nt_eventlog.c</code></a>: Windowsイベントログへの出力機能。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a>（設定用プール）は親プロセスの生存期間中保持されます。子プロセスへ渡されるハンドルは、<code>DuplicateHandle</code> によって子プロセスのコンテキストで有効化されます。</li>
+<li>**制約**: <code>AP_ENABLE_V4_MAPPED</code> はサポートされていません。</li>
+<li>**設計の注意**: 本ファイルはWindows特有のAPI（<code>CreateEvent</code>, <code>WaitForMultipleObjects</code>, <code>WSADuplicateSocket</code>）を多用しており、移植性はありません。</li>
+<li>**省略箇所**: リクエスト処理の詳細なスレッドプールロジックは <a class="wiki-source-link" href="../../../../source/server/mpm/winnt/child.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/winnt/child.c.html&quot;}, '*');"><code>child.c</code></a> に委譲されており、本ファイルはあくまで「プロセスのオーケストレーション」に焦点を当てています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__set_threads_per_child.html" target="wiki-view"><code>set_threads_per_child</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__set_thread_limit.html" target="wiki-view"><code>set_thread_limit</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__winnt_note_child_started.html" target="wiki-view"><code>winnt_note_child_started</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__winnt_note_child_killed.html" target="wiki-view"><code>winnt_note_child_killed</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__setup_signal_names.html" target="wiki-view"><code>setup_signal_names</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__ap_signal_parent.html" target="wiki-view"><code>ap_signal_parent</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__get_handles_from_parent.html" target="wiki-view"><code>get_handles_from_parent</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__send_handles_to_child.html" target="wiki-view"><code>send_handles_to_child</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__get_listeners_from_parent.html" target="wiki-view"><code>get_listeners_from_parent</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__waitlist_e.html" target="wiki-view"><code>waitlist_e</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__winnt_get_name.html" target="wiki-view"><code>winnt_get_name</code></a></li>
+<li><a href="../../../symbols/server__mpm__winnt__mpm_winnt_c__winnt_check_config.html" target="wiki-view"><code>winnt_check_config</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

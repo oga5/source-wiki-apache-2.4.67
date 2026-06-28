@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/slotmem/mod_slotmem_shm.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');">modules/slotmem/mod_slotmem_shm.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>mod_slotmem_shm.c</code></a> は、Apache HTTP Server における共有メモリベースの固定長スロット管理機能を提供します。複数のプロセス間で共有されるメモリ領域をスロット単位に分割し、各スロットの利用状況（in-use）を追跡・永続化する仕組みを実装しています。</p>
+<h2>モジュール内での役割</h2>
+<p><a class="wiki-source-link" href="../../../source/modules/cluster/mod_heartmonitor.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cluster/mod_heartmonitor.c.html&quot;}, '*');"><code>slotmem</code></a> サブシステムにおける「共有メモリプロバイダ」です。<code>mod_slotmem_plain</code> がプロセスローカルなメモリを扱うのに対し、本モジュールは <code>apr_shm</code> を利用してプロセス間共有を実現します。</p>
+<h2>責務</h2>
+<ul>
+<li>**共有メモリ管理**: <code>apr_shm</code> を用いたセグメントの作成、アタッチ、破棄。</li>
+<li>**スロット操作**: 固定長データ領域の読み書き、スロットの確保（grab）と解放（release）。</li>
+<li>**永続化**: サーバー再起動を跨ぐためのファイルベースのデータ保存と復元（MD5チェックサムによる整合性検証を含む）。</li>
+<li>**ライフサイクル管理**: プロセス終了時のクリーンアップと、MPM（Multi-Processing Module）環境下での子プロセスへの継承。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>データ構造</h3>
+<ul>
+<li><code>ap_slotmem_instance_t</code>: 共有メモリインスタンスの管理構造体。SHMへのポインタ、スロットのメタデータ、利用状況フラグ配列を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html&quot;}, '*');"><code>sharedslotdesc_t</code></a>: スロットの構成情報（サイズ、個数、型）を保持するヘッダー。</li>
+</ul>
+<h3>プロバイダインターフェース</h3>
+<ul>
+<li><code>storage</code>: <a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html#L86" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_slotmem_h__ap_slotmem_provider_t.html&quot;}, '*');"><code>ap_slotmem_provider_t</code></a> 構造体。外部モジュールから利用される関数ポインタ群（<code>create</code>, <code>attach</code>, <code>grab</code>, <code>put</code>, <code>get</code> 等）。</li>
+</ul>
+<h3>ライフサイクル・管理関数</h3>
+<ul>
+<li><code>slotmem_create</code> / <code>slotmem_attach</code>: インスタンスの初期化および既存SHMへの接続。</li>
+<li><code>slotmem_grab</code> / <code>slotmem_release</code>: スロットの利用権の排他制御と状態更新。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__store_slotmem.html&quot;}, '*');"><code>store_slotmem</code></a> / <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html&quot;}, '*');"><code>restore_slotmem</code></a>: 永続化ファイルへの書き出しと読み込み。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <code>pre_config</code> でグローバルプールを初期化し、<code>post_config</code> で <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L294" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__cleanup_slotmem.html&quot;}, '*');"><code>cleanup_slotmem</code></a> を登録。 2. **インスタンス作成**: <code>slotmem_create</code> が呼ばれると、<a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L87" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_filenames.html&quot;}, '*');"><code>slotmem_filenames</code></a> でパスを決定し、<code>apr_shm_create</code> でメモリを確保。<a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L35" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html&quot;}, '*');"><code>sharedslotdesc_t</code></a> を先頭に配置し、後続にデータ領域と <code>inuse</code> フラグ配列をレイアウトする。 3. **データアクセス**: <code>slotmem_get</code> / <code>slotmem_put</code> は、<code>slotmem_dptr</code> を介してオフセット計算を行い、指定されたスロットのメモリ位置を特定して <code>memcpy</code> を実行。 4. **永続化フロー**: <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__store_slotmem.html&quot;}, '*');"><code>store_slotmem</code></a> は、データ領域のMD5ハッシュを計算し、データ＋ハッシュ＋記述子をファイルに書き出す。<a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html&quot;}, '*');"><code>restore_slotmem</code></a> はこれを読み込み、ハッシュ照合により整合性を確認する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>ap_slotmem.h</code></a>: プロバイダ定義と型定義。</li>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a>: サーバー設定とログ出力。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: MPMの世代管理（<a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html#L178" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>AP_MPMQ_GENERATION</code></a>）によるファイル名の一意性確保。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_plain.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_plain.c.html&quot;}, '*');"><code>modules/slotmem/mod_slotmem_plain.c</code></a>: 同一インターフェースを持つメモリ内（非共有）実装。</li>
+<li><a class="wiki-source-link" href="../../../source/include/ap_slotmem.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_slotmem.h.html&quot;}, '*');"><code>include/ap_slotmem.h</code></a>: 共通のプロバイダAPI定義。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリレイアウト**: 共有メモリは <code>[desc] [num_free] [data_slots] [inuse_array]</code> の順で配置されます。<a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L41" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/slotmem/mod_slotmem_shm.c.html&quot;}, '*');"><code>AP_SLOTMEM_OFFSET</code></a> 等の定数でアライメントが厳密に管理されています。</li>
+<li>**メモリ所有権**: <code>gpool</code>（グローバルプール）がインスタンスの生存期間を管理します。<a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L294" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__cleanup_slotmem.html&quot;}, '*');"><code>cleanup_slotmem</code></a> はプロセス終了時にSHMを破棄しますが、永続化が有効な場合は終了前に <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L153" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__store_slotmem.html&quot;}, '*');"><code>store_slotmem</code></a> が呼ばれます。</li>
+<li>**エッジケース**: <a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L285" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__is_child_process.html&quot;}, '*');"><code>is_child_process</code></a> は <code>WIN32</code> 環境でのプロセス継承を考慮しています。また、<a class="wiki-source-link" href="../../../source/modules/slotmem/mod_slotmem_shm.c.html#L196" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html&quot;}, '*');"><code>restore_slotmem</code></a> は古い永続化ファイルとの互換性を保つため、EOF判定によるMD5チェックのスキップ処理を含みます。</li>
+<li>**省略箇所**: 本ドキュメントでは、MD5計算の詳細や、各OS固有のファイルシステムAPIの差異については詳細を省略しています。これらは <code>apr</code> ライブラリの抽象化に依存しています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__sharedslotdesc_t.html" target="wiki-view"><code>sharedslotdesc_t</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__ap_slotmem_instance_t.html" target="wiki-view"><code>ap_slotmem_instance_t</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_filenames.html" target="wiki-view"><code>slotmem_filenames</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_clearinuse.html" target="wiki-view"><code>slotmem_clearinuse</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__store_slotmem.html" target="wiki-view"><code>store_slotmem</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__restore_slotmem.html" target="wiki-view"><code>restore_slotmem</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__is_child_process.html" target="wiki-view"><code>is_child_process</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__cleanup_slotmem.html" target="wiki-view"><code>cleanup_slotmem</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_doall.html" target="wiki-view"><code>slotmem_doall</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_create.html" target="wiki-view"><code>slotmem_create</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_attach.html" target="wiki-view"><code>slotmem_attach</code></a></li>
+<li><a href="../../symbols/modules__slotmem__mod_slotmem_shm_c__slotmem_get.html" target="wiki-view"><code>slotmem_get</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

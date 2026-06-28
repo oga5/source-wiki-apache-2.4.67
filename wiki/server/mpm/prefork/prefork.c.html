@@ -1,0 +1,107 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>server/mpm/prefork/prefork.c.md</title><link rel="stylesheet" href="../../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');">server/mpm/prefork/prefork.c</a></h1>
+<h2>概要</h2>
+<p><a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/prefork.c.html&quot;}, '*');"><code>prefork.c</code></a> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）の一つである <code>mpm_prefork</code> の実装です。各リクエストを単一のプロセスで処理する非スレッド型のモデルを提供します。スレッドセーフではないライブラリとの互換性を維持しつつ、リクエストの急増に備えてあらかじめ子プロセスを生成（プリフォーク）しておくことで応答性を高めます。</p>
+<h2>モジュール内での役割</h2>
+<p>Apache の MPM サブシステムにおいて、プロセス管理のライフサイクルを担います。親プロセスが子プロセスの生成、監視、終了、および負荷に応じた動的なスケーリングを管理します。</p>
+<h2>責務</h2>
+<ul>
+<li>**プロセス管理**: 子プロセスの生成 (<code>make_child</code>)、死活監視、およびシグナルによる制御。</li>
+<li>**リソース最適化**: <code>MinSpareServers</code> / <code>MaxSpareServers</code> に基づく動的なプロセス数調整。</li>
+<li>**接続処理**: <code>accept()</code> ミューテックスによる排他制御と、リスニングソケットのポーリング。</li>
+<li>**設定管理**: <code>ServerLimit</code> や <code>MaxRequestWorkers</code> などのグローバル設定の検証と適用。</li>
+<li>**ライフサイクル管理**: 設定の読み込みから、正常終了、グレースフル再起動までの状態遷移。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>設定・状態管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html#L101" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__prefork_retained_data.html&quot;}, '*');"><code>prefork_retained_data</code></a>: 再起動を跨いで保持されるデータ構造。世代管理やスケーリング状態を格納。</li>
+<li><code>ap_daemons_limit</code> / <code>server_limit</code>: 同時接続数およびプロセス数の上限設定。</li>
+<li><code>retained</code>: モジュール全体で共有される <a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html#L101" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__prefork_retained_data.html&quot;}, '*');"><code>prefork_retained_data</code></a> のインスタンス。</li>
+</ul>
+<h3>プロセス制御</h3>
+<ul>
+<li><code>child_main()</code>: 子プロセスのメインループ。接続の待機、処理、終了条件のチェックを行う。</li>
+<li><code>make_child()</code>: 新規子プロセスの <code>fork()</code> と初期化。</li>
+<li><code>perform_idle_server_maintenance()</code>: アイドルプロセス数を監視し、必要に応じて増減させる。</li>
+</ul>
+<h3>同期・通信</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html#L126" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__prefork_child_bucket.html&quot;}, '*');"><code>prefork_child_bucket</code></a>: リスナー、パイプ（POD: Pipe of Death）、ミューテックスを保持する構造体。</li>
+<li><code>accept_mutex_on()</code> / <code>accept_mutex_off()</code>: <code>accept()</code> 呼び出し時の競合を防ぐためのプロセス間ミューテックス操作。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **初期化**: <a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html#L1458" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__prefork_hooks.html&quot;}, '*');"><code>prefork_hooks</code></a> が各フェーズのフックを登録。<a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html#L1283" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__prefork_pre_config.html&quot;}, '*');"><code>prefork_pre_config</code></a> で設定の初期化と <code>retained</code> データの確保を行う。 2. **起動**: <a class="wiki-source-link" href="../../../../source/server/mpm/prefork/prefork.c.html#L899" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__prefork__prefork_c__prefork_run.html&quot;}, '*');"><code>prefork_run</code></a> がメインループを開始。<code>startup_children</code> で初期プロセスを生成。 3. **監視**: 親プロセスは <a class="wiki-source-link" href="../../../../source/server/mpm_common.c.html#L181" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm_common_c__ap_wait_or_timeout.html&quot;}, '*');"><code>ap_wait_or_timeout</code></a> で子プロセスの終了を待ち、<code>perform_idle_server_maintenance</code> で負荷に応じたプロセス増減を行う。 4. **接続処理**: 子プロセスは <code>child_main</code> 内で <code>accept()</code> を実行。<code>SAFE_ACCEPT</code> マクロにより、必要に応じてミューテックスで保護された接続受け入れを行う。 5. **終了**: シグナル（<code>SIGTERM</code>, <a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html#L75" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>AP_SIG_GRACEFUL</code></a>）を受け取ると、POD を通じて子プロセスに通知し、クリーンアップ後に終了する。</p>
+<h2>直接依存</h2>
+<ul>
+<li><code>apr.h</code> 系: ポータブルなプロセス、スレッド、メモリ管理。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/scoreboard.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/scoreboard.h.html&quot;}, '*');"><code>scoreboard.h</code></a>: プロセス状態の共有メモリ管理。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a> / <a class="wiki-source-link" href="../../../../source/include/mpm_common.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/mpm_common.h.html&quot;}, '*');"><code>mpm_common.h</code></a>: MPM 共通インターフェース。</li>
+<li><a class="wiki-source-link" href="../../../../source/os/unix/unixd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/unix/unixd.h.html&quot;}, '*');"><code>unixd.h</code></a>: Unix 特有の権限管理やプロセス制御。</li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_config.h.html&quot;}, '*');"><code>ap_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/ap_mmn.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mmn.h.html&quot;}, '*');"><code>ap_mmn.h</code></a></li>
+<li><code>apr_poll.h</code></li>
+<li><code>apr_portable.h</code></li>
+<li><code>apr_signal.h</code></li>
+<li><code>apr_strings.h</code></li>
+<li><code>apr_thread_proc.h</code></li>
+<li><code>apr_want.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_connection.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_connection.h.html&quot;}, '*');"><code>http_connection.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_core.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_core.h.html&quot;}, '*');"><code>http_core.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/http_main.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_main.h.html&quot;}, '*');"><code>http_main.h</code></a></li>
+<li><a class="wiki-source-link" href="../../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a></li>
+<li><code>mpm_default.h</code></li>
+<li><code>signal.h</code></li>
+<li><code>stdlib.h</code></li>
+<li><code>sys/processor.h</code></li>
+<li><code>sys/times.h</code></li>
+<li><code>sys/types.h</code></li>
+<li><code>time.h</code></li>
+<li><code>unistd.h</code></li>
+<li><a class="wiki-source-link" href="../../../../source/include/util_mutex.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_mutex.h.html&quot;}, '*');"><code>util_mutex.h</code></a></li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../../source/server/mpm/prefork/mpm_default.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/prefork/mpm_default.h.html&quot;}, '*');"><code>server/mpm/prefork/mpm_default.h</code></a>: デフォルトの制限値定義。</li>
+<li><a class="wiki-source-link" href="../../../../source/server/scoreboard.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/scoreboard.c.html&quot;}, '*');"><code>server/scoreboard.c</code></a>: プロセス状態の可視化と共有メモリの操作。</li>
+<li><code>server/util_unixd.c</code>: Unix 権限ドロップやシグナル処理の共通実装。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ所有権**: <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2.c.html#L72" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2.c.html&quot;}, '*');"><code>pconf</code></a> は設定用、<a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> は子プロセス固有の生存期間を持つメモリプールです。<code>child_main</code> 内で <a class="wiki-source-link" href="../../../../source/server/mpm/mpmt_os2/mpmt_os2_child.c.html#L64" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/mpmt_os2/mpmt_os2_child.c.html&quot;}, '*');"><code>pchild</code></a> を適切に破棄することでメモリリークを防いでいます。</li>
+<li>**シグナル処理**: <code>die_now</code> フラグはシグナルハンドラから更新されるため <code>volatile</code> です。</li>
+<li>**制約**: <code>ServerLimit</code> は再起動時に変更できません。これは共有メモリのレイアウトが固定されるためです。</li>
+<li>**省略された詳細**: <code>GPROF</code> 関連のコードはプロファイリング用であり、通常の運用では無視して差し支えありません。また、<code>APR_HAS_THREADS</code> 関連の分岐は、この MPM が非スレッド型であっても、APR の基盤としてスレッドサポートが有効な環境を考慮したものです。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_retained_data.html" target="wiki-view"><code>prefork_retained_data</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_child_bucket.html" target="wiki-view"><code>prefork_child_bucket</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__chdir_for_gprof.html" target="wiki-view"><code>chdir_for_gprof</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_note_child_killed.html" target="wiki-view"><code>prefork_note_child_killed</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_note_child_started.html" target="wiki-view"><code>prefork_note_child_started</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__clean_child_exit.html" target="wiki-view"><code>clean_child_exit</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__accept_mutex_on.html" target="wiki-view"><code>accept_mutex_on</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__accept_mutex_off.html" target="wiki-view"><code>accept_mutex_off</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_query.html" target="wiki-view"><code>prefork_query</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_get_name.html" target="wiki-view"><code>prefork_get_name</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__just_die.html" target="wiki-view"><code>just_die</code></a></li>
+<li><a href="../../../symbols/server__mpm__prefork__prefork_c__prefork_check_config.html" target="wiki-view"><code>prefork_check_config</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

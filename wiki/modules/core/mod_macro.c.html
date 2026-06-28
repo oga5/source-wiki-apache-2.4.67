@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>modules/core/mod_macro.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_macro.c.html&quot;}, '*');">modules/core/mod_macro.c</a></h1>
+<h2>概要</h2>
+<p>Apache HTTP Server の設定ファイル内でマクロ定義と展開を可能にするモジュールです。設定の再利用性を高め、冗長な設定記述を削減します。設定読み込み時（<a class="wiki-source-link" href="../../../source/include/http_config.h.html#L242" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>EXEC_ON_READ</code></a>）に即時処理されるため、サーバー起動時や設定再読み込み時にマクロが展開されます。</p>
+<h2>モジュール内での役割</h2>
+<p><code>modules/core</code> に属し、Apache の設定パーサーを拡張するユーティリティとして機能します。通常のモジュールとは異なり、リクエスト処理のフックは持たず、設定ファイルの解析フェーズに特化しています。</p>
+<h2>責務</h2>
+<ul>
+<li>**マクロ定義の管理**: <code>&lt;Macro&gt;</code> セクションを解析し、名前、引数リスト、本体を <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__ap_macro_t.html&quot;}, '*');"><code>ap_macro_t</code></a> 構造体としてグローバルなハッシュテーブルに保持する。</li>
+<li>**マクロ展開**: <code>Use</code> ディレクティブを検出し、引数を置換した上で、その内容を一時的な設定ストリームとしてパーサーに注入する。</li>
+<li>**構文検証**: 引数の重複チェック、未定義マクロの検出、再帰呼び出しの防止、およびマクロ本体の構文整合性を検証する。</li>
+<li>**設定ストリームの制御**: <a class="wiki-source-link" href="../../../source/include/http_config.h.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_configfile_t.html&quot;}, '*');"><code>ap_configfile_t</code></a> を拡張し、マクロ展開後の内容を元の設定ファイルの一部としてパーサーに認識させる。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<h3>マクロ定義と管理</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__ap_macro_t.html&quot;}, '*');"><code>ap_macro_t</code></a>: マクロの定義を保持する構造体。名前、引数名配列、本体行配列、定義場所（エラーメッセージ用）を保持。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_macro.c.html&quot;}, '*');"><code>ap_macros</code></a>: マクロ定義を格納するグローバルな <code>apr_hash_t</code>。</li>
+</ul>
+<h3>設定コマンド (ディレクティブ)</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L685" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__macro_section.html&quot;}, '*');"><code>macro_section</code></a>: <code>&lt;Macro&gt;</code> を処理。定義の解析と検証を行う。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L802" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__use_macro.html&quot;}, '*');"><code>use_macro</code></a>: <code>Use</code> を処理。引数置換を行い、展開後の内容をパーサーへ注入する。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L883" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__undef_macro.html&quot;}, '*');"><code>undef_macro</code></a>: <code>UndefMacro</code> を処理。ハッシュテーブルから定義を削除する。</li>
+</ul>
+<h3>設定ストリーム操作</h3>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L550" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__array_contents_t.html&quot;}, '*');"><code>array_contents_t</code></a>: マクロ展開後の内容を保持し、パーサーが読み取れるようにするコンテキスト構造体。</li>
+<li><a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L657" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__make_array_config.html&quot;}, '*');"><code>make_array_config</code></a>: <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L550" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__array_contents_t.html&quot;}, '*');"><code>array_contents_t</code></a> を <a class="wiki-source-link" href="../../../source/include/http_config.h.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_configfile_t.html&quot;}, '*');"><code>ap_configfile_t</code></a> としてラップし、パーサーに提供する。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1. **定義時**: <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L685" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__macro_section.html&quot;}, '*');"><code>macro_section</code></a> が設定ファイルを読み込み、<a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__get_lines_till_end_token.html&quot;}, '*');"><code>get_lines_till_end_token</code></a> を用いて <code>&lt;/Macro&gt;</code> までの行を <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L55" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__ap_macro_t.html&quot;}, '*');"><code>ap_macro_t</code></a> に格納する。 2. **展開時**: <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L802" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__use_macro.html&quot;}, '*');"><code>use_macro</code></a> が <code>Use</code> を見つけると、<a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L450" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__process_content.html&quot;}, '*');"><code>process_content</code></a> を呼び出す。 3. **置換**: <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L450" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__process_content.html&quot;}, '*');"><code>process_content</code></a> は内部で <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L410" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__substitute_macro_args.html&quot;}, '*');"><code>substitute_macro_args</code></a> を呼び出し、各行に対して引数（<code>$</code>, <code>%</code>, <code>@</code> プレフィックス付き）を置換する。 4. **注入**: 置換後の内容は <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L657" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__make_array_config.html&quot;}, '*');"><code>make_array_config</code></a> により <a class="wiki-source-link" href="../../../source/include/http_config.h.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_configfile_t.html&quot;}, '*');"><code>ap_configfile_t</code></a> 互換のストリームに変換され、現在の設定ファイル読み込み処理に割り込まれる。これにより、パーサーはマクロ展開後の内容を「元のファイルの一部」として読み続ける。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>http_config.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>: Apache コア API。</li>
+<li><code>apr.h</code>, <code>apr_strings.h</code>, <code>apr_hash.h</code>: APR (Apache Portable Runtime) の文字列操作およびハッシュテーブル。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>: Apache の設定ファイル解析のメインロジック。本モジュールはここでの解析処理に介入する。</li>
+<li><a class="wiki-source-link" href="../../../source/include/http_config.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_config.h.html&quot;}, '*');"><code>include/http_config.h</code></a>: <a class="wiki-source-link" href="../../../source/include/http_config.h.html#L267" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__http_config_h__ap_configfile_t.html&quot;}, '*');"><code>ap_configfile_t</code></a> や <code>cmd_parms</code> などの定義元。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>**メモリ管理**: マクロ定義はグローバルな <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L80" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/core/mod_macro.c.html&quot;}, '*');"><code>ap_macros</code></a> ハッシュに保持されます。<code>pre_config</code> フックで初期化・リセットされる設計です。</li>
+<li>**制約**: マクロの再帰的な使用は、設定ファイル名にマクロ名が含まれるかをチェックすることで簡易的に禁止されています。</li>
+<li>**エッジケース**: マクロ引数に <code>@</code> を使用すると、置換時にダブルクォートでエスケープされます。</li>
+<li>**未実装/浅い部分**: <a class="wiki-source-link" href="../../../source/modules/core/mod_macro.c.html#L133" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__core__mod_macro_c__get_lines_till_end_token.html&quot;}, '*');"><code>get_lines_till_end_token</code></a> は行ベースの解析に依存しており、複雑なネスト構造の解析には限界があります。また、エラーメッセージの生成には <code>cmd-&gt;temp_pool</code> を使用しており、メモリリークを防ぐためのライフサイクル管理に注意が必要です。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/modules__core__mod_macro_c__ap_macro_t.html" target="wiki-view"><code>ap_macro_t</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__get_arguments.html" target="wiki-view"><code>get_arguments</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__warn_if_non_blank.html" target="wiki-view"><code>warn_if_non_blank</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__get_lines_till_end_token.html" target="wiki-view"><code>get_lines_till_end_token</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__looks_like_an_argument.html" target="wiki-view"><code>looks_like_an_argument</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__check_macro_arguments.html" target="wiki-view"><code>check_macro_arguments</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__check_macro_use_arguments.html" target="wiki-view"><code>check_macro_use_arguments</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__number_of_escapes.html" target="wiki-view"><code>number_of_escapes</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__next_substitution.html" target="wiki-view"><code>next_substitution</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__substitute_macro_args.html" target="wiki-view"><code>substitute_macro_args</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__process_content.html" target="wiki-view"><code>process_content</code></a></li>
+<li><a href="../../symbols/modules__core__mod_macro_c__array_contents_t.html" target="wiki-view"><code>array_contents_t</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

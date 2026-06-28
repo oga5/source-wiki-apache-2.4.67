@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>os/netware/util_nw.c.md</title><link rel="stylesheet" href="../../../styles.css"></head><body><h1><a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/util_nw.c.html&quot;}, '*');">os/netware/util_nw.c</a></h1>
+<h2>概要</h2>
+<p>NetWare 環境における Apache HTTP Server のライフサイクル管理およびプロセス制御をサポートするユーティリティファイルです。主に NLM (NetWare Loadable Module) としての起動・終了処理と、OS レベルのイベント通知機構とのブリッジを提供します。</p>
+<h2>モジュール内での役割</h2>
+<p><code>os/netware</code> サブシステムの一部として、Apache のコア機能と NetWare OS 特有の API を接続します。特に、サーバーのシャットダウンイベントの捕捉や、特権プロセス生成の抽象化を担います。</p>
+<h2>責務</h2>
+<ul>
+<li>**NLM ライフサイクル管理**: <code>_NonAppStart</code> および <code>_NonAppCheckUnload</code> を通じて、モジュールのロード・アンロード時のフックを提供します。</li>
+<li>**イベント通知**: NetWare の <code>EVENT_DOWN_SERVER</code> を監視し、サーバー停止時に適切なクリーンアップ処理を実行します。</li>
+<li>**プロセス抽象化**: <code>ap_os_create_privileged_process</code> を提供し、プラットフォーム固有のプロセス生成を Apache の標準的な <code>apr_proc_create</code> にマッピングします。</li>
+</ul>
+<h2>重要なシンボル</h2>
+<ul>
+<li><code>_NonAppStart</code>: NLM 起動時に呼び出されるエントリーポイント。イベント通知の登録と終了ハンドラのセットアップを行います。</li>
+<li><a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__netware__util_nw_c__ap_down_server_cb.html&quot;}, '*');"><code>ap_down_server_cb</code></a>: サーバー停止イベント発生時に実行されるコールバック関数。</li>
+<li><a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__netware__util_nw_c__ap_cb_destroy.html&quot;}, '*');"><code>ap_cb_destroy</code></a>: モジュール終了時にリソース（イベント通知やインターフェース）を解放するクリーンアップ関数。</li>
+<li><code>ap_os_create_privileged_process</code>: 特権プロセス生成のためのラッパー関数。</li>
+</ul>
+<h2>制御フローとデータフロー</h2>
+<p>1.  **起動時**: <code>_NonAppStart</code> が OS から呼び出され、<code>AllocateResourceTag</code> でリソースを確保します。<code>RegisterForEventNotification</code> を使用して <code>EVENT_DOWN_SERVER</code> を購読し、終了ハンドラを <code>NXVmRegisterExitHandler</code> で登録します。 2.  **実行中**: サーバーが停止シグナルを受け取ると、<a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html#L50" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__netware__util_nw_c__ap_down_server_cb.html&quot;}, '*');"><code>ap_down_server_cb</code></a> がトリガーされ、<a class="wiki-source-link" href="../../../source/server/mpm/netware/mpm_netware.c.html#L307" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__netware__mpm_netware_c__nlmUnloadSignaled.html&quot;}, '*');"><code>nlmUnloadSignaled</code></a> を呼び出して終了処理を開始します。 3.  **終了時**: <a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html#L63" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/os__netware__util_nw_c__ap_cb_destroy.html&quot;}, '*');"><code>ap_cb_destroy</code></a> が呼び出され、<code>UnRegisterEventNotification</code> でイベント購読を解除し、<code>NX_UNWRAP_INTERFACE</code> でインターフェース参照を解放します。</p>
+<h2>直接依存</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/include/httpd.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>httpd.h</code></a>, <a class="wiki-source-link" href="../../../source/include/http_log.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_log.h.html&quot;}, '*');"><code>http_log.h</code></a>, <a class="wiki-source-link" href="../../../source/include/ap_mpm.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_mpm.h.html&quot;}, '*');"><code>ap_mpm.h</code></a>: Apache HTTP Server のコア定義。</li>
+<li><code>netware.h</code>, <code>nks/netware.h</code>, <code>nks/vm.h</code>: NetWare Kernel Services (NKS) および NetWare OS 特有のシステム API。</li>
+</ul>
+<h2>関連コード</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../../source/os/netware/os.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/os.h.html&quot;}, '*');"><code>os/netware/os.h</code></a>: NetWare 用の OS 抽象化定義。</li>
+<li><a class="wiki-source-link" href="../../../source/os/netware/modules.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/modules.c.html&quot;}, '*');"><code>os/netware/modules.c</code></a>: NetWare 上でのモジュール構成管理。</li>
+<li><code>apr_proc_create</code> (APR): <code>ap_os_create_privileged_process</code> の内部で呼び出されるプロセス生成関数。</li>
+</ul>
+<h2>読者向けメモ</h2>
+<ul>
+<li>本ファイルは NetWare 特有の NLM 構造に強く依存しています。<code>#pragma unused</code> を多用しているのは、NLM の標準的なエントリーポイントシグネチャに合わせるためです。</li>
+<li><a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html#L31" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/util_nw.c.html&quot;}, '*');"><code>ref</code></a> や <a class="wiki-source-link" href="../../../source/os/netware/util_nw.c.html#L32" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/os/netware/util_nw.c.html&quot;}, '*');"><code>dum</code></a> といった変数は、NetWare のインターフェースラッパー（<code>NX_WRAP_INTERFACE</code>）で使用される一時的な参照保持用です。</li>
+<li>NetWare 環境以外ではコンパイルされないことを前提としています。</li>
+</ul>
+<h2>シンボルページ</h2>
+<ul>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_os_create_privileged_process.html" target="wiki-view"><code>ap_os_create_privileged_process</code></a></li>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_down_server_cb.html" target="wiki-view"><code>ap_down_server_cb</code></a></li>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_dummy_cb.html" target="wiki-view"><code>ap_dummy_cb</code></a></li>
+<li><a href="../../symbols/os__netware__util_nw_c__ap_cb_destroy.html" target="wiki-view"><code>ap_cb_destroy</code></a></li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

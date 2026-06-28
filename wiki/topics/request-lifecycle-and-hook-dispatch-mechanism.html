@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/request-lifecycle-and-hook-dispatch-mechanism.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Request Lifecycle and Hook Dispatch Mechanism</h1>
+<h2>概念</h2>
+<p>**Request Lifecycle and Hook Dispatch Mechanism** は、Apache HTTP Server における HTTP リクエストの受信からレスポンス送信、接続終了に至る一連のライフサイクルフェーズと、それらのフェーズごとに登録されたモジュール関数（フック）を順次呼び出すディスパッチ機構を指します。</p>
+<h2>なぜ重要か</h2>
+<p>Apache は高度にモジュール化されたアーキテクチャを採用しています。この仕組みにより、コアのコードを変更することなく、認証、アクセス制御、URLマッピング、コンテンツ生成、ログ記録などの各処理フェーズに対して、サードパーティ製モジュールや標準モジュールが独自の処理を動的に挿入（フック）することが可能になります。</p>
+<h2>関与するモジュール</h2>
+<p>本メカニズムは以下のモジュールおよびディレクトリにまたがって実装されています。</p>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a> （フックの定義マクロなどを提供）</li>
+<li><a class="wiki-entity-link" href="../modules/modules__http.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__http.html&quot;, &quot;source&quot;: &quot;source/modules/http/byterange_filter.c.html&quot;}, '*');"><code>module:modules/http</code></a> （HTTP リクエスト処理の具体的なライフサイクルを実装）</li>
+<li><a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> （フックの登録や設定管理を統括）</li>
+</ul>
+<h2>主要エンティティ</h2>
+<p>本メカニズムを構成する主要なファイルおよびエンティティは以下の通りです。</p>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**</li>
+<p>フックの宣言（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_DECLARE_HOOK</code></a>）や、フックの実行マクロ（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_ALL</code></a>、<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L137" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_FIRST</code></a>、<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_VOID</code></a> など）を定義するヘッダーファイルです。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a>**</li>
+<p>HTTP リクエストの処理フローを制御し、リクエストのライフサイクルに沿って適切なフックを呼び出すコアロジックが実装されています。</p>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**</li>
+<p>各モジュールが初期化時にフックを登録する仕組みや、登録されたフックのソート、管理を行う設定処理が実装されています。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>現時点では、リクエストの受信から各フック（名前変換、アクセス制御、コンテンツ生成など）が呼び出され、最終的にレスポンスが返却されるまでの具体的な関数呼び出しの完全なシーケンスや、詳細なエンドツーエンドの流れは完全には特定されていません。</p>
+<h2>重要な不変条件</h2>
+<p>現時点では、フックの実行順序の保証や、リクエストコンテキスト（<code>request_rec</code>）の状態遷移に関する詳細な不変条件は完全には特定されていません。</p>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**フックの戻り値の誤解**</li>
+<p>フックには「すべての登録関数を実行するもの（RUN_ALL）」と「最初に <a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a> またはエラーを返した時点で処理を打ち切るもの（RUN_FIRST）」があります。戻り値（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>、<a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a>、またはエラーコード）のハンドリングを誤ると、後続の処理が意図せずスキップされたり、リクエストが異常終了したりする原因になります。</p>
+<li>**実行順序（先行関係）の不整合**</li>
+<p>フック登録時に指定する実行順序（<code>APR_HOOK_FIRST</code>、<code>APR_HOOK_MIDDLE</code>、<code>APR_HOOK_LAST</code> など）や、他モジュールとの依存関係の記述が不適切な場合、必要な前処理が実行される前に後続のフックが走ってしまう問題が発生します。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**</li>
+<p>フックシステムの宣言方法や、フックの実行タイプ（RUN_ALL / RUN_FIRST / VOID）の定義を理解するために参照してください。</p>
+<li>**<a class="wiki-source-link" href="../../source/modules/http/http_request.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/http/http_request.c.html&quot;}, '*');"><code>modules/http/http_request.c</code></a>**</li>
+<p>実際のリクエスト処理ライフサイクルの中で、どのタイミングでどのフックがディスパッチされるかを確認するために参照してください。</p>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**</li>
+<p>モジュールがどのようにフックを登録し、サーバー起動時にそれらがどのように整理・管理されるかを理解するために参照してください。</p>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

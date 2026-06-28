@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/memory-management-via-apr-pools-and-bucket-brigades.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Memory Management via APR Pools and Bucket Brigades</h1>
+<h2>概念</h2>
+<p>Apache HTTP Serverにおけるメモリおよびリソース管理は、APR（Apache Portable Runtime）が提供するメモリプール（<code>apr_pool_t</code>）と、フィルタチェーンを介した効率的なデータ転送を可能にするバケットブリゲード（Bucket Brigades）の仕組みに基づいています。</p>
+<p>メモリプールはリソースのライフサイクルをグループ化して一括解放を可能にし、バケットブリゲードは <code>apr_off_t</code> などの型を用いてデータ転送量やオフセットを管理しながら、ストリームデータを効率的に処理します。</p>
+<h2>なぜ重要か</h2>
+<p>Webサーバーのように高並行かつ長時間の動作が求められるシステムでは、リクエストや接続ごとのメモリリーク防止と、データ転送の低オーバーヘッド化が極めて重要です。</p>
+<ul>
+<li>**メモリリークの防止**: <code>apr_pool_t</code> を用いることで、接続やリクエストの終了時にプールに紐付いたリソース（メモリ、ソケット、バッファなど）を確実に一括解放できます。</li>
+<li>**効率的なデータ転送**: <code>apr_off_t</code> を用いてファイルやストリーム上の位置・長さを抽象化し、バケットブリゲードを介してデータをやり取りすることで、プラットフォームに依存しない一貫したデータ操作を実現します。</li>
+</ul>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/include__ap_listen_h__apr_pool_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__ap_listen_h__apr_pool_t.html&quot;, &quot;source&quot;: &quot;source/include/ap_listen.h.html#L40&quot;}, '*');"><code>symbol:include/ap_listen.h#apr_pool_t</code></a>**: APRのメモリプール構造体。接続処理時のトランザクション用プール（<code>ptrans</code>）など、リソースの生存期間管理に利用されます。</li>
+<li>**<a class="wiki-source-link" href="../../source/include/http_request.h.html#L604" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>symbol:include/http_request.h#AP_BUCKET_IS_EOR</code></a>**: EOR（End Of Request）バケットを判定するためのマクロ（詳細な仕様は提供された情報からは未詳）。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/include__util_filter_h__apr_off_t.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/include__util_filter_h__apr_off_t.html&quot;, &quot;source&quot;: &quot;source/include/util_filter.h.html#L136&quot;}, '*');"><code>symbol:include/util_filter.h#apr_off_t</code></a>**: ファイルサイズ、オフセット、バイト数などの「ファイルやストリーム上の位置・長さ」を表現するための整数型。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>提供された情報からは、APR PoolsとBucket Brigadesが連携する完全なエンドツーエンドの処理フローは明らかになっていません。</p>
+<p>現時点で判明している部分的な流れは以下の通りです： 1. **接続の受け入れ**: <a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>ap_listen.h</code></a> 内の <code>accept_function</code> において、接続処理時のトランザクション用プール（<code>ptrans</code>）として <code>apr_pool_t</code> が渡され、接続に関連するリソースが割り当てられます。 2. **データの転送と位置管理**: フィルタチェーン内でのデータ転送時、<code>apr_bucket_brigade</code> を介したデータ転送量やファイル読み込み時のオフセット指定に <code>apr_off_t</code> が使用されます。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**自動解放の保証**: <code>apr_pool_t</code> に関連付けられたリソースは、そのプールが破棄される際にすべて自動的に解放されなければなりません。</li>
+<li>**プラットフォーム依存性**: <code>apr_off_t</code> が負の値を取り得るか、およびその具体的なサイズは、プラットフォームおよび APR の定義に依存します。</li>
+<li>その他の詳細な不変条件（PoolsとBucket Brigades間の相互作用における不変条件など）は、提供された情報からは未詳です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**バイナリ互換性と型サイズ**: <code>apr_off_t</code> は64bit環境と32bit環境でサイズが異なる可能性があるため、バイナリ互換性が重要な箇所では注意が必要です。</li>
+<li>**オーバーフローと制限**: <code>apr_off_t</code> の型の最大値を超過した場合のオーバーフローや、プラットフォームの <code>off_t</code> 制限に依存するファイルサイズ制限に注意する必要があります。</li>
+<li>**OOM（メモリ不足）時のハンドリング**: メモリ不足が発生した場合、APRのメモリ割り当て関数が失敗するため、呼び出し元で適切なエラーハンドリングを行う必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/include/ap_listen.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_listen.h.html&quot;}, '*');"><code>include/ap_listen.h</code></a> — <code>apr_pool_t</code> の利用方法および <code>accept_function</code> での役割について。</li>
+<li><a class="wiki-source-link" href="../../source/include/util_filter.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/util_filter.h.html&quot;}, '*');"><code>include/util_filter.h</code></a> — <code>apr_off_t</code> の定義およびフィルタ内での利用について。</li>
+<li><a class="wiki-source-link" href="../../source/include/http_request.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>include/http_request.h</code></a> — <a class="wiki-source-link" href="../../source/include/http_request.h.html#L604" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/http_request.h.html&quot;}, '*');"><code>AP_BUCKET_IS_EOR</code></a> などのリクエスト終了制御バケットについて。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

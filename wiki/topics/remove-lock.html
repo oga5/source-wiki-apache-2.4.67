@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/remove-lock.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>remove_lock</h1>
+<h2>概念</h2>
+<p><code>remove_lock</code> は、Apache HTTP Server（httpd-2.4.67）の socache（Shared Object Cache）に関連する複数のモジュールにおいて、初期化されたグローバルミューテックスなどのロックリソースを安全に破棄・解放するためのクリーンアップ関数です。</p>
+<h2>なぜ重要か</h2>
+<p>モジュールのアンロードやプロセスの終了、プールの破棄に伴い、確保されたシステムリソース（グローバルミューテックスなど）を確実に解放し、リソースリークを防ぐために重要です。主に <code>apr_pool_cleanup_register</code> を介した自動クリーンアップ機構と連携して動作します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/modules__aaa.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__aaa.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_access_compat.c.html&quot;}, '*');"><code>module:modules/aaa</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/modules__cache.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/modules__cache.html&quot;, &quot;source&quot;: &quot;source/modules/cache/cache_common.h.html&quot;}, '*');"><code>module:modules/cache</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../symbols/modules__aaa__mod_authn_socache_c__remove_lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__aaa__mod_authn_socache_c__remove_lock.html&quot;, &quot;source&quot;: &quot;source/modules/aaa/mod_authn_socache.c.html#L52&quot;}, '*');"><code>symbol:modules/aaa/mod_authn_socache.c#remove_lock</code></a>: <code>mod_authn_socache</code> モジュール内のグローバルミューテックス <a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a> を破棄するためのクリーンアップ関数。</li>
+<li><a class="wiki-entity-link" href="../symbols/modules__cache__mod_cache_socache_c__remove_lock.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/modules__cache__mod_cache_socache_c__remove_lock.html&quot;, &quot;source&quot;: &quot;source/modules/cache/mod_cache_socache.c.html#L1333&quot;}, '*');"><code>symbol:modules/cache/mod_cache_socache.c#remove_lock</code></a>: <code>mod_cache_socache</code> モジュール内に定義されている同名の関数（詳細な振る舞いは未解析）。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p><code>mod_authn_socache</code> における流れは以下の通りです： 1. モジュールの初期化時（<code>modules/aaa/mod_authn_socache.c:125</code>）に、<code>apr_pool_cleanup_register</code> を介して <code>remove_lock</code> がプール破棄時のクリーンアップハンドラとして登録されます。 2. プールが破棄される際、登録された <code>remove_lock</code> が呼び出されます。 3. <code>remove_lock</code> 内でグローバル変数 <a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a> が <code>NULL</code> でないことを確認し、<code>apr_global_mutex_destroy</code> を呼び出してミューテックスを破棄します。 4. 破棄後、<a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a> を <code>NULL</code> に設定し、<code>APR_SUCCESS</code> を返します。</p>
+<p>※ <a class="wiki-source-link" href="../../source/modules/cache/mod_cache_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');"><code>mod_cache_socache.c</code></a> における <code>remove_lock</code> のエンドツーエンドの流れや呼び出し関係については、現時点では解析されておらず不明です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**<code>mod_authn_socache</code> における不変条件**:</li>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a> が初期化済みであるか、または <code>NULL</code> であること。</li>
+<li>本関数の実行完了後、<a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a> は必ず <code>NULL</code> にリセットされること。</li>
+<li>**<code>mod_cache_socache</code> における不変条件**:</li>
+<li>現時点では未解析のため不明です。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**同名関数の混同**: <a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>mod_authn_socache.c</code></a> と <a class="wiki-source-link" href="../../source/modules/cache/mod_cache_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');"><code>mod_cache_socache.c</code></a> の両方に <code>static apr_status_t remove_lock(void *data)</code> という同名の静的関数が存在するため、デバッグやスタックトレースの確認時にファイルパスを混同しないよう注意が必要です。</li>
+<li>**エラーの非伝播**: <code>mod_authn_socache</code> の実装では、<code>apr_global_mutex_destroy</code> がエラーを返した場合でも、関数自体は常に <code>APR_SUCCESS</code> を返します。そのため、ミューテックスの破棄失敗が上位に伝播しない点に留意する必要があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>modules/aaa/mod_authn_socache.c</code></a>（<a class="wiki-source-link" href="../../source/modules/aaa/mod_authn_socache.c.html#L46" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/aaa/mod_authn_socache.c.html&quot;}, '*');"><code>authn_cache_mutex</code></a> の初期化と <code>apr_pool_cleanup_register</code> による登録処理の確認）</li>
+<li><a class="wiki-source-link" href="../../source/modules/cache/mod_cache_socache.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/cache/mod_cache_socache.c.html&quot;}, '*');"><code>modules/cache/mod_cache_socache.c</code></a>（同名関数の具体的な実装と役割の解析）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

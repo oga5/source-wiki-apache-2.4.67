@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/proc-info.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>proc_info</h1>
+<h2>概念</h2>
+<p><code>proc_info</code> は、Apache HTTP Server のマルチプロセッシングモジュール（MPM）である <code>event</code> および <code>worker</code> において、新しく生成されるスレッドにプロセスやスレッドの識別情報（およびソケット記述子などのコンテキスト）を安全に引き渡すために使用される構造体です。</p>
+<h2>なぜ重要か</h2>
+<p>マルチスレッドモデルを採用する MPM（<code>event</code> や <code>worker</code>）では、スレッド起動時に各スレッドが自身が担当するプロセススロットやスレッドスロット、あるいはプロセスIDやスレッドID、ソケット記述子を正しく認識する必要があります。<code>proc_info</code> は、スレッド生成関数（<code>pthread_create</code> 等に渡される起動ルーチン）に対して、<code>void *</code> 型の汎用引数を経由してこれらのコンテキスト情報を安全に受け渡すためのデータコンテナとして機能します。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__event.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__event.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html&quot;}, '*');"><code>module:server/mpm/event</code></a></li>
+<li><a class="wiki-entity-link" href="../modules/server__mpm__worker.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server__mpm__worker.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/mpm_default.h.html&quot;}, '*');"><code>module:server/mpm/worker</code></a></li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__event__event_c__proc_info.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__event__event_c__proc_info.html&quot;, &quot;source&quot;: &quot;source/server/mpm/event/event.c.html#L342&quot;}, '*');"><code>symbol:server/mpm/event/event.c#proc_info</code></a>**: <code>event</code> MPM 内で定義される構造体。プロセススロット（<code>pslot</code>）およびワーカー用スレッドスロット（<code>tslot</code>）を保持します。</li>
+<li>**<a class="wiki-entity-link" href="../symbols/server__mpm__worker__worker_c__proc_info.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__mpm__worker__worker_c__proc_info.html&quot;, &quot;source&quot;: &quot;source/server/mpm/worker/worker.c.html#L185&quot;}, '*');"><code>symbol:server/mpm/worker/worker.c#proc_info</code></a>**: <code>worker</code> MPM 内で定義される構造体。プロセスID（<code>pid</code>）、スレッドID（<code>tid</code>）、およびソケット記述子（<code>sd</code>）を保持します。</li>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **メモリ確保と初期化**: スレッドを生成する側（例: <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> の <code>thread_starter</code> や、<a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> のスレッド生成処理）が、<a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_malloc.html&quot;}, '*');"><code>ap_malloc</code></a> を使用して <code>proc_info</code> 構造体のインスタンスをヒープ上に動的に割り当てます。 2. **コンテキストの設定**: 割り当てられた構造体に、対象スレッドが使用すべき識別情報（<code>pslot</code>/<code>tslot</code> または <code>pid</code>/<code>tid</code>/<code>sd</code>）を設定します。 3. **スレッドへの引き渡し**: スレッド生成時に、この構造体へのポインタをスレッド関数の引数（<code>void *dummy</code> など）として渡します。 4. **キャストと利用**: 起動したスレッド関数内部で、受け取った <code>void *</code> ポインタを <code>proc_info *</code> にキャストし、格納されている識別情報を読み取って自身のコンテキストを初期化します。</p>
+<p>※なお、スレッド起動後の <code>proc_info</code> インスタンスの正確な解放タイミングや、エラー発生時の詳細なクリーンアップフローなど、完全なエンドツーエンドのライフサイクル管理の詳細は提供された情報からは未確定です。</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**有効なインデックス/識別子**: <code>proc_info</code> に格納される <code>pslot</code>、<code>tslot</code>、<code>pid</code>、<code>tid</code> などの値は、MPM のプロセスおよびスレッド管理において常に有効な範囲のインデックスまたは識別子でなければなりません。</li>
+<li>**メモリ管理の整合性**: <a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_malloc.html&quot;}, '*');"><code>ap_malloc</code></a> で動的に確保された <code>proc_info</code> インスタンスは、受け手側のスレッドまたは生成側によって適切に解放される必要があります（具体的な解放の不変条件は未確定です）。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**同名構造体の定義の相違**: <code>proc_info</code> は <a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>event.c</code></a> と <a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>worker.c</code></a> の両方で定義されていますが、そのメンバ構成（<code>pslot</code>/<code>tslot</code> と <code>pid</code>/<code>tid</code>/<code>sd</code>）は異なります。一方の MPM での変更が他方に影響を与えないよう、それぞれのファイルにおける定義と利用箇所を慎重に区別する必要があります。</li>
+<li>**メモリ確保失敗時のハンドリング**: <a class="wiki-source-link" href="../../source/server/util.c.html#L3152" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/symbols/server__util_c__ap_malloc.html&quot;}, '*');"><code>ap_malloc</code></a> によるメモリ確保が失敗した場合、スレッドの起動処理が中断され、システム全体の初期化やリクエスト処理に影響を及ぼす可能性があります。</li>
+<li>**キャスト時の安全性**: スレッド関数内で <code>void *</code> から <code>proc_info *</code> へキャストする際、ポインタが正しく初期化されていない場合や、不正なアドレスが渡された場合に未定義の動作を引き起こす危険性があります。</li>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li><a class="wiki-source-link" href="../../source/server/mpm/event/event.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/event/event.c.html&quot;}, '*');"><code>server/mpm/event/event.c</code></a>（<code>proc_info</code> 構造体の定義および <code>thread_starter</code> 周辺の実装）</li>
+<li><a class="wiki-source-link" href="../../source/server/mpm/worker/worker.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/mpm/worker/worker.c.html&quot;}, '*');"><code>server/mpm/worker/worker.c</code></a>（<code>proc_info</code> 構造体の定義およびスレッド生成・コンテキスト管理の実装）</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>

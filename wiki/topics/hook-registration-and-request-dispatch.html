@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="source-wiki-viewer-version" content="5"><title>topics/hook-registration-and-request-dispatch.md</title><link rel="stylesheet" href="../../styles.css"></head><body><h1>Hook Registration and Request Dispatch</h1>
+<h2>概念</h2>
+<p>Apache HTTPDにおける **Hook Registration and Request Dispatch**（フック登録とリクエストディスパッチ）は、サーバーのコア機能を拡張するための中心的なメカニズムです。コアサーバーはリクエスト処理のライフサイクルを複数のフェーズ（設定解析、アクセス制御、コンテンツ生成など）に分割し、各フェーズに「フック」を提供します。各モジュールは、自身が処理を行いたいフェーズのフックにハンドラ関数を登録し、サーバーはリクエストの到着時にこれらを順次呼び出します（ディスパッチ）。</p>
+<h2>なぜ重要か</h2>
+<p>この仕組みにより、コアサーバー（<a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a>）のコードを変更することなく、新しいプロトコル、認証方式、コンテンツフィルタなどの機能をモジュールとして動的に追加できます。モジュール間の結合度を極限まで下げつつ、リクエスト処理の全ライフサイクルにわたる柔軟な制御を可能にするために不可欠なアーキテクチャです。</p>
+<h2>関与するモジュール</h2>
+<ul>
+<li>**<a class="wiki-entity-link" href="../modules/include.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/include.html&quot;, &quot;source&quot;: &quot;source/include/ap_compat.h.html&quot;}, '*');"><code>module:include</code></a>**: フックの宣言、登録、および呼び出しを行うための共通マクロやAPI定義（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a> など）を提供します。</li>
+<li>**<a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a>**: モジュールの初期化、フックの登録処理の統制、および実際のリクエスト処理フェーズにおけるフックのディスパッチ（<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> など）を担当します。</li>
+</ul>
+<h2>主要エンティティ</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**: </li>
+<p>フックを定義・実装するためのマクロ群（<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L74" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_DECLARE_HOOK</code></a>、<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L117" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_RUN_ALL</code></a>、<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html#L94" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>AP_IMPLEMENT_HOOK_VOID</code></a> など）を提供します。これにより、型安全なフック呼び出しが実現されます。</p>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**:</li>
+<p>モジュールの構造体を管理し、サーバー起動時に各モジュールの <code>register_hooks</code> 関数を呼び出してフックを登録します。また、登録されたフックのソートや、リクエスト処理フェーズの実行制御を行います。</p>
+</ul>
+<h2>エンドツーエンドの流れ</h2>
+<p>1. **モジュール初期化と登録**: サーバー起動時、<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a> はロードされた各モジュールのフック登録関数を呼び出します。モジュールは <code>ap_hook_xxx</code>（例: <code>ap_hook_handler</code>）を使用して、特定のフェーズに自前の関数を登録します。 2. **フックのソート**: 登録完了後、<a class="wiki-entity-link" href="../modules/server.html" target="wiki-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/modules/server.html&quot;, &quot;source&quot;: &quot;source/server/buildmark.c.html&quot;}, '*');"><code>module:server</code></a> は各フックに登録されたハンドラを、指定された優先度（<code>APR_HOOK_FIRST</code>, <code>APR_HOOK_MIDDLE</code>, <code>APR_HOOK_LAST</code> など）および先行・後行関係に基づいてソートします。 3. **リクエストの受信とディスパッチ**: リクエストが到着すると、サーバーは定義されたフェーズに従って <code>ap_run_xxx</code>（例: <code>ap_run_handler</code>）を呼び出し、ソート済みのハンドラ群を順次実行します。</p>
+<p>*注意: 特定のリクエストタイプにおける詳細なフック遷移の全容や、エラーハンドリング時の厳密なロールバックフローは、提供されたモジュールコンテキストからは完全には特定されていません。*</p>
+<h2>重要な不変条件</h2>
+<ul>
+<li>**登録フェーズの限定**: フックの登録は、サーバーの初期化・設定フェーズ（リクエストの受付が開始される前）に完了していなければなりません。リクエスト処理中に動的にフックを追加することはできません。</li>
+<li>**順序の固定化**: フックの実行順序は、起動時のソート処理によって決定された後は固定され、リクエストごとに動的に変更することはできません。</li>
+</ul>
+<h2>よくある落とし穴</h2>
+<ul>
+<li>**戻り値による実行制御の誤解**:</li>
+<p>フックには「すべてのハンドラを実行するもの（<code>RUN_ALL</code> / <code>VOID</code>）」と「いずれかのハンドラが処理を完了したら終了するもの（<code>RUN_FIRST</code>）」があります。ハンドラが返すステータス値（<a class="wiki-source-link" href="../../source/include/httpd.h.html#L460" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>OK</code></a>, <a class="wiki-source-link" href="../../source/include/httpd.h.html#L461" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/httpd.h.html&quot;}, '*');"><code>DECLINED</code></a>, <code>HTTP_...</code>）が、後続のハンドラの実行にどのように影響するかを正しく理解していないと、意図せず他のモジュールの処理を遮断してしまう原因になります。</p>
+<li>**依存関係（先行・後行）の指定漏れ**:</li>
+<p>他のモジュールが処理した結果に依存している場合、適切な優先度や先行・後行関係（<code>predecessors</code>/<code>successors</code>）を指定しないと、実行順序が不定になり、ランダムな不具合を引き起こす可能性があります。</p>
+</ul>
+<h2>次に読む場所</h2>
+<ul>
+<li>**<a class="wiki-source-link" href="../../source/include/ap_hooks.h.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/include/ap_hooks.h.html&quot;}, '*');"><code>include/ap_hooks.h</code></a>**: フックの宣言方法、登録マクロ、および利用可能な優先度定数の詳細な仕様を理解するために参照してください。</li>
+<li>**<a class="wiki-source-link" href="../../source/server/config.c.html" target="source-view" onclick="parent.postMessage({&quot;type&quot;: &quot;source-link&quot;, &quot;panel&quot;: &quot;wiki/server/config.c.html&quot;}, '*');"><code>server/config.c</code></a>**: モジュールがどのようにロードされ、フックがどのように集約・ソートされて実行されるかの具体的な実装フローを確認するために参照してください。</li>
+</ul><script>
+(function() {
+  function notifyParent() {
+    if (parent === window) return;
+    parent.postMessage({type: "frame-location", frame: window.name || "", href: window.location.href}, "*");
+  }
+  document.addEventListener("click", function(event) {
+    const link = event.target.closest("a[data-panel]");
+    if (!link || parent === window) return;
+    parent.postMessage({type: "source-link", panel: link.dataset.panel}, "*");
+  });
+  window.addEventListener("load", notifyParent);
+  window.addEventListener("hashchange", notifyParent);
+})();
+</script></body></html>
